@@ -28,13 +28,12 @@ alwaysApply: true
 
 **Не входит:** auth, каналы, посты, биллинг, AI.
 
-## Волна 2 — Auth + workspace
+## Волна 2 — Auth + workspace ✅ (in progress / shipped)
 
 | Агент | Deliverables |
 |-------|--------------|
-| **2-Backend** | users, sessions JWT, workspaces, migrations, register/login/logout/me |
-| **3-Frontend** | `/app/auth/*`, dashboard layout shell, API client + cookie/session |
-| **2-Backend** | RBAC middleware skeleton (owner only) |
+| **2-Backend** | users, workspaces, JWT cookie auth, register/login/logout/me |
+| **3-Frontend** | `/app/auth/*`, `/app/dashboard`, AppShell, middleware |
 
 ## Волна 3 — Каналы (Telegram + VK)
 

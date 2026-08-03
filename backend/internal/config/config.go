@@ -35,3 +35,7 @@ func Load() (*Config, error) {
 func (c *Config) Addr() string {
 	return ":" + c.ServerPort
 }
+
+func (c *Config) IsProduction() bool {
+	return c.Environment == "production"
+}

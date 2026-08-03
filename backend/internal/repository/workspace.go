@@ -1,0 +1,92 @@
+package repository
+
+import (
+	"context"
+	"errors"
+	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/postilka/postilka/internal/model"
+)
+
+type WorkspaceRepository struct {
+	pool *pgxpool.Pool
+}
+
+func NewWorkspaceRepository(pool *pgxpool.Pool) *WorkspaceRepository {
+	return &WorkspaceRepository{pool: pool}
+}
+
+func (r *WorkspaceRepository) CreateWithOwner(ctx context.Context, name, slug, ownerID string) (*model.Workspace, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	const insertWS = `
+		INSERT INTO workspaces (name, slug, owner_id)
+		VALUES ($1, $2, $3)
+		RETURNING id, name, slug, owner_id, created_at
+	`
+	ws, err := scanWorkspace(tx.QueryRow(ctx, insertWS, name, slug, ownerID))
+	if err != nil {
+		return nil, err
+	}
+
+	const insertMember = `
+		INSERT INTO workspace_members (workspace_id, user_id, role)
+		VALUES ($1, $2, 'owner')
+	`
+	if _, err := tx.Exec(ctx, insertMember, ws.ID, ownerID); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	ws.Role = "owner"
+	return ws, nil
+}
+
+func (r *WorkspaceRepository) GetPrimaryForUser(ctx context.Context, userID string) (*model.Workspace, error) {
+	const q = `
+		SELECT w.id, w.name, w.slug, w.owner_id, wm.role, w.created_at
+		FROM workspaces w
+		JOIN workspace_members wm ON wm.workspace_id = w.id
+		WHERE wm.user_id = $1
+		ORDER BY w.created_at ASC
+		LIMIT 1
+	`
+	var ws model.Workspace
+	var createdAt time.Time
+	err := r.pool.QueryRow(ctx, q, userID).Scan(
+		&ws.ID, &ws.Name, &ws.Slug, &ws.OwnerID, &ws.Role, &createdAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	ws.CreatedAt = createdAt
+	return &ws, nil
+}
+
+func (r *WorkspaceRepository) SlugExists(ctx context.Context, slug string) (bool, error) {
+	var exists bool
+	err := r.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM workspaces WHERE slug = $1)`, slug).Scan(&exists)
+	return exists, err
+}
+
+func scanWorkspace(row pgx.Row) (*model.Workspace, error) {
+	var ws model.Workspace
+	var createdAt time.Time
+	err := row.Scan(&ws.ID, &ws.Name, &ws.Slug, &ws.OwnerID, &createdAt)
+	if err != nil {
+		return nil, err
+	}
+	ws.CreatedAt = createdAt
+	return &ws, nil
+}
