@@ -5,7 +5,7 @@ ARG ALPINE_MIRROR=https://mirror.yandex.ru/mirrors/alpine
 FROM golang:1.23-alpine AS builder
 ARG ALPINE_MIRROR
 WORKDIR /app
-RUN sed -i "s|https://dl-cdn.alpinelinux.org|${ALPINE_MIRROR}|g" /etc/apk/repositories \
+RUN sed -i "s|https://dl-cdn.alpinelinux.org/alpine|${ALPINE_MIRROR}|g" /etc/apk/repositories \
     && apk add --no-cache git ca-certificates
 
 ENV GOPROXY=https://proxy.golang.org,https://goproxy.io,direct
@@ -20,7 +20,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOBIN=/go/bin go install github.com/pressly/goose/v
 
 FROM alpine:3.20
 ARG ALPINE_MIRROR
-RUN sed -i "s|https://dl-cdn.alpinelinux.org|${ALPINE_MIRROR}|g" /etc/apk/repositories \
+RUN sed -i "s|https://dl-cdn.alpinelinux.org/alpine|${ALPINE_MIRROR}|g" /etc/apk/repositories \
     && apk add --no-cache ca-certificates tzdata
 WORKDIR /app
 COPY --from=builder /server /app/server
