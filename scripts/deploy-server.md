@@ -5,9 +5,15 @@
 ## 1. Подготовка сервера
 
 ```bash
-# Ubuntu/Debian
-sudo apt update && sudo apt install -y git docker.io docker-compose-plugin certbot make
+# Ubuntu 24.04 (noble) — пакет docker-compose-plugin в дефолтных репо НЕТ
+sudo apt update
+sudo apt install -y git docker.io docker-compose-v2 certbot make
 
+sudo systemctl enable --now docker
+docker --version
+docker compose version   # должно работать (v2)
+
+# Если не root:
 sudo usermod -aG docker $USER
 # перелогиниться
 
@@ -15,6 +21,16 @@ sudo ufw allow 22
 sudo ufw allow 80
 sudo ufw allow 443
 sudo ufw enable
+```
+
+**Ubuntu 22.04+ альтернатива:** `docker-compose-plugin` из [официального репо Docker](https://docs.docker.com/engine/install/ubuntu/) — если `docker-compose-v2` недоступен:
+
+```bash
+sudo apt install -y git docker.io certbot make
+sudo curl -SL "https://github.com/docker/compose/releases/latest/download/docker-compose-linux-$(uname -m)" \
+  -o /usr/local/lib/docker/cli-plugins/docker-compose
+sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
+sudo systemctl enable --now docker
 ```
 
 ## 2. Клонирование и env
@@ -49,10 +65,11 @@ chmod 600 nginx/ssl/privkey.pem
 
 ```bash
 make prod
-# или: docker compose --env-file .env -f docker-compose.yml -f docker-compose.prod.yml up --build -d
+# или без make:
+docker compose --env-file .env -f docker-compose.yml -f docker-compose.prod.yml up --build -d
 
-docker compose ps
-docker compose logs -f nginx backend frontend
+docker compose --env-file .env ps
+docker compose --env-file .env logs -f nginx backend frontend
 ```
 
 ## 5. Проверка
@@ -102,6 +119,9 @@ docker compose exec -T mysql mysqldump -u root -p"$WP_DB_ROOT_PASSWORD" wordpres
 
 ## Troubleshooting
 
+- **`Unable to locate package docker-compose-plugin`:** на Ubuntu 24.04 используйте `docker-compose-v2` (см. §1).
+- **`docker: command not found`:** `apt install docker.io && systemctl enable --now docker`.
+- **`make: command not found`:** `apt install make` или запуск без make (см. §4).
 - **nginx не стартует:** проверить `nginx/ssl/*.pem`, `docker compose logs nginx`
 - **502 на /app:** `docker compose logs frontend backend`
 - **API недоступен:** проверить `location ^~ /app/api/` в `nginx/snippets/postilka-locations.conf`
