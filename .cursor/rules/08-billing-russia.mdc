@@ -1,0 +1,15 @@
+---
+description: Billing РФ — Go services, Robokassa/YooKassa
+globs: "backend/**/*{billing,payment,subscription,robokassa,yookassa}*.go"
+alwaysApply: false
+---
+
+# Биллинг (РФ)
+
+- **BillingProvider** interface in Go; implementations Robokassa, YooKassa.
+- Same subscription service for UI, webhooks, entitlements.
+- Webhooks: `/app/api/v1/webhooks/...`; signature verify; idempotent.
+- WP Result URL pattern (Erman): WP may OK unknown InvId; app webhooks separate.
+- Server-side quota enforcement (channels, posts, AI credits).
+- Amounts in ₽; legal links to WordPress pages.
+- Tests: checkout, webhook replay, quota block, plan change.

@@ -1,0 +1,54 @@
+---
+description: WordPress + Postilka /app — nginx routing (Erman AI pattern)
+globs: "{nginx,wordpress,frontend}/**/*,**/docker-compose*.yml,**/next.config.*"
+alwaysApply: false
+---
+
+# WordPress + Postilka routing
+
+## Заморожено
+
+- `postilka.ru` — один домен, без `app.postilka.ru`.
+- WordPress — `/`, marketing, legal, `/wp-*`.
+- Postilka — **`/app`** (Next.js `basePath: '/app'` from day one).
+- API — **`/app/api/v1`** (nginx → Go backend :8080), как Erman но с prefix `/app` вместо root `/api/v1`.
+
+## URL map
+
+```
+postilka.ru/                    → WordPress
+postilka.ru/app                 → Next.js frontend
+postilka.ru/app/api/v1/...      → Go backend
+postilka.ru/app/_next/...       → frontend static
+```
+
+## Nginx (Erman `app-locations.conf` adapted)
+
+1. WordPress system paths → wordpress
+2. `location ^~ /app/api/` → backend:8080 (strip or pass — match Erman timeout/body size)
+3. `location ^~ /app/` → frontend:3000 (WebSocket for Next)
+4. `location /` → WordPress
+
+## Env
+
+```bash
+# Frontend
+NEXT_PUBLIC_API_URL=/app/api/v1
+INTERNAL_API_URL=http://backend:8080
+
+# Backend (OAuth, emails)
+PUBLIC_APP_URL=https://postilka.ru/app
+```
+
+- WP CTA → `https://postilka.ru/app/auth/login`
+- No `/app` page in WordPress
+
+## Layout
+
+- `wordpress/` + mysql separate from `backend/` + `frontend/`
+- Reference: Erman AI nginx snippets
+
+## Checklist
+
+- `/` → WP; `/app` → app; assets under `/app/_next/`
+- No requests to `/api/v1` or `/_next` without `/app` prefix

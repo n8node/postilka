@@ -1,0 +1,16 @@
+---
+description: UI, i18n, Next.js frontend conventions
+globs: "frontend/**/*.{ts,tsx,css,scss,json}"
+alwaysApply: false
+---
+
+# Бренд, i18n и UI
+
+- Product **Postilka**; app URL `https://postilka.ru/app`.
+- Russian default UI; next-intl; update all locale files together.
+- Stack: Next.js 15 App Router, Tailwind, shadcn/ui — как Erman AI.
+- Design: clean dashboard (Stripe/Linear-like); light theme default; no emoji decor.
+- Locale-aware dates, ₽, pluralization; org timezone not hardcoded Moscow.
+- Accessible: labels, keyboard, focus, loading/error states; status not color-only.
+- Provider errors — Russian + next step; no raw API JSON.
+- Links/assets via basePath helpers; `NEXT_PUBLIC_API_URL=/app/api/v1`.

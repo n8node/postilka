@@ -1,0 +1,63 @@
+---
+description: Процесс агента — scope, minimal diff, Go stack
+globs: "**/*"
+alwaysApply: true
+---
+
+# Процесс написания кода
+
+Дополняет user rules и `00`–`17`.
+
+## Scope-first
+
+- One task = one measurable outcome; short plan if >3 files; stop when done.
+
+## Minimal diff
+
+- Point edits; follow **this repo** layout (`backend/`, `frontend/`).
+- Erman AI / Photochka — **reference patterns**, adapt to Postilka domain.
+- No unrelated refactor, renames, or extra layers without request.
+
+## Read before write
+
+- Narrow grep → 1–3 files same layer (`handler`, `service`, `repository`, Next page).
+
+## Files
+
+- New file only when no natural home; no unsolicited README/ADR.
+- Tests on request or critical paths (auth, publish idempotency, presign, webhook).
+- No commit/push/deploy without explicit ask.
+
+## Anti-bloat
+
+| Layer | Do | Don't |
+|-------|-----|--------|
+| Go | handler → service → repository | SQL in handlers, sync publish in HTTP |
+| Next | basePath `/app`, Server Components default | second state stack |
+| DB | goose migrations | manual prod schema drift |
+| Jobs | worker + NATS prod | Temporal, duplicate cron |
+| Providers | interface + registry | platform HTTP in React |
+
+## Stop signals
+
+- Missing provider API; billing/legal; >5 new files; security violations; vague scope.
+
+## Rule index
+
+| Topic | File |
+|-------|------|
+| Core stack | `00-postilka-core.mdc` |
+| Repo layout | `01-architecture-principles.mdc` |
+| Product | `02-product-directives.mdc` |
+| Go + Next | `03-stack-architecture.mdc` |
+| Providers | `04-social-providers-oauth.mdc` |
+| Workers/jobs | `05-jobs-scheduling.mdc` |
+| Security | `06-security-data.mdc` |
+| UI | `07-brand-i18n-ui.mdc` |
+| Billing | `08-billing-russia.mdc` |
+| Deploy | `09-deploy-operations.mdc` |
+| AI | `10-ai-privacy.mdc`, `12`, `16` |
+| API | `11-public-api-mcp.mdc` |
+| S3 | `13-s3-media-storage.mdc` |
+| Proxy | `14-outbound-proxy-providers.mdc` |
+| Routing | `17-wordpress-nginx-routing.mdc` |

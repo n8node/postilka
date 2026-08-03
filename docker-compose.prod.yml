@@ -1,0 +1,51 @@
+services:
+  nginx:
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  backend:
+    environment:
+      ENVIRONMENT: production
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  worker:
+    environment:
+      ENVIRONMENT: production
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  frontend:
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # nats:
+  #   image: nats:2.10-alpine
+  #   command: ["-js", "-m", "8222"]
+  #   restart: unless-stopped
+
+  # dragonfly:
+  #   image: docker.dragonflydb.io/dragonflydb/dragonfly
+  #   restart: unless-stopped
+
+  # minio:
+  #   image: minio/minio
+  #   command: server /data --console-address ":9001"
+  #   environment:
+  #     MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
+  #     MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
+  #   volumes:
+  #     - minio_data:/data
+  #   restart: unless-stopped

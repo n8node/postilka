@@ -1,0 +1,22 @@
+---
+description: Ядро Postilka — продукт, стек (Erman AI pattern), домен и инварианты
+alwaysApply: true
+---
+
+# Ядро Postilka
+
+- **Postilka** — собственный продукт автопостинга и SMM-планирования для РФ; домен **`postilka.ru`**. Greenfield, без форков чужих SaaS.
+- **Публичный сайт:** WordPress на корне; **приложение** — **`/app`** (см. `17-wordpress-nginx-routing.mdc`).
+- **Стек — как Erman AI** (reference-проект в workspace):
+  - **Backend:** Go 1.23+, chi, pgx, goose migrations
+  - **Frontend:** Next.js 15+ (App Router), TypeScript strict, Tailwind, shadcn/ui
+  - **DB:** PostgreSQL 16+
+  - **Reverse proxy:** Nginx в Docker
+  - **Dev:** Docker Compose (nginx, backend, frontend, wordpress, postgres, mysql)
+  - **Prod:** + NATS JetStream, DragonflyDB, S3-compatible storage (MinIO self-host / Beget S3 в РФ)
+- Не вводи NestJS, Prisma, Temporal, pnpm monorepo или второй backend-язык без явного ADR.
+- UI — русский в первую очередь; код и tech comments — English.
+- Официальные API соцсетей и OAuth; без скрапинга и сбора паролей.
+- Не коммить secrets, tokens, keys, payment payloads, user content, signed URLs.
+- Production: 152-ФЗ, legal review для оферты/ПДн/платежей.
+- Не commit/push/deploy/production migrations без явного запроса.
