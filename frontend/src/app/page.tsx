@@ -74,6 +74,8 @@ export default function HomePage() {
             process.env.NEXT_PUBLIC_SITE_URL ??
             "https://postilka.ru"
           }
+          target="_blank"
+          rel="noopener noreferrer"
           className="text-accent underline-offset-2 hover:underline"
         >
           главной (WordPress)
