@@ -13,6 +13,8 @@ alwaysApply: true
 - Глобальные каналы — по мере готовности провайдеров + outbound proxy.
 - Public API + webhooks; MCP/CLI — опционально, та же business logic что UI.
 - Биллинг РФ — `08-billing-russia.mdc`.
+- Подписки, квоты, кошелёк токенов — `18-subscriptions-tokens-wallet.mdc` (эталон DOC).
+- Полный план функционала — `19-product-feature-plan.mdc`.
 - AI: Yandex GPT (text), KIE.ai (media) — `12`, `16`.
 - Медиа — S3-compatible — `13`.
 - Outbound proxy — `14`.

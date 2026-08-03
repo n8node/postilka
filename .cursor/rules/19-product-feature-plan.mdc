@@ -1,0 +1,113 @@
+---
+description: Полный план функционала Postilka (рынок SMM + экономика DOC)
+alwaysApply: true
+---
+
+# План функционала Postilka
+
+Чеклист продукта. Статусы уточняем при проходе с владельцем: **must / later / never**.  
+Экономика подробно: `18-subscriptions-tokens-wallet.mdc`. Стек: `00`–`17`.
+
+## 1. Аккаунты и каналы
+- OAuth/API подключение сетей; несколько аккаунтов одной сети
+- Статус: active / token expired / error / reconnect
+- Capabilities и лимиты сети (текст, медиа, форматы)
+- Группы каналов (бренд / проект); отключение без удаления истории
+- РФ must: VK, Telegram, OK, MAX, Rutube, Дзен (официальный API)
+- Глобальные сети — later + outbound proxy (`14`)
+
+## 2. Композер
+- Текст + превью per-network; мультипост с адаптацией
+- Медиа: фото/видео/альбомы; первый комментарий где поддерживается
+- Хештеги, упоминания, ссылки, UTM
+- Черновики, шаблоны, дублирование поста
+- Валидация до публикации; preview «как в сети»
+
+## 3. Планирование и календарь
+- Сейчас / по расписанию / черновик
+- Статусы: draft → scheduled → publishing → published | failed | canceled
+- Календарь день/неделя/месяц; drag-and-drop
+- Очередь, таймзона, recurring, bulk
+- Retry, идемпотентность публикации; reconnect errors
+- Worker + `due_at` + NATS prod (`05`)
+
+## 4. Медиатека
+- Upload, S3-compatible storage (`13`), папки/теги/поиск
+- Превью, метаданные; кроп/ресайз под формат сети
+- Переиспользование; лимит storage по тарифу
+
+## 5. AI
+- Текст: Yandex GPT — генерация, рерайт, тон, хештеги, идеи (`16`)
+- Media: KIE.ai — image/video (`12`)
+- Лимиты: included квота тарифа → overage с кошелька (`18`)
+- Prefail при нуле квоты и пустом кошельке
+
+## 6. Подписка, квоты, кошелёк
+- Тарифы free/paid; entitlements (каналы, посты, seats, storage, AI)
+- Included токены/кредиты периода; без rollover
+- Отдельный кошелёк ₽ для докупки / overage AI
+- Top-up произвольной суммой; YooKassa/Robokassa (`08`)
+- Spend priority: plan quota → wallet
+- Страницы: тарифы, баланс, история usage/платежей
+- Trial = timed free plan; refunds — policy + manual
+
+## 7. Команда и approval
+- Workspace; роли owner/admin/editor/viewer
+- Инвайты; approve/reject поста с комментарием
+- Аудит кто создал/изменил/опубликовал
+
+## 8. Аналитика
+- Метрики по постам/каналам/периоду (если API сети отдаёт)
+- Дашборд периода; экспорт later
+- Глубокий competitive listening — never/later вне своих аккаунтов
+
+## 9. Inbox / engagement
+- Единый inbox комментариев/сообщений — later
+- Ответы из приложения, шаблоны — later
+
+## 10. Уведомления
+- Post published / failed / token expired / low wallet / plan expiry
+- In-app + email/Telegram по настройкам; webhooks для API-клиентов
+
+## 11. Интеграции
+- Public API + webhooks (`11`); та же business logic что UI
+- RSS→пост, Zapier/Make — later
+- MCP/CLI — optional, later
+
+## 12. Онбординг и UX
+- Регистрация/логин; RU UI (`07`)
+- Онбординг: workspace → канал → первый пост
+- Настройки: профиль, таймзона, уведомления
+- Ошибки и пустые состояния на русском
+
+## 13. Биллинг UX и лимиты
+- Checkout, смена тарифа, история платежей, инвойсы
+- Server-side enforcement квот; block с понятной ошибкой
+- Юр. страницы на WordPress; app на `/app` (`17`)
+
+## 14. Админка платформы
+- Users, plans, payments, top-ups
+- LLM config Yandex/KIE (`12`); feature flags
+- Логи публикаций/ошибок провайдеров; active payment provider
+
+## 15. Платформенное
+- Health каналов; rate limits; outbound proxy (`14`)
+- 152-ФЗ: удаление/экспорт данных; не логировать контент в AI usage без нужды (`10`)
+
+## 16. Отложено / не ядро
+- Native mobile; ads manager; social listening чужих аккаунтов
+- Link-in-bio; influencer marketplace; unofficial API
+- Full design-system rewrite
+
+## Порядок внедрения (скелет)
+
+1. Auth + workspace + onboarding shell  
+2. Channels OAuth (Telegram/VK first)  
+3. Composer + media + schedule + worker publish  
+4. Calendar + statuses + retry  
+5. Plans + quotas + payments + wallet (`18`)  
+6. AI text/media + debit priority  
+7. Team/roles/approval  
+8. Analytics MVP  
+9. Public API/webhooks  
+10. Inbox / bulk / integrations — later

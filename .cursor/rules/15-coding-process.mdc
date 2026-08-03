@@ -61,3 +61,5 @@ alwaysApply: true
 | S3 | `13-s3-media-storage.mdc` |
 | Proxy | `14-outbound-proxy-providers.mdc` |
 | Routing | `17-wordpress-nginx-routing.mdc` |
+| Subscriptions / wallet | `18-subscriptions-tokens-wallet.mdc` |
+| Feature plan | `19-product-feature-plan.mdc` |

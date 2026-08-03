@@ -6,10 +6,13 @@ alwaysApply: false
 
 # Биллинг (РФ)
 
+Платежные провайдеры. Модель подписки / квот / кошелька: **`18-subscriptions-tokens-wallet.mdc`**. План фич: `19`.
+
 - **BillingProvider** interface in Go; implementations Robokassa, YooKassa.
-- Same subscription service for UI, webhooks, entitlements.
-- Webhooks: `/app/api/v1/webhooks/...`; signature verify; idempotent.
+- Same payment finalize path for UI, webhooks; idempotent `pending → succeeded`.
+- Два типа платежей: **subscribe (plan)** и **wallet top-up** — разные entities, общий provider switch.
+- Webhooks: `/app/api/v1/webhooks/...`; signature verify; amount check (Robokassa Result).
 - WP Result URL pattern (Erman): WP may OK unknown InvId; app webhooks separate.
-- Server-side quota enforcement (channels, posts, AI credits).
-- Amounts in ₽; legal links to WordPress pages.
-- Tests: checkout, webhook replay, quota block, plan change.
+- Server-side quota enforcement (channels, posts, AI); wallet debit for overage (`18`).
+- Amounts in ₽ (store kopecks); legal links to WordPress pages.
+- Tests: checkout, top-up, webhook replay, quota block, plan change, spend priority.
