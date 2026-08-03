@@ -15,8 +15,10 @@ WORKDIR /app
 RUN sed -i "s|https://dl-cdn.alpinelinux.org/alpine|${ALPINE_MIRROR}|g" /etc/apk/repositories
 ARG NEXT_PUBLIC_API_URL=/app/api/v1
 ARG NEXT_PUBLIC_APP_NAME=Postilka
+ARG NEXT_PUBLIC_SITE_URL=https://postilka.ru
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV NEXT_PUBLIC_APP_NAME=$NEXT_PUBLIC_APP_NAME
+ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .

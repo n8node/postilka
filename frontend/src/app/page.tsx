@@ -69,7 +69,13 @@ export default function HomePage() {
 
       <p className="text-sm text-muted">
         Маркетинговый сайт — на{" "}
-        <a href="/" className="text-accent underline-offset-2 hover:underline">
+        <a
+          href={
+            process.env.NEXT_PUBLIC_SITE_URL ??
+            "https://postilka.ru"
+          }
+          className="text-accent underline-offset-2 hover:underline"
+        >
           главной (WordPress)
         </a>
         .
