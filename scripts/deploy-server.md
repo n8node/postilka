@@ -122,6 +122,7 @@ docker compose exec -T mysql mysqldump -u root -p"$WP_DB_ROOT_PASSWORD" wordpres
 - **`Unable to locate package docker-compose-plugin`:** на Ubuntu 24.04 используйте `docker-compose-v2` (см. §1).
 - **`docker: command not found`:** `apt install docker.io && systemctl enable --now docker`.
 - **`make: command not found`:** `apt install make` или запуск без make (см. §4).
+- **Build timeout на GitHub / Alpine:** обновите repo (`git pull`) — Dockerfile использует зеркало Yandex для Alpine и jsdelivr для wp-cli. Пересборка: `docker compose ... build --no-cache wordpress backend`.
 - **nginx не стартует:** проверить `nginx/ssl/*.pem`, `docker compose logs nginx`
 - **502 на /app:** `docker compose logs frontend backend`
 - **API недоступен:** проверить `location ^~ /app/api/` в `nginx/snippets/postilka-locations.conf`

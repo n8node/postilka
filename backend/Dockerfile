@@ -1,8 +1,14 @@
 # syntax=docker/dockerfile:1
 
+ARG ALPINE_MIRROR=https://mirror.yandex.ru/mirrors/alpine
+
 FROM golang:1.23-alpine AS builder
+ARG ALPINE_MIRROR
 WORKDIR /app
-RUN apk add --no-cache git ca-certificates
+RUN sed -i "s|https://dl-cdn.alpinelinux.org|${ALPINE_MIRROR}|g" /etc/apk/repositories \
+    && apk add --no-cache git ca-certificates
+
+ENV GOPROXY=https://proxy.golang.org,https://goproxy.io,direct
 
 COPY go.mod go.sum ./
 RUN go mod download
@@ -13,7 +19,9 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /worker ./cmd/worker
 RUN CGO_ENABLED=0 GOOS=linux GOBIN=/go/bin go install github.com/pressly/goose/v3/cmd/goose@v3.24.1
 
 FROM alpine:3.20
-RUN apk add --no-cache ca-certificates tzdata
+ARG ALPINE_MIRROR
+RUN sed -i "s|https://dl-cdn.alpinelinux.org|${ALPINE_MIRROR}|g" /etc/apk/repositories \
+    && apk add --no-cache ca-certificates tzdata
 WORKDIR /app
 COPY --from=builder /server /app/server
 COPY --from=builder /worker /app/worker
