@@ -21,6 +21,8 @@ export type Workspace = {
 export type MeResponse = {
   user: User;
   workspace: Workspace | null;
+  active_workspace: Workspace | null;
+  workspaces: Workspace[];
 };
 
 export type AdminUserWorkspace = {
@@ -111,6 +113,20 @@ export function logout() {
 
 export function fetchMe() {
   return apiFetch<MeResponse>("/auth/me");
+}
+
+export function fetchWorkspaces() {
+  return apiFetch<{ workspaces: Workspace[] }>("/workspaces");
+}
+
+export function setActiveWorkspace(workspaceId: string) {
+  return apiFetch<{ workspace: Workspace; active_workspace: Workspace }>(
+    "/workspaces/active",
+    {
+      method: "POST",
+      body: JSON.stringify({ workspace_id: workspaceId }),
+    },
+  );
 }
 
 export function fetchAdminUsers(query: AdminUsersQuery = {}) {

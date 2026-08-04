@@ -74,6 +74,58 @@ func (r *WorkspaceRepository) GetPrimaryForUser(ctx context.Context, userID stri
 	return &ws, nil
 }
 
+func (r *WorkspaceRepository) ListForUser(ctx context.Context, userID string) ([]model.Workspace, error) {
+	const q = `
+		SELECT w.id, w.name, w.slug, w.owner_id, wm.role, w.created_at
+		FROM workspaces w
+		JOIN workspace_members wm ON wm.workspace_id = w.id
+		WHERE wm.user_id = $1
+		ORDER BY w.created_at ASC
+	`
+	rows, err := r.pool.Query(ctx, q, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]model.Workspace, 0)
+	for rows.Next() {
+		var ws model.Workspace
+		var createdAt time.Time
+		if err := rows.Scan(
+			&ws.ID, &ws.Name, &ws.Slug, &ws.OwnerID, &ws.Role, &createdAt,
+		); err != nil {
+			return nil, err
+		}
+		ws.CreatedAt = createdAt
+		out = append(out, ws)
+	}
+	return out, rows.Err()
+}
+
+// GetMembership returns the workspace with the caller's role if they are a member.
+func (r *WorkspaceRepository) GetMembership(ctx context.Context, workspaceID, userID string) (*model.Workspace, error) {
+	const q = `
+		SELECT w.id, w.name, w.slug, w.owner_id, wm.role, w.created_at
+		FROM workspaces w
+		JOIN workspace_members wm ON wm.workspace_id = w.id
+		WHERE w.id = $1 AND wm.user_id = $2
+	`
+	var ws model.Workspace
+	var createdAt time.Time
+	err := r.pool.QueryRow(ctx, q, workspaceID, userID).Scan(
+		&ws.ID, &ws.Name, &ws.Slug, &ws.OwnerID, &ws.Role, &createdAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	ws.CreatedAt = createdAt
+	return &ws, nil
+}
+
 func (r *WorkspaceRepository) SlugExists(ctx context.Context, slug string) (bool, error) {
 	var exists bool
 	err := r.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM workspaces WHERE slug = $1)`, slug).Scan(&exists)

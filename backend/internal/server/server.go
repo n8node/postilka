@@ -30,11 +30,12 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	userRepo := repository.NewUserRepository(db.Pool)
 	wsRepo := repository.NewWorkspaceRepository(db.Pool)
 	authSvc := service.NewAuthService(userRepo, wsRepo, authMW)
+	wsSvc := service.NewWorkspaceService(wsRepo)
 
 	health := handler.NewHealthHandler(cfg, db)
 	status := handler.NewStatusHandler(cfg)
-	authHandler := handler.NewAuthHandler(authSvc, authMW, cfg)
-	wsHandler := handler.NewWorkspaceHandler(wsRepo)
+	authHandler := handler.NewAuthHandler(authSvc, wsSvc, authMW, cfg)
+	wsHandler := handler.NewWorkspaceHandler(wsSvc, cfg)
 	adminHandler := handler.NewAdminHandler(userRepo)
 
 	r.Get("/health", health.ServeHTTP)
@@ -50,8 +51,13 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.With(authMW.Required).Get("/me", authHandler.Me)
 		})
 
+		r.With(authMW.Required).Get("/workspaces", wsHandler.List)
 		r.Route("/workspaces", func(r chi.Router) {
-			r.With(authMW.Required).Get("/me", wsHandler.Me)
+			r.Group(func(r chi.Router) {
+				r.Use(authMW.Required)
+				r.Get("/me", wsHandler.Me)
+				r.Post("/active", wsHandler.SetActive)
+			})
 		})
 
 		r.Route("/admin", func(r chi.Router) {

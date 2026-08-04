@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"net/mail"
 	"regexp"
 	"strings"
@@ -39,9 +40,10 @@ func NewAuthService(users *repository.UserRepository, workspaces *repository.Wor
 }
 
 type AuthResult struct {
-	Token     string
-	User      *model.User
-	Workspace *model.Workspace
+	Token      string
+	User       *model.User
+	Workspace  *model.Workspace
+	Workspaces []model.Workspace
 }
 
 func (s *AuthService) Register(ctx context.Context, email, password, name string) (*AuthResult, error) {
@@ -88,7 +90,8 @@ func (s *AuthService) Register(ctx context.Context, email, password, name string
 		return nil, err
 	}
 
-	return &AuthResult{Token: token, User: user, Workspace: ws}, nil
+	list := []model.Workspace{*ws}
+	return &AuthResult{Token: token, User: user, Workspace: ws, Workspaces: list}, nil
 }
 
 func (s *AuthService) Login(ctx context.Context, email, password string) (*AuthResult, error) {
@@ -113,9 +116,13 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (*AuthR
 
 	_ = s.users.TouchActive(ctx, user.ID)
 
-	ws, err := s.workspaces.GetPrimaryForUser(ctx, user.ID)
-	if err != nil && !errors.Is(err, repository.ErrNotFound) {
+	list, err := s.workspaces.ListForUser(ctx, user.ID)
+	if err != nil {
 		return nil, err
+	}
+	var ws *model.Workspace
+	if len(list) > 0 {
+		ws = &list[0]
 	}
 
 	token, err := s.auth.IssueToken(user.ID, tokenTTL)
@@ -123,22 +130,24 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (*AuthR
 		return nil, err
 	}
 
-	return &AuthResult{Token: token, User: user, Workspace: ws}, nil
+	return &AuthResult{Token: token, User: user, Workspace: ws, Workspaces: list}, nil
 }
 
-func (s *AuthService) Me(ctx context.Context, userID string) (*model.User, *model.Workspace, error) {
+func (s *AuthService) Me(ctx context.Context, userID string, r *http.Request) (*model.User, *model.Workspace, []model.Workspace, error) {
 	user, err := s.users.GetByID(ctx, userID)
 	if errors.Is(err, repository.ErrNotFound) {
-		return nil, nil, ErrInvalidCredentials
+		return nil, nil, nil, ErrInvalidCredentials
 	}
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	ws, err := s.workspaces.GetPrimaryForUser(ctx, userID)
-	if err != nil && !errors.Is(err, repository.ErrNotFound) {
-		return nil, nil, err
+
+	wsSvc := NewWorkspaceService(s.workspaces)
+	active, list, err := wsSvc.ResolveActive(ctx, userID, r)
+	if err != nil {
+		return nil, nil, nil, err
 	}
-	return user, ws, nil
+	return user, active, list, nil
 }
 
 // EnsureSuperAdmin creates a user (with workspace) if missing, then sets is_platform_admin.

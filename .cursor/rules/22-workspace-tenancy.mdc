@@ -1,0 +1,16 @@
+---
+description: Workspace is the tenant; membership ACL for domain resources
+globs: backend/**/*.{go,sql}
+alwaysApply: false
+---
+
+# Workspace tenancy
+
+- **Tenant = workspace**, not user. Channels, posts, media, schedules → `workspace_id NOT NULL`.
+- **User** = identity (auth, block, platform admin, wallet ₽).
+- **Plan / seats / channel quotas** → workspace. **Wallet** → user (`18`).
+- Access: `RequireMembership(userID, workspaceID, minRole)` in service layer before mutations/reads.
+- Active workspace: cookie `active_workspace_id` or header `X-Workspace-Id`; JWT stays user-only.
+- Roles: `owner > admin > editor > viewer`. One canonical `workspaces.owner_id`; membership owner must match.
+- Invites: table `workspace_invites` (wave 8 flow); never insert members by email without accept + seats check.
+- Platform admin ≠ workspace role.

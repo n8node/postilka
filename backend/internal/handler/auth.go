@@ -12,13 +12,19 @@ import (
 )
 
 type AuthHandler struct {
-	auth *service.AuthService
-	mw   *middleware.Auth
-	cfg  *config.Config
+	auth       *service.AuthService
+	workspaces *service.WorkspaceService
+	mw         *middleware.Auth
+	cfg        *config.Config
 }
 
-func NewAuthHandler(auth *service.AuthService, mw *middleware.Auth, cfg *config.Config) *AuthHandler {
-	return &AuthHandler{auth: auth, mw: mw, cfg: cfg}
+func NewAuthHandler(
+	auth *service.AuthService,
+	workspaces *service.WorkspaceService,
+	mw *middleware.Auth,
+	cfg *config.Config,
+) *AuthHandler {
+	return &AuthHandler{auth: auth, workspaces: workspaces, mw: mw, cfg: cfg}
 }
 
 type credentialsRequest struct {
@@ -28,8 +34,22 @@ type credentialsRequest struct {
 }
 
 type meResponse struct {
-	User      *model.User      `json:"user"`
-	Workspace *model.Workspace `json:"workspace"`
+	User            *model.User       `json:"user"`
+	Workspace       *model.Workspace  `json:"workspace"`
+	ActiveWorkspace *model.Workspace  `json:"active_workspace"`
+	Workspaces      []model.Workspace `json:"workspaces"`
+}
+
+func (h *AuthHandler) writeMe(w http.ResponseWriter, status int, user *model.User, active *model.Workspace, list []model.Workspace) {
+	if list == nil {
+		list = []model.Workspace{}
+	}
+	writeJSON(w, status, meResponse{
+		User:            user,
+		Workspace:       active,
+		ActiveWorkspace: active,
+		Workspaces:      list,
+	})
 }
 
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
@@ -46,7 +66,10 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.mw.SetTokenCookie(w, result.Token, h.cfg.IsProduction())
-	writeJSON(w, http.StatusCreated, meResponse{User: result.User, Workspace: result.Workspace})
+	if result.Workspace != nil {
+		service.SetActiveWorkspaceCookie(w, result.Workspace.ID, h.cfg.IsProduction())
+	}
+	h.writeMe(w, http.StatusCreated, result.User, result.Workspace, result.Workspaces)
 }
 
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
@@ -63,11 +86,25 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.mw.SetTokenCookie(w, result.Token, h.cfg.IsProduction())
-	writeJSON(w, http.StatusOK, meResponse{User: result.User, Workspace: result.Workspace})
+
+	active, list, err := h.workspaces.ResolveActive(r.Context(), result.User.ID, r)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Внутренняя ошибка")
+		return
+	}
+	if active == nil {
+		active = result.Workspace
+		list = result.Workspaces
+	}
+	if active != nil {
+		service.SetActiveWorkspaceCookie(w, active.ID, h.cfg.IsProduction())
+	}
+	h.writeMe(w, http.StatusOK, result.User, active, list)
 }
 
 func (h *AuthHandler) Logout(w http.ResponseWriter, _ *http.Request) {
 	h.mw.ClearTokenCookie(w)
+	service.ClearActiveWorkspaceCookie(w)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
@@ -78,13 +115,13 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, ws, err := h.auth.Me(r.Context(), userID)
+	user, active, list, err := h.auth.Me(r.Context(), userID, r)
 	if err != nil {
 		h.writeAuthError(w, err)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, meResponse{User: user, Workspace: ws})
+	h.writeMe(w, http.StatusOK, user, active, list)
 }
 
 func (h *AuthHandler) writeAuthError(w http.ResponseWriter, err error) {
