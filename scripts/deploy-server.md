@@ -72,6 +72,9 @@ docker compose --env-file .env ps
 docker compose --env-file .env logs -f nginx backend frontend
 ```
 
+`make prod` завершается ошибкой, если nginx, frontend или backend не поднялись
+либо edge не отвечает на `/app/health` и `/app/`.
+
 ## 5. Проверка
 
 | URL | Ожидание |
@@ -107,15 +110,16 @@ bash scripts/wp-bootstrap.sh
 cd /opt/postilka
 git pull origin main
 
-# Не гоняйте полный make prod без нужды: рестарт nginx роняет
-# keep-alive сокеты → Windows Chrome/YaBrowser: «Не удаётся установить соединение».
 # Обновляйте только изменившиеся сервисы:
-make prod-backend      # API + worker (+ goose на старте)
-make prod-frontend     # Next.js UI
-make prod-nginx        # только если меняли nginx/*.conf
+make prod-backend      # API + worker (+ goose на старте), затем edge health-check
+make prod-frontend     # Next.js UI, затем edge health-check
+make prod-nginx        # только если меняли nginx/*.conf, затем edge health-check
 
-# Полный стек — редко:
+# Полный стек (инфраструктурные изменения):
 # make prod
+
+# Повторная ручная проверка:
+# make verify-release
 ```
 
 ## 8. Бэкапы (рекомендуется до prod data)
@@ -135,7 +139,7 @@ docker compose exec -T mysql mysqldump -u root -p"$WP_DB_ROOT_PASSWORD" wordpres
 - **502 на /app:** `docker compose logs frontend backend`
 - **API недоступен:** проверить `location ^~ /app/api/` в `nginx/snippets/postilka-locations.conf`
 - **WP mixed content:** `WORDPRESS_CONFIG_EXTRA` в compose уже прокидывает HTTPS за proxy
-- **ПК: сайт «не открывается» после деплоя, мобилка/curl ок:** не DNS. Полностью закройте браузер (все окна YaBrowser/Chrome) и откройте снова. На деплое не пересоздавайте nginx без изменений конфига (`make prod-backend` / `prod-frontend`).
+- **Контейнеры Up, но браузер не открывает Postilka:** это не доказывает browser cache. Проверьте `/app/health` с сервера, затем сравните тот же ПК через домашнюю сеть и hotspot. При отказе соберите `chrome://net-export` и `docker compose ... logs --tail=100 nginx`; если запрос с ПК не попал в access log, исследуйте маршрут/роутер/ISP/TLS inspection.
 
 ## Локальная разработка (без SSL)
 

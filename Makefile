@@ -1,4 +1,4 @@
-.PHONY: up down prod prod-backend prod-frontend prod-nginx migrate test lint logs setup psql wp-cli status create-superadmin
+.PHONY: up down prod prod-backend prod-frontend prod-nginx verify-release migrate test lint logs setup psql wp-cli status create-superadmin
 
 COMPOSE := docker compose --env-file .env
 COMPOSE_PROD := $(COMPOSE) -f docker-compose.yml -f docker-compose.prod.yml
@@ -11,16 +11,23 @@ down:
 
 prod:
 	$(COMPOSE_PROD) up --build -d
+	bash scripts/verify-release.sh
 
-# Prefer these after Wave-1: avoid recreating nginx (Windows browsers RST on dead keepalives).
+# Deploy only the services affected by a release; each target checks the public edge.
 prod-backend:
 	$(COMPOSE_PROD) up --build -d backend worker
+	bash scripts/verify-release.sh
 
 prod-frontend:
 	$(COMPOSE_PROD) up --build -d frontend
+	bash scripts/verify-release.sh
 
 prod-nginx:
 	$(COMPOSE_PROD) up --build -d nginx
+	bash scripts/verify-release.sh
+
+verify-release:
+	bash scripts/verify-release.sh
 
 migrate:
 	$(COMPOSE) exec -T backend sh -c 'goose -dir ./migrations postgres "$$DATABASE_URL" up'
