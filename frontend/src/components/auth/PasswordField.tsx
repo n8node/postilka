@@ -1,7 +1,7 @@
 "use client";
 
-import { Eye, EyeOff } from "lucide-react";
-import { useMemo, useState } from "react";
+import { Eye, EyeOff, Sparkles } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   checkPasswordRules,
   isPasswordValid,
@@ -9,13 +9,13 @@ import {
   PASSWORD_RULE_LABELS,
   PASSWORD_STRENGTH_LABELS,
   passwordStrength,
-  type PasswordRuleKey,
   type PasswordStrength,
 } from "@/lib/password-policy";
+import { copyToClipboard, generateSecurePassword } from "@/lib/generate-password";
 import { cn } from "@/lib/utils";
 
 const inputClass =
-  "w-full rounded-lg border border-slate-200 py-2 pl-3 pr-10 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20";
+  "w-full rounded-lg border border-slate-200 py-2 pl-3 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20";
 
 const STRENGTH_BAR: Record<PasswordStrength, string> = {
   0: "bg-slate-200",
@@ -33,6 +33,13 @@ const STRENGTH_TEXT: Record<PasswordStrength, string> = {
   4: "text-emerald-600",
 };
 
+type CursorTip = {
+  x: number;
+  y: number;
+  text: string;
+  key: number;
+};
+
 type PasswordFieldProps = {
   id: string;
   label: string;
@@ -42,6 +49,8 @@ type PasswordFieldProps = {
   showStrength?: boolean;
   showRequirements?: boolean;
   required?: boolean;
+  allowGenerate?: boolean;
+  onGenerated?: (password: string) => void;
 };
 
 export function PasswordField({
@@ -53,8 +62,12 @@ export function PasswordField({
   showStrength = false,
   showRequirements = false,
   required = true,
+  allowGenerate = false,
+  onGenerated,
 }: PasswordFieldProps) {
   const [visible, setVisible] = useState(false);
+  const [hoverTip, setHoverTip] = useState<CursorTip | null>(null);
+  const [copyTip, setCopyTip] = useState<CursorTip | null>(null);
 
   const rules = useMemo(() => checkPasswordRules(value), [value]);
   const strength = useMemo(() => passwordStrength(value, rules), [value, rules]);
@@ -62,6 +75,33 @@ export function PasswordField({
 
   const strengthLabel =
     strength === 0 ? "" : PASSWORD_STRENGTH_LABELS[strength];
+
+  const showTip = useCallback((x: number, y: number, text: string) => {
+    const tip = { x, y, text, key: Date.now() };
+    setCopyTip(tip);
+    window.setTimeout(() => {
+      setCopyTip((current) => (current?.key === tip.key ? null : current));
+    }, 2200);
+  }, []);
+
+  useEffect(() => {
+    if (!copyTip) return;
+    const onScroll = () => setCopyTip(null);
+    window.addEventListener("scroll", onScroll, true);
+    return () => window.removeEventListener("scroll", onScroll, true);
+  }, [copyTip]);
+
+  async function handleGenerate(e: React.MouseEvent<HTMLButtonElement>) {
+    const pwd = generateSecurePassword();
+    onChange(pwd);
+    onGenerated?.(pwd);
+    setVisible(true);
+    await copyToClipboard(pwd);
+    showTip(e.clientX, e.clientY, "Пароль скопирован в буфер обмена");
+    setHoverTip(null);
+  }
+
+  const inputPad = allowGenerate ? "pr-[4.5rem]" : "pr-10";
 
   return (
     <div>
@@ -76,21 +116,58 @@ export function PasswordField({
           required={required}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className={inputClass}
+          className={cn(inputClass, inputPad)}
           aria-describedby={
             showStrength || showRequirements ? `${id}-hints` : undefined
           }
         />
-        <button
-          type="button"
-          tabIndex={-1}
-          onClick={() => setVisible((v) => !v)}
-          className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted hover:text-text"
-          aria-label={visible ? "Скрыть пароль" : "Показать пароль"}
-        >
-          {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-        </button>
+        <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-0.5">
+          {allowGenerate && (
+            <button
+              type="button"
+              tabIndex={-1}
+              onClick={handleGenerate}
+              onMouseEnter={(e) =>
+                setHoverTip({
+                  x: e.clientX,
+                  y: e.clientY,
+                  text: "Сгенерировать надёжный пароль и скопировать",
+                  key: 0,
+                })
+              }
+              onMouseMove={(e) =>
+                setHoverTip({
+                  x: e.clientX,
+                  y: e.clientY,
+                  text: "Сгенерировать надёжный пароль и скопировать",
+                  key: 0,
+                })
+              }
+              onMouseLeave={() => setHoverTip(null)}
+              className="rounded p-1 text-muted transition-colors hover:bg-slate-100 hover:text-accent"
+              aria-label="Сгенерировать пароль"
+            >
+              <Sparkles className="h-4 w-4" />
+            </button>
+          )}
+          <button
+            type="button"
+            tabIndex={-1}
+            onClick={() => setVisible((v) => !v)}
+            className="rounded p-1 text-muted hover:text-text"
+            aria-label={visible ? "Скрыть пароль" : "Показать пароль"}
+          >
+            {visible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </button>
+        </div>
       </div>
+
+      {hoverTip && (
+        <CursorTooltip tip={hoverTip} variant="hint" />
+      )}
+      {copyTip && (
+        <CursorTooltip tip={copyTip} variant="success" />
+      )}
 
       {(showStrength || showRequirements) && value.length > 0 && (
         <div id={`${id}-hints`} className="mt-2 space-y-2">
@@ -136,6 +213,34 @@ export function PasswordField({
       {showRequirements && value.length > 0 && !valid && (
         <span className="sr-only">Пароль не соответствует требованиям</span>
       )}
+    </div>
+  );
+}
+
+function CursorTooltip({
+  tip,
+  variant,
+}: {
+  tip: CursorTip;
+  variant: "hint" | "success";
+}) {
+  return (
+    <div
+      className={cn(
+        "pointer-events-none fixed z-[9999] max-w-[220px] -translate-x-1/2 -translate-y-full rounded-lg px-3 py-2 text-xs font-medium shadow-lg",
+        variant === "success"
+          ? "border border-emerald-200 bg-emerald-50 text-emerald-800"
+          : "border border-slate-200 bg-white text-slate-700",
+      )}
+      style={{ left: tip.x, top: tip.y - 12 }}
+      role="status"
+    >
+      {variant === "success" && (
+        <span className="mr-1.5 inline-block text-emerald-600" aria-hidden>
+          ✓
+        </span>
+      )}
+      {tip.text}
     </div>
   );
 }

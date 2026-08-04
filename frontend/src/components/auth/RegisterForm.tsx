@@ -96,9 +96,11 @@ export function RegisterForm() {
         label="Пароль"
         value={password}
         onChange={setPassword}
+        onGenerated={(pwd) => setConfirmPassword(pwd)}
         autoComplete="new-password"
         showStrength
         showRequirements
+        allowGenerate
       />
 
       <PasswordField
