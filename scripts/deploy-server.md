@@ -107,7 +107,10 @@ bash scripts/wp-bootstrap.sh
 cd /opt/postilka
 git pull origin main
 make prod
-# goose migrations run on backend boot; или: make migrate
+# Миграции применяются при старте backend автоматически.
+# Ручной запуск (важно: DATABASE_URL внутри контейнера):
+docker compose --env-file .env exec -T backend sh -c 'goose -dir ./migrations postgres "$DATABASE_URL" up'
+# или: make migrate
 ```
 
 ## 8. Бэкапы (рекомендуется до prod data)
