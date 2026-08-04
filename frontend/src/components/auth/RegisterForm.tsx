@@ -2,33 +2,67 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { ApiError, register } from "@/lib/api";
-import { validatePassword } from "@/lib/password-policy";
+import {
+  checkPasswordRules,
+  isPasswordValid,
+  validatePassword,
+} from "@/lib/password-policy";
+import { PasswordField } from "@/components/auth/PasswordField";
+
+function privacyPolicyUrl() {
+  const site =
+    process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ??
+    "https://postilka.ru";
+  const custom = process.env.NEXT_PUBLIC_PRIVACY_POLICY_URL;
+  if (custom) return custom;
+  return `${site}/privacy-policy`;
+}
 
 export function RegisterForm() {
   const router = useRouter();
-  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [policyAccepted, setPolicyAccepted] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const rules = useMemo(() => checkPasswordRules(password), [password]);
+  const passwordOk = isPasswordValid(rules);
+  const passwordsMatch =
+    confirmPassword.length > 0 && password === confirmPassword;
+
+  const canSubmit = passwordOk && passwordsMatch && policyAccepted;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+
     const pwdErr = validatePassword(password);
     if (pwdErr) {
       setError(pwdErr);
       return;
     }
+    if (password !== confirmPassword) {
+      setError("Пароли не совпадают");
+      return;
+    }
+    if (!policyAccepted) {
+      setError("Необходимо согласие с политикой обработки персональных данных");
+      return;
+    }
+
     setLoading(true);
     try {
-      await register(email, password, name);
+      await register(email, password);
       router.push("/dashboard");
       router.refresh();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Не удалось зарегистрироваться");
+      setError(
+        err instanceof ApiError ? err.message : "Не удалось зарегистрироваться",
+      );
     } finally {
       setLoading(false);
     }
@@ -41,19 +75,7 @@ export function RegisterForm() {
           {error}
         </div>
       )}
-      <div>
-        <label htmlFor="name" className="mb-1.5 block text-xs font-medium">
-          Имя
-        </label>
-        <input
-          id="name"
-          type="text"
-          autoComplete="name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
-        />
-      </div>
+
       <div>
         <label htmlFor="email" className="mb-1.5 block text-xs font-medium">
           Email
@@ -68,30 +90,60 @@ export function RegisterForm() {
           className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
         />
       </div>
-      <div>
-        <label htmlFor="password" className="mb-1.5 block text-xs font-medium">
-          Пароль
-        </label>
+
+      <PasswordField
+        id="password"
+        label="Пароль"
+        value={password}
+        onChange={setPassword}
+        autoComplete="new-password"
+        showStrength
+        showRequirements
+      />
+
+      <PasswordField
+        id="confirm-password"
+        label="Подтвердите пароль"
+        value={confirmPassword}
+        onChange={setConfirmPassword}
+        autoComplete="new-password"
+        showStrength={false}
+        showRequirements={false}
+      />
+
+      {confirmPassword.length > 0 && !passwordsMatch && (
+        <p className="text-xs text-red-600">Пароли не совпадают</p>
+      )}
+
+      <label className="flex cursor-pointer items-start gap-2.5 text-sm">
         <input
-          id="password"
-          type="password"
-          autoComplete="new-password"
+          type="checkbox"
+          checked={policyAccepted}
+          onChange={(e) => setPolicyAccepted(e.target.checked)}
+          className="mt-0.5 h-4 w-4 rounded border-slate-300 text-accent focus:ring-accent"
           required
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
         />
-        <p className="mt-1 text-xs text-muted">
-          Мин. 8 символов, заглавные и строчные, цифра, спецсимвол
-        </p>
-      </div>
+        <span className="text-muted">
+          Согласие с{" "}
+          <Link
+            href={privacyPolicyUrl()}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-accent hover:underline"
+          >
+            политикой обработки персональных данных
+          </Link>
+        </span>
+      </label>
+
       <button
         type="submit"
-        disabled={loading}
-        className="w-full rounded-lg bg-accent px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+        disabled={loading || !canSubmit}
+        className="w-full rounded-lg bg-slate-800 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {loading ? "Создаём…" : "Создать аккаунт"}
+        {loading ? "Регистрация…" : "Зарегистрироваться"}
       </button>
+
       <p className="text-center text-sm text-muted">
         Уже есть аккаунт?{" "}
         <Link href="/auth/login" className="text-accent hover:underline">
