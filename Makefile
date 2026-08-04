@@ -1,4 +1,4 @@
-.PHONY: up down prod migrate test lint logs setup psql wp-cli status
+.PHONY: up down prod migrate test lint logs setup psql wp-cli status create-superadmin
 
 COMPOSE := docker compose --env-file .env
 COMPOSE_PROD := $(COMPOSE) -f docker-compose.yml -f docker-compose.prod.yml
@@ -14,6 +14,12 @@ prod:
 
 migrate:
 	$(COMPOSE) exec -T backend sh -c 'goose -dir ./migrations postgres "$$DATABASE_URL" up'
+
+# Usage: make create-superadmin EMAIL=you@example.com PASSWORD='Secret1!' NAME=Admin
+# If the user already exists, only is_platform_admin is set (password unchanged).
+create-superadmin:
+	@test -n "$(EMAIL)" || (echo "EMAIL is required"; exit 1)
+	$(COMPOSE_PROD) exec -T backend /app/create-superadmin -email "$(EMAIL)" -password "$(PASSWORD)" -name "$(NAME)"
 
 test:
 	cd backend && go test ./...

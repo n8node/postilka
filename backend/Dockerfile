@@ -16,6 +16,7 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /worker ./cmd/worker
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /create-superadmin ./cmd/create-superadmin
 RUN CGO_ENABLED=0 GOOS=linux GOBIN=/go/bin go install github.com/pressly/goose/v3/cmd/goose@v3.24.1
 
 FROM alpine:3.20
@@ -25,6 +26,7 @@ RUN sed -i "s|https://dl-cdn.alpinelinux.org/alpine|${ALPINE_MIRROR}|g" /etc/apk
 WORKDIR /app
 COPY --from=builder /server /app/server
 COPY --from=builder /worker /app/worker
+COPY --from=builder /create-superadmin /app/create-superadmin
 COPY --from=builder /go/bin/goose /usr/local/bin/goose
 COPY migrations ./migrations
 

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/postilka/postilka/internal/model"
 )
 
 type contextKey string
@@ -114,4 +115,33 @@ func writeUnauthorized(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusUnauthorized)
 	_, _ = w.Write([]byte(`{"error":"Не авторизован"}`))
+}
+
+func writeForbidden(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusForbidden)
+	_, _ = w.Write([]byte(`{"error":"Недостаточно прав"}`))
+}
+
+type platformAdminLookup interface {
+	GetByID(ctx context.Context, id string) (*model.User, error)
+}
+
+// RequirePlatformAdmin must run after Required. Loads user from DB (do not trust JWT flags).
+func RequirePlatformAdmin(users platformAdminLookup) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			userID, ok := UserIDFromContext(r.Context())
+			if !ok {
+				writeUnauthorized(w)
+				return
+			}
+			u, err := users.GetByID(r.Context(), userID)
+			if err != nil || u == nil || !u.IsPlatformAdmin || u.IsBlocked {
+				writeForbidden(w)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }

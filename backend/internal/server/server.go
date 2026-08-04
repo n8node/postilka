@@ -35,6 +35,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	status := handler.NewStatusHandler(cfg)
 	authHandler := handler.NewAuthHandler(authSvc, authMW, cfg)
 	wsHandler := handler.NewWorkspaceHandler(wsRepo)
+	adminHandler := handler.NewAdminHandler(userRepo)
 
 	r.Get("/health", health.ServeHTTP)
 
@@ -51,6 +52,10 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 
 		r.Route("/workspaces", func(r chi.Router) {
 			r.With(authMW.Required).Get("/me", wsHandler.Me)
+		})
+
+		r.Route("/admin", func(r chi.Router) {
+			r.With(authMW.Required, middleware.RequirePlatformAdmin(userRepo)).Get("/me", adminHandler.Me)
 		})
 	})
 

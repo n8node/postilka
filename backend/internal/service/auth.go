@@ -141,6 +141,40 @@ func (s *AuthService) Me(ctx context.Context, userID string) (*model.User, *mode
 	return user, ws, nil
 }
 
+// EnsureSuperAdmin creates a user (with workspace) if missing, then sets is_platform_admin.
+// If the email already exists, only the platform-admin flag is set (password unchanged).
+func (s *AuthService) EnsureSuperAdmin(ctx context.Context, email, password, name string) (*model.User, bool, error) {
+	email = normalizeEmail(email)
+	if email == "" {
+		return nil, false, ErrInvalidInput
+	}
+
+	exists, err := s.users.ExistsByEmail(ctx, email)
+	if err != nil {
+		return nil, false, err
+	}
+
+	created := false
+	if !exists {
+		if err := validateCredentials(email, password); err != nil {
+			return nil, false, err
+		}
+		result, err := s.Register(ctx, email, password, name)
+		if err != nil {
+			return nil, false, err
+		}
+		created = true
+		if err := s.users.SetPlatformAdmin(ctx, result.User.ID, true); err != nil {
+			return nil, false, err
+		}
+		user, err := s.users.GetByID(ctx, result.User.ID)
+		return user, created, err
+	}
+
+	user, err := s.users.SetPlatformAdminByEmail(ctx, email, true)
+	return user, created, err
+}
+
 func normalizeEmail(email string) string {
 	return strings.ToLower(strings.TrimSpace(email))
 }

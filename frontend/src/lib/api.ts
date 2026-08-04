@@ -5,6 +5,7 @@ export type User = {
   locale: string;
   timezone: string;
   is_blocked: boolean;
+  is_platform_admin: boolean;
   created_at: string;
 };
 
