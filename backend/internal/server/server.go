@@ -55,7 +55,11 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 		})
 
 		r.Route("/admin", func(r chi.Router) {
-			r.With(authMW.Required, middleware.RequirePlatformAdmin(userRepo)).Get("/me", adminHandler.Me)
+			r.Group(func(r chi.Router) {
+				r.Use(authMW.Required, middleware.RequirePlatformAdmin(userRepo))
+				r.Get("/me", adminHandler.Me)
+				r.Get("/users", adminHandler.ListUsers)
+			})
 		})
 	})
 

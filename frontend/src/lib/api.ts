@@ -23,6 +23,37 @@ export type MeResponse = {
   workspace: Workspace | null;
 };
 
+export type AdminUserWorkspace = {
+  id: string;
+  name: string;
+  slug: string;
+  role: string;
+};
+
+export type AdminUser = {
+  id: string;
+  email: string;
+  name: string;
+  locale: string;
+  timezone: string;
+  is_blocked: boolean;
+  is_platform_admin: boolean;
+  created_at: string;
+  updated_at: string;
+  workspace: AdminUserWorkspace | null;
+};
+
+export type AdminUsersResponse = {
+  total: number;
+  users: AdminUser[];
+};
+
+export type AdminUsersQuery = {
+  q?: string;
+  is_blocked?: boolean;
+  is_platform_admin?: boolean;
+};
+
 export class ApiError extends Error {
   status: number;
 
@@ -80,4 +111,17 @@ export function logout() {
 
 export function fetchMe() {
   return apiFetch<MeResponse>("/auth/me");
+}
+
+export function fetchAdminUsers(query: AdminUsersQuery = {}) {
+  const params = new URLSearchParams();
+  if (query.q?.trim()) params.set("q", query.q.trim());
+  if (typeof query.is_blocked === "boolean") {
+    params.set("is_blocked", String(query.is_blocked));
+  }
+  if (typeof query.is_platform_admin === "boolean") {
+    params.set("is_platform_admin", String(query.is_platform_admin));
+  }
+  const qs = params.toString();
+  return apiFetch<AdminUsersResponse>(`/admin/users${qs ? `?${qs}` : ""}`);
 }

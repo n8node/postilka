@@ -3,6 +3,8 @@ package repository
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -93,6 +95,105 @@ func (r *UserRepository) SetPlatformAdminByEmail(ctx context.Context, email stri
 		return nil, ErrNotFound
 	}
 	return u, err
+}
+
+type ListUsersFilter struct {
+	Query           string
+	IsBlocked       *bool
+	IsPlatformAdmin *bool
+	Limit           int
+	Offset          int
+}
+
+func (r *UserRepository) ListForAdmin(ctx context.Context, f ListUsersFilter) ([]model.AdminUserListItem, int, error) {
+	if f.Limit <= 0 || f.Limit > 200 {
+		f.Limit = 50
+	}
+	if f.Offset < 0 {
+		f.Offset = 0
+	}
+
+	args := make([]any, 0, 6)
+	where := make([]string, 0, 3)
+
+	if q := strings.TrimSpace(f.Query); q != "" {
+		args = append(args, "%"+q+"%")
+		where = append(where, fmt.Sprintf("(u.email ILIKE $%d OR u.name ILIKE $%d)", len(args), len(args)))
+	}
+	if f.IsBlocked != nil {
+		args = append(args, *f.IsBlocked)
+		where = append(where, fmt.Sprintf("u.is_blocked = $%d", len(args)))
+	}
+	if f.IsPlatformAdmin != nil {
+		args = append(args, *f.IsPlatformAdmin)
+		where = append(where, fmt.Sprintf("u.is_platform_admin = $%d", len(args)))
+	}
+
+	whereSQL := ""
+	if len(where) > 0 {
+		whereSQL = "WHERE " + strings.Join(where, " AND ")
+	}
+
+	countQ := `SELECT COUNT(*) FROM users u ` + whereSQL
+	var total int
+	if err := r.pool.QueryRow(ctx, countQ, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	args = append(args, f.Limit, f.Offset)
+	limitIdx := len(args) - 1
+	offsetIdx := len(args)
+
+	listQ := fmt.Sprintf(`
+		SELECT
+			u.id, u.email, u.name, u.locale, u.timezone,
+			u.is_blocked, u.is_platform_admin, u.created_at, u.updated_at,
+			ws.id, ws.name, ws.slug, ws.role
+		FROM users u
+		LEFT JOIN LATERAL (
+			SELECT w.id, w.name, w.slug, wm.role
+			FROM workspace_members wm
+			JOIN workspaces w ON w.id = wm.workspace_id
+			WHERE wm.user_id = u.id
+			ORDER BY w.created_at ASC
+			LIMIT 1
+		) AS ws ON true
+		%s
+		ORDER BY u.created_at DESC
+		LIMIT $%d OFFSET $%d
+	`, whereSQL, limitIdx, offsetIdx)
+
+	rows, err := r.pool.Query(ctx, listQ, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	items := make([]model.AdminUserListItem, 0)
+	for rows.Next() {
+		var item model.AdminUserListItem
+		var wsID, wsName, wsSlug, wsRole *string
+		if err := rows.Scan(
+			&item.ID, &item.Email, &item.Name, &item.Locale, &item.Timezone,
+			&item.IsBlocked, &item.IsPlatformAdmin, &item.CreatedAt, &item.UpdatedAt,
+			&wsID, &wsName, &wsSlug, &wsRole,
+		); err != nil {
+			return nil, 0, err
+		}
+		if wsID != nil && wsName != nil && wsSlug != nil && wsRole != nil {
+			item.Workspace = &model.AdminUserWorkspace{
+				ID:   *wsID,
+				Name: *wsName,
+				Slug: *wsSlug,
+				Role: *wsRole,
+			}
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	return items, total, nil
 }
 
 func scanUser(row pgx.Row) (*model.User, error) {

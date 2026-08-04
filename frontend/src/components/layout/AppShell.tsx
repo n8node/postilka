@@ -28,6 +28,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             )}
           </div>
           <div className="flex items-center gap-4 text-sm">
+            {user.is_platform_admin && (
+              <Link href="/admin/users" className="text-accent hover:underline">
+                Админка
+              </Link>
+            )}
             <span className="text-muted">{user.email}</span>
             <button
               type="button"

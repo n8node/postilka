@@ -63,5 +63,5 @@ alwaysApply: true
 | Routing | `17-wordpress-nginx-routing.mdc` |
 | Subscriptions / wallet | `18-subscriptions-tokens-wallet.mdc` |
 | Feature plan | `19-product-feature-plan.mdc` |
-| No Shell | `20-no-shell.mdc` |
+| Shell / git push | `20-no-shell.mdc` |
 | Multi-agent roadmap | `21-multi-agent-roadmap.mdc` |
