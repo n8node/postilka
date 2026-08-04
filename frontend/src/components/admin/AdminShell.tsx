@@ -11,7 +11,18 @@ type AdminShellProps = {
   children: React.ReactNode;
 };
 
-const nav = [
+type NavItem = {
+  href: string;
+  label: string;
+  soon?: boolean;
+};
+
+type NavSection = {
+  label: string;
+  items: NavItem[];
+};
+
+const nav: NavSection[] = [
   {
     label: "Обзор",
     items: [{ href: "/admin", label: "Сводка", soon: true }],
