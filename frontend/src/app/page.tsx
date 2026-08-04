@@ -24,15 +24,15 @@ export default function HomePage() {
         </Link>
         <Link
           href="/auth/login"
-          className="rounded-lg border border-slate-200 bg-surface px-5 py-2.5 text-sm font-medium hover:bg-slate-50"
+          className="rounded-lg border border-border bg-surface px-5 py-2.5 text-sm font-medium hover:bg-zinc-50"
         >
           Войти
         </Link>
         <Link
           href="/dashboard"
-          className="rounded-lg border border-slate-200 bg-surface px-5 py-2.5 text-sm font-medium hover:bg-slate-50"
+          className="rounded-lg border border-border bg-surface px-5 py-2.5 text-sm font-medium hover:bg-zinc-50"
         >
-          Dashboard
+          Личный кабинет
         </Link>
       </div>
 

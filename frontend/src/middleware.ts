@@ -3,6 +3,27 @@ import type { NextRequest } from "next/server";
 
 const publicPaths = ["/auth/login", "/auth/register"];
 
+const protectedPrefixes = [
+  "/dashboard",
+  "/channels",
+  "/posts",
+  "/calendar",
+  "/media",
+  "/ai",
+  "/plans",
+  "/team",
+  "/analytics",
+  "/settings",
+  "/notifications",
+  "/admin",
+];
+
+function isProtected(pathname: string) {
+  return protectedPrefixes.some(
+    (p) => pathname === p || pathname.startsWith(`${p}/`),
+  );
+}
+
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const token = request.cookies.get("access_token");
@@ -11,10 +32,7 @@ export function middleware(request: NextRequest) {
     (p) => pathname === p || pathname.startsWith(`${p}/`),
   );
 
-  if (
-    !token &&
-    (pathname.startsWith("/dashboard") || pathname.startsWith("/admin"))
-  ) {
+  if (!token && isProtected(pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = "/auth/login";
     url.searchParams.set("next", pathname);
@@ -32,5 +50,19 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/auth/:path*", "/admin/:path*"],
+  matcher: [
+    "/dashboard/:path*",
+    "/channels/:path*",
+    "/posts/:path*",
+    "/calendar/:path*",
+    "/media/:path*",
+    "/ai/:path*",
+    "/plans/:path*",
+    "/team/:path*",
+    "/analytics/:path*",
+    "/settings/:path*",
+    "/notifications/:path*",
+    "/auth/:path*",
+    "/admin/:path*",
+  ],
 };
