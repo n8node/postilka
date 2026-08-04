@@ -29,14 +29,16 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 
 	userRepo := repository.NewUserRepository(db.Pool)
 	wsRepo := repository.NewWorkspaceRepository(db.Pool)
-	authSvc := service.NewAuthService(userRepo, wsRepo, authMW)
+	planRepo := repository.NewPlanRepository(db.Pool)
+	authSvc := service.NewAuthService(userRepo, wsRepo, planRepo, authMW)
 	wsSvc := service.NewWorkspaceService(wsRepo)
+	planSvc := service.NewPlanService(planRepo, wsRepo)
 
 	health := handler.NewHealthHandler(cfg, db)
 	status := handler.NewStatusHandler(cfg)
 	authHandler := handler.NewAuthHandler(authSvc, wsSvc, authMW, cfg)
 	wsHandler := handler.NewWorkspaceHandler(wsSvc, cfg)
-	adminHandler := handler.NewAdminHandler(userRepo)
+	adminHandler := handler.NewAdminHandler(userRepo, planSvc)
 
 	r.Get("/health", health.ServeHTTP)
 
@@ -65,6 +67,13 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Use(authMW.Required, middleware.RequirePlatformAdmin(userRepo))
 				r.Get("/me", adminHandler.Me)
 				r.Get("/users", adminHandler.ListUsers)
+				r.Put("/users/{userID}/plan", adminHandler.AssignUserPlan)
+
+				r.Get("/plans", adminHandler.ListPlans)
+				r.Post("/plans", adminHandler.CreatePlan)
+				r.Get("/plans/{planID}", adminHandler.GetPlan)
+				r.Put("/plans/{planID}", adminHandler.UpdatePlan)
+				r.Delete("/plans/{planID}", adminHandler.DeletePlan)
 			})
 		})
 	})

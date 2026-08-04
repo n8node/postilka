@@ -18,7 +18,7 @@ func NewWorkspaceRepository(pool *pgxpool.Pool) *WorkspaceRepository {
 	return &WorkspaceRepository{pool: pool}
 }
 
-func (r *WorkspaceRepository) CreateWithOwner(ctx context.Context, name, slug, ownerID string) (*model.Workspace, error) {
+func (r *WorkspaceRepository) CreateWithOwner(ctx context.Context, name, slug, ownerID, planID string) (*model.Workspace, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return nil, err
@@ -26,11 +26,11 @@ func (r *WorkspaceRepository) CreateWithOwner(ctx context.Context, name, slug, o
 	defer tx.Rollback(ctx)
 
 	const insertWS = `
-		INSERT INTO workspaces (name, slug, owner_id)
-		VALUES ($1, $2, $3)
+		INSERT INTO workspaces (name, slug, owner_id, plan_id, plan_assigned_at)
+		VALUES ($1, $2, $3, NULLIF($4, ''), CASE WHEN $4 = '' THEN NULL ELSE NOW() END)
 		RETURNING id, name, slug, owner_id, created_at
 	`
-	ws, err := scanWorkspace(tx.QueryRow(ctx, insertWS, name, slug, ownerID))
+	ws, err := scanWorkspace(tx.QueryRow(ctx, insertWS, name, slug, ownerID, planID))
 	if err != nil {
 		return nil, err
 	}
@@ -48,6 +48,21 @@ func (r *WorkspaceRepository) CreateWithOwner(ctx context.Context, name, slug, o
 	}
 	ws.Role = "owner"
 	return ws, nil
+}
+
+func (r *WorkspaceRepository) SetPlan(ctx context.Context, workspaceID, planID string) error {
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE workspaces
+		SET plan_id = $2, plan_assigned_at = NOW(), updated_at = NOW()
+		WHERE id = $1
+	`, workspaceID, planID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (r *WorkspaceRepository) GetPrimaryForUser(ctx context.Context, userID string) (*model.Workspace, error) {

@@ -32,6 +32,13 @@ export type AdminUserWorkspace = {
   role: string;
 };
 
+export type AdminUserPlan = {
+  id: string;
+  slug: string;
+  name: string;
+  is_free: boolean;
+};
+
 export type AdminUser = {
   id: string;
   email: string;
@@ -43,6 +50,48 @@ export type AdminUser = {
   created_at: string;
   updated_at: string;
   workspace: AdminUserWorkspace | null;
+  plan: AdminUserPlan | null;
+};
+
+export type Plan = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string;
+  is_free: boolean;
+  is_active: boolean;
+  is_popular: boolean;
+  price_monthly_cents: number | null;
+  price_yearly_cents: number | null;
+  max_channels: number | null;
+  max_posts_per_period: number | null;
+  max_seats: number | null;
+  storage_bytes: number | null;
+  ai_text_tokens_quota: number | null;
+  ai_media_credits_quota: number | null;
+  free_plan_duration_days: number | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PlanInput = {
+  slug?: string;
+  name: string;
+  description?: string;
+  is_free?: boolean;
+  is_active?: boolean;
+  is_popular?: boolean;
+  price_monthly_cents?: number | null;
+  price_yearly_cents?: number | null;
+  max_channels?: number | null;
+  max_posts_per_period?: number | null;
+  max_seats?: number | null;
+  storage_bytes?: number | null;
+  ai_text_tokens_quota?: number | null;
+  ai_media_credits_quota?: number | null;
+  free_plan_duration_days?: number | null;
+  sort_order?: number;
 };
 
 export type AdminUsersResponse = {
@@ -140,4 +189,35 @@ export function fetchAdminUsers(query: AdminUsersQuery = {}) {
   }
   const qs = params.toString();
   return apiFetch<AdminUsersResponse>(`/admin/users${qs ? `?${qs}` : ""}`);
+}
+
+export function fetchAdminPlans() {
+  return apiFetch<{ plans: Plan[] }>("/admin/plans");
+}
+
+export function createAdminPlan(body: PlanInput) {
+  return apiFetch<Plan>("/admin/plans", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function updateAdminPlan(id: string, body: PlanInput) {
+  return apiFetch<Plan>(`/admin/plans/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteAdminPlan(id: string) {
+  return apiFetch<{ status: string }>(`/admin/plans/${id}`, {
+    method: "DELETE",
+  });
+}
+
+export function assignAdminUserPlan(userId: string, planId: string) {
+  return apiFetch<{ plan: Plan }>(`/admin/users/${userId}/plan`, {
+    method: "PUT",
+    body: JSON.stringify({ plan_id: planId }),
+  });
 }

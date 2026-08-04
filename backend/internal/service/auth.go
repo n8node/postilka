@@ -30,13 +30,19 @@ const tokenTTL = 7 * 24 * time.Hour
 var slugSanitizer = regexp.MustCompile(`[^a-z0-9-]+`)
 
 type AuthService struct {
-	users       *repository.UserRepository
-	workspaces  *repository.WorkspaceRepository
-	auth        *middleware.Auth
+	users      *repository.UserRepository
+	workspaces *repository.WorkspaceRepository
+	plans      *repository.PlanRepository
+	auth       *middleware.Auth
 }
 
-func NewAuthService(users *repository.UserRepository, workspaces *repository.WorkspaceRepository, auth *middleware.Auth) *AuthService {
-	return &AuthService{users: users, workspaces: workspaces, auth: auth}
+func NewAuthService(
+	users *repository.UserRepository,
+	workspaces *repository.WorkspaceRepository,
+	plans *repository.PlanRepository,
+	auth *middleware.Auth,
+) *AuthService {
+	return &AuthService{users: users, workspaces: workspaces, plans: plans, auth: auth}
 }
 
 type AuthResult struct {
@@ -80,7 +86,13 @@ func (s *AuthService) Register(ctx context.Context, email, password, name string
 	}
 
 	wsName := fmt.Sprintf("Workspace %s", name)
-	ws, err := s.workspaces.CreateWithOwner(ctx, wsName, slug, user.ID)
+	planID := ""
+	if s.plans != nil {
+		if free, err := s.plans.GetDefaultFree(ctx); err == nil && free != nil {
+			planID = free.ID
+		}
+	}
+	ws, err := s.workspaces.CreateWithOwner(ctx, wsName, slug, user.ID, planID)
 	if err != nil {
 		return nil, err
 	}

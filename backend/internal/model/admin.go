@@ -14,6 +14,7 @@ type AdminUserListItem struct {
 	CreatedAt       time.Time           `json:"created_at"`
 	UpdatedAt       time.Time           `json:"updated_at"`
 	Workspace       *AdminUserWorkspace `json:"workspace"`
+	Plan            *AdminUserPlan      `json:"plan"`
 }
 
 type AdminUserWorkspace struct {

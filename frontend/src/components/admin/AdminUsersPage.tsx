@@ -4,9 +4,12 @@ import { useCallback, useEffect, useState } from "react";
 import { X } from "lucide-react";
 import {
   ApiError,
+  assignAdminUserPlan,
+  fetchAdminPlans,
   fetchAdminUsers,
   type AdminUser,
   type AdminUsersQuery,
+  type Plan,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -171,6 +174,7 @@ export function AdminUsersPage() {
                 <th className="px-4 py-3">ID</th>
                 <th className="px-4 py-3">Статус аккаунта</th>
                 <th className="px-4 py-3">Роль</th>
+                <th className="px-4 py-3">Тариф</th>
                 <th className="px-4 py-3">Workspace</th>
                 <th className="px-4 py-3">Роль WS</th>
                 <th className="px-4 py-3">Язык</th>
@@ -183,21 +187,21 @@ export function AdminUsersPage() {
             <tbody className="divide-y divide-slate-100">
               {loading && (
                 <tr>
-                  <td colSpan={11} className="px-4 py-10 text-center text-slate-500">
+                  <td colSpan={12} className="px-4 py-10 text-center text-slate-500">
                     Загрузка…
                   </td>
                 </tr>
               )}
               {!loading && error && (
                 <tr>
-                  <td colSpan={11} className="px-4 py-10 text-center text-rose-600">
+                  <td colSpan={12} className="px-4 py-10 text-center text-rose-600">
                     {error}
                   </td>
                 </tr>
               )}
               {!loading && !error && users.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="px-4 py-10 text-center text-slate-500">
+                  <td colSpan={12} className="px-4 py-10 text-center text-slate-500">
                     Пользователи не найдены
                   </td>
                 </tr>
@@ -227,6 +231,20 @@ export function AdminUsersPage() {
                         <Badge tone="blue">Superadmin</Badge>
                       ) : (
                         <span className="text-slate-700">Пользователь</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {u.plan ? (
+                        <span className="font-medium text-slate-800">
+                          {u.plan.name}
+                          {u.plan.is_free ? (
+                            <span className="ml-1 text-xs text-emerald-600">
+                              free
+                            </span>
+                          ) : null}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">—</span>
                       )}
                     </td>
                     <td className="px-4 py-3 text-slate-800">
@@ -263,7 +281,16 @@ export function AdminUsersPage() {
       </div>
 
       {selected && (
-        <UserDrawer user={selected} onClose={() => setSelected(null)} />
+        <UserDrawer
+          user={selected}
+          onClose={() => setSelected(null)}
+          onPlanChanged={(updated) => {
+            setUsers((prev) =>
+              prev.map((u) => (u.id === updated.id ? updated : u)),
+            );
+            setSelected(updated);
+          }}
+        />
       )}
     </div>
   );
@@ -272,10 +299,49 @@ export function AdminUsersPage() {
 function UserDrawer({
   user,
   onClose,
+  onPlanChanged,
 }: {
   user: AdminUser;
   onClose: () => void;
+  onPlanChanged: (user: AdminUser) => void;
 }) {
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [planId, setPlanId] = useState(user.plan?.id ?? "");
+  const [saving, setSaving] = useState(false);
+  const [planError, setPlanError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setPlanId(user.plan?.id ?? "");
+  }, [user.id, user.plan?.id]);
+
+  useEffect(() => {
+    void fetchAdminPlans()
+      .then((data) => setPlans(data.plans.filter((p) => p.is_active || p.id === user.plan?.id)))
+      .catch(() => setPlans([]));
+  }, [user.plan?.id]);
+
+  async function handleAssignPlan() {
+    if (!planId) return;
+    setSaving(true);
+    setPlanError(null);
+    try {
+      const res = await assignAdminUserPlan(user.id, planId);
+      onPlanChanged({
+        ...user,
+        plan: {
+          id: res.plan.id,
+          slug: res.plan.slug,
+          name: res.plan.name,
+          is_free: res.plan.is_free,
+        },
+      });
+    } catch (e) {
+      setPlanError(e instanceof ApiError ? e.message : "Не удалось назначить тариф");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div className="fixed inset-0 z-40 flex justify-end">
       <button
@@ -356,6 +422,42 @@ function UserDrawer({
             ) : (
               <p className="mt-2 text-sm text-slate-500">Нет workspace</p>
             )}
+          </section>
+
+          <section className="rounded-xl border border-slate-200 p-4">
+            <h3 className="text-sm font-semibold text-slate-900">Тариф</h3>
+            <p className="mt-1 text-xs text-slate-500">
+              Назначается на primary workspace пользователя (включая ваш
+              superadmin-аккаунт).
+            </p>
+            <label className="mt-3 block text-xs font-medium text-slate-500">
+              Текущий / новый тариф
+              <select
+                value={planId}
+                onChange={(e) => setPlanId(e.target.value)}
+                className="mt-1 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+              >
+                <option value="">Выберите тариф</option>
+                {plans.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                    {p.is_free ? " (free)" : ""}
+                    {!p.is_active ? " [выкл]" : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {planError && (
+              <p className="mt-2 text-sm text-rose-600">{planError}</p>
+            )}
+            <button
+              type="button"
+              disabled={!planId || saving || planId === user.plan?.id}
+              onClick={() => void handleAssignPlan()}
+              className="mt-3 w-full rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+            >
+              {saving ? "Сохранение…" : "Назначить тариф"}
+            </button>
           </section>
         </div>
       </aside>

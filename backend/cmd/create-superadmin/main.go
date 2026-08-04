@@ -42,8 +42,9 @@ func main() {
 
 	users := repository.NewUserRepository(db.Pool)
 	workspaces := repository.NewWorkspaceRepository(db.Pool)
+	plans := repository.NewPlanRepository(db.Pool)
 	authMW := middleware.NewAuth(jwtSecret)
-	authSvc := service.NewAuthService(users, workspaces, authMW)
+	authSvc := service.NewAuthService(users, workspaces, plans, authMW)
 
 	user, created, err := authSvc.EnsureSuperAdmin(ctx, *email, *password, *name)
 	if err != nil {

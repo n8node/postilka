@@ -148,16 +148,18 @@ func (r *UserRepository) ListForAdmin(ctx context.Context, f ListUsersFilter) ([
 		SELECT
 			u.id, u.email, u.name, u.locale, u.timezone,
 			u.is_blocked, u.is_platform_admin, u.created_at, u.updated_at,
-			ws.id, ws.name, ws.slug, ws.role
+			ws.id, ws.name, ws.slug, ws.role,
+			p.id, p.slug, p.name, p.is_free
 		FROM users u
 		LEFT JOIN LATERAL (
-			SELECT w.id, w.name, w.slug, wm.role
+			SELECT w.id, w.name, w.slug, w.plan_id, wm.role
 			FROM workspace_members wm
 			JOIN workspaces w ON w.id = wm.workspace_id
 			WHERE wm.user_id = u.id
 			ORDER BY w.created_at ASC
 			LIMIT 1
 		) AS ws ON true
+		LEFT JOIN plans p ON p.id = ws.plan_id
 		%s
 		ORDER BY u.created_at DESC
 		LIMIT $%d OFFSET $%d
@@ -173,10 +175,13 @@ func (r *UserRepository) ListForAdmin(ctx context.Context, f ListUsersFilter) ([
 	for rows.Next() {
 		var item model.AdminUserListItem
 		var wsID, wsName, wsSlug, wsRole *string
+		var planID, planSlug, planName *string
+		var planIsFree *bool
 		if err := rows.Scan(
 			&item.ID, &item.Email, &item.Name, &item.Locale, &item.Timezone,
 			&item.IsBlocked, &item.IsPlatformAdmin, &item.CreatedAt, &item.UpdatedAt,
 			&wsID, &wsName, &wsSlug, &wsRole,
+			&planID, &planSlug, &planName, &planIsFree,
 		); err != nil {
 			return nil, 0, err
 		}
@@ -186,6 +191,14 @@ func (r *UserRepository) ListForAdmin(ctx context.Context, f ListUsersFilter) ([
 				Name: *wsName,
 				Slug: *wsSlug,
 				Role: *wsRole,
+			}
+		}
+		if planID != nil && planSlug != nil && planName != nil && planIsFree != nil {
+			item.Plan = &model.AdminUserPlan{
+				ID:     *planID,
+				Slug:   *planSlug,
+				Name:   *planName,
+				IsFree: *planIsFree,
 			}
 		}
 		items = append(items, item)

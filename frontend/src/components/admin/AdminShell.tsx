@@ -29,9 +29,18 @@ const nav: NavSection[] = [
   },
   {
     label: "Платформа",
-    items: [{ href: "/admin/users", label: "Пользователи" }],
+    items: [
+      { href: "/admin/users", label: "Пользователи" },
+      { href: "/admin/plans", label: "Тарифы" },
+    ],
   },
 ];
+
+function breadcrumbLabel(pathname: string) {
+  if (pathname.startsWith("/admin/plans")) return "Тарифы";
+  if (pathname.startsWith("/admin/users")) return "Пользователи";
+  return "Admin";
+}
 
 export function AdminShell({
   adminEmail,
@@ -127,7 +136,7 @@ export function AdminShell({
         <header className="flex items-center justify-between border-b border-slate-200/80 bg-white/70 px-6 py-3 backdrop-blur">
           <p className="text-sm text-slate-500">
             Admin <span className="text-slate-300">/</span>{" "}
-            <span className="text-slate-800">Пользователи</span>
+            <span className="text-slate-800">{breadcrumbLabel(pathname)}</span>
           </p>
           <div className="w-56 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-400">
             Search (скоро)
