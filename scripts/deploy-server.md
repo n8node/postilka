@@ -106,11 +106,16 @@ bash scripts/wp-bootstrap.sh
 ```bash
 cd /opt/postilka
 git pull origin main
-make prod
-# Миграции применяются при старте backend автоматически.
-# Ручной запуск (важно: DATABASE_URL внутри контейнера):
-docker compose --env-file .env exec -T backend sh -c 'goose -dir ./migrations postgres "$DATABASE_URL" up'
-# или: make migrate
+
+# Не гоняйте полный make prod без нужды: рестарт nginx роняет
+# keep-alive сокеты → Windows Chrome/YaBrowser: «Не удаётся установить соединение».
+# Обновляйте только изменившиеся сервисы:
+make prod-backend      # API + worker (+ goose на старте)
+make prod-frontend     # Next.js UI
+make prod-nginx        # только если меняли nginx/*.conf
+
+# Полный стек — редко:
+# make prod
 ```
 
 ## 8. Бэкапы (рекомендуется до prod data)
@@ -130,6 +135,7 @@ docker compose exec -T mysql mysqldump -u root -p"$WP_DB_ROOT_PASSWORD" wordpres
 - **502 на /app:** `docker compose logs frontend backend`
 - **API недоступен:** проверить `location ^~ /app/api/` в `nginx/snippets/postilka-locations.conf`
 - **WP mixed content:** `WORDPRESS_CONFIG_EXTRA` в compose уже прокидывает HTTPS за proxy
+- **ПК: сайт «не открывается» после деплоя, мобилка/curl ок:** не DNS. Полностью закройте браузер (все окна YaBrowser/Chrome) и откройте снова. На деплое не пересоздавайте nginx без изменений конфига (`make prod-backend` / `prod-frontend`).
 
 ## Локальная разработка (без SSL)
 
