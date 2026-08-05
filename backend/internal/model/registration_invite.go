@@ -68,6 +68,13 @@ type UserInviteItem struct {
 	CreatedAt time.Time    `json:"created_at"`
 }
 
+type PublicInviteItem struct {
+	ID       string       `json:"id"`
+	Code     string       `json:"code"`
+	Status   InviteStatus `json:"status"`
+	IsActive bool         `json:"is_active"`
+}
+
 type UserInviteRelations struct {
 	InvitedBy *struct {
 		InviteID   string          `json:"invite_id"`

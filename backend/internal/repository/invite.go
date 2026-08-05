@@ -384,16 +384,14 @@ func (r *InviteRepository) CountStats(ctx context.Context) (total, active, used 
 
 func (r *InviteRepository) ListPublicSystem(ctx context.Context, limit int) ([]model.RegistrationInvite, error) {
 	if limit <= 0 || limit > 200 {
-		limit = 50
+		limit = 200
 	}
 	const q = `
 		SELECT id, code, scope, status, owner_user_id, created_by_user_id,
 		       used_by_user_id, used_at, expires_at, created_at
 		FROM invites
 		WHERE scope = 'SYSTEM'
-		  AND status = 'ACTIVE'
-		  AND (expires_at IS NULL OR expires_at > NOW())
-		ORDER BY created_at DESC
+		ORDER BY created_at ASC
 		LIMIT $1
 	`
 	rows, err := r.pool.Query(ctx, q, limit)

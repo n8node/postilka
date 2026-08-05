@@ -25,6 +25,13 @@ function privacyPolicyUrl() {
   return `${site}/privacy-policy`;
 }
 
+function publicInviteKeysUrl() {
+  const site =
+    process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ??
+    "https://postilka.ru";
+  return `${site}/app/invite-keys`;
+}
+
 export function RegisterForm() {
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -155,6 +162,18 @@ export function RegisterForm() {
             placeholder="Postilka_XXXXXXXXXXXX"
             className="w-full rounded-lg border border-slate-200 px-3 py-2 font-mono text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
           />
+          <p className="mt-2 text-xs text-muted">
+            Нет инвайт-ключа? Посмотрите активные ключи на{" "}
+            <Link
+              href="/invite-keys"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-accent hover:underline"
+            >
+              {publicInviteKeysUrl().replace(/^https?:\/\//, "")}
+            </Link>
+            .
+          </p>
         </div>
 
         <button

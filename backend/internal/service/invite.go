@@ -6,6 +6,7 @@ import (
 	"errors"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/postilka/postilka/internal/model"
@@ -235,6 +236,21 @@ func (s *InviteService) AdminStats(ctx context.Context) (map[string]int, error) 
 	}, nil
 }
 
-func (s *InviteService) ListPublicSystem(ctx context.Context) ([]model.RegistrationInvite, error) {
-	return s.invites.ListPublicSystem(ctx, 50)
+func (s *InviteService) ListPublicSystem(ctx context.Context) ([]model.PublicInviteItem, error) {
+	invites, err := s.invites.ListPublicSystem(ctx, 200)
+	if err != nil {
+		return nil, err
+	}
+	now := time.Now()
+	out := make([]model.PublicInviteItem, 0, len(invites))
+	for _, inv := range invites {
+		status := model.EffectiveInviteStatus(inv.Status, inv.ExpiresAt, now)
+		out = append(out, model.PublicInviteItem{
+			ID:       inv.ID,
+			Code:     inv.Code,
+			Status:   status,
+			IsActive: status == model.InviteStatusActive,
+		})
+	}
+	return out, nil
 }

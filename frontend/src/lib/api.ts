@@ -235,6 +235,17 @@ export function verifyInviteCode(inviteCode: string) {
   });
 }
 
+export type PublicInvite = {
+  id: string;
+  code: string;
+  status: string;
+  is_active: boolean;
+};
+
+export function fetchPublicInvites() {
+  return apiFetch<{ invites: PublicInvite[] }>("/public/invites");
+}
+
 export type UserInvite = {
   id: string;
   code: string;
