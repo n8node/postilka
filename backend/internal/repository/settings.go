@@ -53,3 +53,22 @@ func (r *SettingsRepository) SetInviteRegistrationEnabled(ctx context.Context, e
 	return r.Set(ctx, "auth.invite_registration_enabled", v)
 }
 
+func (r *SettingsRepository) IsOAuthLoginEnabled(ctx context.Context, provider string) (bool, error) {
+	value, err := r.Get(ctx, "auth."+provider+"_login_enabled")
+	if errors.Is(err, ErrNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return value == "true", nil
+}
+
+func (r *SettingsRepository) SetOAuthLoginEnabled(ctx context.Context, provider string, enabled bool) error {
+	v := "false"
+	if enabled {
+		v = "true"
+	}
+	return r.Set(ctx, "auth."+provider+"_login_enabled", v)
+}
+

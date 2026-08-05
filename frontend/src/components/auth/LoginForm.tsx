@@ -2,17 +2,25 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ApiError, login } from "@/lib/api";
+import { SocialLoginButtons } from "@/components/auth/SocialLoginButtons";
 
 export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextPath = searchParams.get("next") || "/dashboard";
+  const oauthError = searchParams.get("oauth_error");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (oauthError) {
+      setError("Не удалось войти через соцсеть. Попробуйте снова или используйте email.");
+    }
+  }, [oauthError]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -36,6 +44,7 @@ export function LoginForm() {
           {error}
         </div>
       )}
+      <SocialLoginButtons nextPath={nextPath} mode="login" />
       <div>
         <label htmlFor="email" className="mb-1.5 block text-xs font-medium">
           Email

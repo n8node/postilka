@@ -34,16 +34,22 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	inviteRepo := repository.NewInviteRepository(db.Pool)
 	inviteSvc := service.NewInviteService(inviteRepo, settingsRepo, userRepo, db.Pool)
 	authSvc := service.NewAuthService(userRepo, wsRepo, planRepo, inviteSvc, db.Pool, authMW)
+	identityRepo := repository.NewUserLoginIdentityRepository(db.Pool)
+	oauthSessionRepo := repository.NewOAuthLoginSessionRepository(db.Pool)
+	oauthSvc := service.NewOAuthLoginService(
+		userRepo, identityRepo, oauthSessionRepo, wsRepo, planRepo, settingsRepo, db.Pool, authMW, cfg,
+	)
 	wsSvc := service.NewWorkspaceService(wsRepo)
 	planSvc := service.NewPlanService(planRepo, wsRepo)
 
 	health := handler.NewHealthHandler(cfg, db)
 	status := handler.NewStatusHandler(cfg)
 	authHandler := handler.NewAuthHandler(authSvc, wsSvc, authMW, cfg)
+	oauthHandler := handler.NewOAuthLoginHandler(oauthSvc, wsSvc, authMW, cfg)
 	wsHandler := handler.NewWorkspaceHandler(wsSvc, cfg)
 	adminHandler := handler.NewAdminHandler(userRepo, planSvc)
-	inviteHandler := handler.NewInviteHandler(inviteSvc)
-	adminInviteHandler := handler.NewAdminInviteHandler(inviteSvc, userRepo)
+	inviteHandler := handler.NewInviteHandler(inviteSvc, oauthSvc)
+	adminInviteHandler := handler.NewAdminInviteHandler(inviteSvc, userRepo, oauthSvc)
 
 	r.Get("/health", health.ServeHTTP)
 
@@ -58,7 +64,18 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Post("/login", authHandler.Login)
 			r.Post("/logout", authHandler.Logout)
 			r.With(authMW.Required).Get("/me", authHandler.Me)
+
+			r.Get("/oauth/vk/start", oauthHandler.StartVKPublic)
+			r.Get("/oauth/vk/callback", oauthHandler.VKCallback)
+			r.Get("/oauth/max/start", oauthHandler.StartMAXPublic)
+			r.Post("/oauth/max/webhook", oauthHandler.MAXWebhook)
+			r.Get("/oauth/max/status", oauthHandler.MAXStatus)
+			r.With(authMW.Required).Get("/oauth/vk/link", oauthHandler.StartVKLink)
+			r.With(authMW.Required).Get("/oauth/max/link", oauthHandler.StartMAXLink)
 		})
+
+		r.With(authMW.Required).Get("/user/login-identities", oauthHandler.ListIdentities)
+		r.With(authMW.Required).Delete("/user/login-identities/{provider}", oauthHandler.Unlink)
 
 		r.Get("/public/invites", inviteHandler.PublicSystemInvites)
 

@@ -206,6 +206,9 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (*AuthR
 	if user.IsBlocked {
 		return nil, ErrUserBlocked
 	}
+	if hash == "" {
+		return nil, ErrInvalidCredentials
+	}
 	if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)); err != nil {
 		return nil, ErrInvalidCredentials
 	}

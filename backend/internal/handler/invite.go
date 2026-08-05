@@ -8,16 +8,18 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/postilka/postilka/internal/middleware"
+	"github.com/postilka/postilka/internal/model"
 	"github.com/postilka/postilka/internal/repository"
 	"github.com/postilka/postilka/internal/service"
 )
 
 type InviteHandler struct {
 	invites *service.InviteService
+	oauth   *service.OAuthLoginService
 }
 
-func NewInviteHandler(invites *service.InviteService) *InviteHandler {
-	return &InviteHandler{invites: invites}
+func NewInviteHandler(invites *service.InviteService, oauth *service.OAuthLoginService) *InviteHandler {
+	return &InviteHandler{invites: invites, oauth: oauth}
 }
 
 type verifyInviteRequest struct {
@@ -30,9 +32,20 @@ func (h *InviteHandler) AuthMethods(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "Внутренняя ошибка")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	payload := map[string]any{
 		"invite_registration_enabled": enabled,
-	})
+	}
+	if h.oauth != nil {
+		oauthMethods, err := h.oauth.AuthMethods(r.Context())
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "Внутренняя ошибка")
+			return
+		}
+		for k, v := range oauthMethods {
+			payload[k] = v
+		}
+	}
+	writeJSON(w, http.StatusOK, payload)
 }
 
 func (h *InviteHandler) VerifyInvite(w http.ResponseWriter, r *http.Request) {
@@ -120,10 +133,11 @@ func (h *InviteHandler) writeInviteError(w http.ResponseWriter, err error) {
 type AdminInviteHandler struct {
 	invites *service.InviteService
 	users   *repository.UserRepository
+	oauth   *service.OAuthLoginService
 }
 
-func NewAdminInviteHandler(invites *service.InviteService, users *repository.UserRepository) *AdminInviteHandler {
-	return &AdminInviteHandler{invites: invites, users: users}
+func NewAdminInviteHandler(invites *service.InviteService, users *repository.UserRepository, oauth *service.OAuthLoginService) *AdminInviteHandler {
+	return &AdminInviteHandler{invites: invites, users: users, oauth: oauth}
 }
 
 func (h *AdminInviteHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -233,13 +247,25 @@ func (h *AdminInviteHandler) AuthSettingsGet(w http.ResponseWriter, r *http.Requ
 		writeError(w, http.StatusInternalServerError, "Внутренняя ошибка")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	payload := map[string]any{
 		"invite_registration_enabled": enabled,
-	})
+	}
+	if h.oauth != nil {
+		oauthMethods, err := h.oauth.AuthMethods(r.Context())
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "Внутренняя ошибка")
+			return
+		}
+		payload["vk_login_enabled"] = oauthMethods["vk_login_enabled"]
+		payload["max_login_enabled"] = oauthMethods["max_login_enabled"]
+	}
+	writeJSON(w, http.StatusOK, payload)
 }
 
 type authSettingsBody struct {
 	InviteRegistrationEnabled bool `json:"invite_registration_enabled"`
+	VKLoginEnabled            bool `json:"vk_login_enabled"`
+	MAXLoginEnabled           bool `json:"max_login_enabled"`
 }
 
 func (h *AdminInviteHandler) AuthSettingsPut(w http.ResponseWriter, r *http.Request) {
@@ -252,9 +278,17 @@ func (h *AdminInviteHandler) AuthSettingsPut(w http.ResponseWriter, r *http.Requ
 		writeError(w, http.StatusInternalServerError, "Не удалось сохранить настройки")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"invite_registration_enabled": body.InviteRegistrationEnabled,
-	})
+	if h.oauth != nil {
+		if err := h.oauth.SetProviderEnabled(r.Context(), model.LoginProviderVK, body.VKLoginEnabled); err != nil {
+			writeError(w, http.StatusInternalServerError, "Не удалось сохранить настройки VK")
+			return
+		}
+		if err := h.oauth.SetProviderEnabled(r.Context(), model.LoginProviderMAX, body.MAXLoginEnabled); err != nil {
+			writeError(w, http.StatusInternalServerError, "Не удалось сохранить настройки MAX")
+			return
+		}
+	}
+	h.AuthSettingsGet(w, r)
 }
 
 func (h *AdminInviteHandler) UserInvites(w http.ResponseWriter, r *http.Request) {

@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/caarlos0/env/v11"
 )
@@ -21,6 +22,13 @@ type Config struct {
 	PublicAppURL string `env:"PUBLIC_APP_URL" envDefault:"http://localhost/app"`
 	Domain       string `env:"DOMAIN" envDefault:"localhost"`
 
+	VKClientID     string `env:"VK_CLIENT_ID"`
+	VKClientSecret string `env:"VK_CLIENT_SECRET"`
+
+	MAXBotToken      string `env:"MAX_BOT_TOKEN"`
+	MAXBotUsername   string `env:"MAX_BOT_USERNAME"`
+	MAXWebhookSecret string `env:"MAX_WEBHOOK_SECRET"`
+
 	WorkerPublishConcurrency int `env:"WORKER_PUBLISH_CONCURRENCY" envDefault:"3"`
 }
 
@@ -38,4 +46,8 @@ func (c *Config) Addr() string {
 
 func (c *Config) IsProduction() bool {
 	return c.Environment == "production"
+}
+
+func (c *Config) VKOAuthRedirectURI() string {
+	return strings.TrimSuffix(c.PublicAppURL, "/") + "/api/v1/auth/oauth/vk/callback"
 }

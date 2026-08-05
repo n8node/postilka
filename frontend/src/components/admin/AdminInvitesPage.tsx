@@ -69,6 +69,8 @@ export function AdminInvitesPage() {
   const [scope, setScope] = useState("");
 
   const [inviteEnabled, setInviteEnabled] = useState(false);
+  const [vkLoginEnabled, setVkLoginEnabled] = useState(false);
+  const [maxLoginEnabled, setMaxLoginEnabled] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [issueCount, setIssueCount] = useState(10);
   const [issuing, setIssuing] = useState(false);
@@ -78,6 +80,8 @@ export function AdminInvitesPage() {
     try {
       const data = await fetchAdminAuthSettings();
       setInviteEnabled(data.invite_registration_enabled);
+      setVkLoginEnabled(Boolean(data.vk_login_enabled));
+      setMaxLoginEnabled(Boolean(data.max_login_enabled));
     } catch {
       // ignore
     }
@@ -126,8 +130,31 @@ export function AdminInvitesPage() {
     setSettingsSaving(true);
     try {
       const next = !inviteEnabled;
-      await updateAdminAuthSettings(next);
+      await updateAdminAuthSettings({
+        invite_registration_enabled: next,
+        vk_login_enabled: vkLoginEnabled,
+        max_login_enabled: maxLoginEnabled,
+      });
       setInviteEnabled(next);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Не удалось сохранить настройку");
+    } finally {
+      setSettingsSaving(false);
+    }
+  }
+
+  async function handleToggleOAuth(provider: "vk" | "max") {
+    setSettingsSaving(true);
+    try {
+      const nextVk = provider === "vk" ? !vkLoginEnabled : vkLoginEnabled;
+      const nextMax = provider === "max" ? !maxLoginEnabled : maxLoginEnabled;
+      await updateAdminAuthSettings({
+        invite_registration_enabled: inviteEnabled,
+        vk_login_enabled: nextVk,
+        max_login_enabled: nextMax,
+      });
+      setVkLoginEnabled(nextVk);
+      setMaxLoginEnabled(nextMax);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Не удалось сохранить настройку");
     } finally {
@@ -202,7 +229,7 @@ export function AdminInvitesPage() {
         ))}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-3">
         <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <h2 className="text-sm font-semibold text-slate-900">
             Регистрация по инвайтам
@@ -226,6 +253,50 @@ export function AdminInvitesPage() {
         </section>
 
         <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <h2 className="text-sm font-semibold text-slate-900">
+            Вход через ВКонтакте
+          </h2>
+          <p className="mt-1 text-xs text-slate-500">
+            VK ID OAuth. Требуются VK_CLIENT_ID и VK_CLIENT_SECRET в окружении.
+          </p>
+          <label className="mt-4 flex cursor-pointer items-center gap-3">
+            <input
+              type="checkbox"
+              checked={vkLoginEnabled}
+              disabled={settingsSaving}
+              onChange={() => void handleToggleOAuth("vk")}
+              className="h-4 w-4 rounded border-slate-300"
+            />
+            <span className="text-sm text-slate-700">
+              {vkLoginEnabled ? "Включено" : "Выключено"}
+            </span>
+          </label>
+        </section>
+
+        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <h2 className="text-sm font-semibold text-slate-900">
+            Вход через MAX
+          </h2>
+          <p className="mt-1 text-xs text-slate-500">
+            Deep link + webhook бота. Нужны MAX_BOT_TOKEN и MAX_BOT_USERNAME.
+          </p>
+          <label className="mt-4 flex cursor-pointer items-center gap-3">
+            <input
+              type="checkbox"
+              checked={maxLoginEnabled}
+              disabled={settingsSaving}
+              onChange={() => void handleToggleOAuth("max")}
+              className="h-4 w-4 rounded border-slate-300"
+            />
+            <span className="text-sm text-slate-700">
+              {maxLoginEnabled ? "Включено" : "Выключено"}
+            </span>
+          </label>
+        </section>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:col-span-2">
           <h2 className="text-sm font-semibold text-slate-900">
             Выпуск SYSTEM-инвайтов
           </h2>

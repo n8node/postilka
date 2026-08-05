@@ -49,18 +49,46 @@ func (r *UserRepository) SetRegisteredViaInviteTx(ctx context.Context, tx pgx.Tx
 	return err
 }
 
+func (r *UserRepository) CreateOAuthTx(ctx context.Context, tx pgx.Tx, email, name string) (*model.User, error) {
+	const q = `
+		INSERT INTO users (email, password_hash, name)
+		VALUES ($1, NULL, $2)
+		RETURNING id, email, name, locale, timezone, is_blocked, is_platform_admin, created_at
+	`
+	return scanUser(tx.QueryRow(ctx, q, email, name))
+}
+
+func (r *UserRepository) HasPassword(ctx context.Context, userID string) (bool, error) {
+	var hash *string
+	err := r.pool.QueryRow(ctx, `SELECT password_hash FROM users WHERE id = $1`, userID).Scan(&hash)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, ErrNotFound
+	}
+	if err != nil {
+		return false, err
+	}
+	return hash != nil && *hash != "", nil
+}
+
 func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*model.User, string, error) {
 	const q = `
 		SELECT id, email, password_hash, name, locale, timezone, is_blocked, is_platform_admin, created_at
 		FROM users WHERE email = $1
 	`
-	var hash string
+	var hash *string
 	row := r.pool.QueryRow(ctx, q, email)
 	u, err := scanUserWithHash(row, &hash)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, "", ErrNotFound
 	}
-	return u, hash, err
+	if err != nil {
+		return nil, "", err
+	}
+	passwordHash := ""
+	if hash != nil {
+		passwordHash = *hash
+	}
+	return u, passwordHash, nil
 }
 
 func (r *UserRepository) GetByID(ctx context.Context, id string) (*model.User, error) {
@@ -239,7 +267,7 @@ func scanUser(row pgx.Row) (*model.User, error) {
 	return &u, nil
 }
 
-func scanUserWithHash(row pgx.Row, hash *string) (*model.User, error) {
+func scanUserWithHash(row pgx.Row, hash **string) (*model.User, error) {
 	var u model.User
 	var createdAt time.Time
 	err := row.Scan(

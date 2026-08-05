@@ -168,7 +168,21 @@ export function register(
 
 export type AuthMethods = {
   invite_registration_enabled: boolean;
+  vk_login_enabled?: boolean;
+  max_login_enabled?: boolean;
 };
+
+export type LoginIdentity = {
+  id: string;
+  user_id: string;
+  provider: "vk" | "max";
+  provider_user_id: string;
+  display_name: string;
+  avatar_url?: string;
+  created_at: string;
+};
+
+export type AdminAuthSettings = AuthMethods;
 
 export function fetchAuthMethods() {
   return apiFetch<AuthMethods>("/auth/methods");
@@ -279,12 +293,14 @@ export function fetchAdminAuthSettings() {
   return apiFetch<AuthMethods>("/admin/auth-settings");
 }
 
-export function updateAdminAuthSettings(inviteRegistrationEnabled: boolean) {
-  return apiFetch<AuthMethods>("/admin/auth-settings", {
+export function updateAdminAuthSettings(settings: {
+  invite_registration_enabled: boolean;
+  vk_login_enabled?: boolean;
+  max_login_enabled?: boolean;
+}) {
+  return apiFetch<AdminAuthSettings>("/admin/auth-settings", {
     method: "PUT",
-    body: JSON.stringify({
-      invite_registration_enabled: inviteRegistrationEnabled,
-    }),
+    body: JSON.stringify(settings),
   });
 }
 
@@ -321,6 +337,28 @@ export function fetchAdminUserInviteRelations(userId: string) {
   return apiFetch<UserInviteRelations>(
     `/admin/users/${userId}/invite-relations`,
   );
+}
+
+export function fetchLoginIdentities() {
+  return apiFetch<{
+    identities: LoginIdentity[];
+    methods: AuthMethods;
+  }>("/user/login-identities");
+}
+
+export function unlinkLoginIdentity(provider: "vk" | "max") {
+  return apiFetch<{ status: string }>(`/user/login-identities/${provider}`, {
+    method: "DELETE",
+  });
+}
+
+export function pollMAXOAuthStatus(token: string) {
+  return apiFetch<{
+    status: string;
+    redirect_url?: string;
+    deep_link?: string;
+    error?: string;
+  }>(`/auth/oauth/max/status?token=${encodeURIComponent(token)}`);
 }
 
 export function logout() {
