@@ -181,6 +181,28 @@ docker compose exec -T mysql mysqldump -u root -p"$WP_DB_ROOT_PASSWORD" wordpres
 
   Если `--network host` OK, а bridge timeout — нужен `outbound-proxy` (не `extra_hosts`).
 
+- **MAX OAuth / webhook не приходит, `curl platform-api2.max.ru` → `SSL certificate problem`:** API MAX подписан сертификатами **НУЦ Минцифры**. Без них backend не регистрирует webhook.
+
+  **На хосте (Ubuntu) для ручной проверки curl:**
+
+  ```bash
+  sudo apt install -y wget
+  cd /tmp
+  wget https://gu-st.ru/content/lending/russian_trusted_root_ca_pem.crt
+  wget https://gu-st.ru/content/lending/russian_trusted_sub_ca_pem.crt
+  sudo cp russian_trusted_* /usr/local/share/ca-certificates/
+  sudo update-ca-certificates
+  curl -s "https://platform-api2.max.ru/subscriptions" -H "Authorization: BOT_TOKEN" | jq .
+  ```
+
+  **Backend (prod):** образ `backend` уже ставит эти CA в Dockerfile. После обновления:
+
+  ```bash
+  git pull && make prod-backend-nocache
+  ```
+
+  Затем в админке Postilka → MAX → **Сохранить** (регистрация webhook). В логах backend при «Запустить» в MAX должен появиться `POST .../max/webhook`.
+
 ## Локальная разработка (без SSL)
 
 ```bash
