@@ -38,7 +38,10 @@ services:
       DOMAIN: postilka.ru
       HTTPS_PROXY: http://host.docker.internal:8888
       HTTP_PROXY: http://host.docker.internal:8888
+      https_proxy: http://host.docker.internal:8888
+      http_proxy: http://host.docker.internal:8888
       NO_PROXY: postgres,mysql,backend,frontend,nginx,wordpress,localhost,127.0.0.1
+      no_proxy: postgres,mysql,backend,frontend,nginx,wordpress,localhost,127.0.0.1
     logging:
       driver: json-file
       options:
@@ -54,7 +57,10 @@ services:
       ENVIRONMENT: production
       HTTPS_PROXY: http://host.docker.internal:8888
       HTTP_PROXY: http://host.docker.internal:8888
+      https_proxy: http://host.docker.internal:8888
+      http_proxy: http://host.docker.internal:8888
       NO_PROXY: postgres,mysql,backend,frontend,nginx,wordpress,localhost,127.0.0.1
+      no_proxy: postgres,mysql,backend,frontend,nginx,wordpress,localhost,127.0.0.1
     logging:
       driver: json-file
       options:
