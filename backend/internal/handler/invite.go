@@ -242,51 +242,42 @@ func (h *AdminInviteHandler) Revoke(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AdminInviteHandler) AuthSettingsGet(w http.ResponseWriter, r *http.Request) {
+	if h.oauth != nil {
+		settings, err := h.oauth.GetAdminSettings(r.Context())
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "Внутренняя ошибка")
+			return
+		}
+		writeJSON(w, http.StatusOK, settings)
+		return
+	}
 	enabled, err := h.invites.IsRegistrationEnabled(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Внутренняя ошибка")
 		return
 	}
-	payload := map[string]any{
+	writeJSON(w, http.StatusOK, map[string]any{
 		"invite_registration_enabled": enabled,
-	}
-	if h.oauth != nil {
-		oauthMethods, err := h.oauth.AuthMethods(r.Context())
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, "Внутренняя ошибка")
-			return
-		}
-		payload["vk_login_enabled"] = oauthMethods["vk_login_enabled"]
-		payload["max_login_enabled"] = oauthMethods["max_login_enabled"]
-	}
-	writeJSON(w, http.StatusOK, payload)
-}
-
-type authSettingsBody struct {
-	InviteRegistrationEnabled bool `json:"invite_registration_enabled"`
-	VKLoginEnabled            bool `json:"vk_login_enabled"`
-	MAXLoginEnabled           bool `json:"max_login_enabled"`
+	})
 }
 
 func (h *AdminInviteHandler) AuthSettingsPut(w http.ResponseWriter, r *http.Request) {
-	var body authSettingsBody
+	var body model.AdminAuthSettingsInput
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeError(w, http.StatusBadRequest, "Некорректное тело запроса")
+		return
+	}
+	if h.oauth != nil {
+		if err := h.oauth.SaveAdminSettings(r.Context(), body); err != nil {
+			writeError(w, http.StatusInternalServerError, "Не удалось сохранить настройки")
+			return
+		}
+		h.AuthSettingsGet(w, r)
 		return
 	}
 	if err := h.invites.SetRegistrationEnabled(r.Context(), body.InviteRegistrationEnabled); err != nil {
 		writeError(w, http.StatusInternalServerError, "Не удалось сохранить настройки")
 		return
-	}
-	if h.oauth != nil {
-		if err := h.oauth.SetProviderEnabled(r.Context(), model.LoginProviderVK, body.VKLoginEnabled); err != nil {
-			writeError(w, http.StatusInternalServerError, "Не удалось сохранить настройки VK")
-			return
-		}
-		if err := h.oauth.SetProviderEnabled(r.Context(), model.LoginProviderMAX, body.MAXLoginEnabled); err != nil {
-			writeError(w, http.StatusInternalServerError, "Не удалось сохранить настройки MAX")
-			return
-		}
 	}
 	h.AuthSettingsGet(w, r)
 }

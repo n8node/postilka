@@ -36,8 +36,9 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	authSvc := service.NewAuthService(userRepo, wsRepo, planRepo, inviteSvc, db.Pool, authMW)
 	identityRepo := repository.NewUserLoginIdentityRepository(db.Pool)
 	oauthSessionRepo := repository.NewOAuthLoginSessionRepository(db.Pool)
+	oauthSettingsRepo := repository.NewOAuthSettingsRepository(settingsRepo)
 	oauthSvc := service.NewOAuthLoginService(
-		userRepo, identityRepo, oauthSessionRepo, wsRepo, planRepo, settingsRepo, db.Pool, authMW, cfg,
+		userRepo, identityRepo, oauthSessionRepo, oauthSettingsRepo, wsRepo, planRepo, settingsRepo, db.Pool, authMW, cfg,
 	)
 	wsSvc := service.NewWorkspaceService(wsRepo)
 	planSvc := service.NewPlanService(planRepo, wsRepo)

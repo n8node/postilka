@@ -30,22 +30,23 @@ var (
 )
 
 type OAuthLoginService struct {
-	users      *repository.UserRepository
-	identities *repository.UserLoginIdentityRepository
-	sessions   *repository.OAuthLoginSessionRepository
-	workspaces *repository.WorkspaceRepository
-	plans      *repository.PlanRepository
-	settings   *repository.SettingsRepository
-	pool       pgxPoolBeginner
-	auth       *middleware.Auth
-	cfg        *config.Config
-	vk         *oauthclient.VKClient
+	users        *repository.UserRepository
+	identities   *repository.UserLoginIdentityRepository
+	sessions     *repository.OAuthLoginSessionRepository
+	oauthSettings *repository.OAuthSettingsRepository
+	workspaces   *repository.WorkspaceRepository
+	plans        *repository.PlanRepository
+	settings     *repository.SettingsRepository
+	pool         pgxPoolBeginner
+	auth         *middleware.Auth
+	cfg          *config.Config
 }
 
 func NewOAuthLoginService(
 	users *repository.UserRepository,
 	identities *repository.UserLoginIdentityRepository,
 	sessions *repository.OAuthLoginSessionRepository,
+	oauthSettings *repository.OAuthSettingsRepository,
 	workspaces *repository.WorkspaceRepository,
 	plans *repository.PlanRepository,
 	settings *repository.SettingsRepository,
@@ -55,13 +56,9 @@ func NewOAuthLoginService(
 ) *OAuthLoginService {
 	return &OAuthLoginService{
 		users: users, identities: identities, sessions: sessions,
+		oauthSettings: oauthSettings,
 		workspaces: workspaces, plans: plans, settings: settings,
 		pool: pool, auth: auth, cfg: cfg,
-		vk: &oauthclient.VKClient{
-			ClientID:     cfg.VKClientID,
-			ClientSecret: cfg.VKClientSecret,
-			RedirectURI:  cfg.VKOAuthRedirectURI(),
-		},
 	}
 }
 
@@ -115,6 +112,110 @@ func (s *OAuthLoginService) SetProviderEnabled(ctx context.Context, provider mod
 	return s.settings.Set(ctx, key, v)
 }
 
+func (s *OAuthLoginService) GetAdminSettings(ctx context.Context) (*model.AdminAuthSettingsResponse, error) {
+	inviteEnabled, err := s.settings.IsInviteRegistrationEnabled(ctx)
+	if err != nil {
+		return nil, err
+	}
+	oauthAdmin, err := s.buildAdminOAuthSettings(ctx)
+	if err != nil {
+		return nil, err
+	}
+	vkEnabled, err := s.isProviderEnabled(ctx, model.LoginProviderVK)
+	if err != nil {
+		return nil, err
+	}
+	maxEnabled, err := s.isProviderEnabled(ctx, model.LoginProviderMAX)
+	if err != nil {
+		return nil, err
+	}
+	return &model.AdminAuthSettingsResponse{
+		InviteRegistrationEnabled: inviteEnabled,
+		VKLoginEnabled:            vkEnabled,
+		MAXLoginEnabled:           maxEnabled,
+		OAuth:                     oauthAdmin,
+	}, nil
+}
+
+func (s *OAuthLoginService) SaveAdminSettings(ctx context.Context, input model.AdminAuthSettingsInput) error {
+	if err := s.settings.SetInviteRegistrationEnabled(ctx, input.InviteRegistrationEnabled); err != nil {
+		return err
+	}
+	if err := s.SetProviderEnabled(ctx, model.LoginProviderVK, input.VKLoginEnabled); err != nil {
+		return err
+	}
+	if err := s.SetProviderEnabled(ctx, model.LoginProviderMAX, input.MAXLoginEnabled); err != nil {
+		return err
+	}
+	if input.VK != nil {
+		if err := s.oauthSettings.SaveVK(ctx, input.VK.ClientID, input.VK.ClientSecret, input.VK.ClientSecret == ""); err != nil {
+			return err
+		}
+	}
+	if input.MAX != nil {
+		if err := s.oauthSettings.SaveMAX(
+			ctx,
+			input.MAX.BotUsername,
+			input.MAX.BotToken,
+			input.MAX.WebhookSecret,
+			input.MAX.BotToken == "",
+			input.MAX.WebhookSecret == "",
+		); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *OAuthLoginService) GetMAXWebhookSecret(ctx context.Context) (string, error) {
+	cfg, err := s.oauthSettings.GetMAX(ctx)
+	if err != nil {
+		return "", err
+	}
+	return cfg.WebhookSecret, nil
+}
+
+func (s *OAuthLoginService) buildAdminOAuthSettings(ctx context.Context) (model.AdminOAuthLoginSettings, error) {
+	vk, err := s.oauthSettings.GetVK(ctx)
+	if err != nil {
+		return model.AdminOAuthLoginSettings{}, err
+	}
+	maxCfg, err := s.oauthSettings.GetMAX(ctx)
+	if err != nil {
+		return model.AdminOAuthLoginSettings{}, err
+	}
+	return model.AdminOAuthLoginSettings{
+		VK: model.AdminVKLoginConfig{
+			ClientID:        vk.ClientID,
+			ClientSecretSet: vk.ClientSecret != "",
+			RedirectURI:     s.cfg.VKOAuthRedirectURI(),
+			Configured:      vk.Configured(),
+		},
+		MAX: model.AdminMAXLoginConfig{
+			BotUsername:      maxCfg.BotUsername,
+			BotTokenSet:      maxCfg.BotToken != "",
+			WebhookSecretSet: maxCfg.WebhookSecret != "",
+			WebhookURL:       s.cfg.MAXOAuthWebhookURL(),
+			Configured:       maxCfg.Configured(),
+		},
+	}, nil
+}
+
+func (s *OAuthLoginService) vkClient(ctx context.Context) (*oauthclient.VKClient, error) {
+	vk, err := s.oauthSettings.GetVK(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !vk.Configured() {
+		return nil, ErrOAuthProviderNotReady
+	}
+	return &oauthclient.VKClient{
+		ClientID:     vk.ClientID,
+		ClientSecret: vk.ClientSecret,
+		RedirectURI:  s.cfg.VKOAuthRedirectURI(),
+	}, nil
+}
+
 func (s *OAuthLoginService) StartVK(ctx context.Context, mode, userID, redirectPath string) (*OAuthStartResult, error) {
 	if err := s.ensureStartAllowed(ctx, model.LoginProviderVK, mode, userID); err != nil {
 		return nil, err
@@ -134,8 +235,13 @@ func (s *OAuthLoginService) StartVK(ctx context.Context, mode, userID, redirectP
 		return nil, err
 	}
 
+	vk, err := s.vkClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	return &OAuthStartResult{
-		RedirectURL: s.vk.AuthorizeURL(state, challenge, s.cfg.VKOAuthRedirectURI()),
+		RedirectURL: vk.AuthorizeURL(state, challenge, s.cfg.VKOAuthRedirectURI()),
 		StateToken:  state,
 	}, nil
 }
@@ -144,7 +250,11 @@ func (s *OAuthLoginService) StartMAX(ctx context.Context, mode, userID, redirect
 	if err := s.ensureStartAllowed(ctx, model.LoginProviderMAX, mode, userID); err != nil {
 		return nil, err
 	}
-	if s.cfg.MAXBotUsername == "" {
+	maxCfg, err := s.oauthSettings.GetMAX(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if maxCfg.BotUsername == "" {
 		return nil, ErrOAuthProviderNotReady
 	}
 
@@ -157,7 +267,7 @@ func (s *OAuthLoginService) StartMAX(ctx context.Context, mode, userID, redirect
 	}
 
 	payload := maxStartPrefix + state
-	deepLink := fmt.Sprintf("https://max.ru/%s?start=%s", s.cfg.MAXBotUsername, payload)
+	deepLink := fmt.Sprintf("https://max.ru/%s?start=%s", maxCfg.BotUsername, payload)
 	waitURL := s.cfg.PublicAppURL + "/auth/oauth/max/wait?token=" + state
 
 	return &OAuthStartResult{
@@ -176,12 +286,17 @@ func (s *OAuthLoginService) CompleteVK(
 		return nil, "", err
 	}
 
-	token, err := s.vk.ExchangeCode(ctx, code, session.CodeVerifier, deviceID, state, s.cfg.VKOAuthRedirectURI())
+	vk, err := s.vkClient(ctx)
 	if err != nil {
 		return nil, "", err
 	}
 
-	profile, err := s.vk.FetchUserInfo(ctx, token.AccessToken)
+	token, err := vk.ExchangeCode(ctx, code, session.CodeVerifier, deviceID, state, s.cfg.VKOAuthRedirectURI())
+	if err != nil {
+		return nil, "", err
+	}
+
+	profile, err := vk.FetchUserInfo(ctx, token.AccessToken)
 	if err != nil {
 		profile = &oauthclient.VKProfile{UserID: fmt.Sprintf("%d", token.UserID)}
 	}
@@ -257,8 +372,9 @@ func (s *OAuthLoginService) PollMAXStatus(ctx context.Context, stateToken string
 			return &OAuthStatusResult{Status: "expired", Error: "Сессия истекла. Попробуйте снова."}, nil
 		}
 		deepLink := ""
-		if s.cfg.MAXBotUsername != "" {
-			deepLink = fmt.Sprintf("https://max.ru/%s?start=%s%s", s.cfg.MAXBotUsername, maxStartPrefix, stateToken)
+		maxCfg, err := s.oauthSettings.GetMAX(ctx)
+		if err == nil && maxCfg.BotUsername != "" {
+			deepLink = fmt.Sprintf("https://max.ru/%s?start=%s%s", maxCfg.BotUsername, maxStartPrefix, stateToken)
 		}
 		return &OAuthStatusResult{Status: "pending", DeepLink: deepLink}, nil
 	}
@@ -441,11 +557,17 @@ func (s *OAuthLoginService) ensureStartAllowed(ctx context.Context, provider mod
 	if !enabled {
 		return ErrOAuthProviderDisabled
 	}
-	if provider == model.LoginProviderVK && s.cfg.VKClientID == "" {
-		return ErrOAuthProviderNotReady
+	if provider == model.LoginProviderVK {
+		ok, err := s.isVKConfigured(ctx)
+		if err != nil || !ok {
+			return ErrOAuthProviderNotReady
+		}
 	}
-	if provider == model.LoginProviderMAX && s.cfg.MAXBotToken == "" {
-		return ErrOAuthProviderNotReady
+	if provider == model.LoginProviderMAX {
+		ok, err := s.isMAXConfigured(ctx)
+		if err != nil || !ok {
+			return ErrOAuthProviderNotReady
+		}
 	}
 	if mode == "link" {
 		existing, err := s.identities.ListByUserID(ctx, userID)
@@ -482,7 +604,7 @@ func (s *OAuthLoginService) isProviderEnabled(ctx context.Context, provider mode
 	key := settingKeyForProvider(provider)
 	value, err := s.settings.Get(ctx, key)
 	if errors.Is(err, repository.ErrNotFound) {
-		return s.providerConfigured(provider), nil
+		return false, nil
 	}
 	if err != nil {
 		return false, err
@@ -490,18 +612,34 @@ func (s *OAuthLoginService) isProviderEnabled(ctx context.Context, provider mode
 	if value != "true" {
 		return false, nil
 	}
-	return s.providerConfigured(provider), nil
+	return s.isProviderConfigured(ctx, provider)
 }
 
-func (s *OAuthLoginService) providerConfigured(provider model.LoginOAuthProvider) bool {
+func (s *OAuthLoginService) isProviderConfigured(ctx context.Context, provider model.LoginOAuthProvider) (bool, error) {
 	switch provider {
 	case model.LoginProviderVK:
-		return s.cfg.VKClientID != ""
+		return s.isVKConfigured(ctx)
 	case model.LoginProviderMAX:
-		return s.cfg.MAXBotToken != "" && s.cfg.MAXBotUsername != ""
+		return s.isMAXConfigured(ctx)
 	default:
-		return false
+		return false, nil
 	}
+}
+
+func (s *OAuthLoginService) isVKConfigured(ctx context.Context) (bool, error) {
+	vk, err := s.oauthSettings.GetVK(ctx)
+	if err != nil {
+		return false, err
+	}
+	return vk.Configured(), nil
+}
+
+func (s *OAuthLoginService) isMAXConfigured(ctx context.Context) (bool, error) {
+	maxCfg, err := s.oauthSettings.GetMAX(ctx)
+	if err != nil {
+		return false, err
+	}
+	return maxCfg.Configured(), nil
 }
 
 func settingKeyForProvider(provider model.LoginOAuthProvider) string {

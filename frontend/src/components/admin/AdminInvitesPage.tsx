@@ -71,6 +71,16 @@ export function AdminInvitesPage() {
   const [inviteEnabled, setInviteEnabled] = useState(false);
   const [vkLoginEnabled, setVkLoginEnabled] = useState(false);
   const [maxLoginEnabled, setMaxLoginEnabled] = useState(false);
+  const [vkClientId, setVkClientId] = useState("");
+  const [vkClientSecret, setVkClientSecret] = useState("");
+  const [vkClientSecretSet, setVkClientSecretSet] = useState(false);
+  const [vkRedirectUri, setVkRedirectUri] = useState("");
+  const [maxBotUsername, setMaxBotUsername] = useState("");
+  const [maxBotToken, setMaxBotToken] = useState("");
+  const [maxBotTokenSet, setMaxBotTokenSet] = useState(false);
+  const [maxWebhookSecret, setMaxWebhookSecret] = useState("");
+  const [maxWebhookSecretSet, setMaxWebhookSecretSet] = useState(false);
+  const [maxWebhookUrl, setMaxWebhookUrl] = useState("");
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [issueCount, setIssueCount] = useState(10);
   const [issuing, setIssuing] = useState(false);
@@ -82,6 +92,16 @@ export function AdminInvitesPage() {
       setInviteEnabled(data.invite_registration_enabled);
       setVkLoginEnabled(Boolean(data.vk_login_enabled));
       setMaxLoginEnabled(Boolean(data.max_login_enabled));
+      setVkClientId(data.oauth?.vk.client_id ?? "");
+      setVkClientSecret("");
+      setVkClientSecretSet(Boolean(data.oauth?.vk.client_secret_set));
+      setVkRedirectUri(data.oauth?.vk.redirect_uri ?? "");
+      setMaxBotUsername(data.oauth?.max.bot_username ?? "");
+      setMaxBotToken("");
+      setMaxBotTokenSet(Boolean(data.oauth?.max.bot_token_set));
+      setMaxWebhookSecret("");
+      setMaxWebhookSecretSet(Boolean(data.oauth?.max.webhook_secret_set));
+      setMaxWebhookUrl(data.oauth?.max.webhook_url ?? "");
     } catch {
       // ignore
     }
@@ -126,37 +146,27 @@ export function AdminInvitesPage() {
     [stats],
   );
 
-  async function handleToggleRegistration() {
+  async function handleSaveAuthSettings() {
     setSettingsSaving(true);
+    setError(null);
     try {
-      const next = !inviteEnabled;
-      await updateAdminAuthSettings({
-        invite_registration_enabled: next,
-        vk_login_enabled: vkLoginEnabled,
-        max_login_enabled: maxLoginEnabled,
-      });
-      setInviteEnabled(next);
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Не удалось сохранить настройку");
-    } finally {
-      setSettingsSaving(false);
-    }
-  }
-
-  async function handleToggleOAuth(provider: "vk" | "max") {
-    setSettingsSaving(true);
-    try {
-      const nextVk = provider === "vk" ? !vkLoginEnabled : vkLoginEnabled;
-      const nextMax = provider === "max" ? !maxLoginEnabled : maxLoginEnabled;
       await updateAdminAuthSettings({
         invite_registration_enabled: inviteEnabled,
-        vk_login_enabled: nextVk,
-        max_login_enabled: nextMax,
+        vk_login_enabled: vkLoginEnabled,
+        max_login_enabled: maxLoginEnabled,
+        vk: {
+          client_id: vkClientId,
+          client_secret: vkClientSecret,
+        },
+        max: {
+          bot_username: maxBotUsername,
+          bot_token: maxBotToken,
+          webhook_secret: maxWebhookSecret,
+        },
       });
-      setVkLoginEnabled(nextVk);
-      setMaxLoginEnabled(nextMax);
+      await loadSettings();
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Не удалось сохранить настройку");
+      setError(e instanceof ApiError ? e.message : "Не удалось сохранить настройки");
     } finally {
       setSettingsSaving(false);
     }
@@ -229,71 +239,132 @@ export function AdminInvitesPage() {
         ))}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <h2 className="text-sm font-semibold text-slate-900">
-            Регистрация по инвайтам
-          </h2>
-          <p className="mt-1 text-xs text-slate-500">
-            При включении новые пользователи смогут регистрироваться только с
-            действующим ключом.
-          </p>
-          <label className="mt-4 flex cursor-pointer items-center gap-3">
+      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-900">
+              Настройки входа и регистрации
+            </h2>
+            <p className="mt-1 text-xs text-slate-500">
+              Инвайты, VK ID и MAX — ключи хранятся в базе, доступны только админам.
+            </p>
+          </div>
+          <button
+            type="button"
+            disabled={settingsSaving}
+            onClick={() => void handleSaveAuthSettings()}
+            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          >
+            {settingsSaving ? "Сохранение…" : "Сохранить"}
+          </button>
+        </div>
+
+        <div className="mt-4 grid gap-4 lg:grid-cols-3">
+          <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-100 p-3">
             <input
               type="checkbox"
               checked={inviteEnabled}
               disabled={settingsSaving}
-              onChange={() => void handleToggleRegistration()}
+              onChange={(e) => setInviteEnabled(e.target.checked)}
               className="h-4 w-4 rounded border-slate-300"
             />
-            <span className="text-sm text-slate-700">
-              {inviteEnabled ? "Включено" : "Выключено"}
-            </span>
+            <span className="text-sm text-slate-700">Регистрация по инвайтам</span>
           </label>
-        </section>
-
-        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <h2 className="text-sm font-semibold text-slate-900">
-            Вход через ВКонтакте
-          </h2>
-          <p className="mt-1 text-xs text-slate-500">
-            VK ID OAuth. Требуются VK_CLIENT_ID и VK_CLIENT_SECRET в окружении.
-          </p>
-          <label className="mt-4 flex cursor-pointer items-center gap-3">
+          <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-100 p-3">
             <input
               type="checkbox"
               checked={vkLoginEnabled}
               disabled={settingsSaving}
-              onChange={() => void handleToggleOAuth("vk")}
+              onChange={(e) => setVkLoginEnabled(e.target.checked)}
               className="h-4 w-4 rounded border-slate-300"
             />
-            <span className="text-sm text-slate-700">
-              {vkLoginEnabled ? "Включено" : "Выключено"}
-            </span>
+            <span className="text-sm text-slate-700">Вход через ВКонтакте</span>
           </label>
-        </section>
-
-        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <h2 className="text-sm font-semibold text-slate-900">
-            Вход через MAX
-          </h2>
-          <p className="mt-1 text-xs text-slate-500">
-            Deep link + webhook бота. Нужны MAX_BOT_TOKEN и MAX_BOT_USERNAME.
-          </p>
-          <label className="mt-4 flex cursor-pointer items-center gap-3">
+          <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-100 p-3">
             <input
               type="checkbox"
               checked={maxLoginEnabled}
               disabled={settingsSaving}
-              onChange={() => void handleToggleOAuth("max")}
+              onChange={(e) => setMaxLoginEnabled(e.target.checked)}
               className="h-4 w-4 rounded border-slate-300"
             />
-            <span className="text-sm text-slate-700">
-              {maxLoginEnabled ? "Включено" : "Выключено"}
-            </span>
+            <span className="text-sm text-slate-700">Вход через MAX</span>
           </label>
-        </section>
-      </div>
+        </div>
+
+        <div className="mt-4 grid gap-4 lg:grid-cols-2">
+          <div className="rounded-lg border border-slate-100 p-4">
+            <h3 className="text-sm font-medium text-slate-900">VK ID</h3>
+            <div className="mt-3 space-y-3">
+              <label className="block text-xs font-medium text-slate-500">
+                Client ID
+                <input
+                  value={vkClientId}
+                  onChange={(e) => setVkClientId(e.target.value)}
+                  className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="block text-xs font-medium text-slate-500">
+                Client Secret
+                <input
+                  type="password"
+                  value={vkClientSecret}
+                  onChange={(e) => setVkClientSecret(e.target.value)}
+                  placeholder={vkClientSecretSet ? "Уже задан — оставьте пустым" : "Введите secret"}
+                  className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+                />
+              </label>
+              {vkRedirectUri && (
+                <p className="text-xs text-slate-500">
+                  Redirect URI для VK ID:{" "}
+                  <code className="rounded bg-slate-100 px-1">{vkRedirectUri}</code>
+                </p>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-slate-100 p-4">
+            <h3 className="text-sm font-medium text-slate-900">MAX бот</h3>
+            <div className="mt-3 space-y-3">
+              <label className="block text-xs font-medium text-slate-500">
+                Username бота
+                <input
+                  value={maxBotUsername}
+                  onChange={(e) => setMaxBotUsername(e.target.value)}
+                  placeholder="my_bot"
+                  className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="block text-xs font-medium text-slate-500">
+                Bot token
+                <input
+                  type="password"
+                  value={maxBotToken}
+                  onChange={(e) => setMaxBotToken(e.target.value)}
+                  placeholder={maxBotTokenSet ? "Уже задан — оставьте пустым" : "Токен бота"}
+                  className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+                />
+              </label>
+              <label className="block text-xs font-medium text-slate-500">
+                Webhook secret
+                <input
+                  type="password"
+                  value={maxWebhookSecret}
+                  onChange={(e) => setMaxWebhookSecret(e.target.value)}
+                  placeholder={maxWebhookSecretSet ? "Уже задан — оставьте пустым" : "Секрет для X-Max-Bot-Api-Secret"}
+                  className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+                />
+              </label>
+              {maxWebhookUrl && (
+                <p className="text-xs text-slate-500">
+                  Webhook URL:{" "}
+                  <code className="rounded bg-slate-100 px-1">{maxWebhookUrl}</code>
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:col-span-2">

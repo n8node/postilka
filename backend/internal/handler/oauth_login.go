@@ -114,7 +114,12 @@ func (h *OAuthLoginHandler) VKCallback(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *OAuthLoginHandler) MAXWebhook(w http.ResponseWriter, r *http.Request) {
-	if secret := h.cfg.MAXWebhookSecret; secret != "" {
+	secret, err := h.oauth.GetMAXWebhookSecret(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Внутренняя ошибка")
+		return
+	}
+	if secret != "" {
 		if r.Header.Get("X-Max-Bot-Api-Secret") != secret {
 			writeError(w, http.StatusUnauthorized, "Неверный секрет webhook")
 			return

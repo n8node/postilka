@@ -22,13 +22,6 @@ type Config struct {
 	PublicAppURL string `env:"PUBLIC_APP_URL" envDefault:"http://localhost/app"`
 	Domain       string `env:"DOMAIN" envDefault:"localhost"`
 
-	VKClientID     string `env:"VK_CLIENT_ID"`
-	VKClientSecret string `env:"VK_CLIENT_SECRET"`
-
-	MAXBotToken      string `env:"MAX_BOT_TOKEN"`
-	MAXBotUsername   string `env:"MAX_BOT_USERNAME"`
-	MAXWebhookSecret string `env:"MAX_WEBHOOK_SECRET"`
-
 	WorkerPublishConcurrency int `env:"WORKER_PUBLISH_CONCURRENCY" envDefault:"3"`
 }
 
@@ -50,4 +43,8 @@ func (c *Config) IsProduction() bool {
 
 func (c *Config) VKOAuthRedirectURI() string {
 	return strings.TrimSuffix(c.PublicAppURL, "/") + "/api/v1/auth/oauth/vk/callback"
+}
+
+func (c *Config) MAXOAuthWebhookURL() string {
+	return strings.TrimSuffix(c.PublicAppURL, "/") + "/api/v1/auth/oauth/max/webhook"
 }

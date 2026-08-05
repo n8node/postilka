@@ -182,7 +182,41 @@ export type LoginIdentity = {
   created_at: string;
 };
 
-export type AdminAuthSettings = AuthMethods;
+export type AdminAuthSettings = {
+  invite_registration_enabled: boolean;
+  vk_login_enabled?: boolean;
+  max_login_enabled?: boolean;
+  oauth?: {
+    vk: {
+      client_id: string;
+      client_secret_set: boolean;
+      redirect_uri: string;
+      configured: boolean;
+    };
+    max: {
+      bot_username: string;
+      bot_token_set: boolean;
+      webhook_secret_set: boolean;
+      webhook_url: string;
+      configured: boolean;
+    };
+  };
+};
+
+export type AdminAuthSettingsInput = {
+  invite_registration_enabled: boolean;
+  vk_login_enabled?: boolean;
+  max_login_enabled?: boolean;
+  vk?: {
+    client_id?: string;
+    client_secret?: string;
+  };
+  max?: {
+    bot_username?: string;
+    bot_token?: string;
+    webhook_secret?: string;
+  };
+};
 
 export function fetchAuthMethods() {
   return apiFetch<AuthMethods>("/auth/methods");
@@ -290,14 +324,10 @@ export function revokeAdminInvite(inviteId: string) {
 }
 
 export function fetchAdminAuthSettings() {
-  return apiFetch<AuthMethods>("/admin/auth-settings");
+  return apiFetch<AdminAuthSettings>("/admin/auth-settings");
 }
 
-export function updateAdminAuthSettings(settings: {
-  invite_registration_enabled: boolean;
-  vk_login_enabled?: boolean;
-  max_login_enabled?: boolean;
-}) {
+export function updateAdminAuthSettings(settings: AdminAuthSettingsInput) {
   return apiFetch<AdminAuthSettings>("/admin/auth-settings", {
     method: "PUT",
     body: JSON.stringify(settings),
