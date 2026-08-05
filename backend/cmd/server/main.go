@@ -30,6 +30,10 @@ func main() {
 	ctx := context.Background()
 
 	if err := runMigrations(cfg.DatabaseURL); err != nil {
+		if cfg.IsProduction() {
+			logger.Error("migrations failed", "error", err)
+			os.Exit(1)
+		}
 		logger.Warn("migrations failed", "error", err)
 	}
 

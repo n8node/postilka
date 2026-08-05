@@ -76,6 +76,9 @@ func (h *OAuthLoginHandler) startProvider(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if err != nil {
+		if h.logger != nil {
+			h.logger.Error("oauth start failed", "provider", provider, "mode", mode, "err", err)
+		}
 		h.writeOAuthError(w, err)
 		return
 	}

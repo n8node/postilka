@@ -1,4 +1,4 @@
-.PHONY: up down prod prod-backend prod-frontend prod-nginx verify-release migrate test lint logs setup psql wp-cli status create-superadmin
+.PHONY: up down prod prod-backend prod-backend-nocache prod-frontend prod-nginx verify-release migrate test lint logs setup psql wp-cli status create-superadmin
 
 COMPOSE := docker compose --env-file .env
 COMPOSE_PROD := $(COMPOSE) -f docker-compose.yml -f docker-compose.prod.yml
@@ -16,6 +16,11 @@ prod:
 # Deploy only the services affected by a release; each target checks the public edge.
 prod-backend:
 	$(COMPOSE_PROD) up --build -d backend worker
+	bash scripts/verify-release.sh
+
+prod-backend-nocache:
+	$(COMPOSE_PROD) build --no-cache backend worker
+	$(COMPOSE_PROD) up -d backend worker
 	bash scripts/verify-release.sh
 
 prod-frontend:

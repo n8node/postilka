@@ -231,8 +231,8 @@ func (s *OAuthLoginService) StartVK(ctx context.Context, mode, userID, redirectP
 	}
 	challenge := oauthclient.CodeChallenge(verifier)
 
-	if _, err := s.sessions.Create(ctx, model.LoginProviderVK, state, mode, userID, sanitizeRedirectPath(redirectPath), verifier, oauthSessionTTL); err != nil {
-		return nil, err
+	if err := s.sessions.Create(ctx, model.LoginProviderVK, state, mode, userID, sanitizeRedirectPath(redirectPath), verifier, oauthSessionTTL); err != nil {
+		return nil, fmt.Errorf("create vk oauth session: %w", err)
 	}
 
 	vk, err := s.vkClient(ctx)
@@ -262,8 +262,8 @@ func (s *OAuthLoginService) StartMAX(ctx context.Context, mode, userID, redirect
 	if err != nil {
 		return nil, err
 	}
-	if _, err := s.sessions.Create(ctx, model.LoginProviderMAX, state, mode, userID, sanitizeRedirectPath(redirectPath), "", oauthSessionTTL); err != nil {
-		return nil, err
+	if err := s.sessions.Create(ctx, model.LoginProviderMAX, state, mode, userID, sanitizeRedirectPath(redirectPath), "", oauthSessionTTL); err != nil {
+		return nil, fmt.Errorf("create max oauth session: %w", err)
 	}
 
 	payload := maxStartPrefix + state

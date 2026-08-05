@@ -23,19 +23,19 @@ func (r *OAuthLoginSessionRepository) Create(
 	provider model.LoginOAuthProvider,
 	stateToken, mode, userID, redirectPath, codeVerifier string,
 	ttl time.Duration,
-) (*model.OAuthLoginSession, error) {
+) error {
 	const q = `
 		INSERT INTO oauth_login_sessions (
 			provider, state_token, mode, user_id, redirect_path, code_verifier, expires_at
 		)
-		VALUES ($1, $2, $3, NULLIF($4, ''), $5, NULLIF($6, ''), $7)
-		RETURNING id, provider::text, state_token, mode, COALESCE(user_id::text, ''), redirect_path,
-			COALESCE(code_verifier, ''), expires_at, completed_at, COALESCE(completed_user_id::text, ''),
-			COALESCE(provider_user_id, '')
+		VALUES ($1::login_oauth_provider, $2, $3, NULLIF($4, '')::uuid, $5, NULLIF($6, ''), $7)
 	`
 	expiresAt := time.Now().Add(ttl)
-	row := r.pool.QueryRow(ctx, q, provider, stateToken, mode, userID, redirectPath, codeVerifier, expiresAt)
-	return scanOAuthSession(row)
+	_, err := r.pool.Exec(
+		ctx, q,
+		string(provider), stateToken, mode, userID, redirectPath, codeVerifier, expiresAt,
+	)
+	return err
 }
 
 func (r *OAuthLoginSessionRepository) GetByStateToken(ctx context.Context, stateToken string) (*model.OAuthLoginSession, error) {
