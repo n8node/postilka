@@ -59,6 +59,11 @@ function oauthStatusMessage(
         type: "error" as const,
         text: "Сессия MAX истекла. Нажмите «Привязать» ещё раз и запустите бота быстрее.",
       };
+    case "max_not_configured":
+      return {
+        type: "error" as const,
+        text: "MAX не настроен: укажите username и token бота в админке и сохраните настройки.",
+      };
     case "max_webhook":
       return {
         type: "error" as const,

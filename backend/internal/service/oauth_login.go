@@ -138,37 +138,39 @@ func (s *OAuthLoginService) GetAdminSettings(ctx context.Context) (*model.AdminA
 	}, nil
 }
 
-func (s *OAuthLoginService) SaveAdminSettings(ctx context.Context, input model.AdminAuthSettingsInput) error {
+func (s *OAuthLoginService) SaveAdminSettings(ctx context.Context, input model.AdminAuthSettingsInput) (string, error) {
 	if err := s.settings.SetInviteRegistrationEnabled(ctx, input.InviteRegistrationEnabled); err != nil {
-		return err
+		return "", err
 	}
 	if err := s.SetProviderEnabled(ctx, model.LoginProviderVK, input.VKLoginEnabled); err != nil {
-		return err
+		return "", err
 	}
 	if err := s.SetProviderEnabled(ctx, model.LoginProviderMAX, input.MAXLoginEnabled); err != nil {
-		return err
+		return "", err
 	}
 	if input.VK != nil {
 		if err := s.oauthSettings.SaveVK(ctx, input.VK.ClientID, input.VK.ClientSecret, input.VK.ClientSecret == ""); err != nil {
-			return err
+			return "", err
 		}
 	}
+	var webhookErr string
 	if input.MAX != nil {
+		botUsername := oauthclient.NormalizeMAXBotUsername(input.MAX.BotUsername)
 		if err := s.oauthSettings.SaveMAX(
 			ctx,
-			input.MAX.BotUsername,
+			botUsername,
 			input.MAX.BotToken,
 			input.MAX.WebhookSecret,
 			input.MAX.BotToken == "",
 			input.MAX.WebhookSecret == "",
 		); err != nil {
-			return err
+			return "", err
 		}
 		if err := s.registerMAXWebhook(ctx); err != nil {
-			return fmt.Errorf("max webhook registration: %w", err)
+			webhookErr = oauthclient.SanitizeOAuthDetail(err.Error())
 		}
 	}
-	return nil
+	return webhookErr, nil
 }
 
 func (s *OAuthLoginService) registerMAXWebhook(ctx context.Context) error {
@@ -180,7 +182,7 @@ func (s *OAuthLoginService) registerMAXWebhook(ctx context.Context) error {
 		return nil
 	}
 	client := oauthclient.NewMAXBotClient()
-	return client.RegisterWebhook(ctx, cfg.BotToken, s.cfg.MAXOAuthWebhookURL(), cfg.WebhookSecret)
+	return client.ReplaceWebhook(ctx, cfg.BotToken, s.cfg.MAXOAuthWebhookURL(), cfg.WebhookSecret)
 }
 
 func (s *OAuthLoginService) GetMAXWebhookSecret(ctx context.Context) (string, error) {
@@ -298,6 +300,9 @@ func (s *OAuthLoginService) StartMAX(ctx context.Context, mode, userID, redirect
 		return nil, err
 	}
 	if maxCfg.BotUsername == "" {
+		return nil, ErrOAuthProviderNotReady
+	}
+	if maxCfg.BotToken == "" {
 		return nil, ErrOAuthProviderNotReady
 	}
 

@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/postilka/postilka/internal/middleware"
 	"github.com/postilka/postilka/internal/model"
+	oauthclient "github.com/postilka/postilka/internal/oauth"
 	"github.com/postilka/postilka/internal/repository"
 	"github.com/postilka/postilka/internal/service"
 )
@@ -268,11 +269,19 @@ func (h *AdminInviteHandler) AuthSettingsPut(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	if h.oauth != nil {
-		if err := h.oauth.SaveAdminSettings(r.Context(), body); err != nil {
-			writeError(w, http.StatusInternalServerError, "Не удалось сохранить настройки")
+		webhookErr, err := h.oauth.SaveAdminSettings(r.Context(), body)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, oauthclient.SanitizeOAuthDetail(err.Error()))
 			return
 		}
-		h.AuthSettingsGet(w, r)
+		settings, err := h.oauth.GetAdminSettings(r.Context())
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "Внутренняя ошибка")
+			return
+		}
+		settings.MAXWebhookError = webhookErr
+		settings.MAXWebhookRegistered = webhookErr == "" && settings.OAuth.MAX.Configured
+		writeJSON(w, http.StatusOK, settings)
 		return
 	}
 	if err := h.invites.SetRegistrationEnabled(r.Context(), body.InviteRegistrationEnabled); err != nil {

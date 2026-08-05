@@ -81,6 +81,10 @@ func (h *OAuthLoginHandler) startProvider(w http.ResponseWriter, r *http.Request
 		if h.logger != nil {
 			h.logger.Error("oauth start failed", "provider", provider, "mode", mode, "err", err)
 		}
+		if mode == "link" {
+			h.redirectLinkStartError(w, r, provider, err)
+			return
+		}
 		h.writeOAuthError(w, err)
 		return
 	}
@@ -302,6 +306,29 @@ func (h *OAuthLoginHandler) vkCallbackError(err error) (string, string) {
 
 func (h *OAuthLoginHandler) redirectOAuthError(w http.ResponseWriter, r *http.Request, code, state, detail string) {
 	target := strings.TrimSuffix(h.cfg.PublicAppURL, "/") + h.oauth.OAuthErrorRedirect(r.Context(), state, code, detail)
+	http.Redirect(w, r, target, http.StatusFound)
+}
+
+func (h *OAuthLoginHandler) redirectLinkStartError(w http.ResponseWriter, r *http.Request, provider model.LoginOAuthProvider, err error) {
+	code := "oauth_failed"
+	detail := oauthclient.SanitizeOAuthDetail(err.Error())
+	switch {
+	case errors.Is(err, service.ErrOAuthProviderNotReady):
+		code = "max_not_configured"
+		if provider == model.LoginProviderVK {
+			code = "vk_not_configured"
+		}
+		detail = "Укажите ключи провайдера в админке и сохраните настройки"
+	case errors.Is(err, service.ErrOAuthProviderDisabled):
+		code = "provider_disabled"
+		detail = "Вход через этот провайдер отключён в админке"
+	}
+	q := url.Values{}
+	q.Set("oauth_error", code)
+	if detail != "" {
+		q.Set("oauth_detail", detail)
+	}
+	target := strings.TrimSuffix(h.cfg.PublicAppURL, "/") + "/settings?" + q.Encode()
 	http.Redirect(w, r, target, http.StatusFound)
 }
 

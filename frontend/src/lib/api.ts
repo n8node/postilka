@@ -186,6 +186,8 @@ export type AdminAuthSettings = {
   invite_registration_enabled: boolean;
   vk_login_enabled?: boolean;
   max_login_enabled?: boolean;
+  max_webhook_registered?: boolean;
+  max_webhook_error?: string;
   oauth?: {
     vk: {
       client_id: string;

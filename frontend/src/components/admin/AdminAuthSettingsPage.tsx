@@ -25,6 +25,8 @@ export function AdminAuthSettingsPage() {
   const [maxWebhookSecret, setMaxWebhookSecret] = useState("");
   const [maxWebhookSecretSet, setMaxWebhookSecretSet] = useState(false);
   const [maxWebhookUrl, setMaxWebhookUrl] = useState("");
+  const [maxWebhookError, setMaxWebhookError] = useState<string | null>(null);
+  const [maxWebhookRegistered, setMaxWebhookRegistered] = useState(false);
 
   const loadSettings = useCallback(async () => {
     setLoading(true);
@@ -44,6 +46,8 @@ export function AdminAuthSettingsPage() {
       setMaxWebhookSecret("");
       setMaxWebhookSecretSet(Boolean(data.oauth?.max.webhook_secret_set));
       setMaxWebhookUrl(data.oauth?.max.webhook_url ?? "");
+      setMaxWebhookError(data.max_webhook_error?.trim() || null);
+      setMaxWebhookRegistered(Boolean(data.max_webhook_registered));
     } catch (e) {
       setError(
         e instanceof ApiError ? e.message : "Не удалось загрузить настройки",
@@ -61,7 +65,7 @@ export function AdminAuthSettingsPage() {
     setSettingsSaving(true);
     setError(null);
     try {
-      await updateAdminAuthSettings({
+      const data = await updateAdminAuthSettings({
         invite_registration_enabled: inviteEnabled,
         vk_login_enabled: vkLoginEnabled,
         max_login_enabled: maxLoginEnabled,
@@ -75,6 +79,8 @@ export function AdminAuthSettingsPage() {
           webhook_secret: maxWebhookSecret,
         },
       });
+      setMaxWebhookError(data.max_webhook_error?.trim() || null);
+      setMaxWebhookRegistered(Boolean(data.max_webhook_registered));
       await loadSettings();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Не удалось сохранить настройки");
@@ -207,8 +213,9 @@ export function AdminAuthSettingsPage() {
                   <p className="font-medium">Настройка бота MAX (dev.max.ru):</p>
                   <ul className="mt-1 list-disc space-y-1 pl-4">
                     <li>Создайте бота на platform.max.ru и получите токен</li>
-                    <li>Username — ник бота без @ (как в ссылке max.ru/…)</li>
-                    <li>Webhook secret — произвольная строка A–Z, a–z, 0–9</li>
+                    <li>Username — ник бота без @ (например SupportBot)</li>
+                    <li>Webhook secret — придумайте сами (A–Z, a–z, 0–9, _ -, от 5 символов)</li>
+                    <li>Secret вводится только здесь — в кабинете MAX его нет</li>
                     <li>При сохранении Postilka регистрирует webhook в MAX API</li>
                     <li>В webhook должно быть событие bot_started</li>
                   </ul>
@@ -253,6 +260,21 @@ export function AdminAuthSettingsPage() {
                     Webhook URL:{" "}
                     <code className="rounded bg-slate-100 px-1">{maxWebhookUrl}</code>
                   </p>
+                )}
+                {maxWebhookRegistered && !maxWebhookError && (
+                  <p className="text-xs text-green-700">
+                    Webhook зарегистрирован в MAX API.
+                  </p>
+                )}
+                {maxWebhookError && (
+                  <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                    <p className="font-medium">Ключи сохранены, но webhook MAX не зарегистрирован:</p>
+                    <p className="mt-1 break-all">{maxWebhookError}</p>
+                    <p className="mt-1">
+                      Проверьте токен бота, формат secret и доступ backend к platform-api2.max.ru
+                      (через outbound-proxy).
+                    </p>
+                  </div>
                 )}
               </div>
             </section>

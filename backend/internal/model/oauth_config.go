@@ -44,4 +44,6 @@ type AdminAuthSettingsResponse struct {
 	VKLoginEnabled            bool                   `json:"vk_login_enabled"`
 	MAXLoginEnabled           bool                   `json:"max_login_enabled"`
 	OAuth                     AdminOAuthLoginSettings `json:"oauth"`
+	MAXWebhookRegistered      bool                   `json:"max_webhook_registered,omitempty"`
+	MAXWebhookError           string                 `json:"max_webhook_error,omitempty"`
 }
