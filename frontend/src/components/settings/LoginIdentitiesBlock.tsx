@@ -36,12 +36,12 @@ function oauthStatusMessage(
     case "ip_denied":
       return {
         type: "error" as const,
-        text: "VK отклонил обмен кода: IP сервера не в whitelist. В кабинете VK ID → Ключи доступа → «IP-адрес сервера» добавьте IP postilka.ru и включите «Конфиденциальное» приложение.",
+        text: "VK отклонил запрос. Для публичного приложения IP whitelist не нужен — проверьте, что приложение «Публичное», а не «Конфиденциальное».",
       };
     case "invalid_token":
       return {
         type: "error" as const,
-        text: "Неверный сервисный ключ. В админке нужен «Сервисный ключ доступа» (длинный hex), не «Защищённый ключ».",
+        text: "Неверный Защищённый ключ (client_secret). Проверьте значение в админке Postilka.",
       };
     case "redirect_uri":
       return {

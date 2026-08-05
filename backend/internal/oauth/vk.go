@@ -13,6 +13,7 @@ import (
 const vkAuthURL = "https://id.vk.ru/authorize"
 const vkTokenURL = "https://id.vk.ru/oauth2/auth"
 const vkUserInfoURL = "https://id.vk.ru/oauth2/user_info"
+const vkIDScope = "email vkid.personal_info"
 
 type VKClient struct {
 	ClientID     string
@@ -25,6 +26,7 @@ type VKTokenResponse struct {
 	AccessToken string `json:"access_token"`
 	UserID      int64  `json:"user_id"`
 	State       string `json:"state"`
+	Email       string `json:"email"`
 	Error       string `json:"error"`
 	ErrorDesc   string `json:"error_description"`
 }
@@ -52,7 +54,7 @@ func (c *VKClient) AuthorizeURL(state, codeChallenge, redirectURI string) string
 	values.Set("state", state)
 	values.Set("code_challenge", codeChallenge)
 	values.Set("code_challenge_method", "S256")
-	values.Set("scope", "email")
+	values.Set("scope", vkIDScope)
 	return vkAuthURL + "?" + values.Encode()
 }
 
@@ -60,48 +62,19 @@ func (c *VKClient) ExchangeCode(
 	ctx context.Context,
 	code, codeVerifier, deviceID, state, redirectURI string,
 ) (*VKTokenResponse, error) {
-	form := baseExchangeForm(code, codeVerifier, deviceID, state, redirectURI, c.ClientID)
-
-	if c.ClientSecret != "" {
-		withToken := cloneValues(form)
-		withToken.Set("service_token", c.ClientSecret)
-		resp, err := c.postTokenExchange(ctx, withToken)
-		if err == nil {
-			return resp, nil
-		}
-		// Public VK apps reject service_token — retry without it.
-		if vkErr, ok := err.(*VKAPIError); ok && (vkErr.Reason == "invalid_token" || vkErr.Reason == "oauth_failed") {
-			if resp, err2 := c.postTokenExchange(ctx, form); err2 == nil {
-				return resp, nil
-			}
-		}
-		return nil, err
-	}
-
-	return c.postTokenExchange(ctx, form)
-}
-
-func baseExchangeForm(code, codeVerifier, deviceID, state, redirectURI, clientID string) url.Values {
 	form := url.Values{}
 	form.Set("grant_type", "authorization_code")
 	form.Set("code", code)
 	form.Set("code_verifier", codeVerifier)
 	form.Set("redirect_uri", redirectURI)
-	form.Set("client_id", clientID)
+	form.Set("client_id", c.ClientID)
 	form.Set("device_id", deviceID)
 	form.Set("state", state)
-	return form
-}
-
-func cloneValues(v url.Values) url.Values {
-	out := url.Values{}
-	for key, vals := range v {
-		out[key] = append([]string(nil), vals...)
+	// Public VK ID app (как DOC): Защищённый ключ → client_secret, без service_token.
+	if strings.TrimSpace(c.ClientSecret) != "" {
+		form.Set("client_secret", strings.TrimSpace(c.ClientSecret))
 	}
-	return out
-}
 
-func (c *VKClient) postTokenExchange(ctx context.Context, form url.Values) (*VKTokenResponse, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, vkTokenURL, strings.NewReader(form.Encode()))
 	if err != nil {
 		return nil, err
@@ -172,11 +145,12 @@ func (c *VKClient) FetchUserInfo(ctx context.Context, accessToken string) (*VKPr
 	if userID == "" {
 		return nil, fmt.Errorf("vk user_info: empty user_id")
 	}
+	email := strings.TrimSpace(parsed.User.Email)
 	return &VKProfile{
 		UserID:      userID,
 		DisplayName: name,
 		AvatarURL:   parsed.User.Avatar,
-		Email:       strings.TrimSpace(parsed.User.Email),
+		Email:       email,
 	}, nil
 }
 
@@ -188,8 +162,18 @@ func (c *VKClient) http() *http.Client {
 }
 
 func ProfileFromToken(token *VKTokenResponse) *VKProfile {
-	if token == nil || token.UserID <= 0 {
+	if token == nil {
 		return nil
 	}
-	return &VKProfile{UserID: fmt.Sprintf("%d", token.UserID)}
+	userID := ""
+	if token.UserID > 0 {
+		userID = fmt.Sprintf("%d", token.UserID)
+	}
+	if userID == "" {
+		return nil
+	}
+	return &VKProfile{
+		UserID: userID,
+		Email:  strings.TrimSpace(token.Email),
+	}
 }

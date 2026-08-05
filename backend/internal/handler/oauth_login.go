@@ -106,6 +106,11 @@ func (h *OAuthLoginHandler) VKCallback(w http.ResponseWriter, r *http.Request) {
 	state := r.URL.Query().Get("state")
 	deviceID := r.URL.Query().Get("device_id")
 	if code == "" || state == "" || deviceID == "" {
+		if c, s, d, ok := oauthclient.CallbackParams(r); ok {
+			code, state, deviceID = c, s, d
+		}
+	}
+	if code == "" || state == "" || deviceID == "" {
 		h.redirectOAuthError(w, r, "invalid_callback", state, "")
 		return
 	}

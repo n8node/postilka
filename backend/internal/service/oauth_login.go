@@ -328,6 +328,9 @@ func (s *OAuthLoginService) CompleteVK(
 	if err != nil {
 		profile = oauthclient.ProfileFromToken(token)
 	}
+	if profile != nil && profile.Email == "" && strings.TrimSpace(token.Email) != "" {
+		profile.Email = strings.TrimSpace(token.Email)
+	}
 	if profile == nil || profile.UserID == "" || profile.UserID == "0" {
 		return nil, "", fmt.Errorf("vk profile: empty user id after token exchange")
 	}

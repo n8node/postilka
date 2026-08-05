@@ -170,7 +170,7 @@ export function AdminAuthSettingsPage() {
                   />
                 </label>
                 <label className="block text-xs font-medium text-slate-500">
-                  Сервисный ключ доступа (service_token)
+                  Защищённый ключ (client_secret)
                   <input
                     type="password"
                     value={vkClientSecret}
@@ -178,19 +178,18 @@ export function AdminAuthSettingsPage() {
                     placeholder={
                       vkClientSecretSet
                         ? "Уже задан — оставьте пустым"
-                        : "Длинный hex из VK ID, не «Защищённый ключ»"
+                        : "Защищённый ключ из кабинета VK ID"
                     }
                     className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
                   />
                 </label>
-                <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
-                  <p className="font-medium">Чеклист VK ID (кабинет id.vk.ru):</p>
-                  <ol className="mt-1 list-decimal space-y-1 pl-4">
-                    <li>Уровень конфиденциальности → «Конфиденциальное»</li>
-                    <li>IP-адрес сервера → публичный IP postilka.ru</li>
-                    <li>Доверенный redirect URL → как ниже, символ в символ</li>
-                    <li>Ключ здесь → «Сервисный ключ доступа», не «Защищённый ключ»</li>
-                  </ol>
+                <div className="rounded-md border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                  <p className="font-medium">Публичное приложение VK ID (как в DOC):</p>
+                  <ul className="mt-1 list-disc space-y-1 pl-4">
+                    <li>Уровень конфиденциальности → «Публичное»</li>
+                    <li>Здесь — «Защищённый ключ», не «Сервисный ключ доступа»</li>
+                    <li>Redirect URL — как указано ниже, без лишних слэшей</li>
+                  </ul>
                 </div>
                 {vkRedirectUri && (
                   <p className="text-xs text-slate-500">
