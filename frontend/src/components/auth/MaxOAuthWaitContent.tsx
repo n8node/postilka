@@ -67,10 +67,10 @@ export function MaxOAuthWaitContent() {
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-16">
       <div className="rounded-xl border border-slate-200 bg-surface p-6 shadow-sm">
-        <h1 className="text-xl font-semibold">Вход через MAX</h1>
+        <h1 className="text-xl font-semibold">Вход или привязка через MAX</h1>
         <p className="mt-2 text-sm text-muted">
           Откройте MAX, перейдите к боту и нажмите «Запустить». Эта страница
-          автоматически завершит вход.
+          автоматически завершит вход или привязку аккаунта.
         </p>
         {deepLink && (
           <a

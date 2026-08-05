@@ -164,8 +164,23 @@ func (s *OAuthLoginService) SaveAdminSettings(ctx context.Context, input model.A
 		); err != nil {
 			return err
 		}
+		if err := s.registerMAXWebhook(ctx); err != nil {
+			return fmt.Errorf("max webhook registration: %w", err)
+		}
 	}
 	return nil
+}
+
+func (s *OAuthLoginService) registerMAXWebhook(ctx context.Context) error {
+	cfg, err := s.oauthSettings.GetMAX(ctx)
+	if err != nil {
+		return err
+	}
+	if !cfg.Configured() {
+		return nil
+	}
+	client := oauthclient.NewMAXBotClient()
+	return client.RegisterWebhook(ctx, cfg.BotToken, s.cfg.MAXOAuthWebhookURL(), cfg.WebhookSecret)
 }
 
 func (s *OAuthLoginService) GetMAXWebhookSecret(ctx context.Context) (string, error) {
@@ -353,16 +368,8 @@ func (s *OAuthLoginService) HandleMAXWebhook(ctx context.Context, update map[str
 		return nil
 	}
 
-	payload, _ := update["payload"].(map[string]any)
-	if payload == nil {
-		payload = update
-	}
-
-	startPayload, _ := payload["start_payload"].(string)
-	if startPayload == "" {
-		startPayload, _ = payload["startPayload"].(string)
-	}
-	if !strings.HasPrefix(startPayload, maxStartPrefix) {
+	startPayload := maxStartPayload(update)
+	if startPayload == "" || !strings.HasPrefix(startPayload, maxStartPrefix) {
 		return nil
 	}
 	state := strings.TrimPrefix(startPayload, maxStartPrefix)
@@ -372,16 +379,17 @@ func (s *OAuthLoginService) HandleMAXWebhook(ctx context.Context, update map[str
 		return err
 	}
 
-	userObj, _ := payload["user"].(map[string]any)
-	if userObj == nil {
-		userObj, _ = update["user"].(map[string]any)
-	}
+	userObj, _ := update["user"].(map[string]any)
 	if userObj == nil {
 		return ErrOAuthStateInvalid
 	}
 
 	providerUserID := maxUserIDString(userObj)
-	displayName := strings.TrimSpace(fmt.Sprintf("%v %v", userObj["first_name"], userObj["last_name"]))
+	if providerUserID == "" {
+		return ErrOAuthStateInvalid
+	}
+
+	displayName := maxDisplayName(userObj)
 	if displayName == "" {
 		displayName = fmt.Sprintf("MAX %s", providerUserID)
 	}
@@ -390,7 +398,7 @@ func (s *OAuthLoginService) HandleMAXWebhook(ctx context.Context, update map[str
 	_, _, err = s.completeOAuth(ctx, session, OAuthIdentityProfile{
 		Provider:       model.LoginProviderMAX,
 		ProviderUserID: providerUserID,
-		DisplayName:    strings.TrimSpace(displayName),
+		DisplayName:    displayName,
 		AvatarURL:      avatarURL,
 	})
 	return err
@@ -418,9 +426,17 @@ func (s *OAuthLoginService) PollMAXStatus(ctx context.Context, stateToken string
 	if session.CompletedUserID == "" {
 		return &OAuthStatusResult{Status: "error", Error: "Не удалось завершить вход"}, nil
 	}
+	redirectPath := session.RedirectPath
+	if session.Mode == "link" {
+		redirectPath = sanitizeRedirectPath(session.RedirectPath)
+		if redirectPath == "/dashboard" {
+			redirectPath = "/settings"
+		}
+		redirectPath += "?oauth_linked=" + url.QueryEscape(string(session.Provider))
+	}
 	return &OAuthStatusResult{
 		Status:      "completed",
-		RedirectURL: s.cfg.PublicAppURL + session.RedirectPath,
+		RedirectURL: s.cfg.PublicAppURL + redirectPath,
 	}, nil
 }
 
@@ -713,8 +729,48 @@ func maxUserIDString(user map[string]any) string {
 	case string:
 		return v
 	default:
-		return fmt.Sprintf("%v", v)
+		if v := user["id"]; v != nil {
+			return fmt.Sprintf("%v", v)
+		}
+		return ""
 	}
+}
+
+func maxStartPayload(update map[string]any) string {
+	if s, ok := update["payload"].(string); ok {
+		return s
+	}
+	if nested, ok := update["payload"].(map[string]any); ok {
+		if s, ok := nested["start_payload"].(string); ok {
+			return s
+		}
+		if s, ok := nested["startPayload"].(string); ok {
+			return s
+		}
+	}
+	return ""
+}
+
+func maxDisplayName(user map[string]any) string {
+	if name, ok := user["name"].(string); ok {
+		if trimmed := strings.TrimSpace(name); trimmed != "" {
+			return trimmed
+		}
+	}
+	first := strings.TrimSpace(fmt.Sprintf("%v", user["first_name"]))
+	last := strings.TrimSpace(fmt.Sprintf("%v", user["last_name"]))
+	if first != "" && first != "<nil>" {
+		if last != "" && last != "<nil>" {
+			return first + " " + last
+		}
+		return first
+	}
+	if username, ok := user["username"].(string); ok {
+		if trimmed := strings.TrimSpace(username); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }
 
 // Used by handler after MAX poll completes to set cookies consistently with email login.

@@ -54,6 +54,16 @@ function oauthStatusMessage(
         type: "error" as const,
         text: "Сессия VK истекла. Нажмите «Привязать» ещё раз и подтвердите быстрее.",
       };
+    case "max_session_expired":
+      return {
+        type: "error" as const,
+        text: "Сессия MAX истекла. Нажмите «Привязать» ещё раз и запустите бота быстрее.",
+      };
+    case "max_webhook":
+      return {
+        type: "error" as const,
+        text: "Webhook MAX не настроен. Сохраните настройки бота в админке Postilka ещё раз.",
+      };
     case "link_conflict":
       return {
         type: "error" as const,
@@ -109,7 +119,6 @@ export function LoginIdentitiesBlock() {
   const [maxEnabled, setMaxEnabled] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [unlinking, setUnlinking] = useState<string | null>(null);
-  const [maxLinkHint, setMaxLinkHint] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -146,25 +155,7 @@ export function LoginIdentitiesBlock() {
   }
 
   async function handleLink(provider: "vk" | "max") {
-    if (provider === "vk") {
-      window.location.href = linkStartURL("vk", "/settings");
-      return;
-    }
-    try {
-      const res = await fetch(linkStartURL("max", "/settings"), {
-        credentials: "include",
-      });
-      const data = await res.json();
-      if (data.deep_link) {
-        setMaxLinkHint(
-          "Откройте MAX, нажмите «Запустить» у бота и вернитесь сюда — привязка обновится автоматически.",
-        );
-        window.open(data.deep_link, "_blank", "noopener,noreferrer");
-        window.setTimeout(() => void load(), 4000);
-      }
-    } catch {
-      setError("Не удалось начать привязку MAX");
-    }
+    window.location.href = linkStartURL(provider, "/settings");
   }
 
   function isProviderEnabled(provider: "vk" | "max") {
@@ -247,10 +238,6 @@ export function LoginIdentitiesBlock() {
             );
           })}
         </ul>
-      )}
-
-      {maxLinkHint && (
-        <p className="mt-3 text-xs text-muted">{maxLinkHint}</p>
       )}
 
       {!loading && !vkEnabled && !maxEnabled && (

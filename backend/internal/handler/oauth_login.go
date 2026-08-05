@@ -89,7 +89,7 @@ func (h *OAuthLoginHandler) startProvider(w http.ResponseWriter, r *http.Request
 		http.Redirect(w, r, result.RedirectURL, http.StatusFound)
 		return
 	}
-	if mode == "login" && result.WaitURL != "" {
+	if result.WaitURL != "" {
 		http.Redirect(w, r, result.WaitURL, http.StatusFound)
 		return
 	}

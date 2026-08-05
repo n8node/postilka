@@ -6,7 +6,6 @@ import { fetchAuthMethods } from "@/lib/api";
 type SocialLoginButtonsProps = {
   nextPath?: string;
   mode?: "login" | "link";
-  onLinkStart?: (provider: "vk" | "max", data: { deep_link?: string; wait_url?: string }) => void;
 };
 
 function oauthStartURL(provider: "vk" | "max", mode: string, nextPath: string) {
@@ -21,7 +20,6 @@ function oauthStartURL(provider: "vk" | "max", mode: string, nextPath: string) {
 export function SocialLoginButtons({
   nextPath = "/dashboard",
   mode = "login",
-  onLinkStart,
 }: SocialLoginButtonsProps) {
   const [vkEnabled, setVkEnabled] = useState(false);
   const [maxEnabled, setMaxEnabled] = useState(false);
@@ -45,19 +43,7 @@ export function SocialLoginButtons({
   }
 
   async function handleMAX() {
-    if (mode === "login") {
-      window.location.href = oauthStartURL("max", mode, nextPath);
-      return;
-    }
-    const res = await fetch(oauthStartURL("max", mode, nextPath), {
-      credentials: "include",
-    });
-    const data = await res.json();
-    if (onLinkStart) {
-      onLinkStart("max", data);
-    } else if (data.deep_link) {
-      window.open(data.deep_link, "_blank", "noopener,noreferrer");
-    }
+    window.location.href = oauthStartURL("max", mode, nextPath);
   }
 
   function handleVK() {

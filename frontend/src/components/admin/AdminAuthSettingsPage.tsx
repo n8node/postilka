@@ -203,6 +203,16 @@ export function AdminAuthSettingsPage() {
             <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
               <h2 className="text-sm font-semibold text-slate-900">MAX бот</h2>
               <div className="mt-3 space-y-3">
+                <div className="rounded-md border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                  <p className="font-medium">Настройка бота MAX (dev.max.ru):</p>
+                  <ul className="mt-1 list-disc space-y-1 pl-4">
+                    <li>Создайте бота на platform.max.ru и получите токен</li>
+                    <li>Username — ник бота без @ (как в ссылке max.ru/…)</li>
+                    <li>Webhook secret — произвольная строка A–Z, a–z, 0–9</li>
+                    <li>При сохранении Postilka регистрирует webhook в MAX API</li>
+                    <li>В webhook должно быть событие bot_started</li>
+                  </ul>
+                </div>
                 <label className="block text-xs font-medium text-slate-500">
                   Username бота
                   <input
