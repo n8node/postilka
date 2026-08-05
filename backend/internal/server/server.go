@@ -84,14 +84,12 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 
 		r.With(authMW.Required).Get("/user/invites", inviteHandler.UserInvites)
 
-		r.With(authMW.Required).Get("/workspaces", wsHandler.List)
-		r.With(authMW.Required).Post("/workspaces", wsHandler.Create)
-		r.Route("/workspaces", func(r chi.Router) {
-			r.Group(func(r chi.Router) {
-				r.Use(authMW.Required)
-				r.Get("/me", wsHandler.Me)
-				r.Post("/active", wsHandler.SetActive)
-			})
+		r.Group(func(r chi.Router) {
+			r.Use(authMW.Required)
+			r.Get("/workspaces", wsHandler.List)
+			r.Post("/workspaces", wsHandler.Create)
+			r.Get("/workspaces/me", wsHandler.Me)
+			r.Post("/workspaces/active", wsHandler.SetActive)
 		})
 
 		r.Route("/admin", func(r chi.Router) {
