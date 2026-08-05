@@ -24,7 +24,7 @@ func (r *UserLoginIdentityRepository) GetByProviderUser(
 	providerUserID string,
 ) (*model.UserLoginIdentity, error) {
 	const q = `
-		SELECT id, user_id, provider, provider_user_id, display_name, COALESCE(avatar_url, ''), created_at
+		SELECT id, user_id, provider::text, provider_user_id, display_name, COALESCE(avatar_url, ''), created_at
 		FROM user_login_identities
 		WHERE provider = $1 AND provider_user_id = $2
 	`
@@ -34,7 +34,7 @@ func (r *UserLoginIdentityRepository) GetByProviderUser(
 
 func (r *UserLoginIdentityRepository) ListByUserID(ctx context.Context, userID string) ([]model.UserLoginIdentity, error) {
 	const q = `
-		SELECT id, user_id, provider, provider_user_id, display_name, COALESCE(avatar_url, ''), created_at
+		SELECT id, user_id, provider::text, provider_user_id, display_name, COALESCE(avatar_url, ''), created_at
 		FROM user_login_identities
 		WHERE user_id = $1
 		ORDER BY created_at ASC
@@ -78,7 +78,7 @@ func (r *UserLoginIdentityRepository) Upsert(
 			display_name = EXCLUDED.display_name,
 			avatar_url = EXCLUDED.avatar_url,
 			updated_at = NOW()
-		RETURNING id, user_id, provider, provider_user_id, display_name, COALESCE(avatar_url, ''), created_at
+		RETURNING id, user_id, provider::text, provider_user_id, display_name, COALESCE(avatar_url, ''), created_at
 	`
 	return scanLoginIdentity(r.pool.QueryRow(ctx, q, userID, provider, providerUserID, displayName, avatarURL))
 }
@@ -98,7 +98,7 @@ func (r *UserLoginIdentityRepository) UpsertTx(
 			display_name = EXCLUDED.display_name,
 			avatar_url = EXCLUDED.avatar_url,
 			updated_at = NOW()
-		RETURNING id, user_id, provider, provider_user_id, display_name, COALESCE(avatar_url, ''), created_at
+		RETURNING id, user_id, provider::text, provider_user_id, display_name, COALESCE(avatar_url, ''), created_at
 	`
 	return scanLoginIdentity(tx.QueryRow(ctx, q, userID, provider, providerUserID, displayName, avatarURL))
 }
@@ -122,9 +122,10 @@ func (r *UserLoginIdentityRepository) DeleteByUserProvider(
 
 func scanLoginIdentity(row pgx.Row) (*model.UserLoginIdentity, error) {
 	var item model.UserLoginIdentity
+	var provider string
 	var createdAt time.Time
 	err := row.Scan(
-		&item.ID, &item.UserID, &item.Provider, &item.ProviderUserID,
+		&item.ID, &item.UserID, &provider, &item.ProviderUserID,
 		&item.DisplayName, &item.AvatarURL, &createdAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -133,6 +134,7 @@ func scanLoginIdentity(row pgx.Row) (*model.UserLoginIdentity, error) {
 	if err != nil {
 		return nil, err
 	}
+	item.Provider = model.LoginOAuthProvider(provider)
 	item.CreatedAt = createdAt
 	return &item, nil
 }

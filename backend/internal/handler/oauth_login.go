@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -19,6 +20,7 @@ type OAuthLoginHandler struct {
 	workspaces *service.WorkspaceService
 	mw         *middleware.Auth
 	cfg        *config.Config
+	logger     *slog.Logger
 }
 
 func NewOAuthLoginHandler(
@@ -26,8 +28,9 @@ func NewOAuthLoginHandler(
 	workspaces *service.WorkspaceService,
 	mw *middleware.Auth,
 	cfg *config.Config,
+	logger *slog.Logger,
 ) *OAuthLoginHandler {
-	return &OAuthLoginHandler{oauth: oauth, workspaces: workspaces, mw: mw, cfg: cfg}
+	return &OAuthLoginHandler{oauth: oauth, workspaces: workspaces, mw: mw, cfg: cfg, logger: logger}
 }
 
 func (h *OAuthLoginHandler) StartVKPublic(w http.ResponseWriter, r *http.Request) {
@@ -77,15 +80,13 @@ func (h *OAuthLoginHandler) startProvider(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if mode == "login" {
-		if result.RedirectURL != "" {
-			http.Redirect(w, r, result.RedirectURL, http.StatusFound)
-			return
-		}
-		if result.WaitURL != "" {
-			http.Redirect(w, r, result.WaitURL, http.StatusFound)
-			return
-		}
+	if result.RedirectURL != "" {
+		http.Redirect(w, r, result.RedirectURL, http.StatusFound)
+		return
+	}
+	if mode == "login" && result.WaitURL != "" {
+		http.Redirect(w, r, result.WaitURL, http.StatusFound)
+		return
 	}
 	writeJSON(w, http.StatusOK, result)
 }
@@ -286,6 +287,9 @@ func (h *OAuthLoginHandler) writeOAuthError(w http.ResponseWriter, err error) {
 	case errors.Is(err, service.ErrUserBlocked):
 		writeError(w, http.StatusForbidden, "Аккаунт заблокирован")
 	default:
+		if h.logger != nil {
+			h.logger.Error("oauth login failed", "err", err)
+		}
 		writeError(w, http.StatusInternalServerError, "Внутренняя ошибка")
 	}
 }

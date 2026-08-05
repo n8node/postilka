@@ -46,7 +46,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	health := handler.NewHealthHandler(cfg, db)
 	status := handler.NewStatusHandler(cfg)
 	authHandler := handler.NewAuthHandler(authSvc, wsSvc, authMW, cfg)
-	oauthHandler := handler.NewOAuthLoginHandler(oauthSvc, wsSvc, authMW, cfg)
+	oauthHandler := handler.NewOAuthLoginHandler(oauthSvc, wsSvc, authMW, cfg, logger)
 	wsHandler := handler.NewWorkspaceHandler(wsSvc, cfg)
 	adminHandler := handler.NewAdminHandler(userRepo, planSvc)
 	inviteHandler := handler.NewInviteHandler(inviteSvc, oauthSvc)

@@ -29,7 +29,7 @@ func (r *OAuthLoginSessionRepository) Create(
 			provider, state_token, mode, user_id, redirect_path, code_verifier, expires_at
 		)
 		VALUES ($1, $2, $3, NULLIF($4, ''), $5, NULLIF($6, ''), $7)
-		RETURNING id, provider, state_token, mode, COALESCE(user_id::text, ''), redirect_path,
+		RETURNING id, provider::text, state_token, mode, COALESCE(user_id::text, ''), redirect_path,
 			COALESCE(code_verifier, ''), expires_at, completed_at, COALESCE(completed_user_id::text, ''),
 			COALESCE(provider_user_id, '')
 	`
@@ -40,7 +40,7 @@ func (r *OAuthLoginSessionRepository) Create(
 
 func (r *OAuthLoginSessionRepository) GetByStateToken(ctx context.Context, stateToken string) (*model.OAuthLoginSession, error) {
 	const q = `
-		SELECT id, provider, state_token, mode, COALESCE(user_id::text, ''), redirect_path,
+		SELECT id, provider::text, state_token, mode, COALESCE(user_id::text, ''), redirect_path,
 			COALESCE(code_verifier, ''), expires_at, completed_at, COALESCE(completed_user_id::text, ''),
 			COALESCE(provider_user_id, '')
 		FROM oauth_login_sessions
@@ -74,8 +74,9 @@ func (r *OAuthLoginSessionRepository) Complete(
 
 func scanOAuthSession(row pgx.Row) (*model.OAuthLoginSession, error) {
 	var s model.OAuthLoginSession
+	var provider string
 	err := row.Scan(
-		&s.ID, &s.Provider, &s.StateToken, &s.Mode, &s.UserID, &s.RedirectPath,
+		&s.ID, &provider, &s.StateToken, &s.Mode, &s.UserID, &s.RedirectPath,
 		&s.CodeVerifier, &s.ExpiresAt, &s.CompletedAt, &s.CompletedUserID, &s.ProviderUserID,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -84,5 +85,6 @@ func scanOAuthSession(row pgx.Row) (*model.OAuthLoginSession, error) {
 	if err != nil {
 		return nil, err
 	}
+	s.Provider = model.LoginOAuthProvider(provider)
 	return &s, nil
 }
