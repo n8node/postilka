@@ -69,8 +69,9 @@ export function MaxOAuthWaitContent() {
       <div className="rounded-xl border border-slate-200 bg-surface p-6 shadow-sm">
         <h1 className="text-xl font-semibold">Вход или привязка через MAX</h1>
         <p className="mt-2 text-sm text-muted">
-          Откройте MAX, перейдите к боту и нажмите «Запустить». Эта страница
-          автоматически завершит вход или привязку аккаунта.
+          Нажмите «Открыть MAX» ниже — откроется бот с нужной ссылкой. Подтвердите
+          запуск в MAX. Не открывайте бота вручную из списка чатов — иначе привязка
+          не сработает. Эта страница завершит вход автоматически.
         </p>
         {deepLink && (
           <a

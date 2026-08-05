@@ -158,6 +158,13 @@ func (h *OAuthLoginHandler) MAXWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.oauth.HandleMAXWebhook(r.Context(), update); err != nil {
+		if h.logger != nil {
+			h.logger.Warn("max webhook handling failed",
+				"update_type", update["update_type"],
+				"payload", update["payload"],
+				"err", err,
+			)
+		}
 		if errors.Is(err, service.ErrOAuthStateInvalid) || errors.Is(err, service.ErrOAuthSessionExpired) {
 			writeJSON(w, http.StatusOK, map[string]string{"status": "ignored"})
 			return

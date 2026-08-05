@@ -369,15 +369,27 @@ func (s *OAuthLoginService) CompleteVK(
 
 func (s *OAuthLoginService) HandleMAXWebhook(ctx context.Context, update map[string]any) error {
 	updateType, _ := update["update_type"].(string)
-	if updateType != "bot_started" {
+	startPayload := maxStartPayload(update)
+	if startPayload == "" {
 		return nil
 	}
-
-	startPayload := maxStartPayload(update)
-	if startPayload == "" || !strings.HasPrefix(startPayload, maxStartPrefix) {
+	if !strings.HasPrefix(startPayload, maxStartPrefix) {
 		return nil
 	}
 	state := strings.TrimPrefix(startPayload, maxStartPrefix)
+	// Legacy: wait-page deep link once duplicated the prefix (p_p_<token>).
+	for strings.HasPrefix(state, maxStartPrefix) {
+		state = strings.TrimPrefix(state, maxStartPrefix)
+	}
+	if state == "" {
+		return nil
+	}
+
+	switch updateType {
+	case "bot_started", "bot_added":
+	default:
+		return nil
+	}
 
 	session, err := s.validateSession(ctx, model.LoginProviderMAX, state)
 	if err != nil {
@@ -424,7 +436,7 @@ func (s *OAuthLoginService) PollMAXStatus(ctx context.Context, stateToken string
 		deepLink := ""
 		maxCfg, err := s.oauthSettings.GetMAX(ctx)
 		if err == nil && maxCfg.BotUsername != "" {
-			deepLink = fmt.Sprintf("https://max.ru/%s?start=%s%s", maxCfg.BotUsername, maxStartPrefix, stateToken)
+			deepLink = fmt.Sprintf("https://max.ru/%s?start=%s", maxCfg.BotUsername, maxStartPrefix+stateToken)
 		}
 		return &OAuthStatusResult{Status: "pending", DeepLink: deepLink}, nil
 	}
@@ -742,7 +754,10 @@ func maxUserIDString(user map[string]any) string {
 }
 
 func maxStartPayload(update map[string]any) string {
-	if s, ok := update["payload"].(string); ok {
+	if s, ok := update["payload"].(string); ok && s != "" {
+		return s
+	}
+	if s, ok := update["start_payload"].(string); ok && s != "" {
 		return s
 	}
 	if nested, ok := update["payload"].(map[string]any); ok {
