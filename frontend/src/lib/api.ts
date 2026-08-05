@@ -382,6 +382,12 @@ export function fetchAdminUserInviteRelations(userId: string) {
   );
 }
 
+export function fetchAdminUserLoginIdentities(userId: string) {
+  return apiFetch<{ identities: LoginIdentity[] }>(
+    `/admin/users/${userId}/login-identities`,
+  );
+}
+
 export function fetchLoginIdentities() {
   return apiFetch<{
     identities: LoginIdentity[];

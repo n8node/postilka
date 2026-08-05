@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/postilka/postilka/internal/middleware"
+	"github.com/postilka/postilka/internal/model"
 	"github.com/postilka/postilka/internal/repository"
 	"github.com/postilka/postilka/internal/service"
 )
@@ -16,10 +17,15 @@ import (
 type AdminHandler struct {
 	users *repository.UserRepository
 	plans *service.PlanService
+	oauth *service.OAuthLoginService
 }
 
-func NewAdminHandler(users *repository.UserRepository, plans *service.PlanService) *AdminHandler {
-	return &AdminHandler{users: users, plans: plans}
+func NewAdminHandler(
+	users *repository.UserRepository,
+	plans *service.PlanService,
+	oauth *service.OAuthLoginService,
+) *AdminHandler {
+	return &AdminHandler{users: users, plans: plans, oauth: oauth}
 }
 
 func (h *AdminHandler) Me(w http.ResponseWriter, r *http.Request) {
@@ -201,6 +207,25 @@ func (h *AdminHandler) AssignUserPlan(w http.ResponseWriter, r *http.Request) {
 		"plan":      plan,
 		"workspace": ws,
 	})
+}
+
+func (h *AdminHandler) ListUserLoginIdentities(w http.ResponseWriter, r *http.Request) {
+	userID := chi.URLParam(r, "userID")
+	if _, err := h.users.GetByID(r.Context(), userID); err != nil {
+		writeError(w, http.StatusNotFound, "Пользователь не найден")
+		return
+	}
+
+	identities, err := h.oauth.ListIdentities(r.Context(), userID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось загрузить привязки")
+		return
+	}
+	if identities == nil {
+		identities = []model.UserLoginIdentity{}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"identities": identities})
 }
 
 func (h *AdminHandler) writePlanError(w http.ResponseWriter, err error) {

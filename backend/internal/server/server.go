@@ -48,7 +48,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	authHandler := handler.NewAuthHandler(authSvc, wsSvc, authMW, cfg)
 	oauthHandler := handler.NewOAuthLoginHandler(oauthSvc, wsSvc, authMW, cfg, logger)
 	wsHandler := handler.NewWorkspaceHandler(wsSvc, cfg)
-	adminHandler := handler.NewAdminHandler(userRepo, planSvc)
+	adminHandler := handler.NewAdminHandler(userRepo, planSvc, oauthSvc)
 	inviteHandler := handler.NewInviteHandler(inviteSvc, oauthSvc)
 	adminInviteHandler := handler.NewAdminInviteHandler(inviteSvc, userRepo, oauthSvc)
 
@@ -113,6 +113,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Get("/users/{userID}/invites", adminInviteHandler.UserInvites)
 				r.Post("/users/{userID}/invites", adminInviteHandler.AddUserInvites)
 				r.Get("/users/{userID}/invite-relations", adminInviteHandler.UserInviteRelations)
+				r.Get("/users/{userID}/login-identities", adminHandler.ListUserLoginIdentities)
 			})
 		})
 	})

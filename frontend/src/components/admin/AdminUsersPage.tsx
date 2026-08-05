@@ -9,9 +9,11 @@ import {
   fetchAdminPlans,
   fetchAdminUserInviteRelations,
   fetchAdminUserInvites,
+  fetchAdminUserLoginIdentities,
   fetchAdminUsers,
   type AdminUser,
   type AdminUsersQuery,
+  type LoginIdentity,
   type Plan,
   type UserInvite,
   type UserInviteRelations,
@@ -24,6 +26,11 @@ const workspaceRoleLabels: Record<string, string> = {
   editor: "Редактор",
   viewer: "Наблюдатель",
 };
+
+const loginProviders = [
+  { id: "vk" as const, label: "ВКонтакте" },
+  { id: "max" as const, label: "MAX" },
+];
 
 function formatDate(iso: string) {
   const d = new Date(iso);
@@ -318,9 +325,11 @@ function UserDrawer({
   const [userInvites, setUserInvites] = useState<UserInvite[]>([]);
   const [inviteRelations, setInviteRelations] =
     useState<UserInviteRelations | null>(null);
+  const [loginIdentities, setLoginIdentities] = useState<LoginIdentity[]>([]);
   const [inviteCount, setInviteCount] = useState(3);
   const [addingInvites, setAddingInvites] = useState(false);
   const [invitesLoading, setInvitesLoading] = useState(true);
+  const [loginIdentitiesLoading, setLoginIdentitiesLoading] = useState(true);
 
   useEffect(() => {
     setPlanId(user.plan?.id ?? "");
@@ -334,20 +343,31 @@ function UserDrawer({
 
   useEffect(() => {
     setInvitesLoading(true);
+    setLoginIdentitiesLoading(true);
     Promise.all([
       fetchAdminUserInvites(user.id),
       fetchAdminUserInviteRelations(user.id),
+      fetchAdminUserLoginIdentities(user.id),
     ])
-      .then(([invitesData, relationsData]) => {
+      .then(([invitesData, relationsData, identitiesData]) => {
         setUserInvites(invitesData.invites ?? []);
         setInviteRelations(relationsData);
+        setLoginIdentities(identitiesData.identities ?? []);
       })
       .catch(() => {
         setUserInvites([]);
         setInviteRelations(null);
+        setLoginIdentities([]);
       })
-      .finally(() => setInvitesLoading(false));
+      .finally(() => {
+        setInvitesLoading(false);
+        setLoginIdentitiesLoading(false);
+      });
   }, [user.id]);
+
+  function identityFor(provider: "vk" | "max") {
+    return loginIdentities.find((item) => item.provider === provider);
+  }
 
   async function handleAssignPlan() {
     if (!planId) return;
@@ -465,6 +485,65 @@ function UserDrawer({
               </div>
             ) : (
               <p className="mt-2 text-sm text-slate-500">Нет workspace</p>
+            )}
+          </section>
+
+          <section className="rounded-xl border border-slate-200 p-4">
+            <h3 className="text-sm font-semibold text-slate-900">
+              Вход через соцсети
+            </h3>
+            <p className="mt-1 text-xs text-slate-500">
+              Привязанные аккаунты для OAuth-входа (VK ID, MAX).
+            </p>
+            {loginIdentitiesLoading ? (
+              <p className="mt-2 text-sm text-slate-500">Загрузка…</p>
+            ) : (
+              <ul className="mt-3 space-y-2">
+                {loginProviders.map((provider) => {
+                  const linked = identityFor(provider.id);
+                  return (
+                    <li
+                      key={provider.id}
+                      className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2.5"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-slate-800">
+                            {provider.label}
+                          </p>
+                          {linked ? (
+                            <>
+                              <p className="mt-0.5 text-sm text-slate-700">
+                                {linked.display_name || "—"}
+                              </p>
+                              <p className="mt-0.5 font-mono text-[11px] text-slate-400">
+                                ID: {linked.provider_user_id}
+                              </p>
+                              <p className="mt-0.5 text-[11px] text-slate-400">
+                                Привязан: {formatDateTime(linked.created_at)}
+                              </p>
+                            </>
+                          ) : (
+                            <p className="mt-0.5 text-sm text-slate-500">
+                              Не привязан
+                            </p>
+                          )}
+                        </div>
+                        {linked ? (
+                          <Badge tone="green">Привязан</Badge>
+                        ) : (
+                          <Badge tone="slate">—</Badge>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            {!loginIdentitiesLoading && loginIdentities.length === 0 && (
+              <p className="mt-2 text-xs text-slate-500">
+                Пользователь входит только по email и паролю.
+              </p>
             )}
           </section>
 
