@@ -15,17 +15,19 @@ import (
 )
 
 type AdminHandler struct {
-	users *repository.UserRepository
-	plans *service.PlanService
-	oauth *service.OAuthLoginService
+	users      *repository.UserRepository
+	adminUsers *service.AdminUserService
+	plans      *service.PlanService
+	oauth      *service.OAuthLoginService
 }
 
 func NewAdminHandler(
 	users *repository.UserRepository,
+	adminUsers *service.AdminUserService,
 	plans *service.PlanService,
 	oauth *service.OAuthLoginService,
 ) *AdminHandler {
-	return &AdminHandler{users: users, plans: plans, oauth: oauth}
+	return &AdminHandler{users: users, adminUsers: adminUsers, plans: plans, oauth: oauth}
 }
 
 func (h *AdminHandler) Me(w http.ResponseWriter, r *http.Request) {
@@ -226,6 +228,62 @@ func (h *AdminHandler) ListUserLoginIdentities(w http.ResponseWriter, r *http.Re
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"identities": identities})
+}
+
+type setBlockedBody struct {
+	Blocked bool `json:"blocked"`
+}
+
+func (h *AdminHandler) SetUserBlocked(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Не авторизован")
+		return
+	}
+
+	targetID := chi.URLParam(r, "userID")
+	var body setBlockedBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "Некорректное тело запроса")
+		return
+	}
+
+	user, err := h.adminUsers.SetBlocked(r.Context(), actorID, targetID, body.Blocked)
+	if err != nil {
+		h.writeUserManageError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"user": user})
+}
+
+func (h *AdminHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Не авторизован")
+		return
+	}
+
+	targetID := chi.URLParam(r, "userID")
+	if err := h.adminUsers.Delete(r.Context(), actorID, targetID); err != nil {
+		h.writeUserManageError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (h *AdminHandler) writeUserManageError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, repository.ErrNotFound):
+		writeError(w, http.StatusNotFound, "Пользователь не найден")
+	case errors.Is(err, service.ErrCannotModifySelf):
+		writeError(w, http.StatusForbidden, "Нельзя изменить свой аккаунт")
+	case errors.Is(err, service.ErrCannotDeleteAdmin):
+		writeError(w, http.StatusForbidden, "Нельзя удалить platform admin")
+	default:
+		writeError(w, http.StatusInternalServerError, "Внутренняя ошибка")
+	}
 }
 
 func (h *AdminHandler) writePlanError(w http.ResponseWriter, err error) {

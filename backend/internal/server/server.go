@@ -42,13 +42,14 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	)
 	wsSvc := service.NewWorkspaceService(wsRepo)
 	planSvc := service.NewPlanService(planRepo, wsRepo)
+	adminUserSvc := service.NewAdminUserService(userRepo)
 
 	health := handler.NewHealthHandler(cfg, db)
 	status := handler.NewStatusHandler(cfg)
 	authHandler := handler.NewAuthHandler(authSvc, wsSvc, authMW, cfg)
 	oauthHandler := handler.NewOAuthLoginHandler(oauthSvc, wsSvc, authMW, cfg, logger)
 	wsHandler := handler.NewWorkspaceHandler(wsSvc, cfg)
-	adminHandler := handler.NewAdminHandler(userRepo, planSvc, oauthSvc)
+	adminHandler := handler.NewAdminHandler(userRepo, adminUserSvc, planSvc, oauthSvc)
 	inviteHandler := handler.NewInviteHandler(inviteSvc, oauthSvc)
 	adminInviteHandler := handler.NewAdminInviteHandler(inviteSvc, userRepo, oauthSvc)
 
@@ -98,6 +99,8 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Get("/me", adminHandler.Me)
 				r.Get("/users", adminHandler.ListUsers)
 				r.Put("/users/{userID}/plan", adminHandler.AssignUserPlan)
+				r.Put("/users/{userID}/blocked", adminHandler.SetUserBlocked)
+				r.Delete("/users/{userID}", adminHandler.DeleteUser)
 
 				r.Get("/plans", adminHandler.ListPlans)
 				r.Post("/plans", adminHandler.CreatePlan)

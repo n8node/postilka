@@ -141,6 +141,31 @@ func (r *UserRepository) SetPlatformAdminByEmail(ctx context.Context, email stri
 	return u, err
 }
 
+func (r *UserRepository) SetBlocked(ctx context.Context, userID string, blocked bool) (*model.User, error) {
+	const q = `
+		UPDATE users
+		SET is_blocked = $2, updated_at = NOW()
+		WHERE id = $1
+		RETURNING id, email, name, locale, timezone, is_blocked, is_platform_admin, created_at
+	`
+	u, err := scanUser(r.pool.QueryRow(ctx, q, userID, blocked))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	return u, err
+}
+
+func (r *UserRepository) Delete(ctx context.Context, userID string) error {
+	tag, err := r.pool.Exec(ctx, `DELETE FROM users WHERE id = $1`, userID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 type ListUsersFilter struct {
 	Query           string
 	IsBlocked       *bool

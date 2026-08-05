@@ -475,3 +475,16 @@ export function assignAdminUserPlan(userId: string, planId: string) {
     body: JSON.stringify({ plan_id: planId }),
   });
 }
+
+export function setAdminUserBlocked(userId: string, blocked: boolean) {
+  return apiFetch<{ user: User }>(`/admin/users/${userId}/blocked`, {
+    method: "PUT",
+    body: JSON.stringify({ blocked }),
+  });
+}
+
+export function deleteAdminUser(userId: string) {
+  return apiFetch<{ status: string }>(`/admin/users/${userId}`, {
+    method: "DELETE",
+  });
+}

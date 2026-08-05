@@ -6,11 +6,13 @@ import {
   ApiError,
   addAdminUserInvites,
   assignAdminUserPlan,
+  deleteAdminUser,
   fetchAdminPlans,
   fetchAdminUserInviteRelations,
   fetchAdminUserInvites,
   fetchAdminUserLoginIdentities,
   fetchAdminUsers,
+  setAdminUserBlocked,
   type AdminUser,
   type AdminUsersQuery,
   type LoginIdentity,
@@ -302,6 +304,16 @@ export function AdminUsersPage() {
             );
             setSelected(updated);
           }}
+          onUserChanged={(updated) => {
+            setUsers((prev) =>
+              prev.map((u) => (u.id === updated.id ? updated : u)),
+            );
+            setSelected(updated);
+          }}
+          onUserDeleted={(userId) => {
+            setUsers((prev) => prev.filter((u) => u.id !== userId));
+            setSelected(null);
+          }}
         />
       )}
     </div>
@@ -312,15 +324,22 @@ function UserDrawer({
   user,
   onClose,
   onPlanChanged,
+  onUserChanged,
+  onUserDeleted,
 }: {
   user: AdminUser;
   onClose: () => void;
   onPlanChanged: (user: AdminUser) => void;
+  onUserChanged: (user: AdminUser) => void;
+  onUserDeleted: (userId: string) => void;
 }) {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [planId, setPlanId] = useState(user.plan?.id ?? "");
   const [saving, setSaving] = useState(false);
   const [planError, setPlanError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [blocking, setBlocking] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const [userInvites, setUserInvites] = useState<UserInvite[]>([]);
   const [inviteRelations, setInviteRelations] =
@@ -398,11 +417,56 @@ function UserDrawer({
       const data = await addAdminUserInvites(user.id, inviteCount);
       setUserInvites(data.invites ?? []);
     } catch (e) {
-      setPlanError(
+      setActionError(
         e instanceof ApiError ? e.message : "Не удалось добавить инвайты",
       );
     } finally {
       setAddingInvites(false);
+    }
+  }
+
+  async function handleToggleBlock() {
+    const nextBlocked = !user.is_blocked;
+    const label = nextBlocked ? "заблокировать" : "разблокировать";
+    if (!window.confirm(`${nextBlocked ? "Заблокировать" : "Разблокировать"} ${user.email}?`)) {
+      return;
+    }
+    setBlocking(true);
+    setActionError(null);
+    try {
+      const res = await setAdminUserBlocked(user.id, nextBlocked);
+      onUserChanged({
+        ...user,
+        is_blocked: res.user.is_blocked,
+      });
+    } catch (e) {
+      setActionError(
+        e instanceof ApiError ? e.message : `Не удалось ${label} пользователя`,
+      );
+    } finally {
+      setBlocking(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (
+      !window.confirm(
+        `Удалить пользователя ${user.email}? Действие необратимо: аккаунт, workspace и связанные данные будут удалены.`,
+      )
+    ) {
+      return;
+    }
+    setDeleting(true);
+    setActionError(null);
+    try {
+      await deleteAdminUser(user.id);
+      onUserDeleted(user.id);
+    } catch (e) {
+      setActionError(
+        e instanceof ApiError ? e.message : "Не удалось удалить пользователя",
+      );
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -674,6 +738,50 @@ function UserDrawer({
             >
               {saving ? "Сохранение…" : "Назначить тариф"}
             </button>
+          </section>
+
+          <section className="rounded-xl border border-slate-200 p-4">
+            <h3 className="text-sm font-semibold text-slate-900">
+              Управление аккаунтом
+            </h3>
+            <p className="mt-1 text-xs text-slate-500">
+              Блокировка временно запрещает вход. Удаление необратимо.
+            </p>
+            {actionError && (
+              <p className="mt-2 text-sm text-rose-600">{actionError}</p>
+            )}
+            <div className="mt-3 flex flex-col gap-2">
+              <button
+                type="button"
+                disabled={blocking || deleting}
+                onClick={() => void handleToggleBlock()}
+                className={cn(
+                  "w-full rounded-md border px-3 py-2 text-sm font-medium disabled:opacity-50",
+                  user.is_blocked
+                    ? "border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                    : "border-amber-200 text-amber-800 hover:bg-amber-50",
+                )}
+              >
+                {blocking
+                  ? "…"
+                  : user.is_blocked
+                    ? "Разблокировать"
+                    : "Заблокировать"}
+              </button>
+              <button
+                type="button"
+                disabled={blocking || deleting || user.is_platform_admin}
+                onClick={() => void handleDelete()}
+                className="w-full rounded-md border border-rose-200 px-3 py-2 text-sm font-medium text-rose-700 hover:bg-rose-50 disabled:opacity-50"
+              >
+                {deleting ? "Удаление…" : "Удалить пользователя"}
+              </button>
+              {user.is_platform_admin && (
+                <p className="text-xs text-slate-500">
+                  Platform admin нельзя удалить через админку.
+                </p>
+              )}
+            </div>
           </section>
         </div>
       </aside>
