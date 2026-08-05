@@ -140,6 +140,40 @@ docker compose exec -T mysql mysqldump -u root -p"$WP_DB_ROOT_PASSWORD" wordpres
 - **API недоступен:** проверить `location ^~ /app/api/` в `nginx/snippets/postilka-locations.conf`
 - **WP mixed content:** `WORDPRESS_CONFIG_EXTRA` в compose уже прокидывает HTTPS за proxy
 - **Контейнеры Up, но браузер не открывает Postilka:** это не доказывает browser cache. Проверьте `/app/health` с сервера, затем сравните тот же ПК через домашнюю сеть и hotspot. При отказе соберите `chrome://net-export` и `docker compose ... logs --tail=100 nginx`; если запрос с ПК не попал в access log, исследуйте маршрут/роутер/ISP/TLS inspection.
+- **VK OAuth / `network_error`, `сервер не достучался до id.vk.ru`:** OAuth-ключи уже не при чём — backend не может завершить HTTPS к `id.vk.ru` из контейнера.
+
+  ```bash
+  # 1) С хоста (не из Docker):
+  curl -v --max-time 20 https://id.vk.ru/
+
+  # 2) Из контейнера backend (BusyBox wget без -4):
+  docker compose exec backend wget -T 20 -S --spider https://id.vk.ru/ 2>&1
+  ```
+
+  | Хост | Контейнер | Причина | Действие |
+  |------|-----------|---------|----------|
+  | OK | timeout | Docker DNS returns dead VK node first (`95.213.56.1`) | `extra_hosts` + multi-IP dial (см. ниже) или `HTTPS_PROXY` |
+  | timeout | timeout | блокировка исходящего HTTPS у VPS / VK | тикет хостингу или `HTTPS_PROXY` в `.env` |
+  | OK | OK | код/конфиг OAuth | логи `docker compose logs backend --tail=50` |
+
+  **UFW + Docker (если с хоста curl OK, из контейнера timeout):**
+
+  ```bash
+  sudo sed -i 's/^DEFAULT_FORWARD_POLICY=.*/DEFAULT_FORWARD_POLICY="ACCEPT"/' /etc/default/ufw
+  sudo ufw reload
+  docker compose exec backend wget -T 20 -S --spider https://id.vk.ru/ 2>&1
+  ```
+
+  Если не помогло — в `/etc/ufw/after.rules` перед `COMMIT` добавьте цепочку `DOCKER-USER` (см. [Docker UFW docs](https://docs.docker.com/engine/network/packet-filtering-firewalls/#docker-and-ufw)).
+
+  **Обход через HTTP-прокси** (backend уже читает `HTTPS_PROXY` из `.env`):
+
+  ```bash
+  # .env — раскомментировать и указать прокси с доступом к id.vk.ru
+  # HTTPS_PROXY=http://user:pass@proxy-host:3128
+  # HTTP_PROXY=http://user:pass@proxy-host:3128
+  docker compose --env-file .env -f docker-compose.yml -f docker-compose.prod.yml up -d backend worker
+  ```
 
 ## Локальная разработка (без SSL)
 

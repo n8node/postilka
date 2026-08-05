@@ -15,6 +15,9 @@ services:
         max-file: "3"
 
   backend:
+    # Docker DNS may resolve id.vk.ru to an unreachable node first; pin the working IPv4.
+    extra_hosts:
+      - "id.vk.ru:93.186.237.1"
     environment:
       ENVIRONMENT: production
       PUBLIC_APP_URL: https://postilka.ru/app
@@ -26,6 +29,8 @@ services:
         max-file: "3"
 
   worker:
+    extra_hosts:
+      - "id.vk.ru:93.186.237.1"
     environment:
       ENVIRONMENT: production
     logging:
