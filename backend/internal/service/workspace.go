@@ -3,7 +3,9 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -12,10 +14,16 @@ import (
 )
 
 var (
-	ErrForbidden          = errors.New("forbidden")
-	ErrWorkspaceNotFound  = errors.New("workspace not found")
-	ErrNotWorkspaceMember = errors.New("not a workspace member")
+	ErrForbidden             = errors.New("forbidden")
+	ErrWorkspaceNotFound     = errors.New("workspace not found")
+	ErrNotWorkspaceMember    = errors.New("not a workspace member")
+	ErrInvalidWorkspaceName  = errors.New("invalid workspace name")
+	ErrWorkspaceLimitReached = errors.New("workspace limit reached")
 )
+
+const MaxOwnedWorkspacesPerUser = 20
+
+var wsSlugSanitizer = regexp.MustCompile(`[^a-z0-9-]+`)
 
 const (
 	ActiveWorkspaceCookie = "active_workspace_id"
@@ -24,10 +32,11 @@ const (
 
 type WorkspaceService struct {
 	workspaces *repository.WorkspaceRepository
+	plans      *repository.PlanRepository
 }
 
-func NewWorkspaceService(workspaces *repository.WorkspaceRepository) *WorkspaceService {
-	return &WorkspaceService{workspaces: workspaces}
+func NewWorkspaceService(workspaces *repository.WorkspaceRepository, plans *repository.PlanRepository) *WorkspaceService {
+	return &WorkspaceService{workspaces: workspaces, plans: plans}
 }
 
 // RequireMembership loads the workspace membership and ensures role >= minRole.
@@ -89,6 +98,63 @@ func (s *WorkspaceService) SetActive(ctx context.Context, userID, workspaceID st
 		return nil, ErrNotWorkspaceMember
 	}
 	return ws, err
+}
+
+// Create adds a new workspace owned by userID and assigns the default free plan.
+func (s *WorkspaceService) Create(ctx context.Context, userID, name string) (*model.Workspace, error) {
+	name = strings.TrimSpace(name)
+	if name == "" || len(name) > 255 {
+		return nil, ErrInvalidWorkspaceName
+	}
+
+	count, err := s.workspaces.CountOwnedByUser(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if count >= MaxOwnedWorkspacesPerUser {
+		return nil, ErrWorkspaceLimitReached
+	}
+
+	slug, err := s.uniqueSlug(ctx, slugFromWorkspaceName(name))
+	if err != nil {
+		return nil, err
+	}
+
+	planID := ""
+	if s.plans != nil {
+		if free, err := s.plans.GetDefaultFree(ctx); err == nil && free != nil {
+			planID = free.ID
+		}
+	}
+
+	return s.workspaces.CreateWithOwner(ctx, name, slug, userID, planID)
+}
+
+func slugFromWorkspaceName(name string) string {
+	base := strings.ToLower(name)
+	base = wsSlugSanitizer.ReplaceAllString(base, "-")
+	base = strings.Trim(base, "-")
+	if base == "" {
+		base = "workspace"
+	}
+	return base
+}
+
+func (s *WorkspaceService) uniqueSlug(ctx context.Context, base string) (string, error) {
+	slug := base
+	for i := 0; i < 100; i++ {
+		if i > 0 {
+			slug = fmt.Sprintf("%s-%d", base, i)
+		}
+		exists, err := s.workspaces.SlugExists(ctx, slug)
+		if err != nil {
+			return "", err
+		}
+		if !exists {
+			return slug, nil
+		}
+	}
+	return "", fmt.Errorf("generate unique slug")
 }
 
 func SetActiveWorkspaceCookie(w http.ResponseWriter, workspaceID string, secure bool) {

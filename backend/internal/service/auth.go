@@ -241,7 +241,7 @@ func (s *AuthService) Me(ctx context.Context, userID string, r *http.Request) (*
 		return nil, nil, nil, err
 	}
 
-	wsSvc := NewWorkspaceService(s.workspaces)
+	wsSvc := NewWorkspaceService(s.workspaces, s.plans)
 	active, list, err := wsSvc.ResolveActive(ctx, userID, r)
 	if err != nil {
 		return nil, nil, nil, err

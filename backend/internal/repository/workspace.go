@@ -155,6 +155,12 @@ func (r *WorkspaceRepository) SlugExists(ctx context.Context, slug string) (bool
 	return exists, err
 }
 
+func (r *WorkspaceRepository) CountOwnedByUser(ctx context.Context, userID string) (int, error) {
+	var count int
+	err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM workspaces WHERE owner_id = $1::uuid`, userID).Scan(&count)
+	return count, err
+}
+
 func scanWorkspace(row pgx.Row) (*model.Workspace, error) {
 	var ws model.Workspace
 	var createdAt time.Time

@@ -844,6 +844,6 @@ func (s *OAuthLoginService) ResolveActiveWorkspace(
 	userID string,
 	r *http.Request,
 ) (*model.Workspace, []model.Workspace, error) {
-	wsSvc := NewWorkspaceService(s.workspaces)
+	wsSvc := NewWorkspaceService(s.workspaces, s.plans)
 	return wsSvc.ResolveActive(ctx, userID, r)
 }

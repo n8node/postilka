@@ -40,7 +40,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	oauthSvc := service.NewOAuthLoginService(
 		userRepo, identityRepo, oauthSessionRepo, oauthSettingsRepo, wsRepo, planRepo, settingsRepo, db.Pool, authMW, cfg,
 	)
-	wsSvc := service.NewWorkspaceService(wsRepo)
+	wsSvc := service.NewWorkspaceService(wsRepo, planRepo)
 	planSvc := service.NewPlanService(planRepo, wsRepo)
 	adminUserSvc := service.NewAdminUserService(userRepo)
 
@@ -85,6 +85,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 		r.With(authMW.Required).Get("/user/invites", inviteHandler.UserInvites)
 
 		r.With(authMW.Required).Get("/workspaces", wsHandler.List)
+		r.With(authMW.Required).Post("/workspaces", wsHandler.Create)
 		r.Route("/workspaces", func(r chi.Router) {
 			r.Group(func(r chi.Router) {
 				r.Use(authMW.Required)

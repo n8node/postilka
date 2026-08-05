@@ -22,6 +22,7 @@ import {
 import { useState } from "react";
 import { logout } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { WorkspaceSwitcher } from "@/components/layout/WorkspaceSwitcher";
 import { cn } from "@/lib/utils";
 
 type NavItem = {
@@ -54,7 +55,7 @@ function isActive(pathname: string, href: string) {
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const { user, workspace } = useAuth();
+  const { user } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
@@ -176,9 +177,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{displayName}</p>
-                  <p className="truncate text-xs text-muted">
-                    {workspace?.name ?? "Workspace"}
-                  </p>
+                  <WorkspaceSwitcher />
                 </div>
                 <button
                   type="button"
@@ -192,6 +191,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </>
             )}
           </div>
+          {collapsed && (
+            <div className="mt-1 flex justify-center">
+              <WorkspaceSwitcher collapsed />
+            </div>
+          )}
           {collapsed && (
             <button
               type="button"

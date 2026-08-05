@@ -432,6 +432,17 @@ export function setActiveWorkspace(workspaceId: string) {
   );
 }
 
+export function createWorkspace(name: string) {
+  return apiFetch<{
+    workspace: Workspace;
+    active_workspace: Workspace;
+    workspaces: Workspace[];
+  }>("/workspaces", {
+    method: "POST",
+    body: JSON.stringify({ name }),
+  });
+}
+
 export function fetchAdminUsers(query: AdminUsersQuery = {}) {
   const params = new URLSearchParams();
   if (query.q?.trim()) params.set("q", query.q.trim());

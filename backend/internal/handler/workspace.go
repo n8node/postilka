@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/postilka/postilka/internal/config"
@@ -92,5 +93,55 @@ func (h *WorkspaceHandler) SetActive(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"active_workspace": ws,
 		"workspace":        ws,
+	})
+}
+
+type createWorkspaceRequest struct {
+	Name string `json:"name"`
+}
+
+// Create adds a workspace owned by the caller and sets it as active.
+func (h *WorkspaceHandler) Create(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Не авторизован")
+		return
+	}
+
+	var req createWorkspaceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Некорректное тело запроса")
+		return
+	}
+
+	ws, err := h.workspaces.Create(r.Context(), userID, req.Name)
+	if errors.Is(err, service.ErrInvalidWorkspaceName) {
+		writeError(w, http.StatusBadRequest, "Укажите название workspace (до 255 символов)")
+		return
+	}
+	if errors.Is(err, service.ErrWorkspaceLimitReached) {
+		writeError(w, http.StatusForbidden, fmt.Sprintf("Достигнут лимит: не более %d workspace на аккаунт", service.MaxOwnedWorkspacesPerUser))
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Внутренняя ошибка")
+		return
+	}
+
+	service.SetActiveWorkspaceCookie(w, ws.ID, h.cfg.IsProduction())
+
+	list, err := h.workspaces.ListForUser(r.Context(), userID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Внутренняя ошибка")
+		return
+	}
+	if list == nil {
+		list = []model.Workspace{}
+	}
+
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"workspace":        ws,
+		"active_workspace": ws,
+		"workspaces":       list,
 	})
 }
