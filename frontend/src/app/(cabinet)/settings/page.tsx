@@ -13,7 +13,7 @@ export default function SettingsPage() {
     <div>
       <PageHeader
         title="Настройки"
-        description="Профиль, таймзона и уведомления workspace."
+        description="Профиль, привязка соцсетей для входа и параметры workspace."
         actions={<StubBadge label="Макет" />}
       />
 
