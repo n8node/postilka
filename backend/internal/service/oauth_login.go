@@ -418,7 +418,37 @@ func (s *OAuthLoginService) HandleMAXWebhook(ctx context.Context, update map[str
 		DisplayName:    displayName,
 		AvatarURL:      avatarURL,
 	})
-	return err
+	if err != nil {
+		return err
+	}
+	s.sendMAXReturnLink(ctx, update, session.StateToken, session.Mode)
+	return nil
+}
+
+func (s *OAuthLoginService) sendMAXReturnLink(ctx context.Context, update map[string]any, stateToken, mode string) {
+	maxCfg, err := s.oauthSettings.GetMAX(ctx)
+	if err != nil || maxCfg.BotToken == "" {
+		return
+	}
+
+	completeURL := strings.TrimSuffix(s.cfg.PublicAppURL, "/") +
+		"/api/v1/auth/oauth/max/complete?token=" + url.QueryEscape(stateToken)
+
+	text := "Вход в Postilka выполнен. Нажмите кнопку ниже, чтобы открыть личный кабинет."
+	buttonText := "Открыть Postilka"
+	if mode == "link" {
+		text = "Аккаунт MAX привязан. Нажмите кнопку, чтобы вернуться в Postilka."
+		buttonText = "Вернуться в Postilka"
+	}
+
+	userID := ""
+	if userObj, ok := update["user"].(map[string]any); ok {
+		userID = maxUserIDString(userObj)
+	}
+	chatID := maxChatIDString(update)
+
+	client := oauthclient.NewMAXBotClient()
+	_ = client.SendMessageLink(ctx, maxCfg.BotToken, userID, chatID, text, buttonText, completeURL)
 }
 
 func (s *OAuthLoginService) PollMAXStatus(ctx context.Context, stateToken string) (*OAuthStatusResult, error) {
@@ -733,6 +763,21 @@ func sanitizeRedirectPath(path string) string {
 		return "/dashboard"
 	}
 	return path
+}
+
+func maxChatIDString(update map[string]any) string {
+	switch v := update["chat_id"].(type) {
+	case float64:
+		return fmt.Sprintf("%.0f", v)
+	case int64:
+		return fmt.Sprintf("%d", v)
+	case int:
+		return fmt.Sprintf("%d", v)
+	case string:
+		return v
+	default:
+		return ""
+	}
 }
 
 func maxUserIDString(user map[string]any) string {

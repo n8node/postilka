@@ -174,3 +174,69 @@ func (c *MAXBotClient) do(ctx context.Context, method, endpoint, token string, b
 	}
 	return respBody, resp.StatusCode, nil
 }
+
+type maxMessageLinkRequest struct {
+	Text        string           `json:"text"`
+	Attachments []maxMessageAttachment `json:"attachments,omitempty"`
+}
+
+type maxMessageAttachment struct {
+	Type    string              `json:"type"`
+	Payload maxInlineKeyboard   `json:"payload"`
+}
+
+type maxInlineKeyboard struct {
+	Buttons [][]maxInlineButton `json:"buttons"`
+}
+
+type maxInlineButton struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+	URL  string `json:"url"`
+}
+
+func (c *MAXBotClient) SendMessageLink(
+	ctx context.Context,
+	botToken, userID, chatID, text, buttonText, linkURL string,
+) error {
+	botToken = strings.TrimSpace(botToken)
+	if botToken == "" {
+		return fmt.Errorf("max message: empty bot token")
+	}
+	q := url.Values{}
+	if strings.TrimSpace(userID) != "" {
+		q.Set("user_id", strings.TrimSpace(userID))
+	} else if strings.TrimSpace(chatID) != "" {
+		q.Set("chat_id", strings.TrimSpace(chatID))
+	} else {
+		return fmt.Errorf("max message: missing user_id and chat_id")
+	}
+
+	body := maxMessageLinkRequest{
+		Text: text,
+		Attachments: []maxMessageAttachment{
+			{
+				Type: "inline_keyboard",
+				Payload: maxInlineKeyboard{
+					Buttons: [][]maxInlineButton{
+						{{Type: "link", Text: buttonText, URL: linkURL}},
+					},
+				},
+			},
+		},
+	}
+	payload, err := json.Marshal(body)
+	if err != nil {
+		return err
+	}
+
+	endpoint := maxAPIBase + "/messages?" + q.Encode()
+	respBody, status, err := c.do(ctx, http.MethodPost, endpoint, botToken, payload)
+	if err != nil {
+		return err
+	}
+	if status >= 400 {
+		return fmt.Errorf("max messages: HTTP %d: %s", status, strings.TrimSpace(string(respBody)))
+	}
+	return nil
+}

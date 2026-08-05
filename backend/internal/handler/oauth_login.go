@@ -186,6 +186,32 @@ func (h *OAuthLoginHandler) MAXWebhook(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
+func (h *OAuthLoginHandler) MAXComplete(w http.ResponseWriter, r *http.Request) {
+	token := strings.TrimSpace(r.URL.Query().Get("token"))
+	if token == "" {
+		http.Redirect(w, r, strings.TrimSuffix(h.cfg.PublicAppURL, "/")+"/auth/login?oauth_error=invalid_session", http.StatusFound)
+		return
+	}
+
+	status, err := h.oauth.PollMAXStatus(r.Context(), token)
+	if err != nil || status.Status != "completed" {
+		http.Redirect(w, r, strings.TrimSuffix(h.cfg.PublicAppURL, "/")+"/auth/login?oauth_error=session_expired", http.StatusFound)
+		return
+	}
+
+	result, err := h.oauth.IssueTokenForCompletedSession(r.Context(), token)
+	if err != nil {
+		http.Redirect(w, r, strings.TrimSuffix(h.cfg.PublicAppURL, "/")+"/auth/login?oauth_error=oauth_failed", http.StatusFound)
+		return
+	}
+
+	redirectPath := strings.TrimPrefix(status.RedirectURL, strings.TrimSuffix(h.cfg.PublicAppURL, "/"))
+	if redirectPath == "" || !strings.HasPrefix(redirectPath, "/") {
+		redirectPath = "/dashboard"
+	}
+	h.finishOAuthLogin(w, r, result, redirectPath)
+}
+
 func (h *OAuthLoginHandler) MAXStatus(w http.ResponseWriter, r *http.Request) {
 	token := strings.TrimSpace(r.URL.Query().Get("token"))
 	if token == "" {

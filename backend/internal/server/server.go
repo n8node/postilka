@@ -70,6 +70,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Get("/oauth/vk/callback", oauthHandler.VKCallback)
 			r.Get("/oauth/max/start", oauthHandler.StartMAXPublic)
 			r.Post("/oauth/max/webhook", oauthHandler.MAXWebhook)
+			r.Get("/oauth/max/complete", oauthHandler.MAXComplete)
 			r.Get("/oauth/max/status", oauthHandler.MAXStatus)
 			r.With(authMW.Required).Get("/oauth/vk/link", oauthHandler.StartVKLink)
 			r.With(authMW.Required).Get("/oauth/max/link", oauthHandler.StartMAXLink)
