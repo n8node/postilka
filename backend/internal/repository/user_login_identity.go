@@ -72,7 +72,7 @@ func (r *UserLoginIdentityRepository) Upsert(
 ) (*model.UserLoginIdentity, error) {
 	const q = `
 		INSERT INTO user_login_identities (user_id, provider, provider_user_id, display_name, avatar_url)
-		VALUES ($1, $2, $3, $4, NULLIF($5, ''))
+		VALUES ($1::uuid, $2::login_oauth_provider, $3, $4, NULLIF($5, ''))
 		ON CONFLICT (provider, provider_user_id) DO UPDATE SET
 			user_id = EXCLUDED.user_id,
 			display_name = EXCLUDED.display_name,
@@ -80,7 +80,7 @@ func (r *UserLoginIdentityRepository) Upsert(
 			updated_at = NOW()
 		RETURNING id, user_id, provider::text, provider_user_id, display_name, COALESCE(avatar_url, ''), created_at
 	`
-	return scanLoginIdentity(r.pool.QueryRow(ctx, q, userID, provider, providerUserID, displayName, avatarURL))
+	return scanLoginIdentity(r.pool.QueryRow(ctx, q, userID, string(provider), providerUserID, displayName, avatarURL))
 }
 
 func (r *UserLoginIdentityRepository) UpsertTx(
@@ -92,7 +92,7 @@ func (r *UserLoginIdentityRepository) UpsertTx(
 ) (*model.UserLoginIdentity, error) {
 	const q = `
 		INSERT INTO user_login_identities (user_id, provider, provider_user_id, display_name, avatar_url)
-		VALUES ($1, $2, $3, $4, NULLIF($5, ''))
+		VALUES ($1::uuid, $2::login_oauth_provider, $3, $4, NULLIF($5, ''))
 		ON CONFLICT (provider, provider_user_id) DO UPDATE SET
 			user_id = EXCLUDED.user_id,
 			display_name = EXCLUDED.display_name,
@@ -100,7 +100,7 @@ func (r *UserLoginIdentityRepository) UpsertTx(
 			updated_at = NOW()
 		RETURNING id, user_id, provider::text, provider_user_id, display_name, COALESCE(avatar_url, ''), created_at
 	`
-	return scanLoginIdentity(tx.QueryRow(ctx, q, userID, provider, providerUserID, displayName, avatarURL))
+	return scanLoginIdentity(tx.QueryRow(ctx, q, userID, string(provider), providerUserID, displayName, avatarURL))
 }
 
 func (r *UserLoginIdentityRepository) DeleteByUserProvider(

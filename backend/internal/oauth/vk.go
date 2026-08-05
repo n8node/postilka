@@ -30,7 +30,7 @@ type VKTokenResponse struct {
 }
 
 type VKUserInfo struct {
-	UserID    int64  `json:"user_id"`
+	UserID    string `json:"user_id"`
 	FirstName string `json:"first_name"`
 	LastName  string `json:"last_name"`
 	Avatar    string `json:"avatar"`
@@ -69,7 +69,8 @@ func (c *VKClient) ExchangeCode(
 	form.Set("device_id", deviceID)
 	form.Set("state", state)
 	if c.ClientSecret != "" {
-		form.Set("client_secret", c.ClientSecret)
+		// VK ID confidential apps expect service_token, not OAuth client_secret.
+		form.Set("service_token", c.ClientSecret)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, vkTokenURL, strings.NewReader(form.Encode()))
@@ -135,8 +136,12 @@ func (c *VKClient) FetchUserInfo(ctx context.Context, accessToken string) (*VKPr
 	}
 
 	name := strings.TrimSpace(strings.Join([]string{parsed.User.FirstName, parsed.User.LastName}, " "))
+	userID := strings.TrimSpace(parsed.User.UserID)
+	if userID == "" {
+		return nil, fmt.Errorf("vk user_info: empty user_id")
+	}
 	return &VKProfile{
-		UserID:      fmt.Sprintf("%d", parsed.User.UserID),
+		UserID:      userID,
 		DisplayName: name,
 		AvatarURL:   parsed.User.Avatar,
 		Email:       strings.TrimSpace(parsed.User.Email),

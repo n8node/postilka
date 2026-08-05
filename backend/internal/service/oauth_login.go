@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -214,6 +215,20 @@ func (s *OAuthLoginService) vkClient(ctx context.Context) (*oauthclient.VKClient
 		ClientSecret: vk.ClientSecret,
 		RedirectURI:  s.cfg.VKOAuthRedirectURI(),
 	}, nil
+}
+
+func (s *OAuthLoginService) OAuthErrorRedirect(ctx context.Context, state, code string) string {
+	if state != "" {
+		session, err := s.sessions.GetByStateToken(ctx, state)
+		if err == nil && session.Mode == "link" {
+			path := sanitizeRedirectPath(session.RedirectPath)
+			if path == "/dashboard" {
+				path = "/settings"
+			}
+			return path + "?oauth_error=" + url.QueryEscape(code)
+		}
+	}
+	return "/auth/login?oauth_error=" + url.QueryEscape(code)
 }
 
 func (s *OAuthLoginService) StartVK(ctx context.Context, mode, userID, redirectPath string) (*OAuthStartResult, error) {
@@ -472,7 +487,15 @@ func (s *OAuthLoginService) completeOAuth(
 	if err != nil {
 		return nil, "", err
 	}
-	return result, session.RedirectPath, nil
+	redirectOut := session.RedirectPath
+	if session.Mode == "link" {
+		redirectOut = sanitizeRedirectPath(session.RedirectPath)
+		if redirectOut == "/dashboard" {
+			redirectOut = "/settings"
+		}
+		redirectOut += "?oauth_linked=" + url.QueryEscape(string(profile.Provider))
+	}
+	return result, redirectOut, nil
 }
 
 func (s *OAuthLoginService) createOAuthUser(ctx context.Context, profile OAuthIdentityProfile) (*model.User, error) {

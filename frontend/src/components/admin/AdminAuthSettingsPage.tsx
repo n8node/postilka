@@ -170,13 +170,15 @@ export function AdminAuthSettingsPage() {
                   />
                 </label>
                 <label className="block text-xs font-medium text-slate-500">
-                  Client Secret
+                  Сервисный ключ (service_token)
                   <input
                     type="password"
                     value={vkClientSecret}
                     onChange={(e) => setVkClientSecret(e.target.value)}
                     placeholder={
-                      vkClientSecretSet ? "Уже задан — оставьте пустым" : "Введите secret"
+                      vkClientSecretSet
+                        ? "Уже задан — оставьте пустым"
+                        : "Защищённый ключ из настроек VK ID"
                     }
                     className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
                   />

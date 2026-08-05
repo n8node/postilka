@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
@@ -96,7 +97,7 @@ func (h *OAuthLoginHandler) startProvider(w http.ResponseWriter, r *http.Request
 
 func (h *OAuthLoginHandler) VKCallback(w http.ResponseWriter, r *http.Request) {
 	if errMsg := r.URL.Query().Get("error"); errMsg != "" {
-		h.redirectOAuthError(w, r, errMsg)
+		h.redirectOAuthError(w, r, errMsg, r.URL.Query().Get("state"))
 		return
 	}
 
@@ -104,13 +105,16 @@ func (h *OAuthLoginHandler) VKCallback(w http.ResponseWriter, r *http.Request) {
 	state := r.URL.Query().Get("state")
 	deviceID := r.URL.Query().Get("device_id")
 	if code == "" || state == "" || deviceID == "" {
-		h.redirectOAuthError(w, r, "invalid_callback")
+		h.redirectOAuthError(w, r, "invalid_callback", state)
 		return
 	}
 
 	result, redirectPath, err := h.oauth.CompleteVK(r.Context(), code, deviceID, state)
 	if err != nil {
-		h.redirectOAuthError(w, r, "oauth_failed")
+		if h.logger != nil {
+			h.logger.Error("vk oauth callback failed", "state", state, "err", err)
+		}
+		h.redirectOAuthError(w, r, "oauth_failed", state)
 		return
 	}
 
@@ -254,12 +258,20 @@ func (h *OAuthLoginHandler) finishOAuthLogin(w http.ResponseWriter, r *http.Requ
 		service.SetActiveWorkspaceCookie(w, active.ID, h.cfg.IsProduction())
 	}
 
-	target := h.cfg.PublicAppURL + sanitizeAppRedirect(redirectPath)
+	target := strings.TrimSuffix(h.cfg.PublicAppURL, "/") + sanitizeAppRedirect(redirectPath)
+	if strings.Contains(redirectPath, "?") {
+		if u, err := url.Parse(redirectPath); err == nil && strings.HasPrefix(u.Path, "/") {
+			target = strings.TrimSuffix(h.cfg.PublicAppURL, "/") + u.Path
+			if u.RawQuery != "" {
+				target += "?" + u.RawQuery
+			}
+		}
+	}
 	http.Redirect(w, r, target, http.StatusFound)
 }
 
-func (h *OAuthLoginHandler) redirectOAuthError(w http.ResponseWriter, r *http.Request, code string) {
-	target := h.cfg.PublicAppURL + "/auth/login?oauth_error=" + code
+func (h *OAuthLoginHandler) redirectOAuthError(w http.ResponseWriter, r *http.Request, code, state string) {
+	target := strings.TrimSuffix(h.cfg.PublicAppURL, "/") + h.oauth.OAuthErrorRedirect(r.Context(), state, code)
 	http.Redirect(w, r, target, http.StatusFound)
 }
 

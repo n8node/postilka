@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   ApiError,
   fetchLoginIdentities,
@@ -18,7 +19,28 @@ function linkStartURL(provider: "vk" | "max", nextPath: string) {
   return `/app/api/v1/auth/oauth/${provider}/link?${params.toString()}`;
 }
 
+function oauthStatusMessage(oauthError: string | null, oauthLinked: string | null) {
+  if (oauthLinked === "vk") {
+    return { type: "success" as const, text: "Аккаунт ВКонтакте успешно привязан." };
+  }
+  if (oauthLinked === "max") {
+    return { type: "success" as const, text: "Аккаунт MAX успешно привязан." };
+  }
+  if (!oauthError) return null;
+  if (oauthError === "oauth_failed" || oauthError === "invalid_callback") {
+    return {
+      type: "error" as const,
+      text: "Не удалось привязать аккаунт. Проверьте ключ VK ID в админке и попробуйте снова.",
+    };
+  }
+  return { type: "error" as const, text: "Не удалось завершить привязку. Попробуйте снова." };
+}
+
 export function LoginIdentitiesBlock() {
+  const searchParams = useSearchParams();
+  const oauthError = searchParams.get("oauth_error");
+  const oauthLinked = searchParams.get("oauth_linked");
+  const statusMessage = oauthStatusMessage(oauthError, oauthLinked);
   const [loading, setLoading] = useState(true);
   const [identities, setIdentities] = useState<LoginIdentity[]>([]);
   const [vkEnabled, setVkEnabled] = useState(false);
@@ -98,6 +120,16 @@ export function LoginIdentitiesBlock() {
         Привяжите аккаунты для быстрого входа без пароля. Доступно всем
         пользователям, включая администраторов.
       </p>
+
+      {statusMessage && (
+        <p
+          className={`mt-3 text-sm ${
+            statusMessage.type === "success" ? "text-green-700" : "text-red-600"
+          }`}
+        >
+          {statusMessage.text}
+        </p>
+      )}
 
       {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
 
