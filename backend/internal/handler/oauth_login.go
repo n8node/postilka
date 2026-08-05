@@ -293,6 +293,8 @@ func (h *OAuthLoginHandler) vkCallbackError(err error) (string, string) {
 		return "invalid_session", "link session has no user id"
 	case errors.Is(err, service.ErrOAuthAlreadyLinked):
 		return "already_linked", ""
+	case oauthclient.IsNetworkError(err):
+		return "network_error", "сервер не достучался до id.vk.ru"
 	default:
 		return "oauth_failed", oauthclient.SanitizeOAuthDetail(err.Error())
 	}

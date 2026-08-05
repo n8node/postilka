@@ -321,6 +321,9 @@ func (s *OAuthLoginService) CompleteVK(
 
 	token, err := vk.ExchangeCode(ctx, code, session.CodeVerifier, deviceID, state, s.cfg.VKOAuthRedirectURI())
 	if err != nil {
+		if oauthclient.IsNetworkError(err) {
+			return nil, "", fmt.Errorf("vk token exchange network: %w", err)
+		}
 		return nil, "", fmt.Errorf("vk token exchange: %w", err)
 	}
 

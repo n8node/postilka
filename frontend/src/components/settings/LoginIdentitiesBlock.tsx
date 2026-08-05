@@ -65,6 +65,11 @@ function oauthStatusMessage(
         type: "error" as const,
         text: "Некорректный ответ VK. Попробуйте привязать аккаунт заново.",
       };
+    case "network_error":
+      return {
+        type: "error" as const,
+        text: "Сервер Postilka не может связаться с VK ID (id.vk.ru). Проверьте исходящий HTTPS с сервера или обратитесь к хостингу.",
+      };
     case "access_denied":
       return {
         type: "error" as const,

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 )
 
 const vkAuthURL = "https://id.vk.ru/authorize"
@@ -70,11 +71,32 @@ func (c *VKClient) ExchangeCode(
 	form.Set("client_id", c.ClientID)
 	form.Set("device_id", deviceID)
 	form.Set("state", state)
-	// Public VK ID app (как DOC): Защищённый ключ → client_secret, без service_token.
 	if strings.TrimSpace(c.ClientSecret) != "" {
 		form.Set("client_secret", strings.TrimSpace(c.ClientSecret))
 	}
 
+	var lastErr error
+	for attempt := 0; attempt < 2; attempt++ {
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(2 * time.Second):
+			}
+		}
+		out, err := c.doTokenExchange(ctx, form)
+		if err == nil {
+			return out, nil
+		}
+		lastErr = err
+		if !IsNetworkError(err) {
+			return nil, err
+		}
+	}
+	return nil, lastErr
+}
+
+func (c *VKClient) doTokenExchange(ctx context.Context, form url.Values) (*VKTokenResponse, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, vkTokenURL, strings.NewReader(form.Encode()))
 	if err != nil {
 		return nil, err
@@ -113,6 +135,28 @@ func (c *VKClient) FetchUserInfo(ctx context.Context, accessToken string) (*VKPr
 	form.Set("client_id", c.ClientID)
 	form.Set("access_token", accessToken)
 
+	var lastErr error
+	for attempt := 0; attempt < 2; attempt++ {
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(2 * time.Second):
+			}
+		}
+		profile, err := c.doFetchUserInfo(ctx, form)
+		if err == nil {
+			return profile, nil
+		}
+		lastErr = err
+		if !IsNetworkError(err) {
+			return nil, err
+		}
+	}
+	return nil, lastErr
+}
+
+func (c *VKClient) doFetchUserInfo(ctx context.Context, form url.Values) (*VKProfile, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, vkUserInfoURL, strings.NewReader(form.Encode()))
 	if err != nil {
 		return nil, err
@@ -158,7 +202,7 @@ func (c *VKClient) http() *http.Client {
 	if c.HTTP != nil {
 		return c.HTTP
 	}
-	return http.DefaultClient
+	return DefaultVKHTTPClient()
 }
 
 func ProfileFromToken(token *VKTokenResponse) *VKProfile {
