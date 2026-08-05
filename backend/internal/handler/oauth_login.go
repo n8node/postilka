@@ -133,6 +133,14 @@ func (h *OAuthLoginHandler) VKCallback(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *OAuthLoginHandler) MAXWebhook(w http.ResponseWriter, r *http.Request) {
+	if h.logger != nil {
+		h.logger.Info("max webhook request",
+			"method", r.Method,
+			"remote", r.RemoteAddr,
+			"has_secret_header", r.Header.Get("X-Max-Bot-Api-Secret") != "",
+		)
+	}
+
 	secret, err := h.oauth.GetMAXWebhookSecret(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Внутренняя ошибка")
@@ -171,6 +179,9 @@ func (h *OAuthLoginHandler) MAXWebhook(w http.ResponseWriter, r *http.Request) {
 		}
 		writeError(w, http.StatusInternalServerError, "Не удалось обработать webhook")
 		return
+	}
+	if h.logger != nil {
+		h.logger.Info("max webhook handled", "update_type", update["update_type"], "payload", update["payload"])
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
