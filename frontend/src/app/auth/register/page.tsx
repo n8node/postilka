@@ -12,7 +12,7 @@ export default function RegisterPage() {
           Создайте workspace и начните планировать публикации
         </p>
       </div>
-      <div className="rounded-xl border border-slate-200 bg-surface p-6 shadow-sm">
+      <div className="rounded-xl border border-white/60 bg-surface/90 p-6 shadow-sm backdrop-blur-sm">
         <RegisterForm />
       </div>
     </main>
