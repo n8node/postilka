@@ -107,6 +107,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </button>
         </div>
 
+        <div className="border-b border-border py-2">
+          <WorkspaceSwitcher collapsed={collapsed} />
+        </div>
+
         <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-2 py-3">
           {mainNav.map((item) => {
             const Icon = item.icon;
@@ -177,7 +181,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{displayName}</p>
-                  <WorkspaceSwitcher />
+                  <p className="truncate text-xs text-muted">{user.email}</p>
                 </div>
                 <button
                   type="button"
@@ -191,11 +195,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </>
             )}
           </div>
-          {collapsed && (
-            <div className="mt-1 flex justify-center">
-              <WorkspaceSwitcher collapsed />
-            </div>
-          )}
           {collapsed && (
             <button
               type="button"

@@ -14,7 +14,7 @@ export default async function CabinetLayout({
   }
 
   return (
-    <AuthProvider value={me}>
+    <AuthProvider initial={me}>
       <AppShell>{children}</AppShell>
     </AuthProvider>
   );

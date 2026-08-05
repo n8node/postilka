@@ -1,18 +1,39 @@
 "use client";
 
-import type { MeResponse } from "@/lib/api";
-import { createContext, useContext } from "react";
+import { fetchMe, type MeResponse } from "@/lib/api";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useState,
+  type ReactNode,
+} from "react";
 
-const AuthContext = createContext<MeResponse | null>(null);
+export type AuthContextValue = MeResponse & {
+  refreshAuth: () => Promise<void>;
+};
+
+const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({
-  value,
+  initial,
   children,
 }: {
-  value: MeResponse;
-  children: React.ReactNode;
+  initial: MeResponse;
+  children: ReactNode;
 }) {
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  const [me, setMe] = useState(initial);
+
+  const refreshAuth = useCallback(async () => {
+    const data = await fetchMe();
+    setMe(data);
+  }, []);
+
+  return (
+    <AuthContext.Provider value={{ ...me, refreshAuth }}>
+      {children}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {

@@ -12,9 +12,15 @@ async function serverFetch<T>(path: string): Promise<T | null> {
   const token = cookieStore.get("access_token");
   if (!token?.value) return null;
 
+  const cookieHeader = [`access_token=${token.value}`];
+  const activeWorkspace = cookieStore.get("active_workspace_id");
+  if (activeWorkspace?.value) {
+    cookieHeader.push(`active_workspace_id=${activeWorkspace.value}`);
+  }
+
   try {
     const res = await fetch(`${serverApiBase()}/api/v1${path}`, {
-      headers: { Cookie: `access_token=${token.value}` },
+      headers: { Cookie: cookieHeader.join("; ") },
       cache: "no-store",
     });
     if (!res.ok) return null;

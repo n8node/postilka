@@ -24,7 +24,7 @@ type WorkspaceSwitcherProps = {
 };
 
 export function WorkspaceSwitcher({ collapsed = false }: WorkspaceSwitcherProps) {
-  const { workspace, workspaces } = useAuth();
+  const { workspace, workspaces, refreshAuth } = useAuth();
   const router = useRouter();
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -54,6 +54,7 @@ export function WorkspaceSwitcher({ collapsed = false }: WorkspaceSwitcherProps)
     setError(null);
     try {
       await setActiveWorkspace(ws.id);
+      await refreshAuth();
       setOpen(false);
       router.refresh();
     } catch (e) {
@@ -72,6 +73,7 @@ export function WorkspaceSwitcher({ collapsed = false }: WorkspaceSwitcherProps)
     setError(null);
     try {
       await createWorkspace(name);
+      await refreshAuth();
       setNewName("");
       setShowCreateForm(false);
       setOpen(false);
@@ -84,9 +86,10 @@ export function WorkspaceSwitcher({ collapsed = false }: WorkspaceSwitcherProps)
   }
 
   const activeName = workspace?.name ?? "Workspace";
+  const activeRole = workspace?.role ? roleLabels[workspace.role] ?? workspace.role : null;
 
   return (
-    <div ref={rootRef} className="relative">
+    <div ref={rootRef} className={cn("relative", collapsed ? "px-1" : "px-2")}>
       <button
         type="button"
         onClick={() => {
@@ -94,19 +97,39 @@ export function WorkspaceSwitcher({ collapsed = false }: WorkspaceSwitcherProps)
           setError(null);
         }}
         className={cn(
-          "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-zinc-100",
-          collapsed ? "justify-center px-1" : "",
+          "flex w-full items-center gap-2.5 rounded-lg border text-left transition-colors",
+          "border-border bg-zinc-50 hover:border-zinc-300 hover:bg-zinc-100",
+          open && "border-accent/40 bg-zinc-100 ring-1 ring-accent/20",
+          collapsed ? "justify-center px-2 py-2.5" : "px-3 py-2.5",
         )}
         title={collapsed ? activeName : undefined}
         aria-expanded={open}
         aria-haspopup="listbox"
       >
-        <Building2 className="h-4 w-4 shrink-0 text-muted" />
+        <div
+          className={cn(
+            "flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-white shadow-sm ring-1 ring-border",
+            collapsed && "h-7 w-7",
+          )}
+        >
+          <Building2 className="h-4 w-4 text-accent" />
+        </div>
         {!collapsed && (
           <>
-            <span className="min-w-0 flex-1 truncate text-xs text-muted">{activeName}</span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[11px] font-medium uppercase tracking-wide text-muted">
+                Workspace
+              </span>
+              <span className="block truncate text-sm font-semibold text-text">{activeName}</span>
+              {activeRole && (
+                <span className="block truncate text-xs text-muted">{activeRole}</span>
+              )}
+            </span>
             <ChevronDown
-              className={cn("h-3.5 w-3.5 shrink-0 text-muted transition-transform", open && "rotate-180")}
+              className={cn(
+                "h-4 w-4 shrink-0 text-muted transition-transform",
+                open && "rotate-180",
+              )}
             />
           </>
         )}
@@ -115,12 +138,16 @@ export function WorkspaceSwitcher({ collapsed = false }: WorkspaceSwitcherProps)
       {open && (
         <div
           className={cn(
-            "absolute z-50 rounded-lg border border-border bg-surface shadow-lg",
-            collapsed ? "bottom-full left-0 mb-2 w-72" : "bottom-full left-0 mb-2 w-full min-w-[14rem]",
+            "absolute z-50 rounded-lg border border-border bg-surface shadow-xl",
+            collapsed
+              ? "left-full top-0 ml-2 w-72"
+              : "left-2 right-2 top-full mt-2 min-w-[14rem]",
           )}
         >
-          <div className="border-b border-border px-3 py-2">
-            <p className="text-xs font-medium text-muted">Workspace</p>
+          <div className="border-b border-border px-3 py-2.5">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+              Ваши workspace
+            </p>
           </div>
 
           <ul className="max-h-52 overflow-y-auto py-1" role="listbox">
@@ -136,8 +163,8 @@ export function WorkspaceSwitcher({ collapsed = false }: WorkspaceSwitcherProps)
                     disabled={!!busyId}
                     onClick={() => void handleSwitch(ws)}
                     className={cn(
-                      "flex w-full items-start gap-2 px-3 py-2 text-left text-sm hover:bg-zinc-50",
-                      isActive && "bg-zinc-50",
+                      "flex w-full items-start gap-2 px-3 py-2.5 text-left text-sm hover:bg-zinc-50",
+                      isActive && "bg-accent/5",
                       busyId && !isBusy && "opacity-50",
                     )}
                   >
@@ -205,7 +232,7 @@ export function WorkspaceSwitcher({ collapsed = false }: WorkspaceSwitcherProps)
                   setShowCreateForm(true);
                   setError(null);
                 }}
-                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted hover:bg-zinc-50 hover:text-text"
+                className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-sm font-medium text-accent hover:bg-accent/5"
               >
                 <Plus className="h-4 w-4" />
                 Создать workspace
