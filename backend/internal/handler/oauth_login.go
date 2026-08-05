@@ -13,6 +13,7 @@ import (
 	"github.com/postilka/postilka/internal/config"
 	"github.com/postilka/postilka/internal/middleware"
 	"github.com/postilka/postilka/internal/model"
+	oauthclient "github.com/postilka/postilka/internal/oauth"
 	"github.com/postilka/postilka/internal/service"
 )
 
@@ -114,7 +115,7 @@ func (h *OAuthLoginHandler) VKCallback(w http.ResponseWriter, r *http.Request) {
 		if h.logger != nil {
 			h.logger.Error("vk oauth callback failed", "state", state, "err", err)
 		}
-		h.redirectOAuthError(w, r, "oauth_failed", state)
+		h.redirectOAuthError(w, r, h.vkCallbackErrorCode(err), state)
 		return
 	}
 
@@ -268,6 +269,23 @@ func (h *OAuthLoginHandler) finishOAuthLogin(w http.ResponseWriter, r *http.Requ
 		}
 	}
 	http.Redirect(w, r, target, http.StatusFound)
+}
+
+func (h *OAuthLoginHandler) vkCallbackErrorCode(err error) string {
+	var vkErr *oauthclient.VKAPIError
+	if errors.As(err, &vkErr) {
+		return vkErr.Reason
+	}
+	switch {
+	case errors.Is(err, service.ErrOAuthSessionExpired):
+		return "session_expired"
+	case errors.Is(err, service.ErrOAuthStateInvalid):
+		return "invalid_state"
+	case errors.Is(err, service.ErrOAuthLinkConflict):
+		return "link_conflict"
+	default:
+		return "oauth_failed"
+	}
 }
 
 func (h *OAuthLoginHandler) redirectOAuthError(w http.ResponseWriter, r *http.Request, code, state string) {

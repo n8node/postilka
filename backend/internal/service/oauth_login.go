@@ -16,7 +16,7 @@ import (
 	"github.com/postilka/postilka/internal/repository"
 )
 
-const oauthSessionTTL = 5 * time.Minute
+const oauthSessionTTL = 15 * time.Minute
 const maxStartPrefix = "p_"
 
 var (
@@ -308,7 +308,7 @@ func (s *OAuthLoginService) CompleteVK(
 
 	token, err := vk.ExchangeCode(ctx, code, session.CodeVerifier, deviceID, state, s.cfg.VKOAuthRedirectURI())
 	if err != nil {
-		return nil, "", err
+		return nil, "", fmt.Errorf("vk token exchange: %w", err)
 	}
 
 	profile, err := vk.FetchUserInfo(ctx, token.AccessToken)

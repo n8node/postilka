@@ -27,13 +27,46 @@ function oauthStatusMessage(oauthError: string | null, oauthLinked: string | nul
     return { type: "success" as const, text: "Аккаунт MAX успешно привязан." };
   }
   if (!oauthError) return null;
-  if (oauthError === "oauth_failed" || oauthError === "invalid_callback") {
-    return {
-      type: "error" as const,
-      text: "Не удалось привязать аккаунт. Проверьте ключ VK ID в админке и попробуйте снова.",
-    };
+
+  switch (oauthError) {
+    case "ip_denied":
+      return {
+        type: "error" as const,
+        text: "VK отклонил обмен кода: IP сервера не в whitelist. В кабинете VK ID → Ключи доступа → «IP-адрес сервера» добавьте IP postilka.ru и включите «Конфиденциальное» приложение.",
+      };
+    case "invalid_token":
+      return {
+        type: "error" as const,
+        text: "Неверный сервисный ключ. В админке нужен «Сервисный ключ доступа» (длинный hex), не «Защищённый ключ».",
+      };
+    case "redirect_uri":
+      return {
+        type: "error" as const,
+        text: "Redirect URI не совпадает с настройками VK ID. Скопируйте URI из админки Postilka в «Доверенный redirect URL» без изменений.",
+      };
+    case "session_expired":
+    case "code_expired":
+      return {
+        type: "error" as const,
+        text: "Сессия VK истекла. Нажмите «Привязать» ещё раз и подтвердите быстрее.",
+      };
+    case "link_conflict":
+      return {
+        type: "error" as const,
+        text: "Этот аккаунт VK уже привязан к другому пользователю Postilka.",
+      };
+    case "invalid_callback":
+    case "invalid_state":
+      return {
+        type: "error" as const,
+        text: "Некорректный ответ VK. Попробуйте привязать аккаунт заново.",
+      };
+    default:
+      return {
+        type: "error" as const,
+        text: "Не удалось привязать аккаунт. Проверьте настройки VK ID в админке Postilka.",
+      };
   }
-  return { type: "error" as const, text: "Не удалось завершить привязку. Попробуйте снова." };
 }
 
 export function LoginIdentitiesBlock() {

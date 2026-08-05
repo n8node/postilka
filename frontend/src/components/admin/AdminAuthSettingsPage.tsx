@@ -170,7 +170,7 @@ export function AdminAuthSettingsPage() {
                   />
                 </label>
                 <label className="block text-xs font-medium text-slate-500">
-                  Сервисный ключ (service_token)
+                  Сервисный ключ доступа (service_token)
                   <input
                     type="password"
                     value={vkClientSecret}
@@ -178,11 +178,20 @@ export function AdminAuthSettingsPage() {
                     placeholder={
                       vkClientSecretSet
                         ? "Уже задан — оставьте пустым"
-                        : "Защищённый ключ из настроек VK ID"
+                        : "Длинный hex из VK ID, не «Защищённый ключ»"
                     }
                     className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
                   />
                 </label>
+                <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+                  <p className="font-medium">Чеклист VK ID (кабинет id.vk.ru):</p>
+                  <ol className="mt-1 list-decimal space-y-1 pl-4">
+                    <li>Уровень конфиденциальности → «Конфиденциальное»</li>
+                    <li>IP-адрес сервера → публичный IP postilka.ru</li>
+                    <li>Доверенный redirect URL → как ниже, символ в символ</li>
+                    <li>Ключ здесь → «Сервисный ключ доступа», не «Защищённый ключ»</li>
+                  </ol>
+                </div>
                 {vkRedirectUri && (
                   <p className="text-xs text-slate-500">
                     Redirect URI для VK ID:{" "}

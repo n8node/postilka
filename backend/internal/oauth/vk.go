@@ -90,7 +90,7 @@ func (c *VKClient) ExchangeCode(
 		return nil, err
 	}
 	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("vk token exchange: %s", string(body))
+		return nil, ClassifyVKAPIFailure(resp.StatusCode, string(body))
 	}
 
 	var out VKTokenResponse
@@ -98,7 +98,7 @@ func (c *VKClient) ExchangeCode(
 		return nil, err
 	}
 	if out.Error != "" {
-		return nil, fmt.Errorf("vk oauth: %s — %s", out.Error, out.ErrorDesc)
+		return nil, ClassifyVKAPIFailure(resp.StatusCode, string(body))
 	}
 	return &out, nil
 }
@@ -125,7 +125,7 @@ func (c *VKClient) FetchUserInfo(ctx context.Context, accessToken string) (*VKPr
 		return nil, err
 	}
 	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("vk user_info: %s", string(body))
+		return nil, ClassifyVKAPIFailure(resp.StatusCode, string(body))
 	}
 
 	var parsed struct {
