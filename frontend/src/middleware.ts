@@ -14,6 +14,7 @@ const protectedPrefixes = [
   "/team",
   "/analytics",
   "/settings",
+  "/invites",
   "/notifications",
   "/admin",
 ];
@@ -61,6 +62,7 @@ export const config = {
     "/team/:path*",
     "/analytics/:path*",
     "/settings/:path*",
+    "/invites/:path*",
     "/notifications/:path*",
     "/auth/:path*",
     "/admin/:path*",

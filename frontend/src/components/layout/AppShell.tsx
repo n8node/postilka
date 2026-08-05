@@ -14,6 +14,7 @@ import {
   BarChart3,
   Settings,
   Bell,
+  Ticket,
   PanelLeftClose,
   PanelLeft,
   LogOut,
@@ -42,6 +43,7 @@ const mainNav: NavItem[] = [
 ];
 
 const bottomNav: NavItem[] = [
+  { href: "/invites", label: "Инвайты", icon: Ticket },
   { href: "/settings", label: "Настройки", icon: Settings },
   { href: "/notifications", label: "Уведомления", icon: Bell },
 ];

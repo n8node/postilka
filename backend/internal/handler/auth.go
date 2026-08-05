@@ -28,9 +28,10 @@ func NewAuthHandler(
 }
 
 type credentialsRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
-	Name     string `json:"name"`
+	Email      string `json:"email"`
+	Password   string `json:"password"`
+	Name       string `json:"name"`
+	InviteCode string `json:"invite_code"`
 }
 
 type meResponse struct {
@@ -59,7 +60,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.auth.Register(r.Context(), req.Email, req.Password, req.Name)
+	result, err := h.auth.Register(r.Context(), req.Email, req.Password, req.Name, req.InviteCode)
 	if err != nil {
 		h.writeAuthError(w, err)
 		return
@@ -134,6 +135,14 @@ func (h *AuthHandler) writeAuthError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusForbidden, "Аккаунт заблокирован")
 	case errors.Is(err, service.ErrInvalidInput):
 		writeError(w, http.StatusBadRequest, "Проверьте email и пароль (мин. 8 символов, заглавные, цифры, спецсимвол)")
+	case errors.Is(err, service.ErrInviteRequired):
+		writeError(w, http.StatusBadRequest, "Требуется инвайт-ключ для регистрации")
+	case errors.Is(err, service.ErrInvalidInviteCode):
+		writeError(w, http.StatusBadRequest, "Некорректный формат инвайт-ключа")
+	case errors.Is(err, service.ErrInviteNotActive):
+		writeError(w, http.StatusBadRequest, "Инвайт-ключ недействителен или уже использован")
+	case errors.Is(err, service.ErrInviteAlreadyUsed):
+		writeError(w, http.StatusConflict, "Инвайт-ключ уже использован")
 	default:
 		writeError(w, http.StatusInternalServerError, "Внутренняя ошибка")
 	}

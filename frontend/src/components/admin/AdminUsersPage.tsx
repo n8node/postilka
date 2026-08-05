@@ -4,12 +4,17 @@ import { useCallback, useEffect, useState } from "react";
 import { X } from "lucide-react";
 import {
   ApiError,
+  addAdminUserInvites,
   assignAdminUserPlan,
   fetchAdminPlans,
+  fetchAdminUserInviteRelations,
+  fetchAdminUserInvites,
   fetchAdminUsers,
   type AdminUser,
   type AdminUsersQuery,
   type Plan,
+  type UserInvite,
+  type UserInviteRelations,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -310,6 +315,13 @@ function UserDrawer({
   const [saving, setSaving] = useState(false);
   const [planError, setPlanError] = useState<string | null>(null);
 
+  const [userInvites, setUserInvites] = useState<UserInvite[]>([]);
+  const [inviteRelations, setInviteRelations] =
+    useState<UserInviteRelations | null>(null);
+  const [inviteCount, setInviteCount] = useState(3);
+  const [addingInvites, setAddingInvites] = useState(false);
+  const [invitesLoading, setInvitesLoading] = useState(true);
+
   useEffect(() => {
     setPlanId(user.plan?.id ?? "");
   }, [user.id, user.plan?.id]);
@@ -319,6 +331,23 @@ function UserDrawer({
       .then((data) => setPlans(data.plans.filter((p) => p.is_active || p.id === user.plan?.id)))
       .catch(() => setPlans([]));
   }, [user.plan?.id]);
+
+  useEffect(() => {
+    setInvitesLoading(true);
+    Promise.all([
+      fetchAdminUserInvites(user.id),
+      fetchAdminUserInviteRelations(user.id),
+    ])
+      .then(([invitesData, relationsData]) => {
+        setUserInvites(invitesData.invites ?? []);
+        setInviteRelations(relationsData);
+      })
+      .catch(() => {
+        setUserInvites([]);
+        setInviteRelations(null);
+      })
+      .finally(() => setInvitesLoading(false));
+  }, [user.id]);
 
   async function handleAssignPlan() {
     if (!planId) return;
@@ -339,6 +368,21 @@ function UserDrawer({
       setPlanError(e instanceof ApiError ? e.message : "Не удалось назначить тариф");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleAddInvites() {
+    if (inviteCount < 1) return;
+    setAddingInvites(true);
+    try {
+      const data = await addAdminUserInvites(user.id, inviteCount);
+      setUserInvites(data.invites ?? []);
+    } catch (e) {
+      setPlanError(
+        e instanceof ApiError ? e.message : "Не удалось добавить инвайты",
+      );
+    } finally {
+      setAddingInvites(false);
     }
   }
 
@@ -421,6 +465,99 @@ function UserDrawer({
               </div>
             ) : (
               <p className="mt-2 text-sm text-slate-500">Нет workspace</p>
+            )}
+          </section>
+
+          <section className="rounded-xl border border-slate-200 p-4">
+            <h3 className="text-sm font-semibold text-slate-900">Инвайты</h3>
+            {invitesLoading ? (
+              <p className="mt-2 text-sm text-slate-500">Загрузка…</p>
+            ) : (
+              <div className="mt-3 space-y-4">
+                <div>
+                  <p className="text-xs font-medium text-slate-500">
+                    Пригласил пользователя
+                  </p>
+                  {inviteRelations?.invited_by ? (
+                    <div className="mt-1 text-sm">
+                      {inviteRelations.invited_by.user ? (
+                        <p className="font-medium text-slate-800">
+                          {inviteRelations.invited_by.user.email}
+                        </p>
+                      ) : (
+                        <p className="text-slate-600">Системный инвайт</p>
+                      )}
+                      <p className="font-mono text-xs text-slate-400">
+                        {inviteRelations.invited_by.invite_code}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="mt-1 text-sm text-slate-500">—</p>
+                  )}
+                </div>
+
+                <div>
+                  <p className="text-xs font-medium text-slate-500">
+                    Пригласил ({inviteRelations?.invited_users.length ?? 0})
+                  </p>
+                  {inviteRelations?.invited_users.length ? (
+                    <ul className="mt-2 max-h-32 space-y-2 overflow-y-auto text-sm">
+                      {inviteRelations.invited_users.slice(0, 8).map((u) => (
+                        <li key={u.id} className="rounded-md bg-slate-50 px-2 py-1.5">
+                          <p className="font-medium text-slate-800">{u.email}</p>
+                          <p className="font-mono text-[11px] text-slate-400">
+                            {u.invite_code}
+                          </p>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-1 text-sm text-slate-500">Никого</p>
+                  )}
+                </div>
+
+                <div>
+                  <p className="text-xs font-medium text-slate-500">
+                    Ключи пользователя ({userInvites.length})
+                  </p>
+                  {userInvites.length > 0 ? (
+                    <ul className="mt-2 max-h-28 space-y-1 overflow-y-auto font-mono text-xs text-slate-600">
+                      {userInvites.slice(0, 6).map((inv) => (
+                        <li key={inv.id}>
+                          {inv.code}{" "}
+                          <span className="text-slate-400">({inv.status})</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-1 text-sm text-slate-500">Нет ключей</p>
+                  )}
+                </div>
+
+                <div className="flex items-end gap-2">
+                  <label className="flex-1 text-xs font-medium text-slate-500">
+                    Добавить инвайтов
+                    <input
+                      type="number"
+                      min={1}
+                      max={100}
+                      value={inviteCount}
+                      onChange={(e) =>
+                        setInviteCount(Number(e.target.value) || 1)
+                      }
+                      className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    disabled={addingInvites}
+                    onClick={() => void handleAddInvites()}
+                    className="rounded-md border border-slate-200 px-3 py-2 text-sm font-medium hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    {addingInvites ? "…" : "Добавить"}
+                  </button>
+                </div>
+              </div>
             )}
           </section>
 

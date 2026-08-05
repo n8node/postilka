@@ -32,11 +32,13 @@ const nav: NavSection[] = [
     items: [
       { href: "/admin/users", label: "Пользователи" },
       { href: "/admin/plans", label: "Тарифы" },
+      { href: "/admin/invites", label: "Инвайты" },
     ],
   },
 ];
 
 function breadcrumbLabel(pathname: string) {
+  if (pathname.startsWith("/admin/invites")) return "Инвайты";
   if (pathname.startsWith("/admin/plans")) return "Тарифы";
   if (pathname.startsWith("/admin/users")) return "Пользователи";
   return "Admin";

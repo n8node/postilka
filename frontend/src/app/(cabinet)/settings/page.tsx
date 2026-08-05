@@ -2,6 +2,7 @@
 
 import { PageHeader } from "@/components/layout/PageHeader";
 import { StubBadge } from "@/components/layout/StubBadge";
+import { UserInvitesBlock } from "@/components/settings/UserInvitesBlock";
 import { useAuth } from "@/context/AuthContext";
 
 export default function SettingsPage() {
@@ -38,6 +39,8 @@ export default function SettingsPage() {
             </div>
           </dl>
         </section>
+
+        <UserInvitesBlock />
 
         <section className="rounded-xl border border-border bg-surface p-5 shadow-sm">
           <h2 className="text-sm font-semibold">Таймзона</h2>

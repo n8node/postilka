@@ -18,13 +18,7 @@ func NewWorkspaceRepository(pool *pgxpool.Pool) *WorkspaceRepository {
 	return &WorkspaceRepository{pool: pool}
 }
 
-func (r *WorkspaceRepository) CreateWithOwner(ctx context.Context, name, slug, ownerID, planID string) (*model.Workspace, error) {
-	tx, err := r.pool.Begin(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback(ctx)
-
+func (r *WorkspaceRepository) CreateWithOwnerTx(ctx context.Context, tx pgx.Tx, name, slug, ownerID, planID string) (*model.Workspace, error) {
 	const insertWS = `
 		INSERT INTO workspaces (name, slug, owner_id, plan_id, plan_assigned_at)
 		VALUES ($1, $2, $3, NULLIF($4, ''), CASE WHEN $4 = '' THEN NULL ELSE NOW() END)
@@ -42,11 +36,25 @@ func (r *WorkspaceRepository) CreateWithOwner(ctx context.Context, name, slug, o
 	if _, err := tx.Exec(ctx, insertMember, ws.ID, ownerID); err != nil {
 		return nil, err
 	}
+	ws.Role = "owner"
+	return ws, nil
+}
+
+func (r *WorkspaceRepository) CreateWithOwner(ctx context.Context, name, slug, ownerID, planID string) (*model.Workspace, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	ws, err := r.CreateWithOwnerTx(ctx, tx, name, slug, ownerID, planID)
+	if err != nil {
+		return nil, err
+	}
 
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
-	ws.Role = "owner"
 	return ws, nil
 }
 

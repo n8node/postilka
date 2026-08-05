@@ -30,7 +30,10 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	userRepo := repository.NewUserRepository(db.Pool)
 	wsRepo := repository.NewWorkspaceRepository(db.Pool)
 	planRepo := repository.NewPlanRepository(db.Pool)
-	authSvc := service.NewAuthService(userRepo, wsRepo, planRepo, authMW)
+	settingsRepo := repository.NewSettingsRepository(db.Pool)
+	inviteRepo := repository.NewInviteRepository(db.Pool)
+	inviteSvc := service.NewInviteService(inviteRepo, settingsRepo, userRepo, db.Pool)
+	authSvc := service.NewAuthService(userRepo, wsRepo, planRepo, inviteSvc, db.Pool, authMW)
 	wsSvc := service.NewWorkspaceService(wsRepo)
 	planSvc := service.NewPlanService(planRepo, wsRepo)
 
@@ -39,6 +42,8 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	authHandler := handler.NewAuthHandler(authSvc, wsSvc, authMW, cfg)
 	wsHandler := handler.NewWorkspaceHandler(wsSvc, cfg)
 	adminHandler := handler.NewAdminHandler(userRepo, planSvc)
+	inviteHandler := handler.NewInviteHandler(inviteSvc)
+	adminInviteHandler := handler.NewAdminInviteHandler(inviteSvc, userRepo)
 
 	r.Get("/health", health.ServeHTTP)
 
@@ -47,11 +52,17 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 		r.Get("/status", status.ServeHTTP)
 
 		r.Route("/auth", func(r chi.Router) {
+			r.Get("/methods", inviteHandler.AuthMethods)
+			r.Post("/invite/verify", inviteHandler.VerifyInvite)
 			r.Post("/register", authHandler.Register)
 			r.Post("/login", authHandler.Login)
 			r.Post("/logout", authHandler.Logout)
 			r.With(authMW.Required).Get("/me", authHandler.Me)
 		})
+
+		r.Get("/public/invites", inviteHandler.PublicSystemInvites)
+
+		r.With(authMW.Required).Get("/user/invites", inviteHandler.UserInvites)
 
 		r.With(authMW.Required).Get("/workspaces", wsHandler.List)
 		r.Route("/workspaces", func(r chi.Router) {
@@ -74,6 +85,15 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Get("/plans/{planID}", adminHandler.GetPlan)
 				r.Put("/plans/{planID}", adminHandler.UpdatePlan)
 				r.Delete("/plans/{planID}", adminHandler.DeletePlan)
+
+				r.Get("/auth-settings", adminInviteHandler.AuthSettingsGet)
+				r.Put("/auth-settings", adminInviteHandler.AuthSettingsPut)
+				r.Get("/invites", adminInviteHandler.List)
+				r.Post("/invites/issue", adminInviteHandler.IssueSystem)
+				r.Post("/invites/revoke", adminInviteHandler.Revoke)
+				r.Get("/users/{userID}/invites", adminInviteHandler.UserInvites)
+				r.Post("/users/{userID}/invites", adminInviteHandler.AddUserInvites)
+				r.Get("/users/{userID}/invite-relations", adminInviteHandler.UserInviteRelations)
 			})
 		})
 	})

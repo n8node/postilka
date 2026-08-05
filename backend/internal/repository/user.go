@@ -33,6 +33,22 @@ func (r *UserRepository) Create(ctx context.Context, email, passwordHash, name s
 	return scanUser(r.pool.QueryRow(ctx, q, email, passwordHash, name))
 }
 
+func (r *UserRepository) CreateTx(ctx context.Context, tx pgx.Tx, email, passwordHash, name string) (*model.User, error) {
+	const q = `
+		INSERT INTO users (email, password_hash, name)
+		VALUES ($1, $2, $3)
+		RETURNING id, email, name, locale, timezone, is_blocked, is_platform_admin, created_at
+	`
+	return scanUser(tx.QueryRow(ctx, q, email, passwordHash, name))
+}
+
+func (r *UserRepository) SetRegisteredViaInviteTx(ctx context.Context, tx pgx.Tx, userID, inviteID string) error {
+	_, err := tx.Exec(ctx, `
+		UPDATE users SET registered_via_invite_id = $2, updated_at = NOW() WHERE id = $1
+	`, userID, inviteID)
+	return err
+}
+
 func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*model.User, string, error) {
 	const q = `
 		SELECT id, email, password_hash, name, locale, timezone, is_blocked, is_platform_admin, created_at

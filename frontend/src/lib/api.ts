@@ -149,11 +149,178 @@ export function login(email: string, password: string) {
   });
 }
 
-export function register(email: string, password: string, name?: string) {
+export function register(
+  email: string,
+  password: string,
+  name?: string,
+  inviteCode?: string,
+) {
   return apiFetch<MeResponse>("/auth/register", {
     method: "POST",
-    body: JSON.stringify({ email, password, name }),
+    body: JSON.stringify({
+      email,
+      password,
+      name,
+      invite_code: inviteCode,
+    }),
   });
+}
+
+export type AuthMethods = {
+  invite_registration_enabled: boolean;
+};
+
+export function fetchAuthMethods() {
+  return apiFetch<AuthMethods>("/auth/methods");
+}
+
+export function verifyInviteCode(inviteCode: string) {
+  return apiFetch<{
+    ok: boolean;
+    invite_required: boolean;
+    invite_code?: string;
+  }>("/auth/invite/verify", {
+    method: "POST",
+    body: JSON.stringify({ invite_code: inviteCode }),
+  });
+}
+
+export type UserInvite = {
+  id: string;
+  code: string;
+  status: string;
+  is_active: boolean;
+  used_at?: string | null;
+  created_at: string;
+};
+
+export function fetchUserInvites() {
+  return apiFetch<{
+    invite_registration_enabled: boolean;
+    invites: UserInvite[];
+  }>("/user/invites");
+}
+
+export type AdminInvite = {
+  id: string;
+  code: string;
+  scope: "SYSTEM" | "USER";
+  status: string;
+  effective_status: string;
+  created_at: string;
+  used_at?: string | null;
+  expires_at?: string | null;
+  owner_user?: { id: string; email: string; name: string } | null;
+  created_by_user?: { id: string; email: string; name: string } | null;
+  used_by_user?: { id: string; email: string; name: string } | null;
+};
+
+export type InviteRelation = {
+  id: string;
+  invite_code: string;
+  inviter?: { id: string; email: string; name: string } | null;
+  invited?: { id: string; email: string; name: string } | null;
+  used_at?: string | null;
+};
+
+export type AdminInvitesResponse = {
+  invites: AdminInvite[];
+  relations: InviteRelation[];
+  stats: {
+    total: number;
+    active: number;
+    used: number;
+    total_relations: number;
+    unique_inviters: number;
+  };
+  total: number;
+  page: number;
+  limit: number;
+  total_pages: number;
+};
+
+export type AdminInvitesQuery = {
+  search?: string;
+  status?: string;
+  scope?: string;
+  page?: number;
+  limit?: number;
+};
+
+export function fetchAdminInvites(query: AdminInvitesQuery = {}) {
+  const params = new URLSearchParams();
+  if (query.search?.trim()) params.set("search", query.search.trim());
+  if (query.status) params.set("status", query.status);
+  if (query.scope) params.set("scope", query.scope);
+  if (query.page) params.set("page", String(query.page));
+  if (query.limit) params.set("limit", String(query.limit));
+  const qs = params.toString();
+  return apiFetch<AdminInvitesResponse>(`/admin/invites${qs ? `?${qs}` : ""}`);
+}
+
+export function issueAdminInvites(count: number) {
+  return apiFetch<{ invites: AdminInvite[]; count: number }>(
+    "/admin/invites/issue",
+    {
+      method: "POST",
+      body: JSON.stringify({ count }),
+    },
+  );
+}
+
+export function revokeAdminInvite(inviteId: string) {
+  return apiFetch<{ status: string }>("/admin/invites/revoke", {
+    method: "POST",
+    body: JSON.stringify({ invite_id: inviteId }),
+  });
+}
+
+export function fetchAdminAuthSettings() {
+  return apiFetch<AuthMethods>("/admin/auth-settings");
+}
+
+export function updateAdminAuthSettings(inviteRegistrationEnabled: boolean) {
+  return apiFetch<AuthMethods>("/admin/auth-settings", {
+    method: "PUT",
+    body: JSON.stringify({
+      invite_registration_enabled: inviteRegistrationEnabled,
+    }),
+  });
+}
+
+export type UserInviteRelations = {
+  invited_by?: {
+    invite_id: string;
+    invite_code: string;
+    user?: { id: string; email: string; name: string } | null;
+  } | null;
+  invited_users: {
+    id: string;
+    email: string;
+    name: string;
+    invite_code: string;
+    registered_at: string;
+  }[];
+};
+
+export function fetchAdminUserInvites(userId: string) {
+  return apiFetch<{ invites: UserInvite[] }>(`/admin/users/${userId}/invites`);
+}
+
+export function addAdminUserInvites(userId: string, count: number) {
+  return apiFetch<{ invites: UserInvite[] }>(
+    `/admin/users/${userId}/invites`,
+    {
+      method: "POST",
+      body: JSON.stringify({ count }),
+    },
+  );
+}
+
+export function fetchAdminUserInviteRelations(userId: string) {
+  return apiFetch<UserInviteRelations>(
+    `/admin/users/${userId}/invite-relations`,
+  );
 }
 
 export function logout() {

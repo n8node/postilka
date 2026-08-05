@@ -33,6 +33,8 @@ type AuthService struct {
 	users      *repository.UserRepository
 	workspaces *repository.WorkspaceRepository
 	plans      *repository.PlanRepository
+	invites    *InviteService
+	pool       pgxPoolBeginner
 	auth       *middleware.Auth
 }
 
@@ -40,9 +42,14 @@ func NewAuthService(
 	users *repository.UserRepository,
 	workspaces *repository.WorkspaceRepository,
 	plans *repository.PlanRepository,
+	invites *InviteService,
+	pool pgxPoolBeginner,
 	auth *middleware.Auth,
 ) *AuthService {
-	return &AuthService{users: users, workspaces: workspaces, plans: plans, auth: auth}
+	return &AuthService{
+		users: users, workspaces: workspaces, plans: plans,
+		invites: invites, pool: pool, auth: auth,
+	}
 }
 
 type AuthResult struct {
@@ -52,10 +59,22 @@ type AuthResult struct {
 	Workspaces []model.Workspace
 }
 
-func (s *AuthService) Register(ctx context.Context, email, password, name string) (*AuthResult, error) {
+func (s *AuthService) Register(ctx context.Context, email, password, name, inviteCode string) (*AuthResult, error) {
 	email = normalizeEmail(email)
 	if err := validateCredentials(email, password); err != nil {
 		return nil, err
+	}
+
+	inviteEnabled := false
+	if s.invites != nil {
+		var err error
+		inviteEnabled, err = s.invites.IsRegistrationEnabled(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if inviteEnabled && strings.TrimSpace(inviteCode) == "" {
+		return nil, ErrInviteRequired
 	}
 
 	exists, err := s.users.ExistsByEmail(ctx, email)
@@ -71,6 +90,71 @@ func (s *AuthService) Register(ctx context.Context, email, password, name string
 		return nil, err
 	}
 
+	if strings.TrimSpace(name) == "" {
+		name = defaultNameFromEmail(email)
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	user, err := s.users.CreateTx(ctx, tx, email, string(hash), strings.TrimSpace(name))
+	if err != nil {
+		return nil, err
+	}
+
+	var consumedInviteID string
+	if inviteEnabled {
+		consumedInviteID, err = s.invites.ConsumeInviteTx(ctx, tx, inviteCode, user.ID)
+		if err != nil {
+			return nil, err
+		}
+		if err := s.users.SetRegisteredViaInviteTx(ctx, tx, user.ID, consumedInviteID); err != nil {
+			return nil, err
+		}
+		if err := s.invites.GrantRegistrationInvitesTx(ctx, tx, user.ID); err != nil {
+			return nil, err
+		}
+	}
+
+	slug, err := s.uniqueSlug(ctx, slugFromEmail(email))
+	if err != nil {
+		return nil, err
+	}
+
+	wsName := fmt.Sprintf("Workspace %s", name)
+	planID := ""
+	if s.plans != nil {
+		if free, err := s.plans.GetDefaultFree(ctx); err == nil && free != nil {
+			planID = free.ID
+		}
+	}
+	ws, err := s.workspaces.CreateWithOwnerTx(ctx, tx, wsName, slug, user.ID, planID)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+
+	token, err := s.auth.IssueToken(user.ID, tokenTTL)
+	if err != nil {
+		return nil, err
+	}
+
+	list := []model.Workspace{*ws}
+	return &AuthResult{Token: token, User: user, Workspace: ws, Workspaces: list}, nil
+}
+
+func (s *AuthService) registerWithoutInviteCheck(ctx context.Context, email, password, name string) (*AuthResult, error) {
+	email = normalizeEmail(email)
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcryptCost)
+	if err != nil {
+		return nil, err
+	}
 	if strings.TrimSpace(name) == "" {
 		name = defaultNameFromEmail(email)
 	}
@@ -180,7 +264,7 @@ func (s *AuthService) EnsureSuperAdmin(ctx context.Context, email, password, nam
 		if err := validateCredentials(email, password); err != nil {
 			return nil, false, err
 		}
-		result, err := s.Register(ctx, email, password, name)
+		result, err := s.registerWithoutInviteCheck(ctx, email, password, name)
 		if err != nil {
 			return nil, false, err
 		}
