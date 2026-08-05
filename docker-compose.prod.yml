@@ -14,14 +14,31 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  outbound-proxy:
+    # Host network: TCP to id.vk.ru uses the host stack (works when Docker bridge→VK TLS hangs).
+    image: vimagick/tinyproxy:latest
+    network_mode: host
+    volumes:
+      - ./config/tinyproxy/tinyproxy.conf:/etc/tinyproxy/tinyproxy.conf:ro
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+
   backend:
-    # Docker DNS may resolve id.vk.ru to an unreachable node first; pin the working IPv4.
+    depends_on:
+      - outbound-proxy
     extra_hosts:
-      - "id.vk.ru:93.186.237.1"
+      - "host.docker.internal:host-gateway"
     environment:
       ENVIRONMENT: production
       PUBLIC_APP_URL: https://postilka.ru/app
       DOMAIN: postilka.ru
+      HTTPS_PROXY: http://host.docker.internal:8888
+      HTTP_PROXY: http://host.docker.internal:8888
+      NO_PROXY: postgres,mysql,backend,frontend,nginx,wordpress,localhost,127.0.0.1
     logging:
       driver: json-file
       options:
@@ -29,10 +46,15 @@ services:
         max-file: "3"
 
   worker:
+    depends_on:
+      - outbound-proxy
     extra_hosts:
-      - "id.vk.ru:93.186.237.1"
+      - "host.docker.internal:host-gateway"
     environment:
       ENVIRONMENT: production
+      HTTPS_PROXY: http://host.docker.internal:8888
+      HTTP_PROXY: http://host.docker.internal:8888
+      NO_PROXY: postgres,mysql,backend,frontend,nginx,wordpress,localhost,127.0.0.1
     logging:
       driver: json-file
       options:

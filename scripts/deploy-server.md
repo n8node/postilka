@@ -152,28 +152,34 @@ docker compose exec -T mysql mysqldump -u root -p"$WP_DB_ROOT_PASSWORD" wordpres
 
   | Хост | Контейнер | Причина | Действие |
   |------|-----------|---------|----------|
-  | OK | timeout | Docker DNS returns dead VK node first (`95.213.56.1`) | `extra_hosts` + multi-IP dial (см. ниже) или `HTTPS_PROXY` |
-  | timeout | timeout | блокировка исходящего HTTPS у VPS / VK | тикет хостингу или `HTTPS_PROXY` в `.env` |
+  | OK | timeout | Docker bridge→VK TLS broken (оба IP); Google из контейнера OK | `outbound-proxy` (tinyproxy, host network) — см. ниже |
+  | timeout | timeout | блокировка исходящего HTTPS у VPS / VK | тикет хостингу |
   | OK | OK | код/конфиг OAuth | логи `docker compose logs backend --tail=50` |
 
-  **UFW + Docker (если с хоста curl OK, из контейнера timeout):**
+  **Prod fix (в `docker-compose.prod.yml`):** сервис `outbound-proxy` (tinyproxy, `network_mode: host`).
+  Backend/worker ходят в VK через `HTTPS_PROXY=http://host.docker.internal:8888`.
 
   ```bash
-  sudo sed -i 's/^DEFAULT_FORWARD_POLICY=.*/DEFAULT_FORWARD_POLICY="ACCEPT"/' /etc/default/ufw
-  sudo ufw reload
+  cd /opt/postilka && git pull
+  make prod-backend-nocache
+
+  # Проверка: tinyproxy на хосте
+  curl -x http://127.0.0.1:8888 -I --max-time 15 https://id.vk.ru/
+
+  # Проверка из backend-контейнера
   docker compose exec backend wget -T 20 -S --spider https://id.vk.ru/ 2>&1
   ```
 
-  Если не помогло — в `/etc/ufw/after.rules` перед `COMMIT` добавьте цепочку `DOCKER-USER` (см. [Docker UFW docs](https://docs.docker.com/engine/network/packet-filtering-firewalls/#docker-and-ufw)).
+  Ожидается HTTP 302, не timeout. Затем привязка VK в настройках.
 
-  **Обход через HTTP-прокси** (backend уже читает `HTTPS_PROXY` из `.env`):
+  **Диагностика (опционально):**
 
   ```bash
-  # .env — раскомментировать и указать прокси с доступом к id.vk.ru
-  # HTTPS_PROXY=http://user:pass@proxy-host:3128
-  # HTTP_PROXY=http://user:pass@proxy-host:3128
-  docker compose --env-file .env -f docker-compose.yml -f docker-compose.prod.yml up -d backend worker
+  docker run --rm --network host curlimages/curl curl -v --max-time 20 https://id.vk.ru/
+  docker run --rm curlimages/curl curl -v --max-time 20 --resolve id.vk.ru:443:93.186.237.1 https://id.vk.ru/
   ```
+
+  Если `--network host` OK, а bridge timeout — нужен `outbound-proxy` (не `extra_hosts`).
 
 ## Локальная разработка (без SSL)
 

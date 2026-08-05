@@ -15,12 +15,12 @@ prod:
 
 # Deploy only the services affected by a release; each target checks the public edge.
 prod-backend:
-	$(COMPOSE_PROD) up --build -d backend worker
+	$(COMPOSE_PROD) up --build -d outbound-proxy backend worker
 	bash scripts/verify-release.sh
 
 prod-backend-nocache:
 	$(COMPOSE_PROD) build --no-cache backend worker
-	$(COMPOSE_PROD) up -d backend worker
+	$(COMPOSE_PROD) up -d outbound-proxy backend worker
 	bash scripts/verify-release.sh
 
 prod-frontend:
