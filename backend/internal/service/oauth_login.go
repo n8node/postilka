@@ -217,18 +217,31 @@ func (s *OAuthLoginService) vkClient(ctx context.Context) (*oauthclient.VKClient
 	}, nil
 }
 
-func (s *OAuthLoginService) OAuthErrorRedirect(ctx context.Context, state, code string) string {
+func (s *OAuthLoginService) OAuthErrorRedirect(ctx context.Context, state, code, detail string) string {
+	path := "/auth/login"
 	if state != "" {
 		session, err := s.sessions.GetByStateToken(ctx, state)
 		if err == nil && session.Mode == "link" {
-			path := sanitizeRedirectPath(session.RedirectPath)
+			path = sanitizeRedirectPath(session.RedirectPath)
 			if path == "/dashboard" {
 				path = "/settings"
 			}
-			return path + "?oauth_error=" + url.QueryEscape(code)
 		}
 	}
-	return "/auth/login?oauth_error=" + url.QueryEscape(code)
+	return appendOAuthQuery(path, code, detail)
+}
+
+func appendOAuthQuery(path, code, detail string) string {
+	q := url.Values{}
+	q.Set("oauth_error", code)
+	if detail != "" {
+		q.Set("oauth_detail", detail)
+	}
+	sep := "?"
+	if strings.Contains(path, "?") {
+		sep = "&"
+	}
+	return path + sep + q.Encode()
 }
 
 func (s *OAuthLoginService) StartVK(ctx context.Context, mode, userID, redirectPath string) (*OAuthStartResult, error) {
@@ -313,7 +326,10 @@ func (s *OAuthLoginService) CompleteVK(
 
 	profile, err := vk.FetchUserInfo(ctx, token.AccessToken)
 	if err != nil {
-		profile = &oauthclient.VKProfile{UserID: fmt.Sprintf("%d", token.UserID)}
+		profile = oauthclient.ProfileFromToken(token)
+	}
+	if profile == nil || profile.UserID == "" || profile.UserID == "0" {
+		return nil, "", fmt.Errorf("vk profile: empty user id after token exchange")
 	}
 
 	return s.completeOAuth(ctx, session, OAuthIdentityProfile{
@@ -475,10 +491,10 @@ func (s *OAuthLoginService) completeOAuth(
 	}
 
 	if _, err := s.identities.Upsert(ctx, targetUserID, profile.Provider, profile.ProviderUserID, profile.DisplayName, profile.AvatarURL); err != nil {
-		return nil, "", err
+		return nil, "", fmt.Errorf("identity upsert: %w", err)
 	}
 	if err := s.sessions.Complete(ctx, session.StateToken, targetUserID, profile.ProviderUserID); err != nil {
-		return nil, "", err
+		return nil, "", fmt.Errorf("session complete: %w", err)
 	}
 
 	_ = s.users.TouchActive(ctx, targetUserID)

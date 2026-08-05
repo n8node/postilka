@@ -57,7 +57,7 @@ func (r *OAuthLoginSessionRepository) Complete(
 	tag, err := r.pool.Exec(ctx, `
 		UPDATE oauth_login_sessions
 		SET completed_at = NOW(),
-		    completed_user_id = $2,
+		    completed_user_id = $2::uuid,
 		    provider_user_id = $3
 		WHERE state_token = $1
 		  AND completed_at IS NULL

@@ -60,19 +60,48 @@ func (c *VKClient) ExchangeCode(
 	ctx context.Context,
 	code, codeVerifier, deviceID, state, redirectURI string,
 ) (*VKTokenResponse, error) {
+	form := baseExchangeForm(code, codeVerifier, deviceID, state, redirectURI, c.ClientID)
+
+	if c.ClientSecret != "" {
+		withToken := cloneValues(form)
+		withToken.Set("service_token", c.ClientSecret)
+		resp, err := c.postTokenExchange(ctx, withToken)
+		if err == nil {
+			return resp, nil
+		}
+		// Public VK apps reject service_token — retry without it.
+		if vkErr, ok := err.(*VKAPIError); ok && (vkErr.Reason == "invalid_token" || vkErr.Reason == "oauth_failed") {
+			if resp, err2 := c.postTokenExchange(ctx, form); err2 == nil {
+				return resp, nil
+			}
+		}
+		return nil, err
+	}
+
+	return c.postTokenExchange(ctx, form)
+}
+
+func baseExchangeForm(code, codeVerifier, deviceID, state, redirectURI, clientID string) url.Values {
 	form := url.Values{}
 	form.Set("grant_type", "authorization_code")
 	form.Set("code", code)
 	form.Set("code_verifier", codeVerifier)
 	form.Set("redirect_uri", redirectURI)
-	form.Set("client_id", c.ClientID)
+	form.Set("client_id", clientID)
 	form.Set("device_id", deviceID)
 	form.Set("state", state)
-	if c.ClientSecret != "" {
-		// VK ID confidential apps expect service_token, not OAuth client_secret.
-		form.Set("service_token", c.ClientSecret)
-	}
+	return form
+}
 
+func cloneValues(v url.Values) url.Values {
+	out := url.Values{}
+	for key, vals := range v {
+		out[key] = append([]string(nil), vals...)
+	}
+	return out
+}
+
+func (c *VKClient) postTokenExchange(ctx context.Context, form url.Values) (*VKTokenResponse, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, vkTokenURL, strings.NewReader(form.Encode()))
 	if err != nil {
 		return nil, err
@@ -95,9 +124,12 @@ func (c *VKClient) ExchangeCode(
 
 	var out VKTokenResponse
 	if err := json.Unmarshal(body, &out); err != nil {
-		return nil, err
+		return nil, ClassifyVKAPIFailure(resp.StatusCode, string(body))
 	}
 	if out.Error != "" {
+		return nil, ClassifyVKAPIFailure(resp.StatusCode, string(body))
+	}
+	if out.AccessToken == "" {
 		return nil, ClassifyVKAPIFailure(resp.StatusCode, string(body))
 	}
 	return &out, nil
@@ -153,4 +185,11 @@ func (c *VKClient) http() *http.Client {
 		return c.HTTP
 	}
 	return http.DefaultClient
+}
+
+func ProfileFromToken(token *VKTokenResponse) *VKProfile {
+	if token == nil || token.UserID <= 0 {
+		return nil
+	}
+	return &VKProfile{UserID: fmt.Sprintf("%d", token.UserID)}
 }

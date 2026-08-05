@@ -19,7 +19,11 @@ function linkStartURL(provider: "vk" | "max", nextPath: string) {
   return `/app/api/v1/auth/oauth/${provider}/link?${params.toString()}`;
 }
 
-function oauthStatusMessage(oauthError: string | null, oauthLinked: string | null) {
+function oauthStatusMessage(
+  oauthError: string | null,
+  oauthLinked: string | null,
+  oauthDetail: string | null,
+) {
   if (oauthLinked === "vk") {
     return { type: "success" as const, text: "Аккаунт ВКонтакте успешно привязан." };
   }
@@ -61,11 +65,30 @@ function oauthStatusMessage(oauthError: string | null, oauthLinked: string | nul
         type: "error" as const,
         text: "Некорректный ответ VK. Попробуйте привязать аккаунт заново.",
       };
-    default:
+    case "access_denied":
       return {
         type: "error" as const,
-        text: "Не удалось привязать аккаунт. Проверьте настройки VK ID в админке Postilka.",
+        text: "VK не выдал доступ. Подтвердите разрешения в окне VK ID.",
       };
+    case "already_linked":
+      return {
+        type: "error" as const,
+        text: "VK уже привязан к этому аккаунту Postilka.",
+      };
+    case "invalid_session":
+      return {
+        type: "error" as const,
+        text: "Сессия привязки повреждена. Нажмите «Привязать» ещё раз.",
+      };
+    default: {
+      const detail = oauthDetail?.trim();
+      return {
+        type: "error" as const,
+        text: detail
+          ? `Не удалось привязать аккаунт: ${detail}`
+          : "Не удалось привязать аккаунт. Проверьте настройки VK ID в админке Postilka.",
+      };
+    }
   }
 }
 
@@ -73,7 +96,8 @@ export function LoginIdentitiesBlock() {
   const searchParams = useSearchParams();
   const oauthError = searchParams.get("oauth_error");
   const oauthLinked = searchParams.get("oauth_linked");
-  const statusMessage = oauthStatusMessage(oauthError, oauthLinked);
+  const oauthDetail = searchParams.get("oauth_detail");
+  const statusMessage = oauthStatusMessage(oauthError, oauthLinked, oauthDetail);
   const [loading, setLoading] = useState(true);
   const [identities, setIdentities] = useState<LoginIdentity[]>([]);
   const [vkEnabled, setVkEnabled] = useState(false);

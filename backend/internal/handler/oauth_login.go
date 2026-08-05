@@ -98,7 +98,7 @@ func (h *OAuthLoginHandler) startProvider(w http.ResponseWriter, r *http.Request
 
 func (h *OAuthLoginHandler) VKCallback(w http.ResponseWriter, r *http.Request) {
 	if errMsg := r.URL.Query().Get("error"); errMsg != "" {
-		h.redirectOAuthError(w, r, errMsg, r.URL.Query().Get("state"))
+		h.redirectOAuthError(w, r, errMsg, r.URL.Query().Get("state"), "")
 		return
 	}
 
@@ -106,16 +106,17 @@ func (h *OAuthLoginHandler) VKCallback(w http.ResponseWriter, r *http.Request) {
 	state := r.URL.Query().Get("state")
 	deviceID := r.URL.Query().Get("device_id")
 	if code == "" || state == "" || deviceID == "" {
-		h.redirectOAuthError(w, r, "invalid_callback", state)
+		h.redirectOAuthError(w, r, "invalid_callback", state, "")
 		return
 	}
 
 	result, redirectPath, err := h.oauth.CompleteVK(r.Context(), code, deviceID, state)
 	if err != nil {
+		code, detail := h.vkCallbackError(err)
 		if h.logger != nil {
-			h.logger.Error("vk oauth callback failed", "state", state, "err", err)
+			h.logger.Error("vk oauth callback failed", "state", state, "code", code, "detail", detail, "err", err)
 		}
-		h.redirectOAuthError(w, r, h.vkCallbackErrorCode(err), state)
+		h.redirectOAuthError(w, r, code, state, detail)
 		return
 	}
 
@@ -271,25 +272,29 @@ func (h *OAuthLoginHandler) finishOAuthLogin(w http.ResponseWriter, r *http.Requ
 	http.Redirect(w, r, target, http.StatusFound)
 }
 
-func (h *OAuthLoginHandler) vkCallbackErrorCode(err error) string {
+func (h *OAuthLoginHandler) vkCallbackError(err error) (string, string) {
 	var vkErr *oauthclient.VKAPIError
 	if errors.As(err, &vkErr) {
-		return vkErr.Reason
+		return vkErr.Reason, vkErr.Details
 	}
 	switch {
 	case errors.Is(err, service.ErrOAuthSessionExpired):
-		return "session_expired"
+		return "session_expired", ""
 	case errors.Is(err, service.ErrOAuthStateInvalid):
-		return "invalid_state"
+		return "invalid_state", ""
 	case errors.Is(err, service.ErrOAuthLinkConflict):
-		return "link_conflict"
+		return "link_conflict", ""
+	case errors.Is(err, service.ErrOAuthInvalidMode):
+		return "invalid_session", "link session has no user id"
+	case errors.Is(err, service.ErrOAuthAlreadyLinked):
+		return "already_linked", ""
 	default:
-		return "oauth_failed"
+		return "oauth_failed", oauthclient.SanitizeOAuthDetail(err.Error())
 	}
 }
 
-func (h *OAuthLoginHandler) redirectOAuthError(w http.ResponseWriter, r *http.Request, code, state string) {
-	target := strings.TrimSuffix(h.cfg.PublicAppURL, "/") + h.oauth.OAuthErrorRedirect(r.Context(), state, code)
+func (h *OAuthLoginHandler) redirectOAuthError(w http.ResponseWriter, r *http.Request, code, state, detail string) {
+	target := strings.TrimSuffix(h.cfg.PublicAppURL, "/") + h.oauth.OAuthErrorRedirect(r.Context(), state, code, detail)
 	http.Redirect(w, r, target, http.StatusFound)
 }
 

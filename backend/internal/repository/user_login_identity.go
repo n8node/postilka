@@ -26,9 +26,9 @@ func (r *UserLoginIdentityRepository) GetByProviderUser(
 	const q = `
 		SELECT id, user_id, provider::text, provider_user_id, display_name, COALESCE(avatar_url, ''), created_at
 		FROM user_login_identities
-		WHERE provider = $1 AND provider_user_id = $2
+		WHERE provider = $1::login_oauth_provider AND provider_user_id = $2
 	`
-	row := r.pool.QueryRow(ctx, q, provider, providerUserID)
+	row := r.pool.QueryRow(ctx, q, string(provider), providerUserID)
 	return scanLoginIdentity(row)
 }
 
