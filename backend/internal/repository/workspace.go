@@ -21,7 +21,7 @@ func NewWorkspaceRepository(pool *pgxpool.Pool) *WorkspaceRepository {
 func (r *WorkspaceRepository) CreateWithOwnerTx(ctx context.Context, tx pgx.Tx, name, slug, ownerID, planID string) (*model.Workspace, error) {
 	const insertWS = `
 		INSERT INTO workspaces (name, slug, owner_id, plan_id, plan_assigned_at)
-		VALUES ($1, $2, $3, NULLIF($4, ''), CASE WHEN $4 = '' THEN NULL ELSE NOW() END)
+		VALUES ($1, $2, $3::uuid, NULLIF($4, '')::uuid, CASE WHEN $4 = '' THEN NULL ELSE NOW() END)
 		RETURNING id, name, slug, owner_id, created_at
 	`
 	ws, err := scanWorkspace(tx.QueryRow(ctx, insertWS, name, slug, ownerID, planID))
@@ -61,8 +61,8 @@ func (r *WorkspaceRepository) CreateWithOwner(ctx context.Context, name, slug, o
 func (r *WorkspaceRepository) SetPlan(ctx context.Context, workspaceID, planID string) error {
 	tag, err := r.pool.Exec(ctx, `
 		UPDATE workspaces
-		SET plan_id = $2, plan_assigned_at = NOW(), updated_at = NOW()
-		WHERE id = $1
+		SET plan_id = $2::uuid, plan_assigned_at = NOW(), updated_at = NOW()
+		WHERE id = $1::uuid
 	`, workspaceID, planID)
 	if err != nil {
 		return err
