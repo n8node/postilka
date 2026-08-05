@@ -44,7 +44,6 @@ export function LoginForm() {
           {error}
         </div>
       )}
-      <SocialLoginButtons nextPath={nextPath} mode="login" />
       <div>
         <label htmlFor="email" className="mb-1.5 block text-xs font-medium">
           Email
@@ -80,6 +79,7 @@ export function LoginForm() {
       >
         {loading ? "Вход…" : "Войти"}
       </button>
+      <SocialLoginButtons nextPath={nextPath} mode="login" />
       <p className="text-center text-sm text-muted">
         Нет аккаунта?{" "}
         <Link href="/auth/register" className="text-accent hover:underline">
