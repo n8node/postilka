@@ -499,3 +499,113 @@ export function deleteAdminUser(userId: string) {
     method: "DELETE",
   });
 }
+
+export type AdminUserWorkspaceItem = {
+  id: string;
+  name: string;
+  slug: string;
+  role: string;
+  is_owner: boolean;
+  owner_email: string;
+  owner_name: string;
+  plan: AdminUserPlan | null;
+  members_count: number;
+  created_at: string;
+};
+
+export type AdminWorkspaceListItem = {
+  id: string;
+  name: string;
+  slug: string;
+  owner_id: string;
+  owner_email: string;
+  owner_name: string;
+  plan: AdminUserPlan | null;
+  members_count: number;
+  invites_pending: number;
+  invites_accepted: number;
+  created_at: string;
+  updated_at: string;
+  plan_assigned_at?: string | null;
+};
+
+export type AdminWorkspaceMember = {
+  user_id: string;
+  email: string;
+  name: string;
+  role: string;
+  joined_at: string;
+  joined_via_invite: boolean;
+};
+
+export type AdminWorkspaceInvite = {
+  id: string;
+  email: string;
+  role: string;
+  status: string;
+  invited_by_email: string;
+  invited_by_name: string;
+  expires_at: string;
+  created_at: string;
+};
+
+export type AdminWorkspaceDetail = AdminWorkspaceListItem & {
+  members: AdminWorkspaceMember[];
+  invites: AdminWorkspaceInvite[];
+};
+
+export type AdminWorkspaceStats = {
+  total_workspaces: number;
+  total_members: number;
+  total_owners: number;
+  pending_invites: number;
+  accepted_invites: number;
+};
+
+export type AdminWorkspacesQuery = {
+  q?: string;
+  owner_id?: string;
+  limit?: number;
+  offset?: number;
+};
+
+export type AdminWorkspacesResponse = {
+  total: number;
+  workspaces: AdminWorkspaceListItem[];
+  stats: AdminWorkspaceStats;
+};
+
+export function fetchAdminUserWorkspaces(userId: string) {
+  return apiFetch<{ workspaces: AdminUserWorkspaceItem[] }>(
+    `/admin/users/${userId}/workspaces`,
+  );
+}
+
+export function fetchAdminWorkspaces(query: AdminWorkspacesQuery = {}) {
+  const params = new URLSearchParams();
+  if (query.q?.trim()) params.set("q", query.q.trim());
+  if (query.owner_id?.trim()) params.set("owner_id", query.owner_id.trim());
+  if (typeof query.limit === "number") params.set("limit", String(query.limit));
+  if (typeof query.offset === "number") params.set("offset", String(query.offset));
+  const qs = params.toString();
+  return apiFetch<AdminWorkspacesResponse>(
+    `/admin/workspaces${qs ? `?${qs}` : ""}`,
+  );
+}
+
+export function fetchAdminWorkspace(workspaceId: string) {
+  return apiFetch<AdminWorkspaceDetail>(`/admin/workspaces/${workspaceId}`);
+}
+
+export function deleteAdminWorkspace(workspaceId: string) {
+  return apiFetch<{ status: string }>(`/admin/workspaces/${workspaceId}`, {
+    method: "DELETE",
+  });
+}
+
+export function deleteAllAdminWorkspaces() {
+  return apiFetch<{ status: string; deleted: number }>("/admin/workspaces", {
+    method: "DELETE",
+    body: JSON.stringify({ confirm: "DELETE_ALL_WORKSPACES" }),
+  });
+}

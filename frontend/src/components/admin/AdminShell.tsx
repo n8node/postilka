@@ -31,6 +31,7 @@ const nav: NavSection[] = [
     label: "Платформа",
     items: [
       { href: "/admin/users", label: "Пользователи" },
+      { href: "/admin/workspaces", label: "Workspace" },
       { href: "/admin/plans", label: "Тарифы" },
       { href: "/admin/auth-settings", label: "Вход и регистрация" },
       { href: "/admin/invites", label: "Инвайты" },
@@ -39,6 +40,7 @@ const nav: NavSection[] = [
 ];
 
 function breadcrumbLabel(pathname: string) {
+  if (pathname.startsWith("/admin/workspaces")) return "Workspace";
   if (pathname.startsWith("/admin/auth-settings")) return "Вход и регистрация";
   if (pathname.startsWith("/admin/invites")) return "Инвайты";
   if (pathname.startsWith("/admin/plans")) return "Тарифы";

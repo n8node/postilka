@@ -43,13 +43,14 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	wsSvc := service.NewWorkspaceService(wsRepo, planRepo)
 	planSvc := service.NewPlanService(planRepo, wsRepo)
 	adminUserSvc := service.NewAdminUserService(userRepo)
+	adminWorkspaceSvc := service.NewAdminWorkspaceService(wsRepo, userRepo)
 
 	health := handler.NewHealthHandler(cfg, db)
 	status := handler.NewStatusHandler(cfg)
 	authHandler := handler.NewAuthHandler(authSvc, wsSvc, authMW, cfg)
 	oauthHandler := handler.NewOAuthLoginHandler(oauthSvc, wsSvc, authMW, cfg, logger)
 	wsHandler := handler.NewWorkspaceHandler(wsSvc, cfg)
-	adminHandler := handler.NewAdminHandler(userRepo, adminUserSvc, planSvc, oauthSvc)
+	adminHandler := handler.NewAdminHandler(userRepo, adminUserSvc, planSvc, oauthSvc, adminWorkspaceSvc)
 	inviteHandler := handler.NewInviteHandler(inviteSvc, oauthSvc)
 	adminInviteHandler := handler.NewAdminInviteHandler(inviteSvc, userRepo, oauthSvc)
 
@@ -116,6 +117,12 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Post("/users/{userID}/invites", adminInviteHandler.AddUserInvites)
 				r.Get("/users/{userID}/invite-relations", adminInviteHandler.UserInviteRelations)
 				r.Get("/users/{userID}/login-identities", adminHandler.ListUserLoginIdentities)
+				r.Get("/users/{userID}/workspaces", adminHandler.ListUserWorkspaces)
+
+				r.Get("/workspaces", adminHandler.ListWorkspaces)
+				r.Delete("/workspaces", adminHandler.DeleteAllWorkspaces)
+				r.Get("/workspaces/{workspaceID}", adminHandler.GetWorkspace)
+				r.Delete("/workspaces/{workspaceID}", adminHandler.DeleteWorkspace)
 			})
 		})
 	})

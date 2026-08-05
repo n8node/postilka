@@ -11,10 +11,12 @@ import {
   fetchAdminUserInviteRelations,
   fetchAdminUserInvites,
   fetchAdminUserLoginIdentities,
+  fetchAdminUserWorkspaces,
   fetchAdminUsers,
   setAdminUserBlocked,
   type AdminUser,
   type AdminUsersQuery,
+  type AdminUserWorkspaceItem,
   type LoginIdentity,
   type Plan,
   type UserInvite,
@@ -349,6 +351,8 @@ function UserDrawer({
   const [addingInvites, setAddingInvites] = useState(false);
   const [invitesLoading, setInvitesLoading] = useState(true);
   const [loginIdentitiesLoading, setLoginIdentitiesLoading] = useState(true);
+  const [userWorkspaces, setUserWorkspaces] = useState<AdminUserWorkspaceItem[]>([]);
+  const [workspacesLoading, setWorkspacesLoading] = useState(true);
 
   useEffect(() => {
     setPlanId(user.plan?.id ?? "");
@@ -363,24 +367,29 @@ function UserDrawer({
   useEffect(() => {
     setInvitesLoading(true);
     setLoginIdentitiesLoading(true);
+    setWorkspacesLoading(true);
     Promise.all([
       fetchAdminUserInvites(user.id),
       fetchAdminUserInviteRelations(user.id),
       fetchAdminUserLoginIdentities(user.id),
+      fetchAdminUserWorkspaces(user.id),
     ])
-      .then(([invitesData, relationsData, identitiesData]) => {
+      .then(([invitesData, relationsData, identitiesData, workspacesData]) => {
         setUserInvites(invitesData.invites ?? []);
         setInviteRelations(relationsData);
         setLoginIdentities(identitiesData.identities ?? []);
+        setUserWorkspaces(workspacesData.workspaces ?? []);
       })
       .catch(() => {
         setUserInvites([]);
         setInviteRelations(null);
         setLoginIdentities([]);
+        setUserWorkspaces([]);
       })
       .finally(() => {
         setInvitesLoading(false);
         setLoginIdentitiesLoading(false);
+        setWorkspacesLoading(false);
       });
   }, [user.id]);
 
@@ -534,21 +543,45 @@ function UserDrawer({
 
           <section className="rounded-xl border border-slate-200 p-4">
             <h3 className="text-sm font-semibold text-slate-900">
-              Workspace и роль
+              Workspace ({userWorkspaces.length})
             </h3>
-            {user.workspace ? (
-              <div className="mt-3 space-y-2">
-                <p className="font-medium text-slate-800">{user.workspace.name}</p>
-                <p className="text-xs text-slate-500">{user.workspace.slug}</p>
-                <div className="flex flex-wrap gap-2 pt-1">
-                  <Badge tone="slate">
-                    {workspaceRoleLabels[user.workspace.role] ??
-                      user.workspace.role}
-                  </Badge>
-                </div>
-              </div>
-            ) : (
+            {workspacesLoading ? (
+              <p className="mt-2 text-sm text-slate-500">Загрузка…</p>
+            ) : userWorkspaces.length === 0 ? (
               <p className="mt-2 text-sm text-slate-500">Нет workspace</p>
+            ) : (
+              <ul className="mt-3 space-y-2">
+                {userWorkspaces.map((ws) => (
+                  <li
+                    key={ws.id}
+                    className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2.5"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-slate-800">{ws.name}</p>
+                        <p className="text-xs text-slate-500">{ws.slug}</p>
+                        {!ws.is_owner && (
+                          <p className="mt-0.5 text-xs text-slate-500">
+                            Владелец: {ws.owner_name || ws.owner_email}
+                          </p>
+                        )}
+                        <p className="mt-0.5 text-[11px] text-slate-400">
+                          Участников: {ws.members_count}
+                          {ws.plan ? ` · ${ws.plan.name}` : ""}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 flex-col items-end gap-1">
+                        <Badge tone={ws.is_owner ? "blue" : "slate"}>
+                          {workspaceRoleLabels[ws.role] ?? ws.role}
+                        </Badge>
+                        {ws.is_owner && (
+                          <span className="text-[10px] text-slate-500">владелец</span>
+                        )}
+                      </div>
+                    </div>
+                  </li>
+                ))}
+              </ul>
             )}
           </section>
 
