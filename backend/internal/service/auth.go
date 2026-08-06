@@ -30,13 +30,14 @@ const tokenTTL = 7 * 24 * time.Hour
 var slugSanitizer = regexp.MustCompile(`[^a-z0-9-]+`)
 
 type AuthService struct {
-	users        *repository.UserRepository
-	workspaces   *repository.WorkspaceRepository
-	plans        *repository.PlanRepository
-	invites      *InviteService
-	pool         pgxPoolBeginner
-	auth         *middleware.Auth
-	verification *EmailVerificationService
+	users         *repository.UserRepository
+	workspaces    *repository.WorkspaceRepository
+	plans         *repository.PlanRepository
+	invites       *InviteService
+	pool          pgxPoolBeginner
+	auth          *middleware.Auth
+	verification  *EmailVerificationService
+	passwordReset *PasswordResetService
 }
 
 func NewAuthService(
@@ -47,10 +48,12 @@ func NewAuthService(
 	pool pgxPoolBeginner,
 	auth *middleware.Auth,
 	verification *EmailVerificationService,
+	passwordReset *PasswordResetService,
 ) *AuthService {
 	return &AuthService{
 		users: users, workspaces: workspaces, plans: plans,
-		invites: invites, pool: pool, auth: auth, verification: verification,
+		invites: invites, pool: pool, auth: auth,
+		verification: verification, passwordReset: passwordReset,
 	}
 }
 
@@ -308,6 +311,44 @@ func (s *AuthService) VerifyEmail(ctx context.Context, token string) (*AuthResul
 	}
 	if user.IsBlocked {
 		return nil, ErrUserBlocked
+	}
+
+	list, err := s.workspaces.ListForUser(ctx, user.ID)
+	if err != nil {
+		return nil, err
+	}
+	var ws *model.Workspace
+	if len(list) > 0 {
+		ws = &list[0]
+	}
+
+	jwtToken, err := s.auth.IssueToken(user.ID, tokenTTL)
+	if err != nil {
+		return nil, err
+	}
+
+	return &AuthResult{Token: jwtToken, User: user, Workspace: ws, Workspaces: list}, nil
+}
+
+func (s *AuthService) ForgotPassword(ctx context.Context, email string) {
+	if s.passwordReset != nil {
+		s.passwordReset.RequestReset(ctx, email)
+	}
+}
+
+func (s *AuthService) ResetPassword(ctx context.Context, token, password string) (*AuthResult, error) {
+	if s.passwordReset == nil {
+		return nil, ErrPasswordResetInvalid
+	}
+
+	userID, err := s.passwordReset.ResetPassword(ctx, token, password)
+	if err != nil {
+		return nil, err
+	}
+
+	user, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		return nil, err
 	}
 
 	list, err := s.workspaces.ListForUser(ctx, user.ID)
