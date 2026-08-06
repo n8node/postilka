@@ -62,7 +62,7 @@ func (r *EmailRenderer) Render(cfg model.EmailTemplateSettings, body EmailBody) 
 	b.WriteString("<tr><td style=\"background:#ffffff;border-radius:")
 	b.WriteString(radius)
 	b.WriteString("px;padding:28px 28px 32px;box-shadow:0 2px 8px rgba(15,23,42,0.06);\">")
-	b.WriteString("&#8203;<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" width=\"100%\">")
+	b.WriteString(" <table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" width=\"100%\">")
 	if content != "" {
 		b.WriteString(content)
 	}
@@ -190,7 +190,13 @@ func injectPrimaryColor(content, primaryColor string) string {
 }
 
 func normalizeEmailContentHTML(content string) string {
-	return stripOuterEmailTable(strings.TrimSpace(content))
+	content = strings.TrimSpace(content)
+	if strings.HasPrefix(content, "<!--") {
+		if idx := strings.Index(content, ">"); idx >= 0 {
+			content = strings.TrimSpace(content[idx+1:])
+		}
+	}
+	return stripOuterEmailTable(content)
 }
 
 func stripOuterEmailTable(content string) string {

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"html"
 	"log/slog"
 	"strings"
 	"time"
@@ -141,17 +140,11 @@ func PasswordResetEmailBody(name, resetURL string) EmailBody {
 	if displayName == "" {
 		displayName = "друг"
 	}
-	escapedName := html.EscapeString(displayName)
-	escapedURL := html.EscapeString(resetURL)
 
-	content := fmt.Sprintf(`<tr><td style="padding:0 0 16px;font-size:16px;line-height:1.6;color:#1e293b;">Здравствуйте, %s!</td></tr>
-<tr><td style="padding:0 0 20px;font-size:16px;line-height:1.6;color:#1e293b;">Мы получили запрос на восстановление пароля в Postilka. Перейдите по ссылке ниже, чтобы задать новый пароль.</td></tr>
-<tr><td style="padding:16px 18px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;word-break:break-all;"><a href="%s" style="color:#2563eb;font-size:14px;line-height:1.6;text-decoration:underline;">%s</a></td></tr>
-<tr><td style="padding:0;font-size:14px;line-height:1.6;color:#64748b;">Ссылка действительна 1 час. Если вы не запрашивали восстановление — просто проигнорируйте это письмо.</td></tr>`,
-		escapedName,
-		escapedURL,
-		escapedURL,
-	)
+	content := emailGreetingRow(displayName) +
+		emailParagraphRow("Мы получили запрос на восстановление пароля в Postilka. Перейдите по ссылке ниже, чтобы задать новый пароль.") +
+		emailLinkBoxRow(resetURL) +
+		emailNoteRow("Ссылка действительна 1 час. Если вы не запрашивали восстановление — просто проигнорируйте это письмо.")
 
 	return EmailBody{
 		Preheader:   "Восстановите пароль в Postilka",
