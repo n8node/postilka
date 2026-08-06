@@ -139,13 +139,8 @@ func RegistrationConfirmationEmailBody(name, confirmURL string) EmailBody {
 	escapedName := html.EscapeString(displayName)
 	escapedURL := html.EscapeString(confirmURL)
 
-	content := fmt.Sprintf(`
-<p style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#1e293b;">
-  Здравствуйте, %s!
-</p>
-<p style="margin:0 0 20px;font-size:16px;line-height:1.6;color:#1e293b;">
-  Спасибо за регистрацию в Postilka. Подтвердите email, чтобы завершить создание аккаунта.
-</p>
+	content := fmt.Sprintf(`<div style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#1e293b;">Здравствуйте, %s!</div>
+<div style="margin:0 0 20px;font-size:16px;line-height:1.6;color:#1e293b;">Спасибо за регистрацию в Postilka. Подтвердите email, чтобы завершить создание аккаунта.</div>
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%%" style="margin:0 0 24px;">
   <tr>
     <td style="padding:16px 18px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;word-break:break-all;">
@@ -153,9 +148,7 @@ func RegistrationConfirmationEmailBody(name, confirmURL string) EmailBody {
     </td>
   </tr>
 </table>
-<p style="margin:0;font-size:14px;line-height:1.6;color:#64748b;">
-  Ссылка действительна 24 часа. Если вы не регистрировались — просто проигнорируйте это письмо.
-</p>`,
+<div style="margin:0;font-size:14px;line-height:1.6;color:#64748b;">Ссылка действительна 24 часа. Если вы не регистрировались — просто проигнорируйте это письмо.</div>`,
 		escapedName,
 		escapedURL,
 		escapedURL,

@@ -148,13 +148,8 @@ func validateEmailTemplateSettings(cfg model.EmailTemplateSettings) error {
 func DefaultTestEmailBody() EmailBody {
 	return EmailBody{
 		Preheader: "Проверка SMTP и оформления писем Postilka",
-		ContentHTML: `
-<p style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#1e293b;">
-  Здравствуйте!
-</p>
-<p style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#1e293b;">
-  Это <strong>тестовое письмо</strong> из админки Postilka. Если вы его получили — SMTP настроен верно, а шаблон письма отображается корректно.
-</p>
+		ContentHTML: `<div style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#1e293b;">Здравствуйте!</div>
+<div style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#1e293b;">Это <strong>тестовое письмо</strong> из админки Postilka. Если вы его получили — SMTP настроен верно, а шаблон письма отображается корректно.</div>
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 20px;">
   <tr>
     <td style="padding:8px 0;font-size:15px;line-height:1.5;color:#334155;">
@@ -175,9 +170,7 @@ func DefaultTestEmailBody() EmailBody {
     </td>
   </tr>
 </table>
-<p style="margin:0;font-size:14px;line-height:1.6;color:#64748b;">
-  Откройте приложение и начните планировать контент уже сегодня.
-</p>`,
+<div style="margin:0;font-size:14px;line-height:1.6;color:#64748b;">Откройте приложение и начните планировать контент уже сегодня.</div>`,
 		CTALabel: "Открыть Postilka",
 		CTAURL:   "https://postilka.ru/app",
 	}

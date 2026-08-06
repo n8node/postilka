@@ -19,7 +19,7 @@ func (r *EmailRenderer) Render(cfg model.EmailTemplateSettings, body EmailBody) 
 	primary := html.EscapeString(cfg.PrimaryColor)
 	bg := html.EscapeString(cfg.BackgroundColor)
 	radius := strconv.Itoa(cfg.CardRadiusPx)
-	content := injectPrimaryColor(body.ContentHTML, cfg.PrimaryColor)
+	content := normalizeEmailContentHTML(injectPrimaryColor(body.ContentHTML, cfg.PrimaryColor))
 
 	var b strings.Builder
 	b.WriteString("<!DOCTYPE html><html lang=\"ru\"><head><meta charset=\"UTF-8\">")
@@ -183,6 +183,20 @@ func injectPrimaryColor(content, primaryColor string) string {
 	}
 	// Replace default blue in test content when admin picks another primary color.
 	return strings.ReplaceAll(content, "#2563eb", primaryColor)
+}
+
+func normalizeEmailContentHTML(content string) string {
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return ""
+	}
+	// Some clients (e.g. Yandex Mail) render a leading <p> as visible text.
+	content = strings.ReplaceAll(content, "<p ", "<div ")
+	content = strings.ReplaceAll(content, "<p>", "<div>")
+	content = strings.ReplaceAll(content, "</p>", "</div>")
+	content = strings.ReplaceAll(content, "< p", "<div")
+	content = strings.ReplaceAll(content, "< /p", "</div")
+	return content
 }
 
 func initials(label string) string {

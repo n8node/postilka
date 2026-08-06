@@ -144,13 +144,8 @@ func PasswordResetEmailBody(name, resetURL string) EmailBody {
 	escapedName := html.EscapeString(displayName)
 	escapedURL := html.EscapeString(resetURL)
 
-	content := fmt.Sprintf(`
-<p style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#1e293b;">
-  Здравствуйте, %s!
-</p>
-<p style="margin:0 0 20px;font-size:16px;line-height:1.6;color:#1e293b;">
-  Мы получили запрос на восстановление пароля в Postilka. Перейдите по ссылке ниже, чтобы задать новый пароль.
-</p>
+	content := fmt.Sprintf(`<div style="margin:0 0 16px;font-size:16px;line-height:1.6;color:#1e293b;">Здравствуйте, %s!</div>
+<div style="margin:0 0 20px;font-size:16px;line-height:1.6;color:#1e293b;">Мы получили запрос на восстановление пароля в Postilka. Перейдите по ссылке ниже, чтобы задать новый пароль.</div>
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%%" style="margin:0 0 24px;">
   <tr>
     <td style="padding:16px 18px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;word-break:break-all;">
@@ -158,9 +153,7 @@ func PasswordResetEmailBody(name, resetURL string) EmailBody {
     </td>
   </tr>
 </table>
-<p style="margin:0;font-size:14px;line-height:1.6;color:#64748b;">
-  Ссылка действительна 1 час. Если вы не запрашивали восстановление — просто проигнорируйте это письмо.
-</p>`,
+<div style="margin:0;font-size:14px;line-height:1.6;color:#64748b;">Ссылка действительна 1 час. Если вы не запрашивали восстановление — просто проигнорируйте это письмо.</div>`,
 		escapedName,
 		escapedURL,
 		escapedURL,
