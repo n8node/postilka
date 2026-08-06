@@ -186,17 +186,7 @@ func injectPrimaryColor(content, primaryColor string) string {
 }
 
 func normalizeEmailContentHTML(content string) string {
-	content = strings.TrimSpace(content)
-	if content == "" {
-		return ""
-	}
-	// Some clients (e.g. Yandex Mail) render a leading <p> as visible text.
-	content = strings.ReplaceAll(content, "<p ", "<div ")
-	content = strings.ReplaceAll(content, "<p>", "<div>")
-	content = strings.ReplaceAll(content, "</p>", "</div>")
-	content = strings.ReplaceAll(content, "< p", "<div")
-	content = strings.ReplaceAll(content, "< /p", "</div")
-	return content
+	return strings.TrimSpace(content)
 }
 
 func initials(label string) string {
