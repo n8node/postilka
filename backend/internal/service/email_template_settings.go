@@ -148,28 +148,14 @@ func validateEmailTemplateSettings(cfg model.EmailTemplateSettings) error {
 func DefaultTestEmailBody() EmailBody {
 	return EmailBody{
 		Preheader: "Проверка SMTP и оформления писем Postilka",
-		ContentHTML: `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr><td style="padding:0 0 16px;font-size:16px;line-height:1.6;color:#1e293b;">Здравствуйте!</td></tr><tr><td style="padding:0 0 16px;font-size:16px;line-height:1.6;color:#1e293b;">Это <strong>тестовое письмо</strong> из админки Postilka. Если вы его получили — SMTP настроен верно, а шаблон письма отображается корректно.</td></tr></table>
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 20px;">
-  <tr>
-    <td style="padding:8px 0;font-size:15px;line-height:1.5;color:#334155;">
-      <span style="display:inline-block;width:22px;height:22px;line-height:22px;text-align:center;border-radius:50%;background:#2563eb;color:#ffffff;font-size:13px;margin-right:10px;">›</span>
-      Планирование публикаций в VK, Telegram и других каналах
-    </td>
-  </tr>
-  <tr>
-    <td style="padding:8px 0;font-size:15px;line-height:1.5;color:#334155;">
-      <span style="display:inline-block;width:22px;height:22px;line-height:22px;text-align:center;border-radius:50%;background:#2563eb;color:#ffffff;font-size:13px;margin-right:10px;">›</span>
-      Календарь контента и статусы публикаций
-    </td>
-  </tr>
-  <tr>
-    <td style="padding:8px 0;font-size:15px;line-height:1.5;color:#334155;">
-      <span style="display:inline-block;width:22px;height:22px;line-height:22px;text-align:center;border-radius:50%;background:#2563eb;color:#ffffff;font-size:13px;margin-right:10px;">›</span>
-      AI-помощник для текстов и медиа
-    </td>
-  </tr>
-</table>
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"><tr><td style="padding:0;font-size:14px;line-height:1.6;color:#64748b;">Откройте приложение и начните планировать контент уже сегодня.</td></tr></table>`,
+		ContentHTML: `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+<tr><td style="padding:0 0 16px;font-size:16px;line-height:1.6;color:#1e293b;">Здравствуйте!</td></tr>
+<tr><td style="padding:0 0 16px;font-size:16px;line-height:1.6;color:#1e293b;">Это <strong>тестовое письмо</strong> из админки Postilka. Если вы его получили — SMTP настроен верно, а шаблон письма отображается корректно.</td></tr>
+<tr><td style="padding:8px 0;font-size:15px;line-height:1.5;color:#334155;"><span style="display:inline-block;width:22px;height:22px;line-height:22px;text-align:center;border-radius:50%;background:#2563eb;color:#ffffff;font-size:13px;margin-right:10px;">›</span>Планирование публикаций в VK, Telegram и других каналах</td></tr>
+<tr><td style="padding:8px 0;font-size:15px;line-height:1.5;color:#334155;"><span style="display:inline-block;width:22px;height:22px;line-height:22px;text-align:center;border-radius:50%;background:#2563eb;color:#ffffff;font-size:13px;margin-right:10px;">›</span>Календарь контента и статусы публикаций</td></tr>
+<tr><td style="padding:8px 0 20px;font-size:15px;line-height:1.5;color:#334155;"><span style="display:inline-block;width:22px;height:22px;line-height:22px;text-align:center;border-radius:50%;background:#2563eb;color:#ffffff;font-size:13px;margin-right:10px;">›</span>AI-помощник для текстов и медиа</td></tr>
+<tr><td style="padding:0;font-size:14px;line-height:1.6;color:#64748b;">Откройте приложение и начните планировать контент уже сегодня.</td></tr>
+</table>`,
 		CTALabel: "Открыть Postilka",
 		CTAURL:   "https://postilka.ru/app",
 	}

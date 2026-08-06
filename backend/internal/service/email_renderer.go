@@ -186,7 +186,16 @@ func injectPrimaryColor(content, primaryColor string) string {
 }
 
 func normalizeEmailContentHTML(content string) string {
-	return strings.TrimSpace(content)
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return ""
+	}
+	// Yandex Mail inserts a space after "<" on the first tag in injected HTML,
+	// which renders as visible markup (e.g. "< table..."). A leading comment avoids that.
+	if !strings.HasPrefix(content, "<!--") {
+		content = "<!-- -->" + content
+	}
+	return content
 }
 
 func initials(label string) string {
