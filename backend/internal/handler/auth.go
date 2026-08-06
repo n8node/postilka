@@ -73,6 +73,30 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	h.writeMe(w, http.StatusCreated, result.User, result.Workspace, result.Workspaces)
 }
 
+type verifyEmailRequest struct {
+	Token string `json:"token"`
+}
+
+func (h *AuthHandler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
+	var req verifyEmailRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Некорректное тело запроса")
+		return
+	}
+
+	result, err := h.auth.VerifyEmail(r.Context(), req.Token)
+	if err != nil {
+		h.writeAuthError(w, err)
+		return
+	}
+
+	h.mw.SetTokenCookie(w, result.Token, h.cfg.IsProduction())
+	if result.Workspace != nil {
+		service.SetActiveWorkspaceCookie(w, result.Workspace.ID, h.cfg.IsProduction())
+	}
+	h.writeMe(w, http.StatusOK, result.User, result.Workspace, result.Workspaces)
+}
+
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req credentialsRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -143,6 +167,8 @@ func (h *AuthHandler) writeAuthError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusBadRequest, "Инвайт-ключ недействителен или уже использован")
 	case errors.Is(err, service.ErrInviteAlreadyUsed):
 		writeError(w, http.StatusConflict, "Инвайт-ключ уже использован")
+	case errors.Is(err, service.ErrEmailVerificationInvalid):
+		writeError(w, http.StatusBadRequest, "Ссылка недействительна или истекла")
 	default:
 		writeError(w, http.StatusInternalServerError, "Внутренняя ошибка")
 	}

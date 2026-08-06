@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const publicPaths = ["/auth/login", "/auth/register"];
+const authEntryPaths = ["/auth/login", "/auth/register"];
 
 const protectedPrefixes = [
   "/dashboard",
@@ -29,7 +29,7 @@ export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const token = request.cookies.get("access_token");
 
-  const isPublic = publicPaths.some(
+  const isAuthEntry = authEntryPaths.some(
     (p) => pathname === p || pathname.startsWith(`${p}/`),
   );
 
@@ -40,7 +40,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (token && isPublic) {
+  if (token && isAuthEntry) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     url.search = "";

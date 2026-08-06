@@ -166,6 +166,13 @@ export function register(
   });
 }
 
+export function verifyEmail(token: string) {
+  return apiFetch<MeResponse>("/auth/verify-email", {
+    method: "POST",
+    body: JSON.stringify({ token }),
+  });
+}
+
 export type AuthMethods = {
   invite_registration_enabled: boolean;
   vk_login_enabled?: boolean;

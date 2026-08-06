@@ -30,12 +30,13 @@ const tokenTTL = 7 * 24 * time.Hour
 var slugSanitizer = regexp.MustCompile(`[^a-z0-9-]+`)
 
 type AuthService struct {
-	users      *repository.UserRepository
-	workspaces *repository.WorkspaceRepository
-	plans      *repository.PlanRepository
-	invites    *InviteService
-	pool       pgxPoolBeginner
-	auth       *middleware.Auth
+	users        *repository.UserRepository
+	workspaces   *repository.WorkspaceRepository
+	plans        *repository.PlanRepository
+	invites      *InviteService
+	pool         pgxPoolBeginner
+	auth         *middleware.Auth
+	verification *EmailVerificationService
 }
 
 func NewAuthService(
@@ -45,10 +46,11 @@ func NewAuthService(
 	invites *InviteService,
 	pool pgxPoolBeginner,
 	auth *middleware.Auth,
+	verification *EmailVerificationService,
 ) *AuthService {
 	return &AuthService{
 		users: users, workspaces: workspaces, plans: plans,
-		invites: invites, pool: pool, auth: auth,
+		invites: invites, pool: pool, auth: auth, verification: verification,
 	}
 }
 
@@ -138,6 +140,10 @@ func (s *AuthService) Register(ctx context.Context, email, password, name, invit
 
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
+	}
+
+	if s.verification != nil {
+		s.verification.SendRegistrationConfirmationBestEffort(ctx, user.ID, user.Email, user.Name)
 	}
 
 	token, err := s.auth.IssueToken(user.ID, tokenTTL)
@@ -272,6 +278,9 @@ func (s *AuthService) EnsureSuperAdmin(ctx context.Context, email, password, nam
 			return nil, false, err
 		}
 		created = true
+		if err := s.users.SetEmailVerified(ctx, result.User.ID); err != nil {
+			return nil, false, err
+		}
 		if err := s.users.SetPlatformAdmin(ctx, result.User.ID, true); err != nil {
 			return nil, false, err
 		}
@@ -281,6 +290,41 @@ func (s *AuthService) EnsureSuperAdmin(ctx context.Context, email, password, nam
 
 	user, err := s.users.SetPlatformAdminByEmail(ctx, email, true)
 	return user, created, err
+}
+
+func (s *AuthService) VerifyEmail(ctx context.Context, token string) (*AuthResult, error) {
+	if s.verification == nil {
+		return nil, ErrEmailVerificationInvalid
+	}
+
+	userID, err := s.verification.Verify(ctx, token)
+	if err != nil {
+		return nil, err
+	}
+
+	user, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if user.IsBlocked {
+		return nil, ErrUserBlocked
+	}
+
+	list, err := s.workspaces.ListForUser(ctx, user.ID)
+	if err != nil {
+		return nil, err
+	}
+	var ws *model.Workspace
+	if len(list) > 0 {
+		ws = &list[0]
+	}
+
+	jwtToken, err := s.auth.IssueToken(user.ID, tokenTTL)
+	if err != nil {
+		return nil, err
+	}
+
+	return &AuthResult{Token: jwtToken, User: user, Workspace: ws, Workspaces: list}, nil
 }
 
 func normalizeEmail(email string) string {

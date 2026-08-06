@@ -22,13 +22,13 @@ func NewUserRepository(pool *pgxpool.Pool) *UserRepository {
 	return &UserRepository{pool: pool}
 }
 
-const userColumns = `id, email, name, locale, timezone, is_blocked, is_platform_admin, created_at`
+const userColumns = `id, email, name, locale, timezone, is_blocked, is_platform_admin, email_verified_at, created_at`
 
 func (r *UserRepository) Create(ctx context.Context, email, passwordHash, name string) (*model.User, error) {
 	const q = `
 		INSERT INTO users (email, password_hash, name)
 		VALUES ($1, $2, $3)
-		RETURNING id, email, name, locale, timezone, is_blocked, is_platform_admin, created_at
+		RETURNING id, email, name, locale, timezone, is_blocked, is_platform_admin, email_verified_at, created_at
 	`
 	return scanUser(r.pool.QueryRow(ctx, q, email, passwordHash, name))
 }
@@ -37,7 +37,7 @@ func (r *UserRepository) CreateTx(ctx context.Context, tx pgx.Tx, email, passwor
 	const q = `
 		INSERT INTO users (email, password_hash, name)
 		VALUES ($1, $2, $3)
-		RETURNING id, email, name, locale, timezone, is_blocked, is_platform_admin, created_at
+		RETURNING id, email, name, locale, timezone, is_blocked, is_platform_admin, email_verified_at, created_at
 	`
 	return scanUser(tx.QueryRow(ctx, q, email, passwordHash, name))
 }
@@ -51,11 +51,26 @@ func (r *UserRepository) SetRegisteredViaInviteTx(ctx context.Context, tx pgx.Tx
 
 func (r *UserRepository) CreateOAuthTx(ctx context.Context, tx pgx.Tx, email, name string) (*model.User, error) {
 	const q = `
-		INSERT INTO users (email, password_hash, name)
-		VALUES ($1, NULL, $2)
-		RETURNING id, email, name, locale, timezone, is_blocked, is_platform_admin, created_at
+		INSERT INTO users (email, password_hash, name, email_verified_at)
+		VALUES ($1, NULL, $2, NOW())
+		RETURNING id, email, name, locale, timezone, is_blocked, is_platform_admin, email_verified_at, created_at
 	`
 	return scanUser(tx.QueryRow(ctx, q, email, name))
+}
+
+func (r *UserRepository) SetEmailVerified(ctx context.Context, userID string) error {
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE users
+		SET email_verified_at = COALESCE(email_verified_at, NOW()), updated_at = NOW()
+		WHERE id = $1
+	`, userID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (r *UserRepository) HasPassword(ctx context.Context, userID string) (bool, error) {
@@ -72,7 +87,7 @@ func (r *UserRepository) HasPassword(ctx context.Context, userID string) (bool, 
 
 func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*model.User, string, error) {
 	const q = `
-		SELECT id, email, password_hash, name, locale, timezone, is_blocked, is_platform_admin, created_at
+		SELECT id, email, password_hash, name, locale, timezone, is_blocked, is_platform_admin, email_verified_at, created_at
 		FROM users WHERE email = $1
 	`
 	var hash *string
@@ -93,7 +108,7 @@ func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*model.U
 
 func (r *UserRepository) GetByID(ctx context.Context, id string) (*model.User, error) {
 	const q = `
-		SELECT id, email, name, locale, timezone, is_blocked, is_platform_admin, created_at
+		SELECT id, email, name, locale, timezone, is_blocked, is_platform_admin, email_verified_at, created_at
 		FROM users WHERE id = $1
 	`
 	u, err := scanUser(r.pool.QueryRow(ctx, q, id))
@@ -132,7 +147,7 @@ func (r *UserRepository) SetPlatformAdminByEmail(ctx context.Context, email stri
 		UPDATE users
 		SET is_platform_admin = $2, updated_at = NOW()
 		WHERE email = $1
-		RETURNING id, email, name, locale, timezone, is_blocked, is_platform_admin, created_at
+		RETURNING id, email, name, locale, timezone, is_blocked, is_platform_admin, email_verified_at, created_at
 	`
 	u, err := scanUser(r.pool.QueryRow(ctx, q, email, value))
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -146,7 +161,7 @@ func (r *UserRepository) SetBlocked(ctx context.Context, userID string, blocked 
 		UPDATE users
 		SET is_blocked = $2, updated_at = NOW()
 		WHERE id = $1
-		RETURNING id, email, name, locale, timezone, is_blocked, is_platform_admin, created_at
+		RETURNING id, email, name, locale, timezone, is_blocked, is_platform_admin, email_verified_at, created_at
 	`
 	u, err := scanUser(r.pool.QueryRow(ctx, q, userID, blocked))
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -283,7 +298,7 @@ func scanUser(row pgx.Row) (*model.User, error) {
 	var createdAt time.Time
 	err := row.Scan(
 		&u.ID, &u.Email, &u.Name, &u.Locale, &u.Timezone,
-		&u.IsBlocked, &u.IsPlatformAdmin, &createdAt,
+		&u.IsBlocked, &u.IsPlatformAdmin, &u.EmailVerifiedAt, &createdAt,
 	)
 	if err != nil {
 		return nil, err
@@ -297,7 +312,7 @@ func scanUserWithHash(row pgx.Row, hash **string) (*model.User, error) {
 	var createdAt time.Time
 	err := row.Scan(
 		&u.ID, &u.Email, hash, &u.Name, &u.Locale, &u.Timezone,
-		&u.IsBlocked, &u.IsPlatformAdmin, &createdAt,
+		&u.IsBlocked, &u.IsPlatformAdmin, &u.EmailVerifiedAt, &createdAt,
 	)
 	if err != nil {
 		return nil, err

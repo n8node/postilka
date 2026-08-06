@@ -114,7 +114,8 @@ export function RegisterForm() {
         undefined,
         inviteEnabled ? inviteVerifiedCode : undefined,
       );
-      router.push("/dashboard");
+      const params = new URLSearchParams({ email });
+      router.push(`/auth/check-email?${params.toString()}`);
       router.refresh();
     } catch (err) {
       setError(
