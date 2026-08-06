@@ -57,7 +57,6 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	emailVerificationSvc := service.NewEmailVerificationService(emailVerificationRepo, userRepo, emailSvc, cfg, logger)
 	passwordResetRepo := repository.NewPasswordResetRepository(db.Pool)
 	passwordResetSvc := service.NewPasswordResetService(passwordResetRepo, userRepo, emailSvc, cfg, logger)
-	authSvc := service.NewAuthService(userRepo, wsRepo, planRepo, inviteSvc, db.Pool, authMW, emailVerificationSvc, passwordResetSvc)
 
 	paymentSettingsRepo := repository.NewPaymentSettingsRepository(db.Pool)
 	paymentSettingsSvc := service.NewPaymentSettingsService(paymentSettingsRepo, cfg)
@@ -67,7 +66,17 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	subscriptionRepo := repository.NewSubscriptionRepository(db.Pool)
 	subscriptionSvc := service.NewSubscriptionService(subscriptionRepo, planRepo, wsRepo)
 	quotaSvc := service.NewQuotaService(planRepo, wsRepo, subscriptionRepo, usageRepo)
-	checkoutSvc := service.NewCheckoutService(planCheckoutRepo, walletRepo, planRepo, wsRepo, userRepo, paymentSettingsSvc, subscriptionSvc, wsSvc, txEmailSvc, cfg)
+	telegramSettingsRepo := repository.NewTelegramSettingsRepository(db.Pool)
+	telegramQueueRepo := repository.NewTelegramNotificationQueueRepository(db.Pool)
+	telegramSettingsSvc := service.NewTelegramSettingsService(telegramSettingsRepo)
+	telegramSvc := service.NewTelegramService(telegramSettingsSvc, telegramQueueRepo, logger)
+	telegramSettingsSvc.BindRuntimeStatus(telegramSvc.GetRuntimeStatus)
+	telegramSvc.Start()
+
+	authSvc := service.NewAuthService(userRepo, wsRepo, planRepo, inviteSvc, db.Pool, authMW, emailVerificationSvc, passwordResetSvc, telegramSvc)
+	emailVerificationSvc.BindTelegram(telegramSvc)
+
+	checkoutSvc := service.NewCheckoutService(planCheckoutRepo, walletRepo, planRepo, wsRepo, userRepo, paymentSettingsSvc, subscriptionSvc, wsSvc, txEmailSvc, telegramSvc, cfg)
 	billingSvc := service.NewBillingService(planRepo, wsRepo, walletRepo, planCheckoutRepo, paymentSettingsSvc, quotaSvc, subscriptionSvc, wsSvc)
 
 	wsInviteRepo := repository.NewWorkspaceInviteRepository(db.Pool)
@@ -86,6 +95,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	smtpHandler := handler.NewSMTPSettingsHandler(smtpSettingsSvc, emailSvc)
 	emailTemplateHandler := handler.NewEmailTemplateSettingsHandler(emailTemplateSettingsSvc, emailSvc)
 	paymentSettingsHandler := handler.NewPaymentSettingsHandler(paymentSettingsSvc)
+	telegramHandler := handler.NewTelegramSettingsHandler(telegramSettingsSvc, telegramSvc)
 	paymentWebhookHandler := handler.NewPaymentWebhookHandler(paymentSettingsSvc, checkoutSvc, logger)
 	billingHandler := handler.NewBillingHandler(billingSvc, checkoutSvc, wsSvc)
 
@@ -185,6 +195,13 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Get("/payment-settings", paymentSettingsHandler.GetAdmin)
 				r.Put("/payment-settings", paymentSettingsHandler.UpdateAdmin)
 				r.Post("/payment-settings/test", paymentSettingsHandler.TestConnection)
+				r.Get("/telegram", telegramHandler.GetAdmin)
+				r.Put("/telegram", telegramHandler.UpdateAdmin)
+				r.Get("/telegram/status", telegramHandler.GetStatus)
+				r.Post("/telegram/restart", telegramHandler.Restart)
+				r.Post("/telegram/test", telegramHandler.SendTest)
+				r.Get("/telegram/queue", telegramHandler.ListQueue)
+				r.Post("/telegram/queue/{id}/retry", telegramHandler.RetryQueueItem)
 				r.Get("/invites", adminInviteHandler.List)
 				r.Post("/invites/issue", adminInviteHandler.IssueSystem)
 				r.Post("/invites/revoke", adminInviteHandler.Revoke)

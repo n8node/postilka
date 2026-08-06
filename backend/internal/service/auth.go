@@ -39,6 +39,7 @@ type AuthService struct {
 	auth          *middleware.Auth
 	verification  *EmailVerificationService
 	passwordReset *PasswordResetService
+	telegram      *TelegramService
 }
 
 func NewAuthService(
@@ -50,11 +51,13 @@ func NewAuthService(
 	auth *middleware.Auth,
 	verification *EmailVerificationService,
 	passwordReset *PasswordResetService,
+	telegram *TelegramService,
 ) *AuthService {
 	return &AuthService{
 		users: users, workspaces: workspaces, plans: plans,
 		invites: invites, pool: pool, auth: auth,
 		verification: verification, passwordReset: passwordReset,
+		telegram: telegram,
 	}
 }
 
@@ -154,6 +157,10 @@ func (s *AuthService) Register(ctx context.Context, email, password, name, invit
 
 	if s.verification != nil {
 		s.verification.SendRegistrationConfirmationBestEffort(ctx, user.ID, user.Email, user.Name)
+	}
+	if s.telegram != nil {
+		meta := RegistrationNotifyMeta{InviteCode: NormalizeInviteCode(inviteCode)}
+		s.telegram.NotifyRegistration(ctx, user, meta)
 	}
 
 	return &RegisterResult{

@@ -29,6 +29,7 @@ type CheckoutService struct {
 	subSvc     *SubscriptionService
 	wsSvc      *WorkspaceService
 	emails     *TransactionalEmailService
+	telegram   *TelegramService
 	cfg        *config.Config
 }
 
@@ -42,6 +43,7 @@ func NewCheckoutService(
 	subSvc *SubscriptionService,
 	wsSvc *WorkspaceService,
 	emails *TransactionalEmailService,
+	telegram *TelegramService,
 	cfg *config.Config,
 ) *CheckoutService {
 	return &CheckoutService{
@@ -54,6 +56,7 @@ func NewCheckoutService(
 		subSvc:     subSvc,
 		wsSvc:      wsSvc,
 		emails:     emails,
+		telegram:   telegram,
 		cfg:        cfg,
 	}
 }
@@ -285,6 +288,12 @@ func (s *CheckoutService) HandleRobokassaResult(ctx context.Context, invIDStr, o
 	if paid.Status == model.CheckoutStatusPaid && s.emails != nil {
 		s.emails.SendWalletTopupPaidBestEffort(ctx, paid)
 	}
+	if paid.Status == model.CheckoutStatusPaid && s.telegram != nil {
+		if user, err := s.users.GetByID(ctx, paid.UserID); err == nil {
+			balance, _ := s.wallet.GetBalance(ctx, paid.UserID)
+			s.telegram.NotifyWalletTopup(ctx, user, paid.AmountCents, balance)
+		}
+	}
 	return nil
 }
 
@@ -322,6 +331,13 @@ func (s *CheckoutService) FulfillSubscribe(ctx context.Context, checkoutID strin
 	}
 	if s.emails != nil {
 		s.emails.SendSubscriptionPaidBestEffort(ctx, paid)
+	}
+	if s.telegram != nil {
+		if user, err := s.users.GetByID(ctx, paid.UserID); err == nil {
+			if plan, err := s.plans.GetByID(ctx, paid.PlanID); err == nil {
+				s.telegram.NotifyPayment(ctx, user, plan, paid.AmountCents)
+			}
+		}
 	}
 	return nil
 }

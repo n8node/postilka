@@ -47,7 +47,7 @@ func main() {
 	invites := repository.NewInviteRepository(db.Pool)
 	authMW := middleware.NewAuth(jwtSecret)
 	inviteSvc := service.NewInviteService(invites, settings, users, db.Pool)
-	authSvc := service.NewAuthService(users, workspaces, plans, inviteSvc, db.Pool, authMW, nil, nil)
+	authSvc := service.NewAuthService(users, workspaces, plans, inviteSvc, db.Pool, authMW, nil, nil, nil)
 
 	user, created, err := authSvc.EnsureSuperAdmin(ctx, *email, *password, *name)
 	if err != nil {

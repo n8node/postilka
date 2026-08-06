@@ -1004,3 +1004,130 @@ export function billingSetAutoRenew(payload: { workspace_id?: string; auto_renew
     body: JSON.stringify(payload),
   });
 }
+
+export type TelegramBotStatus =
+  | "disabled"
+  | "misconfigured"
+  | "starting"
+  | "online"
+  | "offline";
+
+export type TelegramRuntimeStatus = {
+  status: TelegramBotStatus;
+  message: string;
+  bot_username?: string;
+  last_error?: string;
+  last_check_at?: string;
+  supervisor_running: boolean;
+};
+
+export type TelegramSettings = {
+  enabled: boolean;
+  chat_id: string;
+  proxy_enabled: boolean;
+  proxy_active_url: string;
+  proxy_auto_failover: boolean;
+  proxy_urls: string[];
+  notify_registration: boolean;
+  registration_template: string;
+  notify_email_verified: boolean;
+  email_verified_template: string;
+  notify_payment: boolean;
+  payment_template: string;
+  notify_wallet_topup: boolean;
+  wallet_topup_template: string;
+  notify_support: boolean;
+  support_template: string;
+};
+
+export type TelegramAdminView = {
+  settings: TelegramSettings;
+  bot_token_set: boolean;
+  bot_token_hint?: string;
+  updated_at?: string;
+  runtime: TelegramRuntimeStatus;
+};
+
+export type TelegramAdminUpdateRequest = {
+  settings: TelegramSettings;
+  bot_token?: string;
+};
+
+export type TelegramTestResult = {
+  ok: boolean;
+  message: string;
+  runtime?: TelegramRuntimeStatus;
+};
+
+export type TelegramNotificationStatus =
+  | "pending"
+  | "processing"
+  | "sent"
+  | "failed";
+
+export type TelegramNotificationRecord = {
+  id: string;
+  kind: string;
+  message_text: string;
+  status: TelegramNotificationStatus;
+  attempt_count: number;
+  next_attempt_at: string;
+  last_error?: string;
+  last_attempt_at?: string;
+  sent_at?: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type TelegramNotificationListResult = {
+  items: TelegramNotificationRecord[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
+export function fetchAdminTelegramSettings() {
+  return apiFetch<TelegramAdminView>("/admin/telegram");
+}
+
+export function updateAdminTelegramSettings(payload: TelegramAdminUpdateRequest) {
+  return apiFetch<TelegramAdminView>("/admin/telegram", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function fetchAdminTelegramStatus() {
+  return apiFetch<TelegramRuntimeStatus>("/admin/telegram/status");
+}
+
+export function restartAdminTelegramBot() {
+  return apiFetch<TelegramRuntimeStatus>("/admin/telegram/restart", {
+    method: "POST",
+  });
+}
+
+export function sendAdminTelegramTest() {
+  return apiFetch<TelegramTestResult>("/admin/telegram/test", {
+    method: "POST",
+  });
+}
+
+export function fetchAdminTelegramQueue(params?: {
+  status?: TelegramNotificationStatus;
+  limit?: number;
+  offset?: number;
+}) {
+  const q = new URLSearchParams();
+  if (params?.status) q.set("status", params.status);
+  if (params?.limit != null) q.set("limit", String(params.limit));
+  if (params?.offset != null) q.set("offset", String(params.offset));
+  const suffix = q.toString() ? `?${q.toString()}` : "";
+  return apiFetch<TelegramNotificationListResult>(`/admin/telegram/queue${suffix}`);
+}
+
+export function retryAdminTelegramQueueItem(id: string) {
+  return apiFetch<{ status: string }>(`/admin/telegram/queue/${id}/retry`, {
+    method: "POST",
+  });
+}

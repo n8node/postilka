@@ -23,11 +23,12 @@ var (
 const emailVerificationTTL = 24 * time.Hour
 
 type EmailVerificationService struct {
-	tokens *repository.EmailVerificationRepository
-	users  *repository.UserRepository
-	email  *EmailService
-	cfg    *config.Config
-	logger *slog.Logger
+	tokens   *repository.EmailVerificationRepository
+	users    *repository.UserRepository
+	email    *EmailService
+	cfg      *config.Config
+	logger   *slog.Logger
+	telegram *TelegramService
 }
 
 func NewEmailVerificationService(
@@ -44,6 +45,10 @@ func NewEmailVerificationService(
 		cfg:    cfg,
 		logger: logger,
 	}
+}
+
+func (s *EmailVerificationService) BindTelegram(telegram *TelegramService) {
+	s.telegram = telegram
 }
 
 func (s *EmailVerificationService) SendRegistrationConfirmation(ctx context.Context, userID, email, name string) error {
@@ -108,6 +113,11 @@ func (s *EmailVerificationService) Verify(ctx context.Context, rawToken string) 
 	}
 	if err := s.tokens.MarkUsed(ctx, rec.ID); err != nil {
 		return "", err
+	}
+	if s.telegram != nil {
+		if verified, err := s.users.GetByID(ctx, rec.UserID); err == nil {
+			s.telegram.NotifyEmailVerified(ctx, verified)
+		}
 	}
 	return rec.UserID, nil
 }
