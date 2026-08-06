@@ -23,6 +23,7 @@ import { useState } from "react";
 import { logout } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { WorkspaceSwitcher } from "@/components/layout/WorkspaceSwitcher";
+import { WalletBalanceBadge } from "@/components/billing/WalletBalanceBadge";
 import { cn } from "@/lib/utils";
 
 type NavItem = {
@@ -109,6 +110,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         <div className="border-b border-border py-2">
           <WorkspaceSwitcher collapsed={collapsed} />
+          <WalletBalanceBadge collapsed={collapsed} />
         </div>
 
         <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-2 py-3">

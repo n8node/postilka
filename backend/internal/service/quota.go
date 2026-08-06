@@ -1,0 +1,116 @@
+package service
+
+import (
+	"context"
+	"errors"
+	"time"
+
+	"github.com/postilka/postilka/internal/model"
+	"github.com/postilka/postilka/internal/repository"
+)
+
+type QuotaService struct {
+	plans    *repository.PlanRepository
+	workspaces *repository.WorkspaceRepository
+	usage    *repository.UsageRepository
+	wallet   *repository.WalletRepository
+}
+
+func NewQuotaService(
+	plans *repository.PlanRepository,
+	workspaces *repository.WorkspaceRepository,
+	usage *repository.UsageRepository,
+	wallet *repository.WalletRepository,
+) *QuotaService {
+	return &QuotaService{plans: plans, workspaces: workspaces, usage: usage, wallet: wallet}
+}
+
+func (s *QuotaService) PeriodStart(planAssignedAt time.Time) time.Time {
+	y, m, _ := planAssignedAt.Date()
+	return time.Date(y, m, 1, 0, 0, 0, 0, time.UTC)
+}
+
+func (s *QuotaService) GetUsage(ctx context.Context, workspaceID string, planAssignedAt time.Time) (model.BillingUsage, error) {
+	periodStart := s.PeriodStart(planAssignedAt)
+	posts, err := s.usage.SumForPeriod(ctx, workspaceID, "posts", periodStart)
+	if err != nil {
+		return model.BillingUsage{}, err
+	}
+	aiText, err := s.usage.SumForPeriod(ctx, workspaceID, "ai_text_tokens", periodStart)
+	if err != nil {
+		return model.BillingUsage{}, err
+	}
+	aiMedia, err := s.usage.SumForPeriod(ctx, workspaceID, "ai_media_credits", periodStart)
+	if err != nil {
+		return model.BillingUsage{}, err
+	}
+	return model.BillingUsage{
+		ChannelsUsed:       0,
+		PostsUsed:          posts,
+		AITextTokensUsed:   aiText,
+		AIMediaCreditsUsed: aiMedia,
+		PeriodStart:        periodStart.Format("2006-01-02"),
+	}, nil
+}
+
+func (s *QuotaService) CheckPostQuota(ctx context.Context, workspaceID string) error {
+	plan, assignedAt, err := s.getWorkspacePlan(ctx, workspaceID)
+	if err != nil {
+		return err
+	}
+	if plan.MaxPostsPerPeriod == nil {
+		return nil
+	}
+	usage, err := s.GetUsage(ctx, workspaceID, assignedAt)
+	if err != nil {
+		return err
+	}
+	if usage.PostsUsed >= *plan.MaxPostsPerPeriod {
+		return ErrQuotaExceeded
+	}
+	return nil
+}
+
+func (s *QuotaService) CheckChannelQuota(ctx context.Context, workspaceID string, currentCount int) error {
+	plan, _, err := s.getWorkspacePlan(ctx, workspaceID)
+	if err != nil {
+		return err
+	}
+	if plan.MaxChannels == nil {
+		return nil
+	}
+	if currentCount >= *plan.MaxChannels {
+		return ErrQuotaExceeded
+	}
+	return nil
+}
+
+func (s *QuotaService) RecordPost(ctx context.Context, workspaceID string) error {
+	_, assignedAt, err := s.getWorkspacePlan(ctx, workspaceID)
+	if err != nil {
+		return err
+	}
+	if err := s.CheckPostQuota(ctx, workspaceID); err != nil {
+		return err
+	}
+	return s.usage.Record(ctx, workspaceID, "posts", 1, s.PeriodStart(assignedAt))
+}
+
+func (s *QuotaService) getWorkspacePlan(ctx context.Context, workspaceID string) (*model.Plan, time.Time, error) {
+	planID, assignedAt, err := s.workspaces.GetPlanMeta(ctx, workspaceID)
+	if err != nil {
+		return nil, time.Time{}, err
+	}
+	plan, err := s.plans.GetByID(ctx, planID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			free, freeErr := s.plans.GetDefaultFree(ctx)
+			if freeErr != nil {
+				return nil, time.Time{}, freeErr
+			}
+			return free, assignedAt, nil
+		}
+		return nil, time.Time{}, err
+	}
+	return plan, assignedAt, nil
+}

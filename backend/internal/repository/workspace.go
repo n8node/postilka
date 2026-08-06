@@ -73,6 +73,23 @@ func (r *WorkspaceRepository) SetPlan(ctx context.Context, workspaceID, planID s
 	return nil
 }
 
+func (r *WorkspaceRepository) GetPlanMeta(ctx context.Context, workspaceID string) (planID string, assignedAt time.Time, err error) {
+	err = r.pool.QueryRow(ctx, `
+		SELECT COALESCE(plan_id::text, ''), COALESCE(plan_assigned_at, created_at)
+		FROM workspaces WHERE id = $1::uuid
+	`, workspaceID).Scan(&planID, &assignedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", time.Time{}, ErrNotFound
+	}
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	if planID == "" {
+		return "", assignedAt, ErrNotFound
+	}
+	return planID, assignedAt, nil
+}
+
 func (r *WorkspaceRepository) GetPrimaryForUser(ctx context.Context, userID string) (*model.Workspace, error) {
 	const q = `
 		SELECT w.id, w.name, w.slug, w.owner_id, wm.role, w.created_at

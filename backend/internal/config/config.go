@@ -48,3 +48,7 @@ func (c *Config) VKOAuthRedirectURI() string {
 func (c *Config) MAXOAuthWebhookURL() string {
 	return strings.TrimSuffix(c.PublicAppURL, "/") + "/api/v1/auth/oauth/max/webhook"
 }
+
+func (c *Config) PublicAppURLNormalized() string {
+	return strings.TrimSuffix(c.PublicAppURL, "/")
+}

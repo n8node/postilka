@@ -662,3 +662,131 @@ export function sendAdminSMTPTest(to: string) {
     body: JSON.stringify({ to }),
   });
 }
+
+export type RobokassaAdminSettings = {
+  merchant_login: string;
+  test_mode: boolean;
+  enabled: boolean;
+};
+
+export type PaymentAdminView = {
+  active_provider: "robokassa";
+  robokassa: RobokassaAdminSettings;
+  robokassa_password1_set: boolean;
+  robokassa_password1_hint?: string;
+  robokassa_password2_set: boolean;
+  robokassa_password2_hint?: string;
+  robokassa_result_url: string;
+  default_return_url: string;
+  wallet_topup_min_cents: number;
+  wallet_topup_max_cents: number;
+  updated_at?: string;
+};
+
+export type PaymentAdminUpdateRequest = {
+  active_provider: "robokassa";
+  robokassa: RobokassaAdminSettings;
+  robokassa_password1?: string;
+  robokassa_password2?: string;
+  wallet_topup_min_cents?: number;
+  wallet_topup_max_cents?: number;
+};
+
+export type PaymentTestResult = {
+  ok: boolean;
+  message: string;
+};
+
+export function fetchAdminPaymentSettings() {
+  return apiFetch<PaymentAdminView>("/admin/payment-settings");
+}
+
+export function updateAdminPaymentSettings(payload: PaymentAdminUpdateRequest) {
+  return apiFetch<PaymentAdminView>("/admin/payment-settings", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function testAdminPaymentConnection() {
+  return apiFetch<PaymentTestResult>("/admin/payment-settings/test", {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
+export type BillingPeriod = "monthly" | "yearly";
+
+export type BillingUsage = {
+  channels_used: number;
+  posts_used: number;
+  ai_text_tokens_used: number;
+  ai_media_credits_used: number;
+  period_start: string;
+};
+
+export type BillingOverview = {
+  payments_enabled: boolean;
+  active_provider?: string;
+  workspace_id: string;
+  plan?: Plan;
+  plan_assigned_at?: string;
+  usage: BillingUsage;
+  wallet_balance_cents: number;
+  wallet_topup_min_cents: number;
+  wallet_topup_max_cents: number;
+};
+
+export type CheckoutResult = {
+  checkout_id: string;
+  kind: string;
+  provider: string;
+  checkout_url: string;
+};
+
+export type PaymentHistoryItem = {
+  id: string;
+  kind: string;
+  amount_cents: number;
+  status: string;
+  description: string;
+  created_at: string;
+  paid_at?: string;
+};
+
+export function fetchBillingOverview() {
+  return apiFetch<BillingOverview>("/billing/overview");
+}
+
+export function fetchBillingPlans() {
+  return apiFetch<{ plans: Plan[] }>("/billing/plans");
+}
+
+export function billingSubscribeCheckout(payload: {
+  plan_id: string;
+  billing_period: BillingPeriod;
+  workspace_id?: string;
+}) {
+  return apiFetch<CheckoutResult>("/billing/checkout/subscribe", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function billingWalletTopup(payload: { amount_cents: number }) {
+  return apiFetch<CheckoutResult>("/billing/wallet/topup", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function billingSwitchFree(payload: { workspace_id?: string }) {
+  return apiFetch<{ ok: boolean }>("/billing/switch-free", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function fetchBillingPaymentHistory() {
+  return apiFetch<{ items: PaymentHistoryItem[] }>("/billing/payments");
+}

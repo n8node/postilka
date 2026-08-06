@@ -48,6 +48,15 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	smtpSettingsSvc := service.NewSMTPSettingsService(smtpSettingsRepo)
 	mailSvc := service.NewMailService(smtpSettingsSvc)
 
+	paymentSettingsRepo := repository.NewPaymentSettingsRepository(db.Pool)
+	paymentSettingsSvc := service.NewPaymentSettingsService(paymentSettingsRepo, cfg)
+	planCheckoutRepo := repository.NewPlanCheckoutRepository(db.Pool)
+	walletRepo := repository.NewWalletRepository(db.Pool)
+	usageRepo := repository.NewUsageRepository(db.Pool)
+	quotaSvc := service.NewQuotaService(planRepo, wsRepo, usageRepo, walletRepo)
+	checkoutSvc := service.NewCheckoutService(planCheckoutRepo, walletRepo, planRepo, wsRepo, userRepo, paymentSettingsSvc, wsSvc, cfg)
+	billingSvc := service.NewBillingService(planRepo, wsRepo, walletRepo, planCheckoutRepo, paymentSettingsSvc, quotaSvc, wsSvc)
+
 	health := handler.NewHealthHandler(cfg, db)
 	status := handler.NewStatusHandler(cfg)
 	authHandler := handler.NewAuthHandler(authSvc, wsSvc, authMW, cfg)
@@ -57,6 +66,9 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	inviteHandler := handler.NewInviteHandler(inviteSvc, oauthSvc)
 	adminInviteHandler := handler.NewAdminInviteHandler(inviteSvc, userRepo, oauthSvc)
 	smtpHandler := handler.NewSMTPSettingsHandler(smtpSettingsSvc, mailSvc)
+	paymentSettingsHandler := handler.NewPaymentSettingsHandler(paymentSettingsSvc)
+	paymentWebhookHandler := handler.NewPaymentWebhookHandler(paymentSettingsSvc, checkoutSvc, logger)
+	billingHandler := handler.NewBillingHandler(billingSvc, checkoutSvc, wsSvc)
 
 	r.Get("/health", health.ServeHTTP)
 
@@ -86,8 +98,26 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 		r.With(authMW.Required).Delete("/user/login-identities/{provider}", oauthHandler.Unlink)
 
 		r.Get("/public/invites", inviteHandler.PublicSystemInvites)
+		r.Get("/public/billing/plans", billingHandler.PublicListPlans)
+
+		r.Route("/webhooks", func(r chi.Router) {
+			r.Get("/robokassa/result", paymentWebhookHandler.RobokassaResult)
+			r.Post("/robokassa/result", paymentWebhookHandler.RobokassaResult)
+			r.Post("/robokassa/result2", paymentWebhookHandler.RobokassaResult2)
+		})
 
 		r.With(authMW.Required).Get("/user/invites", inviteHandler.UserInvites)
+
+		r.Route("/billing", func(r chi.Router) {
+			r.Use(authMW.Required)
+			r.Get("/overview", billingHandler.Overview)
+			r.Get("/plans", billingHandler.ListPlans)
+			r.Post("/checkout/subscribe", billingHandler.SubscribeCheckout)
+			r.Post("/wallet/topup", billingHandler.WalletTopup)
+			r.Post("/switch-free", billingHandler.SwitchFree)
+			r.Get("/payments", billingHandler.PaymentHistory)
+			r.Get("/wallet/ledger", billingHandler.WalletLedger)
+		})
 
 		r.Group(func(r chi.Router) {
 			r.Use(authMW.Required)
@@ -117,6 +147,9 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Get("/email-smtp", smtpHandler.GetAdmin)
 				r.Put("/email-smtp", smtpHandler.UpdateAdmin)
 				r.Post("/email-smtp/test", smtpHandler.SendTest)
+				r.Get("/payment-settings", paymentSettingsHandler.GetAdmin)
+				r.Put("/payment-settings", paymentSettingsHandler.UpdateAdmin)
+				r.Post("/payment-settings/test", paymentSettingsHandler.TestConnection)
 				r.Get("/invites", adminInviteHandler.List)
 				r.Post("/invites/issue", adminInviteHandler.IssueSystem)
 				r.Post("/invites/revoke", adminInviteHandler.Revoke)
