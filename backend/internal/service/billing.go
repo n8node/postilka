@@ -17,6 +17,7 @@ type BillingService struct {
 	checkouts  *repository.PlanCheckoutRepository
 	payments   *PaymentSettingsService
 	quota      *QuotaService
+	subSvc     *SubscriptionService
 	wsSvc      *WorkspaceService
 }
 
@@ -27,6 +28,7 @@ func NewBillingService(
 	checkouts *repository.PlanCheckoutRepository,
 	payments *PaymentSettingsService,
 	quota *QuotaService,
+	subSvc *SubscriptionService,
 	wsSvc *WorkspaceService,
 ) *BillingService {
 	return &BillingService{
@@ -36,6 +38,7 @@ func NewBillingService(
 		checkouts:  checkouts,
 		payments:   payments,
 		quota:      quota,
+		subSvc:     subSvc,
 		wsSvc:      wsSvc,
 	}
 }
@@ -94,6 +97,8 @@ func (s *BillingService) Overview(ctx context.Context, userID string, r *http.Re
 		return nil, err
 	}
 
+	sub, _ := s.subSvc.GetActive(ctx, ws.ID)
+
 	var assignedPtr *time.Time
 	if !assignedAt.IsZero() {
 		t := assignedAt
@@ -106,6 +111,7 @@ func (s *BillingService) Overview(ctx context.Context, userID string, r *http.Re
 		WorkspaceID:         ws.ID,
 		Plan:                plan,
 		PlanAssignedAt:      assignedPtr,
+		Subscription:        sub,
 		Usage:               usage,
 		WalletBalanceCents:  balance,
 		WalletTopupMinCents: cfg.WalletTopupMinCents,
@@ -113,8 +119,49 @@ func (s *BillingService) Overview(ctx context.Context, userID string, r *http.Re
 	}, nil
 }
 
+func (s *BillingService) PreviewSubscribe(
+	ctx context.Context,
+	userID, workspaceID, planID string,
+	period model.BillingPeriod,
+	r *http.Request,
+) (*model.SubscribePreview, error) {
+	if workspaceID == "" {
+		ws, _, err := s.wsSvc.ResolveActive(ctx, userID, r)
+		if err != nil || ws == nil {
+			return nil, ErrNoPrimaryWS
+		}
+		workspaceID = ws.ID
+	}
+	if _, err := s.wsSvc.RequireMembership(ctx, userID, workspaceID, model.RoleAdmin); err != nil {
+		return nil, err
+	}
+	return s.subSvc.PreviewSubscribe(ctx, workspaceID, planID, period)
+}
+
+func (s *BillingService) SetAutoRenew(
+	ctx context.Context,
+	userID, workspaceID string,
+	autoRenew bool,
+	r *http.Request,
+) (*model.WorkspaceSubscription, error) {
+	if workspaceID == "" {
+		ws, _, err := s.wsSvc.ResolveActive(ctx, userID, r)
+		if err != nil || ws == nil {
+			return nil, ErrNoPrimaryWS
+		}
+		workspaceID = ws.ID
+	}
+	if _, err := s.wsSvc.RequireMembership(ctx, userID, workspaceID, model.RoleAdmin); err != nil {
+		return nil, err
+	}
+	return s.subSvc.SetAutoRenew(ctx, workspaceID, autoRenew)
+}
+
 func (s *BillingService) SwitchToFree(ctx context.Context, userID, workspaceID string) error {
 	if _, err := s.wsSvc.RequireMembership(ctx, userID, workspaceID, model.RoleAdmin); err != nil {
+		return err
+	}
+	if err := s.subSvc.CancelForWorkspace(ctx, workspaceID); err != nil {
 		return err
 	}
 	free, err := s.plans.GetDefaultFree(ctx)
@@ -137,6 +184,9 @@ func (s *BillingService) PaymentHistory(ctx context.Context, userID string) ([]m
 	items := make([]model.PaymentHistoryItem, 0, len(checkouts)+len(topups))
 	for _, c := range checkouts {
 		desc := fmt.Sprintf("Оплата тарифа (%s)", c.BillingPeriod)
+		if c.ProrateCreditCents > 0 {
+			desc = fmt.Sprintf("%s, перерасчёт −%d ₽", desc, c.ProrateCreditCents/100)
+		}
 		items = append(items, model.PaymentHistoryItem{
 			ID:          c.ID,
 			Kind:        "subscribe",

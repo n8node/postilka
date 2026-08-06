@@ -26,6 +26,7 @@ type CheckoutService struct {
 	workspaces *repository.WorkspaceRepository
 	users      *repository.UserRepository
 	payments   *PaymentSettingsService
+	subSvc     *SubscriptionService
 	wsSvc      *WorkspaceService
 	cfg        *config.Config
 }
@@ -37,6 +38,7 @@ func NewCheckoutService(
 	workspaces *repository.WorkspaceRepository,
 	users *repository.UserRepository,
 	payments *PaymentSettingsService,
+	subSvc *SubscriptionService,
 	wsSvc *WorkspaceService,
 	cfg *config.Config,
 ) *CheckoutService {
@@ -47,6 +49,7 @@ func NewCheckoutService(
 		workspaces: workspaces,
 		users:      users,
 		payments:   payments,
+		subSvc:     subSvc,
 		wsSvc:      wsSvc,
 		cfg:        cfg,
 	}
@@ -88,15 +91,27 @@ func (s *CheckoutService) CreateSubscribe(
 		return nil, ErrInvalidInput
 	}
 
-	amountCents, err := planPriceCents(plan, period)
+	listPrice, prorateCredit, amountDue, kind, err := s.subSvc.BuildCheckoutPricing(ctx, workspaceID, planID, period)
 	if err != nil {
 		return nil, err
 	}
-	if amountCents <= 0 {
-		return nil, ErrInvalidInput
+
+	if amountDue == 0 {
+		if err := s.subSvc.ActivateImmediate(ctx, workspaceID, planID, period, listPrice, prorateCredit, kind, nil); err != nil {
+			return nil, err
+		}
+		return &model.CheckoutResult{
+			CheckoutID:  "",
+			Kind:        "subscribe",
+			Provider:    string(model.PaymentProviderRobokassa),
+			CheckoutURL: appendBillingQuery(s.payments.defaultReturnURL(), "payment", "success"),
+		}, nil
 	}
 
-	checkout, err := s.checkouts.Create(ctx, userID, workspaceID, planID, string(provider), period, amountCents)
+	checkout, err := s.checkouts.CreateWithPricing(
+		ctx, userID, workspaceID, planID, string(provider), period, kind,
+		listPrice, prorateCredit, amountDue,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -164,11 +179,16 @@ func (s *CheckoutService) createRobokassaSubscribe(
 	successURL := appendBillingQuery(returnURL, "payment", "success")
 	failURL := appendBillingQuery(returnURL, "payment", "failed")
 
+	desc := fmt.Sprintf("Postilka — %s", plan.Name)
+	if checkout.ProrateCreditCents > 0 {
+		desc = fmt.Sprintf("%s (с учётом перерасчёта)", desc)
+	}
+
 	params := url.Values{}
 	params.Set("MerchantLogin", login)
 	params.Set("OutSum", outSum)
 	params.Set("InvId", invStr)
-	params.Set("Description", fmt.Sprintf("Postilka — %s", plan.Name))
+	params.Set("Description", desc)
 	params.Set("SignatureValue", signature)
 	params.Set("SuccessURL", successURL)
 	params.Set("FailURL", failURL)
@@ -271,15 +291,12 @@ func (s *CheckoutService) FulfillSubscribe(ctx context.Context, checkoutID strin
 		return ErrInvalidInput
 	}
 
-	plan, err := s.plans.GetByID(ctx, checkout.PlanID)
-	if err != nil {
-		return err
+	expectedDue := checkout.ListPriceCents - checkout.ProrateCreditCents
+	expectedAmount := expectedDue
+	if expectedDue > 0 && expectedDue < minCheckoutCents {
+		expectedAmount = minCheckoutCents
 	}
-	expected, err := planPriceCents(plan, checkout.BillingPeriod)
-	if err != nil {
-		return err
-	}
-	if expected != checkout.AmountCents {
+	if checkout.AmountCents != expectedAmount {
 		return ErrInvalidInput
 	}
 
@@ -291,7 +308,7 @@ func (s *CheckoutService) FulfillSubscribe(ctx context.Context, checkoutID strin
 		return nil
 	}
 
-	return s.workspaces.SetPlan(ctx, checkout.WorkspaceID, checkout.PlanID)
+	return s.subSvc.ActivateFromCheckout(ctx, paid)
 }
 
 func planPriceCents(plan *model.Plan, period model.BillingPeriod) (int, error) {

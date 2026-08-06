@@ -7,6 +7,7 @@ import (
 
 	"github.com/postilka/postilka/internal/middleware"
 	"github.com/postilka/postilka/internal/model"
+	"github.com/postilka/postilka/internal/repository"
 	"github.com/postilka/postilka/internal/service"
 )
 
@@ -183,6 +184,63 @@ func (h *BillingHandler) WalletLedger(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (h *BillingHandler) SubscribePreview(w http.ResponseWriter, r *http.Request) {
+	userID, ok := billingUserID(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
+		return
+	}
+	planID := r.URL.Query().Get("plan_id")
+	period := model.BillingPeriod(r.URL.Query().Get("billing_period"))
+	if period == "" {
+		period = model.BillingPeriodMonthly
+	}
+	workspaceID := r.URL.Query().Get("workspace_id")
+
+	preview, err := h.billing.PreviewSubscribe(r.Context(), userID, workspaceID, planID, period, r)
+	if err != nil {
+		if errors.Is(err, service.ErrPlanNotFound) {
+			writeError(w, http.StatusNotFound, "Тариф не найден")
+			return
+		}
+		writeError(w, http.StatusBadRequest, "Не удалось рассчитать стоимость")
+		return
+	}
+	writeJSON(w, http.StatusOK, preview)
+}
+
+type autoRenewRequest struct {
+	WorkspaceID string `json:"workspace_id"`
+	AutoRenew   bool   `json:"auto_renew"`
+}
+
+func (h *BillingHandler) SetAutoRenew(w http.ResponseWriter, r *http.Request) {
+	userID, ok := billingUserID(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
+		return
+	}
+	var req autoRenewRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Некорректное тело запроса")
+		return
+	}
+	sub, err := h.billing.SetAutoRenew(r.Context(), userID, req.WorkspaceID, req.AutoRenew, r)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "Активная подписка не найдена")
+			return
+		}
+		if errors.Is(err, service.ErrForbidden) || errors.Is(err, service.ErrNotWorkspaceMember) {
+			writeError(w, http.StatusForbidden, "Недостаточно прав")
+			return
+		}
+		writeError(w, http.StatusBadRequest, "Не удалось обновить автопродление")
+		return
+	}
+	writeJSON(w, http.StatusOK, sub)
 }
 
 func writeBillingCheckoutError(w http.ResponseWriter, err error) {

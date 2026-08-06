@@ -59,11 +59,15 @@ func (r *WorkspaceRepository) CreateWithOwner(ctx context.Context, name, slug, o
 }
 
 func (r *WorkspaceRepository) SetPlan(ctx context.Context, workspaceID, planID string) error {
+	return r.SetPlanWithPeriod(ctx, workspaceID, planID, time.Now().UTC())
+}
+
+func (r *WorkspaceRepository) SetPlanWithPeriod(ctx context.Context, workspaceID, planID string, assignedAt time.Time) error {
 	tag, err := r.pool.Exec(ctx, `
 		UPDATE workspaces
-		SET plan_id = $2::uuid, plan_assigned_at = NOW(), updated_at = NOW()
+		SET plan_id = $2::uuid, plan_assigned_at = $3, updated_at = NOW()
 		WHERE id = $1::uuid
-	`, workspaceID, planID)
+	`, workspaceID, planID, assignedAt)
 	if err != nil {
 		return err
 	}
@@ -71,6 +75,15 @@ func (r *WorkspaceRepository) SetPlan(ctx context.Context, workspaceID, planID s
 		return ErrNotFound
 	}
 	return nil
+}
+
+func (r *WorkspaceRepository) GetOwnerID(ctx context.Context, workspaceID string) (string, error) {
+	var ownerID string
+	err := r.pool.QueryRow(ctx, `SELECT owner_id::text FROM workspaces WHERE id = $1::uuid`, workspaceID).Scan(&ownerID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	return ownerID, err
 }
 
 func (r *WorkspaceRepository) GetPlanMeta(ctx context.Context, workspaceID string) (planID string, assignedAt time.Time, err error) {

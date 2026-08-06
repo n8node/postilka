@@ -17,19 +17,26 @@ func NewPlanCheckoutRepository(pool *pgxpool.Pool) *PlanCheckoutRepository {
 	return &PlanCheckoutRepository{pool: pool}
 }
 
-func (r *PlanCheckoutRepository) Create(
+func (r *PlanCheckoutRepository) CreateWithPricing(
 	ctx context.Context,
 	userID, workspaceID, planID, provider string,
 	period model.BillingPeriod,
-	amountCents int,
+	kind model.CheckoutKind,
+	listPrice, prorateCredit, amountCents int,
 ) (*model.PlanCheckout, error) {
 	const q = `
-		INSERT INTO plan_checkouts (user_id, workspace_id, plan_id, provider, billing_period, amount_cents, status)
-		VALUES ($1, $2, $3, $4, $5, $6, 'pending')
-		RETURNING id, user_id, workspace_id, plan_id, provider, billing_period, amount_cents, status,
+		INSERT INTO plan_checkouts (
+			user_id, workspace_id, plan_id, provider, billing_period,
+			checkout_kind, list_price_cents, prorate_credit_cents, amount_cents, status
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'pending')
+		RETURNING id, user_id, workspace_id, plan_id, provider, billing_period,
+		          checkout_kind, list_price_cents, prorate_credit_cents, amount_cents, status,
 		          external_id, inv_id, created_at, paid_at
 	`
-	return r.scan(r.pool.QueryRow(ctx, q, userID, workspaceID, planID, provider, period, amountCents))
+	return r.scan(r.pool.QueryRow(ctx, q,
+		userID, workspaceID, planID, provider, period, kind,
+		listPrice, prorateCredit, amountCents,
+	))
 }
 
 func (r *PlanCheckoutRepository) NextInvID(ctx context.Context) (int64, error) {
@@ -46,11 +53,7 @@ func (r *PlanCheckoutRepository) SetExternal(ctx context.Context, id, externalID
 }
 
 func (r *PlanCheckoutRepository) GetByID(ctx context.Context, id string) (*model.PlanCheckout, error) {
-	const q = `
-		SELECT id, user_id, workspace_id, plan_id, provider, billing_period, amount_cents, status,
-		       external_id, inv_id, created_at, paid_at
-		FROM plan_checkouts WHERE id = $1
-	`
+	const q = checkoutSelect + ` FROM plan_checkouts WHERE id = $1`
 	c, err := r.scan(r.pool.QueryRow(ctx, q, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -59,11 +62,7 @@ func (r *PlanCheckoutRepository) GetByID(ctx context.Context, id string) (*model
 }
 
 func (r *PlanCheckoutRepository) GetByInvID(ctx context.Context, invID int64) (*model.PlanCheckout, error) {
-	const q = `
-		SELECT id, user_id, workspace_id, plan_id, provider, billing_period, amount_cents, status,
-		       external_id, inv_id, created_at, paid_at
-		FROM plan_checkouts WHERE inv_id = $1
-	`
+	const q = checkoutSelect + ` FROM plan_checkouts WHERE inv_id = $1`
 	c, err := r.scan(r.pool.QueryRow(ctx, q, invID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -76,7 +75,8 @@ func (r *PlanCheckoutRepository) MarkPaid(ctx context.Context, id string) (*mode
 		UPDATE plan_checkouts
 		SET status = 'paid', paid_at = NOW()
 		WHERE id = $1 AND status = 'pending'
-		RETURNING id, user_id, workspace_id, plan_id, provider, billing_period, amount_cents, status,
+		RETURNING id, user_id, workspace_id, plan_id, provider, billing_period,
+		          checkout_kind, list_price_cents, prorate_credit_cents, amount_cents, status,
 		          external_id, inv_id, created_at, paid_at
 	`
 	c, err := r.scan(r.pool.QueryRow(ctx, q, id))
@@ -90,9 +90,7 @@ func (r *PlanCheckoutRepository) ListForUser(ctx context.Context, userID string,
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
-	const q = `
-		SELECT id, user_id, workspace_id, plan_id, provider, billing_period, amount_cents, status,
-		       external_id, inv_id, created_at, paid_at
+	const q = checkoutSelect + `
 		FROM plan_checkouts
 		WHERE user_id = $1
 		ORDER BY created_at DESC
@@ -115,11 +113,18 @@ func (r *PlanCheckoutRepository) ListForUser(ctx context.Context, userID string,
 	return out, rows.Err()
 }
 
+const checkoutSelect = `
+	SELECT id, user_id, workspace_id, plan_id, provider, billing_period,
+	       checkout_kind, list_price_cents, prorate_credit_cents, amount_cents, status,
+	       external_id, inv_id, created_at, paid_at
+`
+
 func (r *PlanCheckoutRepository) scan(row pgx.Row) (*model.PlanCheckout, error) {
 	var c model.PlanCheckout
 	err := row.Scan(
 		&c.ID, &c.UserID, &c.WorkspaceID, &c.PlanID, &c.Provider, &c.BillingPeriod,
-		&c.AmountCents, &c.Status, &c.ExternalID, &c.InvID, &c.CreatedAt, &c.PaidAt,
+		&c.CheckoutKind, &c.ListPriceCents, &c.ProrateCreditCents, &c.AmountCents,
+		&c.Status, &c.ExternalID, &c.InvID, &c.CreatedAt, &c.PaidAt,
 	)
 	return &c, err
 }

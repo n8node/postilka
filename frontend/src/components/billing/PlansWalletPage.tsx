@@ -4,16 +4,19 @@ import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   ApiError,
+  billingSetAutoRenew,
   billingSubscribeCheckout,
   billingSwitchFree,
   billingWalletTopup,
   fetchBillingOverview,
   fetchBillingPaymentHistory,
   fetchBillingPlans,
+  fetchSubscribePreview,
   type BillingOverview,
   type BillingPeriod,
   type PaymentHistoryItem,
   type Plan,
+  type SubscribePreview,
 } from "@/lib/api";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { cn } from "@/lib/utils";
@@ -42,6 +45,7 @@ export function PlansWalletPage() {
   const [period, setPeriod] = useState<BillingPeriod>("monthly");
   const [topupRub, setTopupRub] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
+  const [previews, setPreviews] = useState<Record<string, SubscribePreview>>({});
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -71,6 +75,44 @@ export function PlansWalletPage() {
     if (payment === "success") setNotice("Оплата принята. Обновление может занять несколько секунд.");
     if (payment === "failed") setNotice("Оплата не завершена.");
   }, [searchParams]);
+
+  useEffect(() => {
+    if (!overview?.workspace_id || plans.length === 0) return;
+    void (async () => {
+      const next: Record<string, SubscribePreview> = {};
+      await Promise.all(
+        plans.map(async (plan) => {
+          try {
+            next[plan.id] = await fetchSubscribePreview({
+              plan_id: plan.id,
+              billing_period: period,
+              workspace_id: overview.workspace_id,
+            });
+          } catch {
+            /* ignore preview errors */
+          }
+        }),
+      );
+      setPreviews(next);
+    })();
+  }, [overview?.workspace_id, plans, period]);
+
+  async function handleToggleAutoRenew() {
+    if (!overview?.subscription) return;
+    setBusy("auto-renew");
+    setError(null);
+    try {
+      await billingSetAutoRenew({
+        workspace_id: overview.workspace_id,
+        auto_renew: !overview.subscription.auto_renew,
+      });
+      await reload();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Не удалось обновить автопродление");
+    } finally {
+      setBusy(null);
+    }
+  }
 
   async function handleSubscribe(planId: string) {
     setBusy(planId);
@@ -171,6 +213,33 @@ export function PlansWalletPage() {
               <li>Storage — {formatQuota(currentPlan.storage_bytes ? Math.round(currentPlan.storage_bytes / (1024 * 1024 * 1024)) : null)} ГБ</li>
             </ul>
           )}
+          {overview?.subscription && !currentPlan?.is_free && (
+            <div className="mt-4 space-y-2 border-t border-border pt-4 text-sm">
+              <p className="text-muted">
+                Период до{" "}
+                <span className="font-medium text-text">
+                  {new Date(overview.subscription.period_end).toLocaleDateString("ru-RU")}
+                </span>
+                {overview.subscription.status === "past_due" && (
+                  <span className="ml-2 text-amber-700">· просрочена</span>
+                )}
+              </p>
+              <label className="flex cursor-pointer items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={overview.subscription.auto_renew}
+                  disabled={busy !== null}
+                  onChange={handleToggleAutoRenew}
+                  className="rounded border-border"
+                />
+                <span>Автопродление с кошелька</span>
+              </label>
+              <p className="text-xs text-muted">
+                При истечении периода спишем стоимость тарифа с вашего кошелька. Grace 72 ч,
+                затем переход на free.
+              </p>
+            </div>
+          )}
           {!overview?.payments_enabled && (
             <p className="mt-4 text-sm text-amber-700">
               Оплата временно недоступна — настройте Robokassa в админке.
@@ -242,6 +311,8 @@ export function PlansWalletPage() {
               const price =
                 period === "monthly" ? plan.price_monthly_cents : plan.price_yearly_cents;
               const isCurrent = currentPlan?.id === plan.id;
+              const preview = previews[plan.id];
+              const due = preview?.amount_due_cents;
               return (
                 <article
                   key={plan.id}
@@ -253,11 +324,21 @@ export function PlansWalletPage() {
                   <h3 className="font-semibold">{plan.name}</h3>
                   <p className="mt-1 text-sm text-muted">{plan.description}</p>
                   <p className="mt-4 text-2xl font-semibold">
-                    {price != null ? formatRub(price) : "—"}
+                    {due != null && preview?.prorate_credit_cents
+                      ? formatRub(due)
+                      : price != null
+                        ? formatRub(price)
+                        : "—"}
                     <span className="text-sm font-normal text-muted">
                       /{period === "monthly" ? "мес" : "год"}
                     </span>
                   </p>
+                  {preview && preview.prorate_credit_cents > 0 && (
+                    <p className="mt-1 text-xs text-green-800">
+                      Перерасчёт −{formatRub(preview.prorate_credit_cents)} (к оплате{" "}
+                      {formatRub(preview.amount_due_cents)})
+                    </p>
+                  )}
                   <ul className="mt-4 space-y-1 text-sm text-muted">
                     <li>Каналы: {formatQuota(plan.max_channels)}</li>
                     <li>Посты: {formatQuota(plan.max_posts_per_period)}</li>

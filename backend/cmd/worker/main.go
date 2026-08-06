@@ -10,6 +10,7 @@ import (
 
 	"github.com/postilka/postilka/internal/config"
 	"github.com/postilka/postilka/internal/repository"
+	"github.com/postilka/postilka/internal/service"
 )
 
 func main() {
@@ -29,6 +30,13 @@ func main() {
 	}
 	defer db.Close()
 
+	wsRepo := repository.NewWorkspaceRepository(db.Pool)
+	planRepo := repository.NewPlanRepository(db.Pool)
+	walletRepo := repository.NewWalletRepository(db.Pool)
+	subscriptionRepo := repository.NewSubscriptionRepository(db.Pool)
+	subscriptionSvc := service.NewSubscriptionService(subscriptionRepo, planRepo, wsRepo)
+	renewalSvc := service.NewRenewalService(subscriptionRepo, planRepo, walletRepo, wsRepo, subscriptionSvc, logger)
+
 	logger.Info("worker started", "publish_concurrency", cfg.WorkerPublishConcurrency, "version", config.Version)
 
 	ticker := time.NewTicker(30 * time.Second)
@@ -42,8 +50,10 @@ func main() {
 		case <-ticker.C:
 			if err := db.Ping(ctx); err != nil {
 				logger.Warn("worker db ping failed", "error", err)
-			} else {
-				logger.Debug("worker heartbeat", "status", "idle")
+				continue
+			}
+			if err := renewalSvc.Process(ctx); err != nil {
+				logger.Warn("subscription renewal tick failed", "error", err)
 			}
 		case <-quit:
 			logger.Info("worker stopped")

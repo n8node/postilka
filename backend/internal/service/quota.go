@@ -12,26 +12,29 @@ import (
 type QuotaService struct {
 	plans    *repository.PlanRepository
 	workspaces *repository.WorkspaceRepository
+	subs     *repository.SubscriptionRepository
 	usage    *repository.UsageRepository
-	wallet   *repository.WalletRepository
 }
 
 func NewQuotaService(
 	plans *repository.PlanRepository,
 	workspaces *repository.WorkspaceRepository,
+	subs *repository.SubscriptionRepository,
 	usage *repository.UsageRepository,
-	wallet *repository.WalletRepository,
 ) *QuotaService {
-	return &QuotaService{plans: plans, workspaces: workspaces, usage: usage, wallet: wallet}
+	return &QuotaService{plans: plans, workspaces: workspaces, subs: subs, usage: usage}
 }
 
-func (s *QuotaService) PeriodStart(planAssignedAt time.Time) time.Time {
-	y, m, _ := planAssignedAt.Date()
-	return time.Date(y, m, 1, 0, 0, 0, 0, time.UTC)
+func (s *QuotaService) periodStartForWorkspace(ctx context.Context, workspaceID string, fallback time.Time) time.Time {
+	sub, err := s.subs.GetActiveForWorkspace(ctx, workspaceID)
+	if err == nil {
+		return sub.PeriodStart.UTC()
+	}
+	return fallback.UTC()
 }
 
 func (s *QuotaService) GetUsage(ctx context.Context, workspaceID string, planAssignedAt time.Time) (model.BillingUsage, error) {
-	periodStart := s.PeriodStart(planAssignedAt)
+	periodStart := s.periodStartForWorkspace(ctx, workspaceID, planAssignedAt)
 	posts, err := s.usage.SumForPeriod(ctx, workspaceID, "posts", periodStart)
 	if err != nil {
 		return model.BillingUsage{}, err
@@ -93,7 +96,8 @@ func (s *QuotaService) RecordPost(ctx context.Context, workspaceID string) error
 	if err := s.CheckPostQuota(ctx, workspaceID); err != nil {
 		return err
 	}
-	return s.usage.Record(ctx, workspaceID, "posts", 1, s.PeriodStart(assignedAt))
+	periodStart := s.periodStartForWorkspace(ctx, workspaceID, assignedAt)
+	return s.usage.Record(ctx, workspaceID, "posts", 1, periodStart)
 }
 
 func (s *QuotaService) getWorkspacePlan(ctx context.Context, workspaceID string) (*model.Plan, time.Time, error) {

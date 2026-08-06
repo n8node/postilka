@@ -725,12 +725,39 @@ export type BillingUsage = {
   period_start: string;
 };
 
+export type WorkspaceSubscription = {
+  id: string;
+  workspace_id: string;
+  plan_id: string;
+  billing_period: BillingPeriod;
+  period_start: string;
+  period_end: string;
+  base_amount_cents: number;
+  auto_renew: boolean;
+  status: "active" | "past_due" | "cancelled";
+  last_checkout_id?: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SubscribePreview = {
+  plan_id: string;
+  billing_period: BillingPeriod;
+  list_price_cents: number;
+  prorate_credit_cents: number;
+  amount_due_cents: number;
+  is_upgrade: boolean;
+  current_plan_id?: string;
+  period_end?: string;
+};
+
 export type BillingOverview = {
   payments_enabled: boolean;
   active_provider?: string;
   workspace_id: string;
   plan?: Plan;
   plan_assigned_at?: string;
+  subscription?: WorkspaceSubscription;
   usage: BillingUsage;
   wallet_balance_cents: number;
   wallet_topup_min_cents: number;
@@ -789,4 +816,24 @@ export function billingSwitchFree(payload: { workspace_id?: string }) {
 
 export function fetchBillingPaymentHistory() {
   return apiFetch<{ items: PaymentHistoryItem[] }>("/billing/payments");
+}
+
+export function fetchSubscribePreview(params: {
+  plan_id: string;
+  billing_period: BillingPeriod;
+  workspace_id?: string;
+}) {
+  const q = new URLSearchParams({
+    plan_id: params.plan_id,
+    billing_period: params.billing_period,
+  });
+  if (params.workspace_id) q.set("workspace_id", params.workspace_id);
+  return apiFetch<SubscribePreview>(`/billing/subscribe/preview?${q.toString()}`);
+}
+
+export function billingSetAutoRenew(payload: { workspace_id?: string; auto_renew: boolean }) {
+  return apiFetch<WorkspaceSubscription>("/billing/subscription/auto-renew", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
 }
