@@ -44,6 +44,9 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	planSvc := service.NewPlanService(planRepo, wsRepo)
 	adminUserSvc := service.NewAdminUserService(userRepo)
 	adminWorkspaceSvc := service.NewAdminWorkspaceService(wsRepo, userRepo)
+	smtpSettingsRepo := repository.NewSMTPSettingsRepository(db.Pool)
+	smtpSettingsSvc := service.NewSMTPSettingsService(smtpSettingsRepo)
+	mailSvc := service.NewMailService(smtpSettingsSvc)
 
 	health := handler.NewHealthHandler(cfg, db)
 	status := handler.NewStatusHandler(cfg)
@@ -53,6 +56,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	adminHandler := handler.NewAdminHandler(userRepo, adminUserSvc, planSvc, oauthSvc, adminWorkspaceSvc)
 	inviteHandler := handler.NewInviteHandler(inviteSvc, oauthSvc)
 	adminInviteHandler := handler.NewAdminInviteHandler(inviteSvc, userRepo, oauthSvc)
+	smtpHandler := handler.NewSMTPSettingsHandler(smtpSettingsSvc, mailSvc)
 
 	r.Get("/health", health.ServeHTTP)
 
@@ -110,6 +114,9 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 
 				r.Get("/auth-settings", adminInviteHandler.AuthSettingsGet)
 				r.Put("/auth-settings", adminInviteHandler.AuthSettingsPut)
+				r.Get("/email-smtp", smtpHandler.GetAdmin)
+				r.Put("/email-smtp", smtpHandler.UpdateAdmin)
+				r.Post("/email-smtp/test", smtpHandler.SendTest)
 				r.Get("/invites", adminInviteHandler.List)
 				r.Post("/invites/issue", adminInviteHandler.IssueSystem)
 				r.Post("/invites/revoke", adminInviteHandler.Revoke)

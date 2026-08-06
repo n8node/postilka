@@ -609,3 +609,56 @@ export function deleteAllAdminWorkspaces() {
     body: JSON.stringify({ confirm: "DELETE_ALL_WORKSPACES" }),
   });
 }
+
+export type SMTPEncryption = "none" | "ssl" | "tls";
+
+export type SMTPSettings = {
+  enabled: boolean;
+  from_email: string;
+  from_name: string;
+  force_from_email: boolean;
+  force_from_name: boolean;
+  reply_to_from_email: boolean;
+  host: string;
+  port: number;
+  encryption: SMTPEncryption;
+  auto_tls: boolean;
+  auth: boolean;
+  username: string;
+};
+
+export type SMTPAdminView = {
+  settings: SMTPSettings;
+  password_set: boolean;
+  updated_at?: string;
+  yandex_preset_host: string;
+  yandex_preset_port: number;
+};
+
+export type SMTPAdminUpdateRequest = {
+  settings: SMTPSettings;
+  password?: string;
+};
+
+export type SMTPTestEmailResult = {
+  ok: boolean;
+  message: string;
+};
+
+export function fetchAdminSMTPSettings() {
+  return apiFetch<SMTPAdminView>("/admin/email-smtp");
+}
+
+export function updateAdminSMTPSettings(payload: SMTPAdminUpdateRequest) {
+  return apiFetch<SMTPAdminView>("/admin/email-smtp", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function sendAdminSMTPTest(to: string) {
+  return apiFetch<SMTPTestEmailResult>("/admin/email-smtp/test", {
+    method: "POST",
+    body: JSON.stringify({ to }),
+  });
+}
