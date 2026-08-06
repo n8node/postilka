@@ -10,12 +10,12 @@ import (
 )
 
 type SMTPSettingsHandler struct {
-	smtp *service.SMTPSettingsService
-	mail *service.MailService
+	smtp  *service.SMTPSettingsService
+	email *service.EmailService
 }
 
-func NewSMTPSettingsHandler(smtp *service.SMTPSettingsService, mail *service.MailService) *SMTPSettingsHandler {
-	return &SMTPSettingsHandler{smtp: smtp, mail: mail}
+func NewSMTPSettingsHandler(smtp *service.SMTPSettingsService, email *service.EmailService) *SMTPSettingsHandler {
+	return &SMTPSettingsHandler{smtp: smtp, email: email}
 }
 
 func (h *SMTPSettingsHandler) GetAdmin(w http.ResponseWriter, r *http.Request) {
@@ -53,25 +53,11 @@ func (h *SMTPSettingsHandler) SendTest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	subject := "Postilka — тест SMTP"
-	body := `<p>Это тестовое письмо из админки Postilka. Если вы его получили — SMTP настроен верно.</p>`
-	if err := h.mail.Send(r.Context(), req.To, subject, body); err != nil {
-		msg := err.Error()
-		if errors.Is(err, service.ErrEmailDisabled) {
-			writeJSON(w, http.StatusOK, model.SMTPTestEmailResult{
-				OK:      false,
-				Message: "Включите отправку email в настройках",
-			})
-			return
-		}
-		if errors.Is(err, service.ErrSMTPNotConfigured) {
-			writeJSON(w, http.StatusOK, model.SMTPTestEmailResult{
-				OK:      false,
-				Message: "Заполните host, порт и учётные данные SMTP",
-			})
-			return
-		}
-		writeJSON(w, http.StatusOK, model.SMTPTestEmailResult{OK: false, Message: msg})
+	if err := h.email.SendTest(r.Context(), req.To); err != nil {
+		writeJSON(w, http.StatusOK, model.SMTPTestEmailResult{
+			OK:      false,
+			Message: service.MapEmailSendError(err),
+		})
 		return
 	}
 	writeJSON(w, http.StatusOK, model.SMTPTestEmailResult{

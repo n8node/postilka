@@ -663,6 +663,71 @@ export function sendAdminSMTPTest(to: string) {
   });
 }
 
+export type EmailFooterLink = {
+  label: string;
+  url: string;
+};
+
+export type EmailSocialLink = {
+  label: string;
+  url: string;
+  icon_url: string;
+};
+
+export type EmailTemplateSettings = {
+  logo_url: string;
+  logo_alt: string;
+  primary_color: string;
+  background_color: string;
+  card_radius_px: number;
+  signature_title: string;
+  signature_team: string;
+  footer_links: EmailFooterLink[];
+  social_links: EmailSocialLink[];
+  app_download_text: string;
+  app_store_url: string;
+  google_play_url: string;
+  footer_legal_text: string;
+  unsubscribe_text: string;
+  unsubscribe_url: string;
+};
+
+export type EmailTemplateAdminView = {
+  settings: EmailTemplateSettings;
+  updated_at?: string;
+};
+
+export type EmailTemplateAdminUpdateRequest = {
+  settings: EmailTemplateSettings;
+};
+
+export type EmailTemplateTestResult = {
+  ok: boolean;
+  message: string;
+};
+
+export function fetchAdminEmailTemplates() {
+  return apiFetch<EmailTemplateAdminView>("/admin/email-templates");
+}
+
+export function updateAdminEmailTemplates(payload: EmailTemplateAdminUpdateRequest) {
+  return apiFetch<EmailTemplateAdminView>("/admin/email-templates", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function sendAdminEmailTemplateTest(to: string) {
+  return apiFetch<EmailTemplateTestResult>("/admin/email-templates/test", {
+    method: "POST",
+    body: JSON.stringify({ to }),
+  });
+}
+
+export function adminEmailTemplatePreviewURL() {
+  return `${clientBase()}/admin/email-templates/preview`;
+}
+
 export type RobokassaAdminSettings = {
   merchant_login: string;
   test_mode: boolean;
