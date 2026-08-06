@@ -73,6 +73,31 @@ func (r *UserRepository) SetEmailVerified(ctx context.Context, userID string) er
 	return nil
 }
 
+func (r *UserRepository) ClearEmailVerified(ctx context.Context, userID string) error {
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE users
+		SET email_verified_at = NULL, updated_at = NOW()
+		WHERE id = $1
+	`, userID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (r *UserRepository) UpdateEmail(ctx context.Context, userID, email string) (*model.User, error) {
+	const q = `
+		UPDATE users
+		SET email = $2, email_verified_at = NULL, updated_at = NOW()
+		WHERE id = $1
+		RETURNING id, email, name, locale, timezone, is_blocked, is_platform_admin, email_verified_at, created_at
+	`
+	return scanUser(r.pool.QueryRow(ctx, q, userID, email))
+}
+
 func (r *UserRepository) UpdatePasswordHash(ctx context.Context, userID, passwordHash string) error {
 	tag, err := r.pool.Exec(ctx, `
 		UPDATE users
@@ -89,15 +114,29 @@ func (r *UserRepository) UpdatePasswordHash(ctx context.Context, userID, passwor
 }
 
 func (r *UserRepository) HasPassword(ctx context.Context, userID string) (bool, error) {
-	var hash *string
-	err := r.pool.QueryRow(ctx, `SELECT password_hash FROM users WHERE id = $1`, userID).Scan(&hash)
-	if errors.Is(err, pgx.ErrNoRows) {
+	hash, err := r.GetPasswordHash(ctx, userID)
+	if errors.Is(err, ErrNotFound) {
 		return false, ErrNotFound
 	}
 	if err != nil {
 		return false, err
 	}
-	return hash != nil && *hash != "", nil
+	return hash != "", nil
+}
+
+func (r *UserRepository) GetPasswordHash(ctx context.Context, userID string) (string, error) {
+	var hash *string
+	err := r.pool.QueryRow(ctx, `SELECT password_hash FROM users WHERE id = $1`, userID).Scan(&hash)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	if err != nil {
+		return "", err
+	}
+	if hash == nil {
+		return "", nil
+	}
+	return *hash, nil
 }
 
 func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*model.User, string, error) {

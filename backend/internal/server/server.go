@@ -3,6 +3,7 @@ package server
 import (
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
@@ -26,6 +27,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	r.Use(chimw.Logger)
 
 	authMW := middleware.NewAuth(cfg.JWTSecret)
+	authLimiter := middleware.NewRateLimiter()
 
 	userRepo := repository.NewUserRepository(db.Pool)
 	wsRepo := repository.NewWorkspaceRepository(db.Pool)
@@ -50,6 +52,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	emailTemplateSettingsSvc := service.NewEmailTemplateSettingsService(emailTemplateSettingsRepo)
 	emailRenderer := service.NewEmailRenderer()
 	emailSvc := service.NewEmailService(mailSvc, emailTemplateSettingsSvc, emailRenderer)
+	txEmailSvc := service.NewTransactionalEmailService(emailSvc, userRepo, planRepo, wsRepo, cfg, logger)
 	emailVerificationRepo := repository.NewEmailVerificationRepository(db.Pool)
 	emailVerificationSvc := service.NewEmailVerificationService(emailVerificationRepo, userRepo, emailSvc, cfg, logger)
 	passwordResetRepo := repository.NewPasswordResetRepository(db.Pool)
@@ -64,12 +67,17 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	subscriptionRepo := repository.NewSubscriptionRepository(db.Pool)
 	subscriptionSvc := service.NewSubscriptionService(subscriptionRepo, planRepo, wsRepo)
 	quotaSvc := service.NewQuotaService(planRepo, wsRepo, subscriptionRepo, usageRepo)
-	checkoutSvc := service.NewCheckoutService(planCheckoutRepo, walletRepo, planRepo, wsRepo, userRepo, paymentSettingsSvc, subscriptionSvc, wsSvc, cfg)
+	checkoutSvc := service.NewCheckoutService(planCheckoutRepo, walletRepo, planRepo, wsRepo, userRepo, paymentSettingsSvc, subscriptionSvc, wsSvc, txEmailSvc, cfg)
 	billingSvc := service.NewBillingService(planRepo, wsRepo, walletRepo, planCheckoutRepo, paymentSettingsSvc, quotaSvc, subscriptionSvc, wsSvc)
+
+	wsInviteRepo := repository.NewWorkspaceInviteRepository(db.Pool)
+	wsInviteSvc := service.NewWorkspaceInviteService(wsInviteRepo, wsRepo, userRepo, wsSvc, txEmailSvc, cfg, logger)
 
 	health := handler.NewHealthHandler(cfg, db)
 	status := handler.NewStatusHandler(cfg)
 	authHandler := handler.NewAuthHandler(authSvc, wsSvc, authMW, cfg)
+	userHandler := handler.NewUserHandler(authSvc)
+	wsInviteHandler := handler.NewWorkspaceInviteHandler(wsInviteSvc, wsSvc)
 	oauthHandler := handler.NewOAuthLoginHandler(oauthSvc, wsSvc, authMW, cfg, logger)
 	wsHandler := handler.NewWorkspaceHandler(wsSvc, cfg)
 	adminHandler := handler.NewAdminHandler(userRepo, adminUserSvc, planSvc, oauthSvc, adminWorkspaceSvc)
@@ -90,13 +98,15 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 		r.Route("/auth", func(r chi.Router) {
 			r.Get("/methods", inviteHandler.AuthMethods)
 			r.Post("/invite/verify", inviteHandler.VerifyInvite)
-			r.Post("/register", authHandler.Register)
-			r.Post("/verify-email", authHandler.VerifyEmail)
-			r.Post("/forgot-password", authHandler.ForgotPassword)
-			r.Post("/reset-password", authHandler.ResetPassword)
-			r.Post("/login", authHandler.Login)
+			r.With(middleware.RateLimit(authLimiter, 5, time.Minute)).Post("/register", authHandler.Register)
+			r.With(middleware.RateLimit(authLimiter, 10, time.Minute)).Post("/verify-email", authHandler.VerifyEmail)
+			r.With(middleware.RateLimit(authLimiter, 3, time.Minute)).Post("/forgot-password", authHandler.ForgotPassword)
+			r.With(middleware.RateLimit(authLimiter, 5, time.Minute)).Post("/reset-password", authHandler.ResetPassword)
+			r.With(middleware.RateLimit(authLimiter, 10, time.Minute)).Post("/login", authHandler.Login)
+			r.With(middleware.RateLimit(authLimiter, 3, time.Minute)).Post("/resend-verification", authHandler.ResendVerification)
 			r.Post("/logout", authHandler.Logout)
 			r.With(authMW.Required).Get("/me", authHandler.Me)
+			r.With(authMW.Required, middleware.RateLimit(authLimiter, 3, time.Minute)).Post("/resend-verification/me", authHandler.ResendVerificationMe)
 
 			r.Get("/oauth/vk/start", oauthHandler.StartVKPublic)
 			r.Get("/oauth/vk/callback", oauthHandler.VKCallback)
@@ -110,9 +120,11 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 
 		r.With(authMW.Required).Get("/user/login-identities", oauthHandler.ListIdentities)
 		r.With(authMW.Required).Delete("/user/login-identities/{provider}", oauthHandler.Unlink)
+		r.With(authMW.Required).Patch("/user/email", userHandler.ChangeEmail)
 
 		r.Get("/public/invites", inviteHandler.PublicSystemInvites)
 		r.Get("/public/billing/plans", billingHandler.PublicListPlans)
+		r.Get("/public/workspace-invites/preview", wsInviteHandler.Preview)
 
 		r.Route("/webhooks", func(r chi.Router) {
 			r.Get("/robokassa/result", paymentWebhookHandler.RobokassaResult)
@@ -141,6 +153,9 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Post("/workspaces", wsHandler.Create)
 			r.Get("/workspaces/me", wsHandler.Me)
 			r.Post("/workspaces/active", wsHandler.SetActive)
+			r.Get("/workspaces/invites", wsInviteHandler.List)
+			r.Post("/workspaces/invites", wsInviteHandler.Create)
+			r.Post("/workspaces/invites/accept", wsInviteHandler.Accept)
 		})
 
 		r.Route("/admin", func(r chi.Router) {

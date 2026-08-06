@@ -191,6 +191,28 @@ func (r *WorkspaceRepository) CountOwnedByUser(ctx context.Context, userID strin
 	return count, err
 }
 
+func (r *WorkspaceRepository) AddMember(ctx context.Context, workspaceID, userID string, role model.WorkspaceRole) error {
+	_, err := r.pool.Exec(ctx, `
+		INSERT INTO workspace_members (workspace_id, user_id, role)
+		VALUES ($1, $2, $3)
+		ON CONFLICT (workspace_id, user_id) DO UPDATE SET role = EXCLUDED.role
+	`, workspaceID, userID, role)
+	return err
+}
+
+func (r *WorkspaceRepository) GetByID(ctx context.Context, workspaceID string) (*model.Workspace, error) {
+	const q = `
+		SELECT id, name, slug, owner_id, created_at
+		FROM workspaces
+		WHERE id = $1
+	`
+	ws, err := scanWorkspace(r.pool.QueryRow(ctx, q, workspaceID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	return ws, err
+}
+
 func scanWorkspace(row pgx.Row) (*model.Workspace, error) {
 	var ws model.Workspace
 	var createdAt time.Time

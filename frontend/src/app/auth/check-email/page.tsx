@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CheckEmailResend } from "@/components/auth/CheckEmailResend";
 
 type PageProps = {
   searchParams: Promise<{ email?: string }>;
@@ -41,23 +42,19 @@ export default async function CheckEmailPage({ searchParams }: PageProps) {
             или перейдите по текстовой ссылке в письме.
           </p>
           <p>
-            После подтверждения вы сможете пользоваться сервисом без
-            ограничений.
+            После подтверждения вы сможете войти в Postilka и пользоваться
+            сервисом.
           </p>
         </div>
 
-        <div className="mt-6 flex flex-col gap-3">
-          <Link
-            href="/dashboard"
-            className="inline-flex w-full items-center justify-center rounded-lg bg-slate-800 px-4 py-2.5 text-sm font-medium text-white hover:bg-slate-900"
-          >
-            Перейти в приложение
-          </Link>
+        <CheckEmailResend email={email} />
+
+        <div className="mt-4">
           <Link
             href="/auth/login"
-            className="text-center text-sm text-accent hover:underline"
+            className="block text-center text-sm text-accent hover:underline"
           >
-            Войти с другим аккаунтом
+            Перейти ко входу
           </Link>
         </div>
       </div>

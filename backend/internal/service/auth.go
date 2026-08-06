@@ -20,6 +20,7 @@ import (
 var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	ErrEmailTaken         = errors.New("email already registered")
+	ErrEmailNotVerified   = errors.New("email not verified")
 	ErrUserBlocked        = errors.New("account blocked")
 	ErrInvalidInput       = errors.New("invalid input")
 )
@@ -64,7 +65,13 @@ type AuthResult struct {
 	Workspaces []model.Workspace
 }
 
-func (s *AuthService) Register(ctx context.Context, email, password, name, inviteCode string) (*AuthResult, error) {
+type RegisterResult struct {
+	Email                     string
+	EmailVerificationRequired bool
+	Message                   string
+}
+
+func (s *AuthService) Register(ctx context.Context, email, password, name, inviteCode string) (*RegisterResult, error) {
 	email = normalizeEmail(email)
 	if err := validateCredentials(email, password); err != nil {
 		return nil, err
@@ -136,7 +143,7 @@ func (s *AuthService) Register(ctx context.Context, email, password, name, invit
 			planID = free.ID
 		}
 	}
-	ws, err := s.workspaces.CreateWithOwnerTx(ctx, tx, wsName, slug, user.ID, planID)
+	_, err = s.workspaces.CreateWithOwnerTx(ctx, tx, wsName, slug, user.ID, planID)
 	if err != nil {
 		return nil, err
 	}
@@ -149,13 +156,11 @@ func (s *AuthService) Register(ctx context.Context, email, password, name, invit
 		s.verification.SendRegistrationConfirmationBestEffort(ctx, user.ID, user.Email, user.Name)
 	}
 
-	token, err := s.auth.IssueToken(user.ID, tokenTTL)
-	if err != nil {
-		return nil, err
-	}
-
-	list := []model.Workspace{*ws}
-	return &AuthResult{Token: token, User: user, Workspace: ws, Workspaces: list}, nil
+	return &RegisterResult{
+		Email:                     user.Email,
+		EmailVerificationRequired: true,
+		Message:                   "Мы отправили письмо со ссылкой для подтверждения регистрации",
+	}, nil
 }
 
 func (s *AuthService) registerWithoutInviteCheck(ctx context.Context, email, password, name string) (*AuthResult, error) {
@@ -220,6 +225,9 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (*AuthR
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)); err != nil {
 		return nil, ErrInvalidCredentials
+	}
+	if user.EmailVerifiedAt == nil {
+		return nil, ErrEmailNotVerified
 	}
 
 	_ = s.users.TouchActive(ctx, user.ID)
@@ -334,6 +342,82 @@ func (s *AuthService) ForgotPassword(ctx context.Context, email string) {
 	if s.passwordReset != nil {
 		s.passwordReset.RequestReset(ctx, email)
 	}
+}
+
+func (s *AuthService) ResendVerification(ctx context.Context, email string) {
+	email = normalizeEmail(email)
+	if email == "" || s.verification == nil {
+		return
+	}
+	user, _, err := s.users.GetByEmail(ctx, email)
+	if errors.Is(err, repository.ErrNotFound) {
+		return
+	}
+	if err != nil || user.IsBlocked || user.EmailVerifiedAt != nil {
+		return
+	}
+	s.verification.SendRegistrationConfirmationBestEffort(ctx, user.ID, user.Email, user.Name)
+}
+
+func (s *AuthService) ResendVerificationForUser(ctx context.Context, userID string) error {
+	if s.verification == nil {
+		return ErrEmailVerificationInvalid
+	}
+	user, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if user.EmailVerifiedAt != nil {
+		return nil
+	}
+	return s.verification.SendRegistrationConfirmation(ctx, user.ID, user.Email, user.Name)
+}
+
+func (s *AuthService) ChangeEmail(ctx context.Context, userID, newEmail, password string) (*model.User, error) {
+	newEmail = normalizeEmail(newEmail)
+	if _, err := mail.ParseAddress(newEmail); err != nil {
+		return nil, ErrInvalidInput
+	}
+
+	existing, _, err := s.users.GetByEmail(ctx, newEmail)
+	if err == nil && existing.ID != userID {
+		return nil, ErrEmailTaken
+	}
+	if err != nil && !errors.Is(err, repository.ErrNotFound) {
+		return nil, err
+	}
+
+	current, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if current.IsBlocked {
+		return nil, ErrUserBlocked
+	}
+
+	storedHash, err := s.users.GetPasswordHash(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if storedHash == "" {
+		return nil, ErrInvalidCredentials
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(storedHash), []byte(password)); err != nil {
+		return nil, ErrInvalidCredentials
+	}
+
+	if normalizeEmail(current.Email) == newEmail {
+		return current, nil
+	}
+
+	updated, err := s.users.UpdateEmail(ctx, userID, newEmail)
+	if err != nil {
+		return nil, err
+	}
+	if s.verification != nil {
+		s.verification.SendRegistrationConfirmationBestEffort(ctx, userID, updated.Email, updated.Name)
+	}
+	return updated, nil
 }
 
 func (s *AuthService) ResetPassword(ctx context.Context, token, password string) (*AuthResult, error) {

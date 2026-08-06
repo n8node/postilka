@@ -3,6 +3,14 @@ import type { NextRequest } from "next/server";
 
 const authEntryPaths = ["/auth/login", "/auth/register"];
 
+const authPathsAllowedWhenLoggedIn = [
+  "/auth/verify-email",
+  "/auth/check-email",
+  "/auth/forgot-password",
+  "/auth/reset-password",
+  "/auth/accept-invite",
+];
+
 const protectedPrefixes = [
   "/dashboard",
   "/channels",
@@ -32,6 +40,9 @@ export function middleware(request: NextRequest) {
   const isAuthEntry = authEntryPaths.some(
     (p) => pathname === p || pathname.startsWith(`${p}/`),
   );
+  const allowAuthWhenLoggedIn = authPathsAllowedWhenLoggedIn.some(
+    (p) => pathname === p || pathname.startsWith(`${p}/`),
+  );
 
   if (!token && isProtected(pathname)) {
     const url = request.nextUrl.clone();
@@ -40,7 +51,7 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (token && isAuthEntry) {
+  if (token && isAuthEntry && !allowAuthWhenLoggedIn) {
     const url = request.nextUrl.clone();
     url.pathname = "/dashboard";
     url.search = "";

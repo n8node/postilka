@@ -23,6 +23,7 @@ import { useState } from "react";
 import { logout } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { WorkspaceSwitcher } from "@/components/layout/WorkspaceSwitcher";
+import { EmailVerificationBanner } from "@/components/layout/EmailVerificationBanner";
 import { WalletBalanceBadge } from "@/components/billing/WalletBalanceBadge";
 import { cn } from "@/lib/utils";
 
@@ -211,9 +212,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <main className="min-w-0 flex-1 overflow-x-hidden">
-        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">{children}</div>
-      </main>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <EmailVerificationBanner />
+        <main className="min-w-0 flex-1 overflow-x-hidden">
+          <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">{children}</div>
+        </main>
+      </div>
     </div>
   );
 }

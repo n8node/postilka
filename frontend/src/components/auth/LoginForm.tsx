@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ApiError, login } from "@/lib/api";
+import { ApiError, login, resendVerification } from "@/lib/api";
 import { SocialLoginButtons } from "@/components/auth/SocialLoginButtons";
 
 export function LoginForm() {
@@ -15,6 +15,9 @@ export function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [unverifiedEmail, setUnverifiedEmail] = useState("");
+  const [resendMessage, setResendMessage] = useState("");
+  const [resending, setResending] = useState(false);
 
   useEffect(() => {
     if (oauthError) {
@@ -25,15 +28,38 @@ export function LoginForm() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    setUnverifiedEmail("");
+    setResendMessage("");
     setLoading(true);
     try {
       await login(email, password);
       router.push(nextPath);
       router.refresh();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Не удалось войти");
+      if (err instanceof ApiError && err.code === "email_not_verified") {
+        setUnverifiedEmail(email);
+        setError(err.message);
+      } else {
+        setError(err instanceof ApiError ? err.message : "Не удалось войти");
+      }
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleResendVerification() {
+    if (!unverifiedEmail) return;
+    setResending(true);
+    setResendMessage("");
+    try {
+      const data = await resendVerification(unverifiedEmail);
+      setResendMessage(data.message);
+    } catch (err) {
+      setResendMessage(
+        err instanceof ApiError ? err.message : "Не удалось отправить письмо",
+      );
+    } finally {
+      setResending(false);
     }
   }
 
@@ -42,6 +68,21 @@ export function LoginForm() {
       {error && (
         <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
           {error}
+          {unverifiedEmail && (
+            <div className="mt-3 space-y-2">
+              <button
+                type="button"
+                onClick={handleResendVerification}
+                disabled={resending}
+                className="text-sm font-medium text-accent hover:underline disabled:opacity-60"
+              >
+                {resending ? "Отправка…" : "Отправить письмо повторно"}
+              </button>
+              {resendMessage && (
+                <p className="text-xs text-emerald-800">{resendMessage}</p>
+              )}
+            </div>
+          )}
         </div>
       )}
       <div>

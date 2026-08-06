@@ -28,6 +28,7 @@ type CheckoutService struct {
 	payments   *PaymentSettingsService
 	subSvc     *SubscriptionService
 	wsSvc      *WorkspaceService
+	emails     *TransactionalEmailService
 	cfg        *config.Config
 }
 
@@ -40,6 +41,7 @@ func NewCheckoutService(
 	payments *PaymentSettingsService,
 	subSvc *SubscriptionService,
 	wsSvc *WorkspaceService,
+	emails *TransactionalEmailService,
 	cfg *config.Config,
 ) *CheckoutService {
 	return &CheckoutService{
@@ -51,6 +53,7 @@ func NewCheckoutService(
 		payments:   payments,
 		subSvc:     subSvc,
 		wsSvc:      wsSvc,
+		emails:     emails,
 		cfg:        cfg,
 	}
 }
@@ -275,8 +278,14 @@ func (s *CheckoutService) HandleRobokassaResult(ctx context.Context, invIDStr, o
 	if err := VerifyRobokassaOutSum(topup.AmountCents, outSumStr); err != nil {
 		return err
 	}
-	_, err = s.wallet.MarkTopupPaid(ctx, topup.ID)
-	return err
+	paid, err := s.wallet.MarkTopupPaid(ctx, topup.ID)
+	if err != nil {
+		return err
+	}
+	if paid.Status == model.CheckoutStatusPaid && s.emails != nil {
+		s.emails.SendWalletTopupPaidBestEffort(ctx, paid)
+	}
+	return nil
 }
 
 func (s *CheckoutService) FulfillSubscribe(ctx context.Context, checkoutID string) error {
@@ -308,7 +317,13 @@ func (s *CheckoutService) FulfillSubscribe(ctx context.Context, checkoutID strin
 		return nil
 	}
 
-	return s.subSvc.ActivateFromCheckout(ctx, paid)
+	if err := s.subSvc.ActivateFromCheckout(ctx, paid); err != nil {
+		return err
+	}
+	if s.emails != nil {
+		s.emails.SendSubscriptionPaidBestEffort(ctx, paid)
+	}
+	return nil
 }
 
 func planPriceCents(plan *model.Plan, period model.BillingPeriod) (int, error) {

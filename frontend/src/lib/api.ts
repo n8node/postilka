@@ -6,6 +6,7 @@ export type User = {
   timezone: string;
   is_blocked: boolean;
   is_platform_admin: boolean;
+  email_verified_at?: string | null;
   created_at: string;
 };
 
@@ -107,10 +108,12 @@ export type AdminUsersQuery = {
 
 export class ApiError extends Error {
   status: number;
+  code?: string;
 
-  constructor(status: number, message: string) {
+  constructor(status: number, message: string, code?: string) {
     super(message);
     this.status = status;
+    this.code = code;
   }
 }
 
@@ -137,7 +140,11 @@ export async function apiFetch<T>(
       typeof data === "object" && data && "error" in data
         ? String((data as { error: string }).error)
         : `HTTP ${res.status}`;
-    throw new ApiError(res.status, msg);
+    const code =
+      typeof data === "object" && data && "code" in data
+        ? String((data as { code: string }).code)
+        : undefined;
+    throw new ApiError(res.status, msg, code);
   }
   return data as T;
 }
@@ -149,13 +156,19 @@ export function login(email: string, password: string) {
   });
 }
 
+export type RegisterResponse = {
+  email_verification_required: boolean;
+  email: string;
+  message: string;
+};
+
 export function register(
   email: string,
   password: string,
   name?: string,
   inviteCode?: string,
 ) {
-  return apiFetch<MeResponse>("/auth/register", {
+  return apiFetch<RegisterResponse>("/auth/register", {
     method: "POST",
     body: JSON.stringify({
       email,
@@ -178,6 +191,74 @@ export function forgotPassword(email: string) {
     method: "POST",
     body: JSON.stringify({ email }),
   });
+}
+
+export function resendVerification(email: string) {
+  return apiFetch<{ status: string; message: string }>(
+    "/auth/resend-verification",
+    {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    },
+  );
+}
+
+export function resendVerificationMe() {
+  return apiFetch<{ status: string; message: string }>(
+    "/auth/resend-verification/me",
+    { method: "POST" },
+  );
+}
+
+export function changeEmail(email: string, password: string) {
+  return apiFetch<{ user: User; message: string }>("/user/email", {
+    method: "PATCH",
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+export type WorkspaceInvite = {
+  id: string;
+  workspace_id: string;
+  email: string;
+  role: string;
+  invited_by: string;
+  status: string;
+  expires_at: string;
+  created_at: string;
+};
+
+export function fetchWorkspaceInvites(workspaceId?: string) {
+  const q = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : "";
+  return apiFetch<{ invites: WorkspaceInvite[] }>(`/workspaces/invites${q}`);
+}
+
+export function createWorkspaceInvite(
+  email: string,
+  role: string,
+  workspaceId?: string,
+) {
+  const q = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : "";
+  return apiFetch<{ invite: WorkspaceInvite }>(`/workspaces/invites${q}`, {
+    method: "POST",
+    body: JSON.stringify({ email, role }),
+  });
+}
+
+export function acceptWorkspaceInvite(token: string) {
+  return apiFetch<{ workspace: Workspace; message: string }>(
+    "/workspaces/invites/accept",
+    {
+      method: "POST",
+      body: JSON.stringify({ token }),
+    },
+  );
+}
+
+export function previewWorkspaceInvite(token: string) {
+  return apiFetch<{ workspace_name: string; email: string; role: string }>(
+    `/public/workspace-invites/preview?token=${encodeURIComponent(token)}`,
+  );
 }
 
 export function resetPassword(token: string, password: string) {

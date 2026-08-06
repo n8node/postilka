@@ -66,11 +66,46 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h.mw.SetTokenCookie(w, result.Token, h.cfg.IsProduction())
-	if result.Workspace != nil {
-		service.SetActiveWorkspaceCookie(w, result.Workspace.ID, h.cfg.IsProduction())
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"email_verification_required": result.EmailVerificationRequired,
+		"email":                       result.Email,
+		"message":                     result.Message,
+	})
+}
+
+type resendVerificationRequest struct {
+	Email string `json:"email"`
+}
+
+func (h *AuthHandler) ResendVerification(w http.ResponseWriter, r *http.Request) {
+	var req resendVerificationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Некорректное тело запроса")
+		return
 	}
-	h.writeMe(w, http.StatusCreated, result.User, result.Workspace, result.Workspaces)
+
+	h.auth.ResendVerification(r.Context(), req.Email)
+	writeJSON(w, http.StatusOK, map[string]string{
+		"status":  "ok",
+		"message": "Если аккаунт с таким email существует и не подтверждён, мы отправили письмо повторно",
+	})
+}
+
+func (h *AuthHandler) ResendVerificationMe(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Не авторизован")
+		return
+	}
+
+	if err := h.auth.ResendVerificationForUser(r.Context(), userID); err != nil {
+		h.writeAuthError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{
+		"status":  "ok",
+		"message": "Письмо для подтверждения email отправлено повторно",
+	})
 }
 
 type verifyEmailRequest struct {
@@ -212,6 +247,8 @@ func (h *AuthHandler) writeAuthError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusConflict, "Инвайт-ключ уже использован")
 	case errors.Is(err, service.ErrEmailVerificationInvalid):
 		writeError(w, http.StatusBadRequest, "Ссылка недействительна или истекла")
+	case errors.Is(err, service.ErrEmailNotVerified):
+		writeErrorWithCode(w, http.StatusForbidden, "email_not_verified", "Подтвердите email — проверьте почту или запросите письмо повторно")
 	case errors.Is(err, service.ErrPasswordResetInvalid):
 		writeError(w, http.StatusBadRequest, "Ссылка для восстановления пароля недействительна или истекла")
 	default:

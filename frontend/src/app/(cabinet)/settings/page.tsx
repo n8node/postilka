@@ -1,20 +1,20 @@
 "use client";
 
 import { PageHeader } from "@/components/layout/PageHeader";
-import { StubBadge } from "@/components/layout/StubBadge";
 import { UserInvitesBlock } from "@/components/settings/UserInvitesBlock";
 import { LoginIdentitiesBlock } from "@/components/settings/LoginIdentitiesBlock";
+import { ChangeEmailForm } from "@/components/settings/ChangeEmailForm";
 import { useAuth } from "@/context/AuthContext";
 
 export default function SettingsPage() {
   const { user, workspace } = useAuth();
+  const emailVerified = Boolean(user.email_verified_at);
 
   return (
     <div>
       <PageHeader
         title="Настройки"
         description="Профиль, привязка соцсетей для входа и параметры workspace."
-        actions={<StubBadge label="Макет" />}
       />
 
       <div className="max-w-xl space-y-4">
@@ -27,7 +27,12 @@ export default function SettingsPage() {
             </div>
             <div>
               <dt className="text-muted">Email</dt>
-              <dd className="font-medium">{user.email}</dd>
+              <dd className="font-medium">
+                {user.email}
+                {!emailVerified && (
+                  <span className="ml-2 text-xs text-amber-700">не подтверждён</span>
+                )}
+              </dd>
             </div>
             <div>
               <dt className="text-muted">Workspace</dt>
@@ -39,6 +44,14 @@ export default function SettingsPage() {
               </dd>
             </div>
           </dl>
+        </section>
+
+        <section className="rounded-xl border border-border bg-surface p-5 shadow-sm">
+          <h2 className="text-sm font-semibold">Смена email</h2>
+          <p className="mt-2 text-sm text-muted">
+            После смены адреса потребуется подтверждение нового email по ссылке из письма.
+          </p>
+          <ChangeEmailForm />
         </section>
 
         <UserInvitesBlock />
