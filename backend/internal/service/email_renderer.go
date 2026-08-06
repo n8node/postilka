@@ -62,7 +62,11 @@ func (r *EmailRenderer) Render(cfg model.EmailTemplateSettings, body EmailBody) 
 	b.WriteString("<tr><td style=\"background:#ffffff;border-radius:")
 	b.WriteString(radius)
 	b.WriteString("px;padding:28px 28px 32px;box-shadow:0 2px 8px rgba(15,23,42,0.06);\">")
-	b.WriteString(content)
+	b.WriteString("&#8203;<table role=\"presentation\" cellpadding=\"0\" cellspacing=\"0\" border=\"0\" width=\"100%\">")
+	if content != "" {
+		b.WriteString(content)
+	}
+	b.WriteString("</table>")
 
 	ctaLabel := strings.TrimSpace(body.CTALabel)
 	ctaURL := strings.TrimSpace(body.CTAURL)
@@ -186,14 +190,26 @@ func injectPrimaryColor(content, primaryColor string) string {
 }
 
 func normalizeEmailContentHTML(content string) string {
+	return stripOuterEmailTable(strings.TrimSpace(content))
+}
+
+func stripOuterEmailTable(content string) string {
 	content = strings.TrimSpace(content)
 	if content == "" {
 		return ""
 	}
-	// Yandex Mail inserts a space after "<" on the first tag in injected HTML,
-	// which renders as visible markup (e.g. "< table..."). A leading comment avoids that.
-	if !strings.HasPrefix(content, "<!--") {
-		content = "<!-- -->" + content
+	if strings.HasPrefix(content, "<!--") {
+		if idx := strings.Index(content, ">"); idx >= 0 {
+			content = strings.TrimSpace(content[idx+1:])
+		}
+	}
+	lower := strings.ToLower(content)
+	if strings.HasPrefix(lower, "<table") {
+		start := strings.Index(content, ">")
+		end := strings.LastIndex(lower, "</table>")
+		if start >= 0 && end > start {
+			content = strings.TrimSpace(content[start+1 : end])
+		}
 	}
 	return content
 }
