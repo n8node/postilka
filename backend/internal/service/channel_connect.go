@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -386,16 +387,47 @@ func (s *ChannelConnectService) DiscoverMAX(
 	}
 
 	targets := []model.DiscoveredChannelTarget{}
-	if chatID := strings.TrimSpace(req.ChatID); chatID != "" {
+	rawChat := strings.TrimSpace(req.ChatID)
+	if rawChat != "" {
+		chat, resolveErr := s.maxClient.ResolveChat(ctx, botToken, rawChat)
+		if resolveErr != nil {
+			return nil, fmt.Errorf("не удалось найти канал: %w", resolveErr)
+		}
+		canPost := true
+		if err := s.maxClient.VerifyChannelPostAccess(ctx, botToken, chat.ChatID); err != nil {
+			canPost = false
+		}
+		title := strings.TrimSpace(chat.Title)
+		if title == "" {
+			title = rawChat
+		}
 		targets = append(targets, model.DiscoveredChannelTarget{
-			ExternalID: chatID,
-			Title:      chatID,
-			Type:       "channel",
-			CanPost:    true,
+			ExternalID: strconv.FormatInt(chat.ChatID, 10),
+			Title:      title,
+			Type:       chat.Type,
+			CanPost:    canPost,
 		})
+		hint := fmt.Sprintf(
+			"Канал «%s» найден (chat_id: %d). Бот @%s готов к подключению.",
+			title, chat.ChatID, bot.Username,
+		)
+		if !canPost {
+			hint = fmt.Sprintf(
+				"Канал найден (chat_id: %d), но у бота @%s нет права публиковать посты. Добавьте бота администратором канала с правом «Публикация».",
+				chat.ChatID, bot.Username,
+			)
+		}
+		return &model.ChannelDiscoverResult{
+			Provider: model.SocialProviderMAX,
+			Targets:  targets,
+			Hint:     hint,
+		}, nil
 	}
 
-	hint := fmt.Sprintf("Бот @%s подключён. Укажите chat_id канала MAX вручную.", bot.Username)
+	hint := fmt.Sprintf(
+		"Бот @%s найден. Укажите chat_id (число) или ссылку на канал: channel_name или https://max.ru/channel_name. Бот должен быть администратором канала с правом публикации.",
+		bot.Username,
+	)
 	return &model.ChannelDiscoverResult{
 		Provider: model.SocialProviderMAX,
 		Targets:  targets,
@@ -447,10 +479,18 @@ func (s *ChannelConnectService) ConnectMAX(
 	}
 
 	for _, input := range req.Channels {
-		chatID := strings.TrimSpace(input.ExternalID)
-		if chatID == "" {
+		rawChat := strings.TrimSpace(input.ExternalID)
+		if rawChat == "" {
 			continue
 		}
+		chat, err := s.maxClient.ResolveChat(ctx, botToken, rawChat)
+		if err != nil {
+			return nil, err
+		}
+		if err := s.maxClient.VerifyChannelPostAccess(ctx, botToken, chat.ChatID); err != nil {
+			return nil, err
+		}
+		chatID := strconv.FormatInt(chat.ChatID, 10)
 		exists, err := s.channels.ExistsByChat(ctx, ws.ID, string(model.ChannelProviderMAX), chatID)
 		if err != nil {
 			return nil, err
@@ -464,6 +504,9 @@ func (s *ChannelConnectService) ConnectMAX(
 		}
 		name := strings.TrimSpace(input.Name)
 		if name == "" {
+			name = strings.TrimSpace(chat.Title)
+		}
+		if name == "" {
 			name = chatID
 		}
 		created, err := s.channels.Create(ctx, repository.ChannelCreateParams{
@@ -471,7 +514,7 @@ func (s *ChannelConnectService) ConnectMAX(
 			Provider:          model.ChannelProviderMAX,
 			Name:              name,
 			ChatID:            chatID,
-			ChatType:          "channel",
+			ChatType:          chat.Type,
 			BotUsername:       bot.Username,
 			BotTokenEncrypted: encrypted,
 			Status:            model.ChannelStatusActive,

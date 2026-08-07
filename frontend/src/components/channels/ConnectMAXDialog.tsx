@@ -98,8 +98,18 @@ export function ConnectMAXDialog({ open, onClose, onConnected }: ConnectMAXDialo
 
         <h2 className="text-lg font-semibold">Подключить MAX</h2>
         <p className="mt-1 text-sm text-muted">
-          Создайте бота в MAX, добавьте его в канал и укажите токен и chat_id.
+          Создайте бота в MAX, добавьте его <strong>администратором канала</strong> с правом публикации,
+          затем укажите токен и ссылку или chat_id канала.
         </p>
+
+        <div className="mt-4 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+          <p className="font-medium">Как получить chat_id</p>
+          <ul className="mt-1 list-inside list-disc space-y-0.5 text-blue-800">
+            <li>Можно вставить ссылку: <code className="text-xs">https://max.ru/channel_postilka</code> или просто <code className="text-xs">channel_postilka</code></li>
+            <li>Postilka сам получит числовой chat_id через API MAX</li>
+            <li>Бот обязан быть админом канала с правом «Публикация» (write)</li>
+          </ul>
+        </div>
 
         {!enabled && (
           <p className="mt-4 text-sm text-amber-700">
@@ -141,12 +151,12 @@ export function ConnectMAXDialog({ open, onClose, onConnected }: ConnectMAXDialo
           </label>
 
           <label className="block space-y-1.5">
-            <span className="text-sm font-medium">Chat ID канала</span>
+            <span className="text-sm font-medium">Chat ID или ссылка на канал</span>
             <input
               type="text"
               value={chatID}
               onChange={(e) => setChatID(e.target.value)}
-              placeholder="ID канала MAX"
+              placeholder="channel_postilka или https://max.ru/channel_postilka"
               disabled={!enabled}
               className="w-full rounded-md border border-border px-3 py-2 text-sm"
             />
@@ -167,10 +177,10 @@ export function ConnectMAXDialog({ open, onClose, onConnected }: ConnectMAXDialo
             <button
               type="button"
               onClick={() => void handleDiscover()}
-              disabled={!enabled || loading || !botToken.trim()}
+              disabled={!enabled || loading || !botToken.trim() || !chatID.trim()}
               className="flex-1 rounded-md border border-border px-3 py-2 text-sm hover:bg-zinc-50 disabled:opacity-50"
             >
-              {loading ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "Проверить токен"}
+              {loading ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "Проверить канал"}
             </button>
             <button
               type="button"

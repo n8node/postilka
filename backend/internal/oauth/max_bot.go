@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -181,6 +182,132 @@ type MAXBotInfo struct {
 	Name     string `json:"name"`
 }
 
+type MAXChat struct {
+	ChatID int64  `json:"chat_id"`
+	Type   string `json:"type"`
+	Title  string `json:"title"`
+	Status string `json:"status"`
+	Link   string `json:"link"`
+}
+
+type MAXBotMembership struct {
+	IsAdmin     bool     `json:"is_admin"`
+	IsOwner     bool     `json:"is_owner"`
+	Permissions []string `json:"permissions"`
+}
+
+func NormalizeMAXChatLink(raw string) string {
+	raw = strings.TrimSpace(raw)
+	raw = strings.TrimPrefix(raw, "https://max.ru/")
+	raw = strings.TrimPrefix(raw, "http://max.ru/")
+	raw = strings.TrimPrefix(raw, "@")
+	if idx := strings.IndexAny(raw, "?/"); idx >= 0 {
+		raw = raw[:idx]
+	}
+	return strings.Trim(raw, "/")
+}
+
+func (c *MAXBotClient) GetChat(ctx context.Context, token string, chatID int64) (*MAXChat, error) {
+	endpoint := maxAPIBase + "/chats/" + strconv.FormatInt(chatID, 10)
+	respBody, status, err := c.do(ctx, http.MethodGet, endpoint, token, nil)
+	if err != nil {
+		return nil, err
+	}
+	if status >= 400 {
+		return nil, fmt.Errorf("max chat: HTTP %d: %s", status, strings.TrimSpace(string(respBody)))
+	}
+	var chat MAXChat
+	if err := json.Unmarshal(respBody, &chat); err != nil {
+		return nil, err
+	}
+	return &chat, nil
+}
+
+func (c *MAXBotClient) GetChatByLink(ctx context.Context, token, chatLink string) (*MAXChat, error) {
+	chatLink = NormalizeMAXChatLink(chatLink)
+	if chatLink == "" {
+		return nil, fmt.Errorf("некорректная ссылка на канал MAX")
+	}
+	endpoint := maxAPIBase + "/chats/" + url.PathEscape(chatLink)
+	respBody, status, err := c.do(ctx, http.MethodGet, endpoint, token, nil)
+	if err != nil {
+		return nil, err
+	}
+	if status >= 400 {
+		return nil, fmt.Errorf("max chat by link: HTTP %d: %s", status, strings.TrimSpace(string(respBody)))
+	}
+	var chat MAXChat
+	if err := json.Unmarshal(respBody, &chat); err != nil {
+		return nil, err
+	}
+	if chat.ChatID == 0 {
+		return nil, fmt.Errorf("канал MAX не найден по ссылке %q", chatLink)
+	}
+	return &chat, nil
+}
+
+func (c *MAXBotClient) GetBotMembership(ctx context.Context, token string, chatID int64) (*MAXBotMembership, error) {
+	endpoint := maxAPIBase + "/chats/" + strconv.FormatInt(chatID, 10) + "/members/me"
+	respBody, status, err := c.do(ctx, http.MethodGet, endpoint, token, nil)
+	if err != nil {
+		return nil, err
+	}
+	if status == http.StatusNotFound {
+		return nil, fmt.Errorf("бот не добавлен в этот канал MAX")
+	}
+	if status >= 400 {
+		return nil, fmt.Errorf("max membership: HTTP %d: %s", status, strings.TrimSpace(string(respBody)))
+	}
+	var member MAXBotMembership
+	if err := json.Unmarshal(respBody, &member); err != nil {
+		return nil, err
+	}
+	return &member, nil
+}
+
+func (m *MAXBotMembership) CanPostToChannel() bool {
+	if m == nil {
+		return false
+	}
+	if m.IsOwner {
+		return true
+	}
+	if !m.IsAdmin {
+		return false
+	}
+	for _, p := range m.Permissions {
+		switch p {
+		case "write", "post_edit_delete_message":
+			return true
+		}
+	}
+	return false
+}
+
+func (c *MAXBotClient) ResolveChat(ctx context.Context, token, raw string) (*MAXChat, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, fmt.Errorf("укажите chat_id или ссылку на канал MAX")
+	}
+	if id, err := strconv.ParseInt(raw, 10, 64); err == nil {
+		return c.GetChat(ctx, token, id)
+	}
+	return c.GetChatByLink(ctx, token, raw)
+}
+
+func (c *MAXBotClient) VerifyChannelPostAccess(ctx context.Context, token string, chatID int64) error {
+	member, err := c.GetBotMembership(ctx, token, chatID)
+	if err != nil {
+		return err
+	}
+	if !member.CanPostToChannel() {
+		return fmt.Errorf(
+			"у бота нет права публиковать посты в канале — назначьте его администратором с правом «Публикация» (write)",
+		)
+	}
+	return nil
+}
+
 func (c *MAXBotClient) GetMe(ctx context.Context, token string) (*MAXBotInfo, error) {
 	token = strings.TrimSpace(token)
 	if token == "" {
@@ -233,19 +360,35 @@ func (c *MAXBotClient) SendText(ctx context.Context, botToken, chatID, text stri
 		return fmt.Errorf("max message: empty chat_id")
 	}
 
+	chat, err := c.ResolveChat(ctx, botToken, chatID)
+	if err != nil {
+		return err
+	}
+	if err := c.VerifyChannelPostAccess(ctx, botToken, chat.ChatID); err != nil {
+		return err
+	}
+
 	body := maxMessageLinkRequest{Text: text}
 	payload, err := json.Marshal(body)
 	if err != nil {
 		return err
 	}
 
-	endpoint := maxAPIBase + "/messages?" + url.Values{"chat_id": {chatID}}.Encode()
+	endpoint := maxAPIBase + "/messages?" + url.Values{
+		"chat_id": {strconv.FormatInt(chat.ChatID, 10)},
+	}.Encode()
 	respBody, status, err := c.do(ctx, http.MethodPost, endpoint, botToken, payload)
 	if err != nil {
 		return err
 	}
 	if status >= 400 {
-		return fmt.Errorf("max messages: HTTP %d: %s", status, strings.TrimSpace(string(respBody)))
+		msg := strings.TrimSpace(string(respBody))
+		if strings.Contains(msg, "proto.payload") {
+			return fmt.Errorf(
+				"некорректный chat_id канала MAX — укажите числовой ID или ссылку вида channel_name, не полный URL в поле ID",
+			)
+		}
+		return fmt.Errorf("max messages: HTTP %d: %s", status, msg)
 	}
 	return nil
 }
