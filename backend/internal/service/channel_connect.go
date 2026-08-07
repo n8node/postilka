@@ -342,9 +342,15 @@ func (s *ChannelConnectService) OAuthConnect(
 			return nil, err
 		}
 		if existing != nil {
+			if existing.Provider != provider {
+				existing = nil
+			}
+		}
+		if existing != nil {
 			updated, err := s.channels.SaveChannel(ctx, repository.ChannelSaveParams{
 				WorkspaceID:         ws.ID,
 				ChannelID:           existing.ID,
+				Provider:            provider,
 				Name:                name,
 				ChatType:            existing.ChatType,
 				BotUsername:         existing.BotUsername,
@@ -634,6 +640,9 @@ func (s *ChannelConnectService) ConnectMAX(
 		existing, err := s.channels.GetByChat(ctx, ws.ID, string(model.ChannelProviderMAX), chatID)
 		if err != nil && !errors.Is(err, repository.ErrNotFound) {
 			return nil, err
+		}
+		if existing != nil && existing.Provider != model.ChannelProviderMAX {
+			existing = nil
 		}
 		if existing != nil {
 			updated, err := s.channels.UpdateMAXConnection(ctx, repository.ChannelMAXReconnectParams{

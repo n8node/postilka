@@ -231,6 +231,7 @@ func (r *ChannelRepository) UpdateStatus(ctx context.Context, workspaceID, chann
 type ChannelSaveParams struct {
 	WorkspaceID         string
 	ChannelID           string
+	Provider            model.ChannelProvider
 	Name                string
 	ChatType            string
 	BotUsername         string
@@ -252,21 +253,21 @@ func (r *ChannelRepository) SaveChannel(ctx context.Context, p ChannelSaveParams
 	}
 	const q = `
 		UPDATE channels
-		SET name = $3,
-		    chat_type = $4,
-		    bot_username = $5,
-		    bot_token_encrypted = NULLIF($6, ''),
-		    max_post_mode = $7,
-		    status = $8,
-		    metadata = $9,
-		    metadata_refreshed_at = $10,
+		SET name = $4,
+		    chat_type = $5,
+		    bot_username = $6,
+		    bot_token_encrypted = NULLIF($7, ''),
+		    max_post_mode = $8,
+		    status = $9,
+		    metadata = $10,
+		    metadata_refreshed_at = $11,
 		    last_error = NULL,
 		    updated_at = NOW()
-		WHERE id = $1 AND workspace_id = $2
+		WHERE id = $1 AND workspace_id = $2 AND provider = $3
 		RETURNING ` + channelSelectSQL
 	var ch model.Channel
 	err = r.scanChannel(r.pool.QueryRow(ctx, q,
-		p.ChannelID, p.WorkspaceID, p.Name, p.ChatType, p.BotUsername,
+		p.ChannelID, p.WorkspaceID, p.Provider, p.Name, p.ChatType, p.BotUsername,
 		p.BotTokenEncrypted, maxPostMode, p.Status, metaRaw, p.MetadataRefreshedAt,
 	), &ch)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -300,15 +301,15 @@ func (r *ChannelRepository) UpdateToken(ctx context.Context, workspaceID, channe
 }
 
 type ChannelMAXReconnectParams struct {
-	WorkspaceID       string
-	ChannelID         string
-	Name              string
-	ChatType          string
-	BotUsername       string
-	BotTokenEncrypted string
-	MaxPostMode       model.MAXPostMode
-	Status            model.ChannelStatus
-	Metadata          model.ChannelMetadata
+	WorkspaceID         string
+	ChannelID           string
+	Name                string
+	ChatType            string
+	BotUsername         string
+	BotTokenEncrypted   string
+	MaxPostMode         model.MAXPostMode
+	Status              model.ChannelStatus
+	Metadata            model.ChannelMetadata
 	MetadataRefreshedAt *time.Time
 }
 
@@ -316,6 +317,7 @@ func (r *ChannelRepository) UpdateMAXConnection(ctx context.Context, p ChannelMA
 	return r.SaveChannel(ctx, ChannelSaveParams{
 		WorkspaceID:         p.WorkspaceID,
 		ChannelID:           p.ChannelID,
+		Provider:            model.ChannelProviderMAX,
 		Name:                p.Name,
 		ChatType:            p.ChatType,
 		BotUsername:         p.BotUsername,

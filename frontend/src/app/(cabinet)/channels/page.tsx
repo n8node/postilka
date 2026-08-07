@@ -102,8 +102,10 @@ export default function ChannelsPage() {
     try {
       const data = await fetchChannels();
       setItems(data.items);
+      return data.items;
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Не удалось загрузить каналы");
+      return null;
     } finally {
       setLoading(false);
     }
@@ -112,6 +114,27 @@ export default function ChannelsPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (selectedId && !items.some((c) => c.id === selectedId)) {
+      setSelectedId(null);
+    }
+  }, [items, selectedId]);
+
+  const handleChannelConnected = useCallback(
+    async (connected?: ChannelListItem[]) => {
+      const latest = await load();
+      if (connected?.length) {
+        const last = connected[connected.length - 1]!;
+        if (latest?.some((c) => c.id === last.id)) {
+          setSelectedId(last.id);
+          return;
+        }
+      }
+      setSelectedId(null);
+    },
+    [load],
+  );
 
   function replaceItem(updated: ChannelListItem) {
     setItems((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
@@ -173,7 +196,7 @@ export default function ChannelsPage() {
       <PageHeader
         title="Каналы"
         description="Подключённые каналы и сообщества workspace во всех соцсетях."
-        actions={<ConnectChannelMenu onConnected={() => void load()} />}
+        actions={<ConnectChannelMenu onConnected={(connected) => void handleChannelConnected(connected)} />}
       />
 
       {error && (

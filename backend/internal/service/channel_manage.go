@@ -250,6 +250,7 @@ func (s *ChannelService) Update(
 	_, err = s.channels.SaveChannel(ctx, repository.ChannelSaveParams{
 		WorkspaceID:         ws.ID,
 		ChannelID:           channelID,
+		Provider:            ch.Provider,
 		Name:                ch.Name,
 		ChatType:            ch.ChatType,
 		BotUsername:         ch.BotUsername,
@@ -366,6 +367,7 @@ func (s *ChannelService) VerifyAndRefresh(
 		_, _ = s.channels.SaveChannel(ctx, repository.ChannelSaveParams{
 			WorkspaceID:         ws.ID,
 			ChannelID:           channelID,
+			Provider:            ch.Provider,
 			Name:                ch.Name,
 			ChatType:            ch.ChatType,
 			BotUsername:         ch.BotUsername,
@@ -386,6 +388,7 @@ func (s *ChannelService) VerifyAndRefresh(
 	updated, err := s.channels.SaveChannel(ctx, repository.ChannelSaveParams{
 		WorkspaceID:         ws.ID,
 		ChannelID:           channelID,
+		Provider:            ch.Provider,
 		Name:                ch.Name,
 		ChatType:            ch.ChatType,
 		BotUsername:         ch.BotUsername,

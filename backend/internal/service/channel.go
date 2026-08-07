@@ -183,10 +183,16 @@ func (s *ChannelService) ConnectTelegram(ctx context.Context, userID string, r *
 			return nil, err
 		}
 		if existing != nil {
+			if existing.Provider != model.ChannelProviderTelegram {
+				existing = nil
+			}
+		}
+		if existing != nil {
 			updated, err := s.channels.SaveChannel(ctx, repository.ChannelSaveParams{
-				WorkspaceID:       ws.ID,
-				ChannelID:         existing.ID,
-				Name:              name,
+				WorkspaceID:         ws.ID,
+				ChannelID:           existing.ID,
+				Provider:            model.ChannelProviderTelegram,
+				Name:                name,
 				ChatType:          chat.Type,
 				BotUsername:       bot.Username,
 				BotTokenEncrypted: encrypted,

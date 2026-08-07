@@ -4,6 +4,7 @@ import { ChevronDown, Loader2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
   fetchChannelProviderInfo,
+  type ChannelListItem,
   type ChannelProvider,
   type ChannelProviderInfo,
   type SocialProviderKey,
@@ -23,7 +24,7 @@ const PROVIDER_LABELS: Record<ChannelProvider, string> = {
 };
 
 type ConnectChannelMenuProps = {
-  onConnected: () => void;
+  onConnected: (connected?: ChannelListItem[]) => void;
 };
 
 export function ConnectChannelMenu({ onConnected }: ConnectChannelMenuProps) {
@@ -66,9 +67,9 @@ export function ConnectChannelMenu({ onConnected }: ConnectChannelMenuProps) {
     setActiveProvider(key);
   }
 
-  function handleConnected() {
+  function handleConnected(connected?: ChannelListItem[]) {
     setActiveProvider(null);
-    onConnected();
+    onConnected(connected);
   }
 
   return (

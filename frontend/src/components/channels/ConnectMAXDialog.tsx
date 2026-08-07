@@ -11,6 +11,7 @@ import {
   discoverMAXChannels,
   fetchChannelProviderInfo,
   type ChannelDiscoverResult,
+  type ChannelListItem,
   type ChannelProviderInfo,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -18,7 +19,7 @@ import { cn } from "@/lib/utils";
 type ConnectMAXDialogProps = {
   open: boolean;
   onClose: () => void;
-  onConnected: () => void;
+  onConnected: (connected: ChannelListItem[]) => void;
 };
 
 export function ConnectMAXDialog({ open, onClose, onConnected }: ConnectMAXDialogProps) {
@@ -120,12 +121,12 @@ export function ConnectMAXDialog({ open, onClose, onConnected }: ConnectMAXDialo
     setConnecting(true);
     setError(null);
     try {
-      await connectMAXChannels({
+      const result = await connectMAXChannels({
         ...(postMode === "own" ? { bot_token: botToken.trim() } : {}),
         post_mode: postMode,
         channels: [{ external_id: id, name: chatName.trim() || id }],
       });
-      onConnected();
+      onConnected(result.connected);
       onClose();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Не удалось подключить канал");
