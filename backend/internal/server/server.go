@@ -208,6 +208,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Post("/channels/max/discover", channelConnectHandler.DiscoverMAX)
 			r.Post("/channels/max/connect", channelConnectHandler.ConnectMAX)
 			r.Get("/channels/oauth/{provider}/start", channelConnectHandler.OAuthStart)
+			r.Post("/channels/oauth/{provider}/start", channelConnectHandler.OAuthStart)
 			r.Get("/channels/oauth/{provider}/discover", channelConnectHandler.OAuthDiscover)
 			r.Post("/channels/oauth/{provider}/connect", channelConnectHandler.OAuthConnect)
 			r.Get("/channels/{id}", channelHandler.Get)

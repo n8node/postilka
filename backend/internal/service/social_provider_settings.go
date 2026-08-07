@@ -86,7 +86,7 @@ func (s *SocialProviderSettingsService) UpdateAdmin(
 	cfg.SupportTelegramUsername = strings.TrimPrefix(strings.TrimSpace(cfg.SupportTelegramUsername), "@")
 	cfg.SupportEmail = strings.TrimSpace(cfg.SupportEmail)
 
-	if cfg.Enabled && provider.ConnectFlow() == "oauth" {
+	if cfg.Enabled && provider.ConnectFlow() == "oauth" && provider != model.SocialProviderVK {
 		if cfg.OAuthClientID == "" {
 			return nil, fmt.Errorf("%w: укажите OAuth Client ID", ErrInvalidSocialProviderSettings)
 		}
@@ -160,7 +160,7 @@ func (s *SocialProviderSettingsService) EnsureReady(ctx context.Context, provide
 	if !cfg.Enabled {
 		return cfg, ErrSocialProviderDisabled
 	}
-	if provider.ConnectFlow() == "oauth" && strings.TrimSpace(cfg.OAuthClientID) == "" {
+	if provider.ConnectFlow() == "oauth" && provider != model.SocialProviderVK && strings.TrimSpace(cfg.OAuthClientID) == "" {
 		return cfg, ErrSocialProviderNotReady
 	}
 	return cfg, nil

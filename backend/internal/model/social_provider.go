@@ -116,7 +116,7 @@ func DefaultSocialProviderSettings(provider SocialProvider) SocialProviderSettin
 	switch provider {
 	case SocialProviderVK:
 		def.ConnectHelpURL = "https://postilka.ru/docs/vk"
-		def.ConnectHelpText = "1. Войдите через VK под аккаунтом администратора сообщества.\n2. Выберите сообщества, где вы администратор.\n3. Подтвердите права на публикацию."
+		def.ConnectHelpText = "1. Создайте Standalone-приложение VK (vk.com/apps?act=manage) и укажите Redirect URI из Postilka.\n2. Скопируйте ID приложения и защищённый ключ.\n3. В Postilka вставьте ключи и войдите через VK.\n4. Выберите сообщества, где вы администратор.\n5. Права приложения: wall, photos, video, groups, offline."
 	case SocialProviderOK:
 		def.ConnectHelpURL = "https://postilka.ru/docs/ok"
 		def.ConnectHelpText = "1. Войдите через Одноклассники.\n2. Выберите группу, где вы администратор.\n3. Подтвердите подключение."
@@ -195,6 +195,11 @@ type MAXConnectRequest struct {
 	BotToken string                      `json:"bot_token"`
 	Channels []ChannelConnectTargetInput `json:"channels"`
 	PostMode string                      `json:"post_mode,omitempty"`
+}
+
+type ChannelOAuthStartRequest struct {
+	OAuthClientID     string `json:"oauth_client_id,omitempty"`
+	OAuthClientSecret string `json:"oauth_client_secret,omitempty"`
 }
 
 type ChannelOAuthStartResult struct {

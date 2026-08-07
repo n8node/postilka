@@ -155,7 +155,7 @@ func (h *ChannelHandler) SendTestMessage(w http.ResponseWriter, r *http.Request)
 	id := chi.URLParam(r, "id")
 	var req model.ChannelTestMessageRequest
 	_ = json.NewDecoder(r.Body).Decode(&req)
-	result, err := h.test.SendTestMessage(r.Context(), userID, r, id, req.Text)
+	result, err := h.test.SendTestMessage(r.Context(), userID, r, id, req)
 	if err != nil {
 		writeChannelError(w, err)
 		return

@@ -1464,7 +1464,19 @@ export function updateChannelTelegramToken(id: string, botToken: string) {
   });
 }
 
-export function startChannelOAuth(provider: SocialProviderKey) {
+export function startChannelOAuth(
+  provider: SocialProviderKey,
+  credentials?: { oauth_client_id: string; oauth_client_secret: string },
+) {
+  if (credentials) {
+    return apiFetch<{ redirect_url: string; state_token: string }>(
+      `/channels/oauth/${provider}/start`,
+      {
+        method: "POST",
+        body: JSON.stringify(credentials),
+      },
+    );
+  }
   return apiFetch<{ redirect_url: string; state_token: string }>(
     `/channels/oauth/${provider}/start`,
   );

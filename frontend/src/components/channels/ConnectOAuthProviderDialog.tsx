@@ -38,6 +38,10 @@ export function ConnectOAuthProviderDialog({
   const [hint, setHint] = useState<string | null>(null);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
+  const [vkAppId, setVkAppId] = useState("");
+  const [vkAppSecret, setVkAppSecret] = useState("");
+
+  const needsUserOAuthApp = provider === "vk";
 
   const loadDiscover = useCallback(async (sid: string) => {
     setLoading(true);
@@ -67,6 +71,8 @@ export function ConnectOAuthProviderDialog({
       setTargets([]);
       setHint(null);
       setSelected({});
+      setVkAppId("");
+      setVkAppSecret("");
       return;
     }
     if (initialSessionId) {
@@ -76,10 +82,23 @@ export function ConnectOAuthProviderDialog({
   }, [open, initialSessionId, loadDiscover]);
 
   async function handleOAuthStart() {
+    if (needsUserOAuthApp) {
+      const appId = vkAppId.trim();
+      const appSecret = vkAppSecret.trim();
+      if (!appId || !appSecret) {
+        setError("Укажите ID приложения VK и защищённый ключ");
+        return;
+      }
+    }
     setLoading(true);
     setError(null);
     try {
-      const result = await startChannelOAuth(provider);
+      const result = needsUserOAuthApp
+        ? await startChannelOAuth(provider, {
+            oauth_client_id: vkAppId.trim(),
+            oauth_client_secret: vkAppSecret.trim(),
+          })
+        : await startChannelOAuth(provider);
       window.location.href = result.redirect_url;
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Не удалось начать OAuth");
@@ -136,10 +155,50 @@ export function ConnectOAuthProviderDialog({
 
         {step === "start" && (
           <div className="mt-6 space-y-4">
-            <p className="text-sm text-muted">
-              Нажмите кнопку ниже — откроется окно авторизации {label}. После подтверждения
-              вы вернётесь сюда и сможете выбрать каналы.
-            </p>
+            {needsUserOAuthApp ? (
+              <>
+                <p className="text-sm text-muted">
+                  Создайте Standalone-приложение на{" "}
+                  <a
+                    href="https://vk.com/apps?act=manage"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-accent underline"
+                  >
+                    vk.com/apps
+                  </a>
+                  . В настройках укажите Redirect URI:{" "}
+                  <code className="rounded bg-zinc-100 px-1 text-xs">
+                    https://postilka.ru/app/api/v1/channels/oauth/vk/callback
+                  </code>
+                </p>
+                <label className="block space-y-1">
+                  <span className="text-sm font-medium">ID приложения</span>
+                  <input
+                    type="text"
+                    value={vkAppId}
+                    onChange={(e) => setVkAppId(e.target.value)}
+                    className="w-full rounded-md border border-border px-3 py-2 text-sm"
+                    autoComplete="off"
+                  />
+                </label>
+                <label className="block space-y-1">
+                  <span className="text-sm font-medium">Защищённый ключ</span>
+                  <input
+                    type="password"
+                    value={vkAppSecret}
+                    onChange={(e) => setVkAppSecret(e.target.value)}
+                    className="w-full rounded-md border border-border px-3 py-2 text-sm"
+                    autoComplete="off"
+                  />
+                </label>
+              </>
+            ) : (
+              <p className="text-sm text-muted">
+                Нажмите кнопку ниже — откроется окно авторизации {label}. После подтверждения
+                вы вернётесь сюда и сможете выбрать каналы.
+              </p>
+            )}
             <button
               type="button"
               onClick={() => void handleOAuthStart()}

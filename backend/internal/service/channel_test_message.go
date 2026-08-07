@@ -43,7 +43,7 @@ func (s *ChannelTestService) SendTestMessage(
 	userID string,
 	r *http.Request,
 	channelID string,
-	text string,
+	req model.ChannelTestMessageRequest,
 ) (*model.ChannelTestMessageResult, error) {
 	ws, err := s.requireAdmin(ctx, userID, r)
 	if err != nil {
@@ -62,12 +62,17 @@ func (s *ChannelTestService) SendTestMessage(
 		return nil, err
 	}
 
-	text = strings.TrimSpace(text)
-	if text == "" {
+	text := strings.TrimSpace(req.Text)
+	photoURL := strings.TrimSpace(req.PhotoURL)
+	videoURL := strings.TrimSpace(req.VideoURL)
+	if photoURL != "" && videoURL != "" {
+		return nil, fmt.Errorf("укажите photo_url или video_url, но не оба сразу")
+	}
+	if text == "" && photoURL == "" && videoURL == "" {
 		text = model.DefaultChannelTestMessage
 	}
 
-	postID, sendErr := s.publish(ctx, ch, token, text)
+	postID, sendErr := s.publish(ctx, ch, token, text, photoURL, videoURL)
 	if sendErr != nil {
 		_ = s.channels.UpdateStatus(ctx, ws.ID, channelID, model.ChannelStatusNeedsReconnect, sendErr.Error())
 		return nil, sendErr
@@ -84,7 +89,11 @@ func (s *ChannelTestService) SendTestMessage(
 	return result, nil
 }
 
-func (s *ChannelTestService) publish(ctx context.Context, ch *model.Channel, token, text string) (string, error) {
+func (s *ChannelTestService) publish(
+	ctx context.Context,
+	ch *model.Channel,
+	token, text, photoURL, videoURL string,
+) (string, error) {
 	switch ch.Provider {
 	case model.ChannelProviderTelegram:
 		if err := s.botClient.SendMessage(ctx, token, ch.ChatID, text); err != nil {
@@ -97,8 +106,15 @@ func (s *ChannelTestService) publish(ctx context.Context, ch *model.Channel, tok
 		if err != nil {
 			return "", fmt.Errorf("некорректный ID сообщества VK")
 		}
+		input := oauthclient.VKWallPostInput{Message: text}
+		if photoURL != "" {
+			input.Photos = []oauthclient.VKMediaSource{{URL: photoURL}}
+		}
+		if videoURL != "" {
+			input.Video = &oauthclient.VKMediaSource{URL: videoURL}
+		}
 		client := &oauthclient.VKCommunityClient{}
-		postID, err := client.PostWallMessage(ctx, token, ownerID, text)
+		postID, err := client.PostWall(ctx, token, ownerID, input)
 		if err != nil {
 			return "", err
 		}

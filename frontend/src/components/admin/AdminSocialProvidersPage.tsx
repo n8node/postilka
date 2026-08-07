@@ -383,14 +383,18 @@ function SocialSettingsForm({
   onSave: () => void;
   saving: boolean;
 }) {
+  const isUserOAuthApp = provider === "vk";
+
   return (
     <div className="mx-auto max-w-2xl space-y-5">
       <div>
         <h2 className="text-lg font-medium text-slate-900">{label}</h2>
         <p className="text-sm text-slate-500">
-          {connectFlow === "oauth"
-            ? "OAuth-приложение для подключения каналов пользователями."
-            : "Подключение через токен бота MAX."}
+          {isUserOAuthApp
+            ? "Пользователи подключают сообщества через своё приложение VK."
+            : connectFlow === "oauth"
+              ? "OAuth-приложение платформы для подключения каналов пользователями."
+              : "Подключение через токен бота MAX."}
         </p>
       </div>
 
@@ -406,33 +410,58 @@ function SocialSettingsForm({
         </label>
       </Section>
 
-      {connectFlow === "oauth" && (
-        <Section title="OAuth-приложение">
+      {isUserOAuthApp ? (
+        <Section title="Приложение VK пользователя">
           <p className="text-xs text-slate-500">
-            Redirect URI для приложения:{" "}
-            <code className="rounded bg-slate-100 px-1 py-0.5 text-xs">
-              https://postilka.ru/app/api/v1/channels/oauth/{provider}/callback
-            </code>
+            Ключи OAuth не хранятся в админке. Каждый пользователь создаёт Standalone-приложение
+            на{" "}
+            <a
+              href="https://vk.com/apps?act=manage"
+              target="_blank"
+              rel="noreferrer"
+              className="text-slate-700 underline"
+            >
+              vk.com/apps
+            </a>{" "}
+            и указывает Redirect URI:
           </p>
-          <label className="block space-y-1.5">
-            <span className="text-sm font-medium text-slate-700">Client ID / App ID</span>
-            <input
-              type="text"
-              value={settings.oauth_client_id}
-              onChange={(e) => onPatch({ oauth_client_id: e.target.value })}
-              className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
-            />
-          </label>
-          <label className="block space-y-1.5">
-            <span className="text-sm font-medium text-slate-700">Client Secret</span>
-            <input
-              type="password"
-              value={settings.oauth_client_secret}
-              onChange={(e) => onPatch({ oauth_client_secret: e.target.value })}
-              className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
-            />
-          </label>
+          <code className="block rounded bg-slate-100 px-2 py-1.5 text-xs">
+            https://postilka.ru/app/api/v1/channels/oauth/vk/callback
+          </code>
+          <p className="text-xs text-slate-500">
+            Нужны права: wall, photos, video, groups, offline. Пользователь вводит ID приложения и
+            защищённый ключ при подключении канала.
+          </p>
         </Section>
+      ) : (
+        connectFlow === "oauth" && (
+          <Section title="OAuth-приложение">
+            <p className="text-xs text-slate-500">
+              Redirect URI для приложения:{" "}
+              <code className="rounded bg-slate-100 px-1 py-0.5 text-xs">
+                https://postilka.ru/app/api/v1/channels/oauth/{provider}/callback
+              </code>
+            </p>
+            <label className="block space-y-1.5">
+              <span className="text-sm font-medium text-slate-700">Client ID / App ID</span>
+              <input
+                type="text"
+                value={settings.oauth_client_id}
+                onChange={(e) => onPatch({ oauth_client_id: e.target.value })}
+                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+              />
+            </label>
+            <label className="block space-y-1.5">
+              <span className="text-sm font-medium text-slate-700">Client Secret</span>
+              <input
+                type="password"
+                value={settings.oauth_client_secret}
+                onChange={(e) => onPatch({ oauth_client_secret: e.target.value })}
+                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+              />
+            </label>
+          </Section>
+        )
       )}
 
       <HelpSupportFields

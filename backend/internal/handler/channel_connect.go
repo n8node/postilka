@@ -32,7 +32,14 @@ func (h *ChannelConnectHandler) OAuthStart(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	result, err := h.connect.OAuthStart(r.Context(), userID, r, provider)
+	var req model.ChannelOAuthStartRequest
+	if r.Method == http.MethodPost && r.ContentLength > 0 {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeError(w, http.StatusBadRequest, "Некорректное тело запроса")
+			return
+		}
+	}
+	result, err := h.connect.OAuthStart(r.Context(), userID, r, provider, req)
 	if err != nil {
 		writeChannelConnectError(w, err)
 		return

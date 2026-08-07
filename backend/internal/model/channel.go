@@ -135,5 +135,7 @@ type ChannelTestMessageResult struct {
 }
 
 type ChannelTestMessageRequest struct {
-	Text string `json:"text,omitempty"`
+	Text     string `json:"text,omitempty"`
+	PhotoURL string `json:"photo_url,omitempty"`
+	VideoURL string `json:"video_url,omitempty"`
 }

@@ -70,6 +70,7 @@ func (s *ChannelConnectService) OAuthStart(
 	userID string,
 	r *http.Request,
 	provider model.SocialProvider,
+	req model.ChannelOAuthStartRequest,
 ) (*model.ChannelOAuthStartResult, error) {
 	if provider == model.SocialProviderMAX {
 		return nil, fmt.Errorf("MAX использует подключение по токену бота")
@@ -86,11 +87,30 @@ func (s *ChannelConnectService) OAuthStart(
 	if err != nil {
 		return nil, err
 	}
+
+	sessionMeta := map[string]any{}
+	appID, appSecret, err := s.resolveOAuthAppCredentials(provider, cfg, req)
+	if err != nil {
+		return nil, err
+	}
+	if provider == model.SocialProviderVK {
+		if s.cipher == nil {
+			return nil, ErrCryptoUnavailable
+		}
+		encSecret, err := s.cipher.Encrypt(appSecret)
+		if err != nil {
+			return nil, err
+		}
+		sessionMeta["oauth_app_id"] = appID
+		sessionMeta["oauth_app_secret_encrypted"] = encSecret
+	}
+
 	session, err := s.oauthSessions.Create(ctx, repository.ChannelOAuthSessionCreateParams{
 		UserID:      userID,
 		WorkspaceID: ws.ID,
 		Provider:    provider,
 		StateToken:  state,
+		Metadata:    sessionMeta,
 		ExpiresAt:   time.Now().Add(channelOAuthSessionTTL),
 	})
 	if err != nil {
@@ -103,7 +123,7 @@ func (s *ChannelConnectService) OAuthStart(
 	switch provider {
 	case model.SocialProviderVK:
 		client := &oauthclient.VKCommunityClient{
-			AppID: cfg.OAuthClientID, AppSecret: cfg.OAuthClientSecret, RedirectURI: redirectURI,
+			AppID: appID, AppSecret: appSecret, RedirectURI: redirectURI,
 		}
 		authURL = client.AuthorizeURL(state)
 	case model.SocialProviderOK:
@@ -164,8 +184,12 @@ func (s *ChannelConnectService) OAuthCallback(
 
 	switch provider {
 	case model.SocialProviderVK:
+		appID, appSecret, err := s.oauthAppCredentialsFromSession(session, cfg)
+		if err != nil {
+			return nil, err
+		}
 		client := &oauthclient.VKCommunityClient{
-			AppID: cfg.OAuthClientID, AppSecret: cfg.OAuthClientSecret, RedirectURI: redirectURI,
+			AppID: appID, AppSecret: appSecret, RedirectURI: redirectURI,
 		}
 		token, err := client.ExchangeCode(ctx, code)
 		if err != nil {
@@ -257,7 +281,7 @@ func (s *ChannelConnectService) OAuthDiscover(
 		return nil, err
 	}
 
-	targets, hint, err := s.discoverTargets(ctx, session.Provider, accessToken)
+	targets, hint, err := s.discoverTargets(ctx, session.Provider, accessToken, session)
 	if err != nil {
 		return nil, err
 	}
@@ -313,7 +337,7 @@ func (s *ChannelConnectService) OAuthConnect(
 	if err != nil {
 		return nil, err
 	}
-	discoveredTargets, _, err := s.discoverTargets(ctx, session.Provider, accessToken)
+	discoveredTargets, _, err := s.discoverTargets(ctx, session.Provider, accessToken, session)
 	if err != nil {
 		return nil, err
 	}
@@ -718,18 +742,18 @@ func (s *ChannelConnectService) discoverTargets(
 	ctx context.Context,
 	provider model.SocialProvider,
 	accessToken string,
+	session *model.ChannelOAuthSession,
 ) ([]model.DiscoveredChannelTarget, string, error) {
 	cfg, err := s.socialSettings.GetEffective(ctx, provider)
 	if err != nil {
 		return nil, "", err
 	}
 	redirectURI := s.cfg.ChannelOAuthRedirectURI(string(provider))
+	_ = session
 
 	switch provider {
 	case model.SocialProviderVK:
-		client := &oauthclient.VKCommunityClient{
-			AppID: cfg.OAuthClientID, AppSecret: cfg.OAuthClientSecret, RedirectURI: redirectURI,
-		}
+		client := &oauthclient.VKCommunityClient{}
 		groups, err := client.ListAdminGroups(ctx, accessToken)
 		if err != nil {
 			return nil, "", err
@@ -842,4 +866,48 @@ func randomToken(n int) (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(b), nil
+}
+
+func (s *ChannelConnectService) resolveOAuthAppCredentials(
+	provider model.SocialProvider,
+	cfg model.SocialProviderSettings,
+	req model.ChannelOAuthStartRequest,
+) (appID, appSecret string, err error) {
+	if provider == model.SocialProviderVK {
+		appID = strings.TrimSpace(req.OAuthClientID)
+		appSecret = strings.TrimSpace(req.OAuthClientSecret)
+		if appID == "" || appSecret == "" {
+			return "", "", fmt.Errorf("укажите ID приложения VK и защищённый ключ")
+		}
+		return appID, appSecret, nil
+	}
+	appID = strings.TrimSpace(cfg.OAuthClientID)
+	appSecret = strings.TrimSpace(cfg.OAuthClientSecret)
+	if appID == "" {
+		return "", "", ErrSocialProviderNotReady
+	}
+	return appID, appSecret, nil
+}
+
+func (s *ChannelConnectService) oauthAppCredentialsFromSession(
+	session *model.ChannelOAuthSession,
+	cfg model.SocialProviderSettings,
+) (appID, appSecret string, err error) {
+	if session.Provider == model.SocialProviderVK {
+		if s.cipher == nil {
+			return "", "", ErrCryptoUnavailable
+		}
+		rawID, _ := session.Metadata["oauth_app_id"].(string)
+		rawSecret, _ := session.Metadata["oauth_app_secret_encrypted"].(string)
+		appID = strings.TrimSpace(rawID)
+		if appID == "" || strings.TrimSpace(rawSecret) == "" {
+			return "", "", fmt.Errorf("сессия OAuth не содержит ключи приложения VK — начните подключение заново")
+		}
+		appSecret, err = s.cipher.Decrypt(rawSecret)
+		if err != nil {
+			return "", "", err
+		}
+		return appID, appSecret, nil
+	}
+	return strings.TrimSpace(cfg.OAuthClientID), strings.TrimSpace(cfg.OAuthClientSecret), nil
 }
