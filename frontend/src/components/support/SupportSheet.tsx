@@ -27,6 +27,7 @@ const DEFAULT_INFO: ChannelProviderInfo = {
   support_telegram_url: "https://t.me/postilka_support",
   support_email: "support@postilka.ru",
   support_hours_text: "пн–вс 10:00–19:00 (МСК)",
+  providers: [],
 };
 
 function SupportRow({
