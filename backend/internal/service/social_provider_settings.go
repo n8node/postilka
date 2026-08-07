@@ -134,6 +134,12 @@ func (s *SocialProviderSettingsService) PublicInfo(ctx context.Context, provider
 		SupportEmail:            fallbackString(cfg.SupportEmail, def.SupportEmail),
 		SupportHoursText:        fallbackString(cfg.SupportHoursText, def.SupportHoursText),
 	}
+	if provider == model.SocialProviderMAX && cfg.PlatformBotEnabled {
+		if bot, ok := s.MAXPlatformBotPublicInfo(ctx); ok {
+			info.PlatformBotEnabled = true
+			info.PlatformBot = bot
+		}
+	}
 	info.SupportTelegramURL = buildSupportTelegramURL(info.SupportTelegramUsername, "connect_"+string(provider))
 	return info
 }

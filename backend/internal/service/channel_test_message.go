@@ -56,14 +56,8 @@ func (s *ChannelTestService) SendTestMessage(
 	if s.cipher == nil {
 		return nil, ErrCryptoUnavailable
 	}
-	enc, err := s.channels.GetTokenEncrypted(ctx, ws.ID, channelID)
-	if err != nil {
-		return nil, err
-	}
-	if strings.TrimSpace(enc) == "" {
-		return nil, fmt.Errorf("токен канала не сохранён — переподключите канал")
-	}
-	token, err := s.cipher.Decrypt(enc)
+
+	token, err := s.resolvePublishToken(ctx, ch)
 	if err != nil {
 		return nil, err
 	}
@@ -145,6 +139,25 @@ func (s *ChannelTestService) publish(ctx context.Context, ch *model.Channel, tok
 	default:
 		return "", fmt.Errorf("провайдер %s не поддерживает тестовую публикацию", ch.Provider)
 	}
+}
+
+func (s *ChannelTestService) resolvePublishToken(ctx context.Context, ch *model.Channel) (string, error) {
+	if ch.Provider == model.ChannelProviderMAX && ch.MaxPostMode == model.MAXPostModePlatform {
+		token, _, err := s.socialSettings.ResolveMAXPlatformBotToken(ctx, s.cipher)
+		if err != nil {
+			return "", fmt.Errorf("бот Postilka для MAX не настроен — обратитесь в поддержку")
+		}
+		return token, nil
+	}
+
+	enc, err := s.channels.GetTokenEncrypted(ctx, ch.WorkspaceID, ch.ID)
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(enc) == "" {
+		return "", fmt.Errorf("токен канала не сохранён — переподключите канал")
+	}
+	return s.cipher.Decrypt(enc)
 }
 
 func (s *ChannelTestService) requireAdmin(ctx context.Context, userID string, r *http.Request) (*model.Workspace, error) {

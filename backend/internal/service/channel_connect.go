@@ -386,6 +386,40 @@ func maxDiscoverBotInfo(bot *oauthclient.MAXBotInfo) *model.MAXDiscoverBot {
 	}
 }
 
+func (s *ChannelConnectService) resolveMAXConnectBot(
+	ctx context.Context,
+	reqToken string,
+	postModeRaw string,
+) (botToken string, bot *oauthclient.MAXBotInfo, botInfo *model.MAXDiscoverBot, postMode model.MAXPostMode, err error) {
+	postMode = normalizeMAXPostMode(postModeRaw)
+	if postMode == model.MAXPostModePlatform {
+		var platformBot *model.MAXDiscoverBot
+		botToken, platformBot, err = s.socialSettings.ResolveMAXPlatformBotToken(ctx, s.cipher)
+		if err != nil {
+			return "", nil, nil, postMode, err
+		}
+		bot, err = s.maxClient.GetMe(ctx, botToken)
+		if err != nil {
+			return "", nil, nil, postMode, fmt.Errorf("%w: %s", ErrInvalidBotToken, err.Error())
+		}
+		botInfo = maxDiscoverBotInfo(bot)
+		if platformBot != nil && platformBot.SearchQuery != "" {
+			botInfo = platformBot
+		}
+		return botToken, bot, botInfo, postMode, nil
+	}
+
+	botToken = strings.TrimSpace(reqToken)
+	if botToken == "" {
+		return "", nil, nil, postMode, ErrInvalidBotToken
+	}
+	bot, err = s.maxClient.GetMe(ctx, botToken)
+	if err != nil {
+		return "", nil, nil, postMode, fmt.Errorf("%w: %s", ErrInvalidBotToken, err.Error())
+	}
+	return botToken, bot, maxDiscoverBotInfo(bot), postMode, nil
+}
+
 func (s *ChannelConnectService) maxTargetsFromChats(
 	ctx context.Context,
 	botToken string,
@@ -426,15 +460,11 @@ func (s *ChannelConnectService) DiscoverMAX(
 	if _, err := s.requireEditor(ctx, userID, r); err != nil {
 		return nil, err
 	}
-	botToken := strings.TrimSpace(req.BotToken)
-	if botToken == "" {
-		return nil, ErrInvalidBotToken
-	}
-	bot, err := s.maxClient.GetMe(ctx, botToken)
+	botToken, bot, botInfo, _, err := s.resolveMAXConnectBot(ctx, req.BotToken, req.PostMode)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %s", ErrInvalidBotToken, err.Error())
+		return nil, err
 	}
-	botInfo := maxDiscoverBotInfo(bot)
+	_ = bot
 
 	targets := []model.DiscoveredChannelTarget{}
 	rawChat := strings.TrimSpace(req.ChatID)
@@ -509,9 +539,9 @@ func (s *ChannelConnectService) ConnectMAX(
 	if err != nil {
 		return nil, err
 	}
-	botToken := strings.TrimSpace(req.BotToken)
-	if botToken == "" {
-		return nil, ErrInvalidBotToken
+	botToken, bot, _, postMode, err := s.resolveMAXConnectBot(ctx, req.BotToken, req.PostMode)
+	if err != nil {
+		return nil, err
 	}
 	if len(req.Channels) == 0 {
 		return nil, fmt.Errorf("выберите хотя бы один канал")
@@ -520,13 +550,12 @@ func (s *ChannelConnectService) ConnectMAX(
 		return nil, ErrCryptoUnavailable
 	}
 
-	bot, err := s.maxClient.GetMe(ctx, botToken)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %s", ErrInvalidBotToken, err.Error())
-	}
-	encrypted, err := s.cipher.Encrypt(botToken)
-	if err != nil {
-		return nil, err
+	var encrypted string
+	if postMode == model.MAXPostModeOwn {
+		encrypted, err = s.cipher.Encrypt(botToken)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	currentCount, err := s.channels.CountByWorkspace(ctx, ws.ID)
@@ -578,16 +607,21 @@ func (s *ChannelConnectService) ConnectMAX(
 			ChatType:          chat.Type,
 			BotUsername:       bot.Username,
 			BotTokenEncrypted: encrypted,
+			MaxPostMode:       postMode,
 			Status:            model.ChannelStatusActive,
 		})
 		if err != nil {
 			return nil, err
 		}
-		result.Connected = append(result.Connected, model.ChannelListItem{
-			Channel:      *created,
-			BotTokenSet:  true,
-			BotTokenHint: maskSecret(botToken),
-		})
+		item := model.ChannelListItem{Channel: *created}
+		if postMode == model.MAXPostModePlatform {
+			item.BotTokenSet = true
+			item.BotTokenHint = "Postilka"
+		} else {
+			item.BotTokenSet = true
+			item.BotTokenHint = maskSecret(botToken)
+		}
+		result.Connected = append(result.Connected, item)
 	}
 
 	if len(result.Connected) == 0 && len(result.Skipped) > 0 {

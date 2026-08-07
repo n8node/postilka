@@ -1223,6 +1223,7 @@ export type SocialProviderSettings = {
   enabled: boolean;
   oauth_client_id: string;
   oauth_client_secret: string;
+  platform_bot_enabled?: boolean;
   connect_help_text: string;
   connect_help_url: string;
   docs_url: string;
@@ -1250,6 +1251,31 @@ export function updateAdminSocialProvider(provider: SocialProviderKey, settings:
   });
 }
 
+export type MAXPlatformBotAdminView = {
+  enabled: boolean;
+  bot_token_set: boolean;
+  bot_token_hint?: string;
+  bot?: {
+    username: string;
+    name: string;
+    user_id: number;
+    profile_url: string;
+    search_query: string;
+  };
+  updated_at?: string;
+};
+
+export function fetchAdminMAXPlatformBot() {
+  return apiFetch<MAXPlatformBotAdminView>("/admin/max-platform-bot");
+}
+
+export function updateAdminMAXPlatformBot(payload: { enabled: boolean; bot_token?: string }) {
+  return apiFetch<MAXPlatformBotAdminView>("/admin/max-platform-bot", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
 export type ChannelStatus = "active" | "needs_reconnect" | "disabled";
 
 export type ChannelProvider =
@@ -1268,6 +1294,7 @@ export type Channel = {
   chat_id: string;
   chat_type: string;
   bot_username?: string;
+  max_post_mode?: "own" | "platform";
   status: ChannelStatus;
   last_error?: string;
   created_at: string;
@@ -1303,6 +1330,14 @@ export type SocialProviderPublicInfo = {
   label: string;
   enabled: boolean;
   connect_flow: "oauth" | "bot_token";
+  platform_bot_enabled?: boolean;
+  platform_bot?: {
+    username: string;
+    name: string;
+    user_id: number;
+    profile_url: string;
+    search_query: string;
+  };
   connect_help_text: string;
   connect_help_url: string;
   docs_url: string;
@@ -1423,15 +1458,24 @@ export function connectChannelOAuth(
   );
 }
 
-export function discoverMAXChannels(botToken: string, chatId?: string) {
+export function discoverMAXChannels(
+  botToken: string,
+  chatId?: string,
+  postMode: "own" | "platform" = "own",
+) {
   return apiFetch<ChannelDiscoverResult>("/channels/max/discover", {
     method: "POST",
-    body: JSON.stringify({ bot_token: botToken, chat_id: chatId ?? "" }),
+    body: JSON.stringify({
+      bot_token: botToken,
+      chat_id: chatId ?? "",
+      post_mode: postMode,
+    }),
   });
 }
 
 export function connectMAXChannels(payload: {
-  bot_token: string;
+  bot_token?: string;
+  post_mode?: "own" | "platform";
   channels: { external_id: string; name?: string }[];
 }) {
   return apiFetch<{ connected: ChannelListItem[]; skipped?: string[] }>(

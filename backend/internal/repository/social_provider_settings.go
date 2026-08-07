@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -96,6 +97,72 @@ func (r *SocialProviderSettingsRepository) Update(
 		return nil, err
 	}
 	rec.Provider = model.SocialProvider(p)
+	if err := json.Unmarshal(out, &rec.Config); err != nil {
+		return nil, err
+	}
+	return &rec, nil
+}
+
+type MAXPlatformBotRecord struct {
+	Config                 model.SocialProviderSettings
+	PlatformBotTokenEnc    string
+	PlatformBotUsername    string
+	UpdatedAt              time.Time
+}
+
+func (r *SocialProviderSettingsRepository) GetMAXPlatformBot(ctx context.Context) (*MAXPlatformBotRecord, error) {
+	const q = `
+		SELECT config, COALESCE(platform_bot_token_encrypted, ''), COALESCE(platform_bot_username, ''), updated_at
+		FROM social_provider_settings
+		WHERE provider = $1
+	`
+	var raw []byte
+	var rec MAXPlatformBotRecord
+	err := r.pool.QueryRow(ctx, q, string(model.SocialProviderMAX)).Scan(
+		&raw, &rec.PlatformBotTokenEnc, &rec.PlatformBotUsername, &rec.UpdatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(raw, &rec.Config); err != nil {
+		return nil, err
+	}
+	return &rec, nil
+}
+
+func (r *SocialProviderSettingsRepository) SaveMAXPlatformBot(
+	ctx context.Context,
+	config model.SocialProviderSettings,
+	tokenEncrypted string,
+	botUsername string,
+) (*MAXPlatformBotRecord, error) {
+	raw, err := json.Marshal(config)
+	if err != nil {
+		return nil, err
+	}
+	const q = `
+		UPDATE social_provider_settings
+		SET config = $2,
+		    platform_bot_token_encrypted = NULLIF($3, ''),
+		    platform_bot_username = NULLIF($4, ''),
+		    updated_at = NOW()
+		WHERE provider = $1
+		RETURNING config, COALESCE(platform_bot_token_encrypted, ''), COALESCE(platform_bot_username, ''), updated_at
+	`
+	var out []byte
+	var rec MAXPlatformBotRecord
+	err = r.pool.QueryRow(ctx, q, string(model.SocialProviderMAX), raw, tokenEncrypted, botUsername).Scan(
+		&out, &rec.PlatformBotTokenEnc, &rec.PlatformBotUsername, &rec.UpdatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
 	if err := json.Unmarshal(out, &rec.Config); err != nil {
 		return nil, err
 	}

@@ -40,6 +40,13 @@ func (p ChannelProvider) Label() string {
 	}
 }
 
+type MAXPostMode string
+
+const (
+	MAXPostModeOwn      MAXPostMode = "own"
+	MAXPostModePlatform MAXPostMode = "platform"
+)
+
 type Channel struct {
 	ID          string          `json:"id"`
 	WorkspaceID string          `json:"workspace_id"`
@@ -48,6 +55,7 @@ type Channel struct {
 	ChatID      string          `json:"chat_id"`
 	ChatType    string          `json:"chat_type"`
 	BotUsername string          `json:"bot_username,omitempty"`
+	MaxPostMode MAXPostMode     `json:"max_post_mode,omitempty"`
 	Status      ChannelStatus   `json:"status"`
 	LastError   string          `json:"last_error,omitempty"`
 	CreatedAt   time.Time       `json:"created_at"`

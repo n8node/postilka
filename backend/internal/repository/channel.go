@@ -20,7 +20,7 @@ func NewChannelRepository(pool *pgxpool.Pool) *ChannelRepository {
 func (r *ChannelRepository) ListByWorkspace(ctx context.Context, workspaceID string) ([]model.Channel, error) {
 	const q = `
 		SELECT id, workspace_id, provider, name, chat_id, chat_type, bot_username,
-		       status, COALESCE(last_error, ''), created_at, updated_at
+		       COALESCE(max_post_mode, 'own'), status, COALESCE(last_error, ''), created_at, updated_at
 		FROM channels
 		WHERE workspace_id = $1
 		ORDER BY created_at DESC
@@ -36,7 +36,7 @@ func (r *ChannelRepository) ListByWorkspace(ctx context.Context, workspaceID str
 		var ch model.Channel
 		if err := rows.Scan(
 			&ch.ID, &ch.WorkspaceID, &ch.Provider, &ch.Name, &ch.ChatID, &ch.ChatType,
-			&ch.BotUsername, &ch.Status, &ch.LastError, &ch.CreatedAt, &ch.UpdatedAt,
+			&ch.BotUsername, &ch.MaxPostMode, &ch.Status, &ch.LastError, &ch.CreatedAt, &ch.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -55,14 +55,14 @@ func (r *ChannelRepository) CountByWorkspace(ctx context.Context, workspaceID st
 func (r *ChannelRepository) GetByID(ctx context.Context, workspaceID, channelID string) (*model.Channel, error) {
 	const q = `
 		SELECT id, workspace_id, provider, name, chat_id, chat_type, bot_username,
-		       status, COALESCE(last_error, ''), created_at, updated_at
+		       COALESCE(max_post_mode, 'own'), status, COALESCE(last_error, ''), created_at, updated_at
 		FROM channels
 		WHERE id = $1 AND workspace_id = $2
 	`
 	var ch model.Channel
 	err := r.pool.QueryRow(ctx, q, channelID, workspaceID).Scan(
 		&ch.ID, &ch.WorkspaceID, &ch.Provider, &ch.Name, &ch.ChatID, &ch.ChatType,
-		&ch.BotUsername, &ch.Status, &ch.LastError, &ch.CreatedAt, &ch.UpdatedAt,
+		&ch.BotUsername, &ch.MaxPostMode, &ch.Status, &ch.LastError, &ch.CreatedAt, &ch.UpdatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -107,25 +107,30 @@ type ChannelCreateParams struct {
 	ChatType           string
 	BotUsername        string
 	BotTokenEncrypted  string
+	MaxPostMode        model.MAXPostMode
 	Status             model.ChannelStatus
 }
 
 func (r *ChannelRepository) Create(ctx context.Context, p ChannelCreateParams) (*model.Channel, error) {
+	maxPostMode := p.MaxPostMode
+	if maxPostMode == "" {
+		maxPostMode = model.MAXPostModeOwn
+	}
 	const q = `
 		INSERT INTO channels (
 			workspace_id, provider, name, chat_id, chat_type, bot_username,
-			bot_token_encrypted, status
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+			bot_token_encrypted, max_post_mode, status
+		) VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, ''), $8, $9)
 		RETURNING id, workspace_id, provider, name, chat_id, chat_type, bot_username,
-		          status, COALESCE(last_error, ''), created_at, updated_at
+		          COALESCE(max_post_mode, 'own'), status, COALESCE(last_error, ''), created_at, updated_at
 	`
 	var ch model.Channel
 	err := r.pool.QueryRow(ctx, q,
 		p.WorkspaceID, p.Provider, p.Name, p.ChatID, p.ChatType, p.BotUsername,
-		p.BotTokenEncrypted, p.Status,
+		p.BotTokenEncrypted, maxPostMode, p.Status,
 	).Scan(
 		&ch.ID, &ch.WorkspaceID, &ch.Provider, &ch.Name, &ch.ChatID, &ch.ChatType,
-		&ch.BotUsername, &ch.Status, &ch.LastError, &ch.CreatedAt, &ch.UpdatedAt,
+		&ch.BotUsername, &ch.MaxPostMode, &ch.Status, &ch.LastError, &ch.CreatedAt, &ch.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
@@ -159,12 +164,12 @@ func (r *ChannelRepository) UpdateToken(ctx context.Context, workspaceID, channe
 		    updated_at = NOW()
 		WHERE id = $1 AND workspace_id = $2
 		RETURNING id, workspace_id, provider, name, chat_id, chat_type, bot_username,
-		          status, COALESCE(last_error, ''), created_at, updated_at
+		          COALESCE(max_post_mode, 'own'), status, COALESCE(last_error, ''), created_at, updated_at
 	`
 	var ch model.Channel
 	err := r.pool.QueryRow(ctx, q, channelID, workspaceID, botTokenEncrypted, botUsername, status).Scan(
 		&ch.ID, &ch.WorkspaceID, &ch.Provider, &ch.Name, &ch.ChatID, &ch.ChatType,
-		&ch.BotUsername, &ch.Status, &ch.LastError, &ch.CreatedAt, &ch.UpdatedAt,
+		&ch.BotUsername, &ch.MaxPostMode, &ch.Status, &ch.LastError, &ch.CreatedAt, &ch.UpdatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound

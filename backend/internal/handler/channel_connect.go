@@ -143,6 +143,7 @@ func (h *ChannelConnectHandler) ConnectMAX(w http.ResponseWriter, r *http.Reques
 	result, err := h.connect.ConnectMAX(r.Context(), userID, r, model.MAXConnectRequest{
 		BotToken: req.BotToken,
 		Channels: channels,
+		PostMode: req.PostMode,
 	})
 	if err != nil {
 		if errors.Is(err, service.ErrChannelAlreadyConnected) && result != nil {

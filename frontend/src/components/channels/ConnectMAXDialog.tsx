@@ -10,6 +10,7 @@ import {
   type ChannelDiscoverResult,
   type ChannelProviderInfo,
 } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 type ConnectMAXDialogProps = {
   open: boolean;
@@ -19,6 +20,7 @@ type ConnectMAXDialogProps = {
 
 export function ConnectMAXDialog({ open, onClose, onConnected }: ConnectMAXDialogProps) {
   const [providerInfo, setProviderInfo] = useState<ChannelProviderInfo | null>(null);
+  const [postMode, setPostMode] = useState<"own" | "platform">("own");
   const [botToken, setBotToken] = useState("");
   const [showToken, setShowToken] = useState(false);
   const [chatID, setChatID] = useState("");
@@ -32,6 +34,7 @@ export function ConnectMAXDialog({ open, onClose, onConnected }: ConnectMAXDialo
   const [copied, setCopied] = useState<string | null>(null);
 
   const reset = useCallback(() => {
+    setPostMode("own");
     setBotToken("");
     setChatID("");
     setChatName("");
@@ -65,10 +68,14 @@ export function ConnectMAXDialog({ open, onClose, onConnected }: ConnectMAXDialo
     setBotResult(null);
     setChannelHint(null);
     try {
-      const result = await discoverMAXChannels(botToken.trim());
+      const result = await discoverMAXChannels(
+        postMode === "own" ? botToken.trim() : "",
+        undefined,
+        postMode,
+      );
       setBotResult(result);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Не удалось проверить токен");
+      setError(e instanceof ApiError ? e.message : "Не удалось проверить бота");
     } finally {
       setLoadingBot(false);
     }
@@ -79,7 +86,11 @@ export function ConnectMAXDialog({ open, onClose, onConnected }: ConnectMAXDialo
     setError(null);
     setChannelHint(null);
     try {
-      const result = await discoverMAXChannels(botToken.trim(), chatID.trim());
+      const result = await discoverMAXChannels(
+        postMode === "own" ? botToken.trim() : "",
+        chatID.trim(),
+        postMode,
+      );
       setChannelHint(result.hint ?? null);
       setBotResult(result);
     } catch (e) {
@@ -90,17 +101,21 @@ export function ConnectMAXDialog({ open, onClose, onConnected }: ConnectMAXDialo
   }
 
   async function handleConnect() {
-    const token = botToken.trim();
     const id = chatID.trim();
-    if (!token || !id) {
-      setError("Укажите токен бота и ссылку на канал");
+    if ((postMode === "own" && !botToken.trim()) || !id) {
+      setError(
+        postMode === "own"
+          ? "Укажите токен бота и канал"
+          : "Укажите канал",
+      );
       return;
     }
     setConnecting(true);
     setError(null);
     try {
       await connectMAXChannels({
-        bot_token: token,
+        ...(postMode === "own" ? { bot_token: botToken.trim() } : {}),
+        post_mode: postMode,
         channels: [{ external_id: id, name: chatName.trim() || id }],
       });
       onConnected();
@@ -114,7 +129,13 @@ export function ConnectMAXDialog({ open, onClose, onConnected }: ConnectMAXDialo
 
   const maxProvider = providerInfo?.providers.find((p) => p.provider === "max");
   const enabled = maxProvider?.enabled ?? false;
-  const bot = botResult?.bot;
+  const platformBotAvailable =
+    Boolean(maxProvider?.platform_bot_enabled && maxProvider.platform_bot?.search_query);
+  const platformBot = maxProvider?.platform_bot;
+  const bot = postMode === "platform" ? (botResult?.bot ?? platformBot ?? null) : botResult?.bot;
+  const botReady = postMode === "platform" ? platformBotAvailable : Boolean(botResult?.bot);
+  const canVerifyChannel = enabled && botReady && chatID.trim().length > 0;
+  const canConnect = enabled && botReady && chatID.trim().length > 0;
 
   if (!open) return null;
 
@@ -125,7 +146,9 @@ export function ConnectMAXDialog({ open, onClose, onConnected }: ConnectMAXDialo
           <div>
             <h2 className="text-lg font-semibold">Подключить MAX</h2>
             <p className="mt-0.5 text-sm text-muted">
-              Проверьте токен — Postilka покажет @username для поиска в MAX.
+              {postMode === "platform"
+                ? "Публикация через общего бота Postilka — добавьте его администратором канала."
+                : "Свой бот — проверьте токен, Postilka покажет @username для поиска в MAX."}
             </p>
           </div>
           <button
@@ -152,6 +175,57 @@ export function ConnectMAXDialog({ open, onClose, onConnected }: ConnectMAXDialo
         )}
 
         <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-2 rounded-lg border border-border p-1">
+            <button
+              type="button"
+              onClick={() => {
+                setPostMode("own");
+                setBotResult(null);
+                setChannelHint(null);
+                setError(null);
+              }}
+              className={cn(
+                "rounded-md px-3 py-2 text-sm",
+                postMode === "own" ? "bg-zinc-100 font-medium" : "text-muted hover:text-foreground",
+              )}
+            >
+              Свой бот
+            </button>
+            <button
+              type="button"
+              disabled={!platformBotAvailable}
+              onClick={() => {
+                setPostMode("platform");
+                setBotToken("");
+                setBotResult(null);
+                setChannelHint(null);
+                setError(null);
+              }}
+              className={cn(
+                "rounded-md px-3 py-2 text-sm",
+                postMode === "platform" ? "bg-zinc-100 font-medium" : "text-muted hover:text-foreground",
+                !platformBotAvailable && "cursor-not-allowed opacity-50",
+              )}
+            >
+              Бот Postilka
+            </button>
+          </div>
+
+          {postMode === "platform" && !platformBotAvailable && (
+            <p className="text-xs text-muted">
+              Публикация через бота Postilka пока недоступна — администратор платформы не настроил общего бота.
+            </p>
+          )}
+
+          {postMode === "platform" && platformBotAvailable && (
+            <p className="text-xs leading-relaxed text-muted">
+              Посты пойдут через бота Postilka. Если бот платформы недоступен или отключён, публикации и
+              запланированные посты в этом канале тоже остановятся.
+            </p>
+          )}
+
+          {postMode === "own" && (
+          <>
           <label className="block space-y-1.5">
             <span className="text-sm font-medium">1. Токен бота MAX</span>
             <div className="relative">
@@ -185,12 +259,28 @@ export function ConnectMAXDialog({ open, onClose, onConnected }: ConnectMAXDialo
             {loadingBot && <Loader2 className="h-4 w-4 animate-spin" />}
             Проверить бота
           </button>
+          </>
+          )}
+
+          {postMode === "platform" && platformBotAvailable && (
+            <button
+              type="button"
+              onClick={() => void handleVerifyBot()}
+              disabled={!enabled || loadingBot}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-border px-3 py-2 text-sm hover:bg-zinc-50 disabled:opacity-50"
+            >
+              {loadingBot && <Loader2 className="h-4 w-4 animate-spin" />}
+              Обновить список каналов
+            </button>
+          )}
 
           {bot && (
             <div className="rounded-lg border border-border bg-zinc-50/80 px-3.5 py-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-xs text-muted">Ник для поиска в MAX</p>
+                  <p className="text-xs text-muted">
+                    {postMode === "platform" ? "Бот Postilka для MAX" : "Ник для поиска в MAX"}
+                  </p>
                   <p className="mt-0.5 truncate font-mono text-[15px] font-semibold tracking-tight">
                     {bot.search_query}
                   </p>
@@ -269,7 +359,9 @@ export function ConnectMAXDialog({ open, onClose, onConnected }: ConnectMAXDialo
           )}
 
           <div className="text-sm">
-            <p className="font-medium">2. Добавьте бота в канал MAX</p>
+            <p className="font-medium">
+              {postMode === "platform" ? "1." : "2."} Добавьте бота в канал MAX
+            </p>
             <ol className="mt-1.5 list-decimal space-y-1 pl-4 text-xs leading-relaxed text-muted">
               <li>
                 Канал → <span className="text-foreground">Участники</span> →{" "}
@@ -291,7 +383,9 @@ export function ConnectMAXDialog({ open, onClose, onConnected }: ConnectMAXDialo
           </div>
 
           <label className="block space-y-1.5">
-            <span className="text-sm font-medium">3. Канал</span>
+            <span className="text-sm font-medium">
+              {postMode === "platform" ? "2." : "3."} Канал
+            </span>
             <input
               type="text"
               value={chatID}
@@ -334,7 +428,7 @@ export function ConnectMAXDialog({ open, onClose, onConnected }: ConnectMAXDialo
           <button
             type="button"
             onClick={() => void handleVerifyChannel()}
-            disabled={!enabled || loadingChannel || !botToken.trim() || !chatID.trim()}
+            disabled={!enabled || loadingChannel || !canVerifyChannel}
             className="flex-1 rounded-md border border-border px-3 py-2 text-sm hover:bg-zinc-50 disabled:opacity-50"
           >
             {loadingChannel ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "Проверить канал"}
@@ -342,7 +436,7 @@ export function ConnectMAXDialog({ open, onClose, onConnected }: ConnectMAXDialo
           <button
             type="button"
             onClick={() => void handleConnect()}
-            disabled={!enabled || connecting || !botToken.trim() || !chatID.trim()}
+            disabled={!enabled || connecting || !canConnect}
             className="flex-1 rounded-md bg-accent px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
           >
             {connecting ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "Подключить"}

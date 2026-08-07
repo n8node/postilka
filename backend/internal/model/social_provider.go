@@ -50,6 +50,7 @@ type SocialProviderSettings struct {
 	Enabled                 bool   `json:"enabled"`
 	OAuthClientID           string `json:"oauth_client_id"`
 	OAuthClientSecret       string `json:"oauth_client_secret"`
+	PlatformBotEnabled      bool   `json:"platform_bot_enabled"`
 	ConnectHelpText         string `json:"connect_help_text"`
 	ConnectHelpURL          string `json:"connect_help_url"`
 	DocsURL                 string `json:"docs_url"`
@@ -81,6 +82,8 @@ type SocialProviderPublicInfo struct {
 	Label                   string         `json:"label"`
 	Enabled                 bool           `json:"enabled"`
 	ConnectFlow             string         `json:"connect_flow"`
+	PlatformBotEnabled      bool           `json:"platform_bot_enabled,omitempty"`
+	PlatformBot             *MAXDiscoverBot `json:"platform_bot,omitempty"`
 	ConnectHelpText         string         `json:"connect_help_text"`
 	ConnectHelpURL          string         `json:"connect_help_url"`
 	DocsURL                 string         `json:"docs_url"`
@@ -88,6 +91,19 @@ type SocialProviderPublicInfo struct {
 	SupportTelegramURL      string         `json:"support_telegram_url"`
 	SupportEmail            string         `json:"support_email"`
 	SupportHoursText        string         `json:"support_hours_text"`
+}
+
+type MAXPlatformBotAdminView struct {
+	Enabled      bool            `json:"enabled"`
+	BotTokenSet  bool            `json:"bot_token_set"`
+	BotTokenHint string          `json:"bot_token_hint,omitempty"`
+	Bot          *MAXDiscoverBot `json:"bot,omitempty"`
+	UpdatedAt    time.Time       `json:"updated_at"`
+}
+
+type MAXPlatformBotAdminUpdateRequest struct {
+	Enabled  bool   `json:"enabled"`
+	BotToken string `json:"bot_token,omitempty"`
 }
 
 func DefaultSocialProviderSettings(provider SocialProvider) SocialProviderSettings {
@@ -172,11 +188,13 @@ type ChannelConnectResult struct {
 type MAXDiscoverRequest struct {
 	BotToken string `json:"bot_token"`
 	ChatID   string `json:"chat_id,omitempty"`
+	PostMode string `json:"post_mode,omitempty"`
 }
 
 type MAXConnectRequest struct {
 	BotToken string                      `json:"bot_token"`
 	Channels []ChannelConnectTargetInput `json:"channels"`
+	PostMode string                      `json:"post_mode,omitempty"`
 }
 
 type ChannelOAuthStartResult struct {
