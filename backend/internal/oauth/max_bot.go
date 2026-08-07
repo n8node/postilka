@@ -175,6 +175,34 @@ func (c *MAXBotClient) do(ctx context.Context, method, endpoint, token string, b
 	return respBody, resp.StatusCode, nil
 }
 
+type MAXBotInfo struct {
+	UserID   int64  `json:"user_id"`
+	Username string `json:"username"`
+	Name     string `json:"name"`
+}
+
+func (c *MAXBotClient) GetMe(ctx context.Context, token string) (*MAXBotInfo, error) {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return nil, fmt.Errorf("max bot: empty token")
+	}
+	respBody, status, err := c.do(ctx, http.MethodGet, maxAPIBase+"/me", token, nil)
+	if err != nil {
+		return nil, err
+	}
+	if status >= 400 {
+		return nil, fmt.Errorf("max bot me: HTTP %d: %s", status, strings.TrimSpace(string(respBody)))
+	}
+	var info MAXBotInfo
+	if err := json.Unmarshal(respBody, &info); err != nil {
+		return nil, err
+	}
+	if info.UserID == 0 && info.Username == "" {
+		return nil, fmt.Errorf("max bot: invalid token")
+	}
+	return &info, nil
+}
+
 type maxMessageLinkRequest struct {
 	Text        string           `json:"text"`
 	Attachments []maxMessageAttachment `json:"attachments,omitempty"`

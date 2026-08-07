@@ -12,7 +12,33 @@ const (
 
 type ChannelProvider string
 
-const ChannelProviderTelegram ChannelProvider = "telegram"
+const (
+	ChannelProviderTelegram ChannelProvider = "telegram"
+	ChannelProviderVK       ChannelProvider = "vk"
+	ChannelProviderOK       ChannelProvider = "ok"
+	ChannelProviderMAX      ChannelProvider = "max"
+	ChannelProviderRutube   ChannelProvider = "rutube"
+	ChannelProviderDzen     ChannelProvider = "dzen"
+)
+
+func (p ChannelProvider) Label() string {
+	switch p {
+	case ChannelProviderTelegram:
+		return "Telegram"
+	case ChannelProviderVK:
+		return "VK"
+	case ChannelProviderOK:
+		return "OK"
+	case ChannelProviderMAX:
+		return "MAX"
+	case ChannelProviderRutube:
+		return "Rutube"
+	case ChannelProviderDzen:
+		return "Дзен"
+	default:
+		return string(p)
+	}
+}
 
 type Channel struct {
 	ID          string          `json:"id"`

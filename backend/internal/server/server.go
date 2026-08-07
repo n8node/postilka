@@ -75,6 +75,9 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	telegramSettingsSvc := service.NewTelegramSettingsService(telegramSettingsRepo)
 	telegramProviderSettingsRepo := repository.NewTelegramProviderSettingsRepository(db.Pool)
 	telegramProviderSettingsSvc := service.NewTelegramProviderSettingsService(telegramProviderSettingsRepo)
+	socialProviderSettingsRepo := repository.NewSocialProviderSettingsRepository(db.Pool)
+	socialProviderSettingsSvc := service.NewSocialProviderSettingsService(socialProviderSettingsRepo)
+	channelOAuthSessionRepo := repository.NewChannelOAuthSessionRepository(db.Pool)
 	telegramBotClient := service.NewTelegramBotClient(telegramProviderSettingsSvc, cfg.TelegramLocalProxy)
 	encKey := cfg.EncryptionKey
 	if strings.TrimSpace(encKey) == "" {
@@ -82,6 +85,10 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	}
 	secretCipher, _ := service.NewSecretCipher(encKey)
 	channelSvc := service.NewChannelService(channelRepo, telegramProviderSettingsSvc, telegramBotClient, wsSvc, quotaSvc, secretCipher)
+	channelConnectSvc := service.NewChannelConnectService(
+		channelRepo, channelOAuthSessionRepo, socialProviderSettingsSvc,
+		telegramProviderSettingsSvc, wsSvc, quotaSvc, secretCipher, cfg,
+	)
 	telegramSvc := service.NewTelegramService(telegramSettingsSvc, telegramQueueRepo, cfg.TelegramLocalProxy, logger)
 	telegramSettingsSvc.BindRuntimeStatus(telegramSvc.GetRuntimeStatus)
 	telegramSvc.Start()
@@ -112,7 +119,9 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	paymentSettingsHandler := handler.NewPaymentSettingsHandler(paymentSettingsSvc)
 	telegramHandler := handler.NewTelegramSettingsHandler(telegramSettingsSvc, telegramSvc)
 	telegramProviderHandler := handler.NewTelegramProviderSettingsHandler(telegramProviderSettingsSvc)
-	channelHandler := handler.NewChannelHandler(channelSvc)
+	socialProviderHandler := handler.NewSocialProviderSettingsHandler(socialProviderSettingsSvc)
+	channelHandler := handler.NewChannelHandler(channelSvc, channelConnectSvc)
+	channelConnectHandler := handler.NewChannelConnectHandler(channelConnectSvc, cfg)
 	publicPageHandler := handler.NewPublicPageHandler(publicPageSvc)
 	paymentWebhookHandler := handler.NewPaymentWebhookHandler(paymentSettingsSvc, checkoutSvc, logger)
 	billingHandler := handler.NewBillingHandler(billingSvc, checkoutSvc, wsSvc)
@@ -192,10 +201,17 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Get("/channels/provider-info", channelHandler.ProviderInfo)
 			r.Post("/channels/telegram/discover", channelHandler.DiscoverTelegram)
 			r.Post("/channels/telegram/connect", channelHandler.ConnectTelegram)
+			r.Post("/channels/max/discover", channelConnectHandler.DiscoverMAX)
+			r.Post("/channels/max/connect", channelConnectHandler.ConnectMAX)
+			r.Get("/channels/oauth/{provider}/start", channelConnectHandler.OAuthStart)
+			r.Get("/channels/oauth/{provider}/discover", channelConnectHandler.OAuthDiscover)
+			r.Post("/channels/oauth/{provider}/connect", channelConnectHandler.OAuthConnect)
 			r.Post("/channels/{id}/verify", channelHandler.Verify)
 			r.Put("/channels/{id}/telegram-token", channelHandler.UpdateTelegramToken)
 			r.Delete("/channels/{id}", channelHandler.Delete)
 		})
+
+		r.Get("/channels/oauth/{provider}/callback", channelConnectHandler.OAuthCallback)
 
 		r.Route("/admin", func(r chi.Router) {
 			r.Group(func(r chi.Router) {
@@ -236,6 +252,9 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Put("/telegram/notifications", telegramHandler.UpdateAdmin)
 				r.Get("/telegram/provider", telegramProviderHandler.GetAdmin)
 				r.Put("/telegram/provider", telegramProviderHandler.UpdateAdmin)
+				r.Get("/social-providers", socialProviderHandler.ListAdmin)
+				r.Get("/social-providers/{provider}", socialProviderHandler.GetAdmin)
+				r.Put("/social-providers/{provider}", socialProviderHandler.UpdateAdmin)
 				r.Get("/telegram/status", telegramHandler.GetStatus)
 				r.Post("/telegram/restart", telegramHandler.Restart)
 				r.Post("/telegram/test", telegramHandler.SendTest)

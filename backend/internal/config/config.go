@@ -57,3 +57,7 @@ func (c *Config) MAXOAuthWebhookURL() string {
 func (c *Config) PublicAppURLNormalized() string {
 	return strings.TrimSuffix(c.PublicAppURL, "/")
 }
+
+func (c *Config) ChannelOAuthRedirectURI(provider string) string {
+	return c.PublicAppURLNormalized() + "/api/v1/channels/oauth/" + provider + "/callback"
+}

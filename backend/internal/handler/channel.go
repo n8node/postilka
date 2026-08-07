@@ -14,10 +14,11 @@ import (
 
 type ChannelHandler struct {
 	channels *service.ChannelService
+	connect  *service.ChannelConnectService
 }
 
-func NewChannelHandler(channels *service.ChannelService) *ChannelHandler {
-	return &ChannelHandler{channels: channels}
+func NewChannelHandler(channels *service.ChannelService, connect *service.ChannelConnectService) *ChannelHandler {
+	return &ChannelHandler{channels: channels, connect: connect}
 }
 
 func channelUserID(r *http.Request) (string, bool) {
@@ -48,7 +49,7 @@ func (h *ChannelHandler) ProviderInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = userID
-	info := h.channels.ProviderInfo(r.Context())
+	info := h.connect.CombinedProviderInfo(r.Context())
 	writeJSON(w, http.StatusOK, info)
 }
 

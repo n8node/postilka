@@ -4,13 +4,14 @@ import { useCallback, useEffect, useState } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { CabinetPage } from "@/components/layout/CabinetPage";
 import { EmptyState } from "@/components/layout/EmptyState";
-import { ConnectTelegramDialog } from "@/components/channels/ConnectTelegramDialog";
+import { ConnectChannelMenu } from "@/components/channels/ConnectChannelMenu";
 import {
   ApiError,
   deleteChannel,
   fetchChannels,
   verifyChannel,
   type ChannelListItem,
+  type ChannelProvider,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
@@ -20,8 +21,13 @@ const statusLabel: Record<ChannelListItem["status"], string> = {
   disabled: "Отключён",
 };
 
-const providerLabel: Record<ChannelListItem["provider"], string> = {
+const providerLabel: Record<ChannelProvider, string> = {
   telegram: "Telegram",
+  vk: "VK",
+  ok: "OK",
+  max: "MAX",
+  rutube: "Rutube",
+  dzen: "Дзен",
 };
 
 export default function ChannelsPage() {
@@ -29,7 +35,6 @@ export default function ChannelsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [connectOpen, setConnectOpen] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
 
   const selected = items.find((c) => c.id === selectedId) ?? null;
@@ -83,16 +88,8 @@ export default function ChannelsPage() {
     <div>
       <PageHeader
         title="Каналы"
-        description="Подключённые Telegram-каналы и группы workspace."
-        actions={
-          <button
-            type="button"
-            onClick={() => setConnectOpen(true)}
-            className="rounded-md bg-accent px-3 py-2 text-sm font-medium text-white"
-          >
-            Подключить Telegram
-          </button>
-        }
+        description="Подключённые каналы и сообщества workspace во всех соцсетях."
+        actions={<ConnectChannelMenu onConnected={() => void load()} />}
       />
 
       {error && (
@@ -112,7 +109,7 @@ export default function ChannelsPage() {
                 <p className="font-medium">{providerLabel[selected.provider]}</p>
               </div>
               <div>
-                <p className="text-xs text-muted">Chat ID</p>
+                <p className="text-xs text-muted">ID канала</p>
                 <p className="font-mono text-sm">{selected.chat_id}</p>
               </div>
               {selected.bot_username && (
@@ -131,14 +128,16 @@ export default function ChannelsPage() {
                   <p className="text-sm text-red-600">{selected.last_error}</p>
                 </div>
               )}
-              <button
-                type="button"
-                onClick={handleVerify}
-                disabled={actionLoading}
-                className="w-full rounded-md border border-border px-3 py-2 text-sm hover:bg-zinc-50 disabled:opacity-50"
-              >
-                Проверить подключение
-              </button>
+              {selected.provider === "telegram" && (
+                <button
+                  type="button"
+                  onClick={handleVerify}
+                  disabled={actionLoading}
+                  className="w-full rounded-md border border-border px-3 py-2 text-sm hover:bg-zinc-50 disabled:opacity-50"
+                >
+                  Проверить подключение
+                </button>
+              )}
               <button
                 type="button"
                 onClick={handleDelete}
@@ -156,7 +155,7 @@ export default function ChannelsPage() {
         ) : items.length === 0 ? (
           <EmptyState
             title="Нет каналов"
-            description="Подключите Telegram-бота, чтобы публиковать посты в каналы и группы."
+            description="Подключите Telegram, VK, OK, MAX, Rutube или Дзен — чтобы публиковать посты."
           />
         ) : (
           <div className="overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
@@ -188,12 +187,6 @@ export default function ChannelsPage() {
           </div>
         )}
       </CabinetPage>
-
-      <ConnectTelegramDialog
-        open={connectOpen}
-        onClose={() => setConnectOpen(false)}
-        onConnected={() => void load()}
-      />
     </div>
   );
 }

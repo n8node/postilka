@@ -1,5 +1,5 @@
-import { AdminTelegramProviderPage } from "@/components/admin/AdminTelegramProviderPage";
+import { redirect } from "next/navigation";
 
-export default function AdminTelegramProviderRoute() {
-  return <AdminTelegramProviderPage />;
+export default function AdminTelegramProviderRedirect() {
+  redirect("/admin/social-providers?provider=telegram");
 }

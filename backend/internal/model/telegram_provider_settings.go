@@ -25,6 +25,7 @@ type ChannelProviderInfo struct {
 	SupportTelegramURL      string `json:"support_telegram_url"`
 	SupportEmail            string `json:"support_email"`
 	SupportHoursText        string `json:"support_hours_text"`
+	Providers               []SocialProviderPublicInfo `json:"providers"`
 }
 
 type TelegramProviderSettingsRecord struct {

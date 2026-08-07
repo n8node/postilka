@@ -1217,12 +1217,53 @@ export function updateAdminTelegramProviderSettings(settings: TelegramProviderSe
   });
 }
 
+export type SocialProviderKey = "vk" | "ok" | "max" | "rutube" | "dzen";
+
+export type SocialProviderSettings = {
+  enabled: boolean;
+  oauth_client_id: string;
+  oauth_client_secret: string;
+  connect_help_text: string;
+  connect_help_url: string;
+  docs_url: string;
+  support_telegram_username: string;
+  support_email: string;
+  support_hours_text: string;
+};
+
+export type SocialProviderAdminView = {
+  provider: SocialProviderKey;
+  label: string;
+  connect_flow: "oauth" | "bot_token";
+  settings: SocialProviderSettings;
+  updated_at?: string;
+};
+
+export function fetchAdminSocialProviders() {
+  return apiFetch<{ providers: SocialProviderAdminView[] }>("/admin/social-providers");
+}
+
+export function updateAdminSocialProvider(provider: SocialProviderKey, settings: SocialProviderSettings) {
+  return apiFetch<SocialProviderAdminView>(`/admin/social-providers/${provider}`, {
+    method: "PUT",
+    body: JSON.stringify(settings),
+  });
+}
+
 export type ChannelStatus = "active" | "needs_reconnect" | "disabled";
+
+export type ChannelProvider =
+  | "telegram"
+  | "vk"
+  | "ok"
+  | "max"
+  | "rutube"
+  | "dzen";
 
 export type Channel = {
   id: string;
   workspace_id: string;
-  provider: "telegram";
+  provider: ChannelProvider;
   name: string;
   chat_id: string;
   chat_type: string;
@@ -1257,6 +1298,20 @@ export type TelegramDiscoverResult = {
   hint?: string;
 };
 
+export type SocialProviderPublicInfo = {
+  provider: SocialProviderKey;
+  label: string;
+  enabled: boolean;
+  connect_flow: "oauth" | "bot_token";
+  connect_help_text: string;
+  connect_help_url: string;
+  docs_url: string;
+  support_telegram_username: string;
+  support_telegram_url: string;
+  support_email: string;
+  support_hours_text: string;
+};
+
 export type ChannelProviderInfo = {
   telegram_enabled: boolean;
   connect_help_text: string;
@@ -1266,6 +1321,21 @@ export type ChannelProviderInfo = {
   support_telegram_url: string;
   support_email: string;
   support_hours_text: string;
+  providers: SocialProviderPublicInfo[];
+};
+
+export type DiscoveredChannelTarget = {
+  external_id: string;
+  title: string;
+  type: string;
+  can_post: boolean;
+  avatar_url?: string;
+};
+
+export type ChannelDiscoverResult = {
+  provider: string;
+  targets: DiscoveredChannelTarget[];
+  hint?: string;
 };
 
 export function fetchChannels() {
@@ -1309,4 +1379,49 @@ export function updateChannelTelegramToken(id: string, botToken: string) {
     method: "PUT",
     body: JSON.stringify({ bot_token: botToken }),
   });
+}
+
+export function startChannelOAuth(provider: SocialProviderKey) {
+  return apiFetch<{ redirect_url: string; state_token: string }>(
+    `/channels/oauth/${provider}/start`,
+  );
+}
+
+export function discoverChannelOAuth(provider: SocialProviderKey, sessionId: string) {
+  return apiFetch<ChannelDiscoverResult>(
+    `/channels/oauth/${provider}/discover?session_id=${encodeURIComponent(sessionId)}`,
+  );
+}
+
+export function connectChannelOAuth(
+  provider: SocialProviderKey,
+  payload: { session_id: string; targets: { external_id: string; name?: string }[] },
+) {
+  return apiFetch<{ connected: ChannelListItem[]; skipped?: string[] }>(
+    `/channels/oauth/${provider}/connect`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export function discoverMAXChannels(botToken: string, chatId?: string) {
+  return apiFetch<ChannelDiscoverResult>("/channels/max/discover", {
+    method: "POST",
+    body: JSON.stringify({ bot_token: botToken, chat_id: chatId ?? "" }),
+  });
+}
+
+export function connectMAXChannels(payload: {
+  bot_token: string;
+  channels: { external_id: string; name?: string }[];
+}) {
+  return apiFetch<{ connected: ChannelListItem[]; skipped?: string[] }>(
+    "/channels/max/connect",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
 }
