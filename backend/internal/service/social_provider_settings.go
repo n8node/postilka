@@ -40,6 +40,7 @@ func (s *SocialProviderSettingsService) ListAdmin(ctx context.Context) (*model.S
 		if !ok {
 			cfg = model.DefaultSocialProviderSettings(p)
 		}
+		cfg = normalizeSocialProviderAdminSettings(p, cfg)
 		out = append(out, model.SocialProviderAdminView{
 			Provider:    p,
 			Label:       p.Label(),
@@ -55,7 +56,7 @@ func (s *SocialProviderSettingsService) GetAdmin(ctx context.Context, provider m
 	rec, err := s.repo.Get(ctx, provider)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
-			cfg := model.DefaultSocialProviderSettings(provider)
+			cfg := normalizeSocialProviderAdminSettings(provider, model.DefaultSocialProviderSettings(provider))
 			return &model.SocialProviderAdminView{
 				Provider:    provider,
 				Label:       provider.Label(),
@@ -65,11 +66,12 @@ func (s *SocialProviderSettingsService) GetAdmin(ctx context.Context, provider m
 		}
 		return nil, err
 	}
+	cfg := normalizeSocialProviderAdminSettings(rec.Provider, rec.Config)
 	return &model.SocialProviderAdminView{
 		Provider:    rec.Provider,
 		Label:       rec.Provider.Label(),
 		ConnectFlow: rec.Provider.ConnectFlow(),
-		Settings:    rec.Config,
+		Settings:    cfg,
 		UpdatedAt:   rec.UpdatedAt,
 	}, nil
 }
@@ -85,8 +87,9 @@ func (s *SocialProviderSettingsService) UpdateAdmin(
 	cfg.DocsURL = strings.TrimSpace(cfg.DocsURL)
 	cfg.SupportTelegramUsername = strings.TrimPrefix(strings.TrimSpace(cfg.SupportTelegramUsername), "@")
 	cfg.SupportEmail = strings.TrimSpace(cfg.SupportEmail)
+	cfg = normalizeSocialProviderAdminSettings(provider, cfg)
 
-	if cfg.Enabled && provider.ConnectFlow() == "oauth" && provider != model.SocialProviderVK {
+	if cfg.Enabled && provider.ConnectFlow() == "oauth" {
 		if cfg.OAuthClientID == "" {
 			return nil, fmt.Errorf("%w: укажите OAuth Client ID", ErrInvalidSocialProviderSettings)
 		}
@@ -160,8 +163,28 @@ func (s *SocialProviderSettingsService) EnsureReady(ctx context.Context, provide
 	if !cfg.Enabled {
 		return cfg, ErrSocialProviderDisabled
 	}
-	if provider.ConnectFlow() == "oauth" && provider != model.SocialProviderVK && strings.TrimSpace(cfg.OAuthClientID) == "" {
+	if provider.ConnectFlow() == "oauth" && strings.TrimSpace(cfg.OAuthClientID) == "" {
 		return cfg, ErrSocialProviderNotReady
 	}
 	return cfg, nil
+}
+
+func normalizeSocialProviderAdminSettings(
+	provider model.SocialProvider,
+	cfg model.SocialProviderSettings,
+) model.SocialProviderSettings {
+	if !provider.UsesUserOAuthApp() {
+		return cfg
+	}
+	cfg.OAuthClientID = ""
+	cfg.OAuthClientSecret = ""
+	def := model.DefaultSocialProviderSettings(provider)
+	if strings.TrimSpace(cfg.ConnectHelpText) == "" ||
+		strings.Contains(cfg.ConnectHelpText, "Войдите через VK под аккаунтом") {
+		cfg.ConnectHelpText = def.ConnectHelpText
+	}
+	if strings.TrimSpace(cfg.ConnectHelpURL) == "" {
+		cfg.ConnectHelpURL = def.ConnectHelpURL
+	}
+	return cfg
 }

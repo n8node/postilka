@@ -1235,7 +1235,7 @@ export type SocialProviderSettings = {
 export type SocialProviderAdminView = {
   provider: SocialProviderKey;
   label: string;
-  connect_flow: "oauth" | "bot_token";
+  connect_flow: "oauth" | "user_oauth" | "bot_token";
   settings: SocialProviderSettings;
   updated_at?: string;
 };
@@ -1349,7 +1349,7 @@ export type SocialProviderPublicInfo = {
   provider: SocialProviderKey;
   label: string;
   enabled: boolean;
-  connect_flow: "oauth" | "bot_token";
+  connect_flow: "oauth" | "user_oauth" | "bot_token";
   platform_bot_enabled?: boolean;
   platform_bot?: {
     username: string;

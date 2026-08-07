@@ -39,11 +39,17 @@ func (p SocialProvider) Label() string {
 
 func (p SocialProvider) ConnectFlow() string {
 	switch p {
+	case SocialProviderVK:
+		return "user_oauth"
 	case SocialProviderMAX:
 		return "bot_token"
 	default:
 		return "oauth"
 	}
+}
+
+func (p SocialProvider) UsesUserOAuthApp() bool {
+	return p == SocialProviderVK
 }
 
 type SocialProviderSettings struct {
