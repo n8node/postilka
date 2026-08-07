@@ -315,6 +315,9 @@ func (s *ChannelService) VerifyAndRefresh(
 			break
 		}
 		meta = telegramChannelMetadata(chat, member)
+		if uri, err := s.botClient.ChatPhotoDataURI(ctx, token, ch.ChatID); err == nil && uri != "" {
+			meta = mergeChannelAvatar(meta, uri)
+		}
 		if chat.Type != "" {
 			ch.ChatType = chat.Type
 		}

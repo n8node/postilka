@@ -125,11 +125,11 @@ export default function ChannelsPage() {
     async (connected?: ChannelListItem[]) => {
       const latest = await load();
       if (connected?.length) {
-        const last = connected[connected.length - 1]!;
-        if (latest?.some((c) => c.id === last.id)) {
-          setSelectedId(last.id);
-          return;
-        }
+        const merged = new Map((latest ?? []).map((c) => [c.id, c]));
+        for (const ch of connected) merged.set(ch.id, ch);
+        setItems(Array.from(merged.values()));
+        setSelectedId(connected[connected.length - 1]!.id);
+        return;
       }
       setSelectedId(null);
     },

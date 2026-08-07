@@ -41,11 +41,15 @@ export function ChannelAvatar({
   const initials = channelInitials(displayName);
 
   const directUrl = (avatarUrl?.trim() || metadata?.avatar_url?.trim() || "") || null;
+  const inlineAvatarUrl = directUrl?.startsWith("data:") ? directUrl : null;
   const publicDirectUrl =
-    directUrl && isPublicChannelAvatarURL(directUrl, provider) ? directUrl : null;
+    directUrl && !inlineAvatarUrl && isPublicChannelAvatarURL(directUrl, provider)
+      ? directUrl
+      : null;
   const proxyUrl = channelId ? channelProxyAvatarURL(channelId) : null;
   const needsProxyFetch = Boolean(
     channelId &&
+      !inlineAvatarUrl &&
       !publicDirectUrl &&
       (provider === "telegram" || provider === "max"),
   );
@@ -79,7 +83,7 @@ export function ChannelAvatar({
     };
   }, [needsProxyFetch, proxyUrl]);
 
-  const src = publicDirectUrl || blobUrl;
+  const src = inlineAvatarUrl || publicDirectUrl || blobUrl;
 
   if (!src || failed) {
     return (

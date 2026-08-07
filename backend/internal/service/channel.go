@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/postilka/postilka/internal/model"
 	oauthclient "github.com/postilka/postilka/internal/oauth"
@@ -176,7 +177,8 @@ func (s *ChannelService) ConnectTelegram(ctx context.Context, userID string, r *
 			name = normalizedChatID
 		}
 
-		meta := telegramChannelMetadata(chat, member)
+		meta := s.telegramConnectMetadata(ctx, botToken, normalizedChatID, chat, member)
+		now := time.Now()
 
 		existing, err := s.findTelegramChannel(ctx, ws.ID, normalizedChatID, rawChatID)
 		if err != nil {
@@ -197,9 +199,9 @@ func (s *ChannelService) ConnectTelegram(ctx context.Context, userID string, r *
 				BotUsername:       bot.Username,
 				BotTokenEncrypted: encrypted,
 				MaxPostMode:       existing.MaxPostMode,
-				Status:            model.ChannelStatusActive,
-				Metadata:          meta,
-				MetadataRefreshedAt: existing.MetadataRefreshedAt,
+				Status:              model.ChannelStatusActive,
+				Metadata:            meta,
+				MetadataRefreshedAt: &now,
 			})
 			if err != nil {
 				return nil, err
@@ -217,15 +219,16 @@ func (s *ChannelService) ConnectTelegram(ctx context.Context, userID string, r *
 		}
 
 		created, err := s.channels.Create(ctx, repository.ChannelCreateParams{
-			WorkspaceID:       ws.ID,
-			Provider:          model.ChannelProviderTelegram,
-			Name:              name,
-			ChatID:            normalizedChatID,
-			ChatType:          chat.Type,
-			BotUsername:       bot.Username,
-			BotTokenEncrypted: encrypted,
-			Status:            model.ChannelStatusActive,
-			Metadata:          meta,
+			WorkspaceID:         ws.ID,
+			Provider:            model.ChannelProviderTelegram,
+			Name:                name,
+			ChatID:              normalizedChatID,
+			ChatType:            chat.Type,
+			BotUsername:         bot.Username,
+			BotTokenEncrypted:   encrypted,
+			Status:              model.ChannelStatusActive,
+			Metadata:            meta,
+			MetadataRefreshedAt: &now,
 		})
 		if err != nil {
 			return nil, err
@@ -260,6 +263,19 @@ func (s *ChannelService) findTelegramChannel(
 		}
 	}
 	return nil, nil
+}
+
+func (s *ChannelService) telegramConnectMetadata(
+	ctx context.Context,
+	botToken, chatID string,
+	chat telegramChat,
+	member telegramChatMember,
+) model.ChannelMetadata {
+	meta := telegramChannelMetadata(chat, member)
+	if uri, err := s.botClient.ChatPhotoDataURI(ctx, botToken, chatID); err == nil && uri != "" {
+		meta = mergeChannelAvatar(meta, uri)
+	}
+	return meta
 }
 
 func (s *ChannelService) Verify(ctx context.Context, userID string, r *http.Request, channelID string) (*model.ChannelListItem, error) {

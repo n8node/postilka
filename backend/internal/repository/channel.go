@@ -174,16 +174,17 @@ func (r *ChannelRepository) GetByChat(ctx context.Context, workspaceID, provider
 }
 
 type ChannelCreateParams struct {
-	WorkspaceID       string
-	Provider          model.ChannelProvider
-	Name              string
-	ChatID            string
-	ChatType          string
-	BotUsername       string
-	BotTokenEncrypted string
-	MaxPostMode       model.MAXPostMode
-	Status            model.ChannelStatus
-	Metadata          model.ChannelMetadata
+	WorkspaceID         string
+	Provider            model.ChannelProvider
+	Name                string
+	ChatID              string
+	ChatType            string
+	BotUsername         string
+	BotTokenEncrypted   string
+	MaxPostMode         model.MAXPostMode
+	Status              model.ChannelStatus
+	Metadata            model.ChannelMetadata
+	MetadataRefreshedAt *time.Time
 }
 
 func (r *ChannelRepository) Create(ctx context.Context, p ChannelCreateParams) (*model.Channel, error) {
@@ -198,13 +199,13 @@ func (r *ChannelRepository) Create(ctx context.Context, p ChannelCreateParams) (
 	const q = `
 		INSERT INTO channels (
 			workspace_id, provider, name, chat_id, chat_type, bot_username,
-			bot_token_encrypted, max_post_mode, status, metadata
-		) VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, ''), $8, $9, $10)
+			bot_token_encrypted, max_post_mode, status, metadata, metadata_refreshed_at
+		) VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, ''), $8, $9, $10, $11)
 		RETURNING ` + channelSelectSQL
 	var ch model.Channel
 	err = r.scanChannel(r.pool.QueryRow(ctx, q,
 		p.WorkspaceID, p.Provider, p.Name, p.ChatID, p.ChatType, p.BotUsername,
-		p.BotTokenEncrypted, maxPostMode, p.Status, metaRaw,
+		p.BotTokenEncrypted, maxPostMode, p.Status, metaRaw, p.MetadataRefreshedAt,
 	), &ch)
 	if err != nil {
 		return nil, err

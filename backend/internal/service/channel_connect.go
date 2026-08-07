@@ -628,6 +628,12 @@ func (s *ChannelConnectService) ConnectMAX(
 		if err := s.maxClient.VerifyChannelPostAccess(ctx, botToken, chat.ChatID); err != nil {
 			return nil, err
 		}
+		member, err := s.maxClient.GetBotMembership(ctx, botToken, chat.ChatID)
+		if err != nil {
+			return nil, err
+		}
+		now := time.Now()
+		meta := maxChannelMetadata(chat, member)
 		chatID := strconv.FormatInt(chat.ChatID, 10)
 		name := strings.TrimSpace(input.Name)
 		if name == "" {
@@ -646,15 +652,16 @@ func (s *ChannelConnectService) ConnectMAX(
 		}
 		if existing != nil {
 			updated, err := s.channels.UpdateMAXConnection(ctx, repository.ChannelMAXReconnectParams{
-				WorkspaceID:       ws.ID,
-				ChannelID:         existing.ID,
-				Name:              name,
-				ChatType:          chat.Type,
-				BotUsername:       bot.Username,
-				BotTokenEncrypted: encrypted,
-				MaxPostMode:       postMode,
-				Status:            model.ChannelStatusActive,
-				Metadata:          maxConnectMetadata(chat),
+				WorkspaceID:         ws.ID,
+				ChannelID:           existing.ID,
+				Name:                name,
+				ChatType:            chat.Type,
+				BotUsername:         bot.Username,
+				BotTokenEncrypted:   encrypted,
+				MaxPostMode:         postMode,
+				Status:              model.ChannelStatusActive,
+				Metadata:            meta,
+				MetadataRefreshedAt: &now,
 			})
 			if err != nil {
 				return nil, err
@@ -675,16 +682,17 @@ func (s *ChannelConnectService) ConnectMAX(
 			return nil, err
 		}
 		created, err := s.channels.Create(ctx, repository.ChannelCreateParams{
-			WorkspaceID:       ws.ID,
-			Provider:          model.ChannelProviderMAX,
-			Name:              name,
-			ChatID:            chatID,
-			ChatType:          chat.Type,
-			BotUsername:       bot.Username,
-			BotTokenEncrypted: encrypted,
-			MaxPostMode:       postMode,
-			Status:            model.ChannelStatusActive,
-			Metadata:          maxConnectMetadata(chat),
+			WorkspaceID:         ws.ID,
+			Provider:            model.ChannelProviderMAX,
+			Name:                name,
+			ChatID:              chatID,
+			ChatType:            chat.Type,
+			BotUsername:         bot.Username,
+			BotTokenEncrypted:   encrypted,
+			MaxPostMode:         postMode,
+			Status:              model.ChannelStatusActive,
+			Metadata:            meta,
+			MetadataRefreshedAt: &now,
 		})
 		if err != nil {
 			return nil, err

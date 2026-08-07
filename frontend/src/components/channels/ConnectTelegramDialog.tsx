@@ -10,6 +10,7 @@ import {
   connectTelegramChannels,
   discoverTelegramChannels,
   fetchChannelProviderInfo,
+  type ChannelListItem,
   type ChannelProviderInfo,
   type TelegramDiscoveredChat,
 } from "@/lib/api";
@@ -27,7 +28,7 @@ const MANUAL_HINT =
 type ConnectTelegramDialogProps = {
   open: boolean;
   onClose: () => void;
-  onConnected: () => void;
+  onConnected: (connected: ChannelListItem[]) => void;
 };
 
 export function ConnectTelegramDialog({ open, onClose, onConnected }: ConnectTelegramDialogProps) {
@@ -127,11 +128,11 @@ export function ConnectTelegramDialog({ open, onClose, onConnected }: ConnectTel
     }
 
     try {
-      await connectTelegramChannels({
+      const result = await connectTelegramChannels({
         bot_token: botToken.trim(),
         channels,
       });
-      onConnected();
+      onConnected(result.connected);
       onClose();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Не удалось подключить каналы");

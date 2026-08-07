@@ -8,6 +8,7 @@ import {
   connectChannelOAuth,
   discoverChannelOAuth,
   startChannelOAuth,
+  type ChannelListItem,
   type DiscoveredChannelTarget,
   type SocialProviderKey,
 } from "@/lib/api";
@@ -18,7 +19,7 @@ type ConnectOAuthProviderDialogProps = {
   provider: SocialProviderKey;
   label: string;
   onClose: () => void;
-  onConnected: () => void;
+  onConnected: (connected?: ChannelListItem[]) => void;
   initialSessionId?: string;
 };
 
@@ -96,11 +97,11 @@ export function ConnectOAuthProviderDialog({
     setStep("connecting");
     setError(null);
     try {
-      await connectChannelOAuth(provider, {
+      const result = await connectChannelOAuth(provider, {
         session_id: sessionId,
         targets: picked.map((t) => ({ external_id: t.external_id, name: t.title })),
       });
-      onConnected();
+      onConnected(result.connected);
       onClose();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Не удалось подключить каналы");

@@ -3,11 +3,13 @@ package service
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -125,7 +127,7 @@ func (c *TelegramBotClient) doRequest(
 
 func (c *TelegramBotClient) SendMessage(ctx context.Context, token, chatID, text string) error {
 	_, err := c.api(ctx, token, "sendMessage", map[string]any{
-		"chat_id": strings.TrimSpace(chatID),
+		"chat_id": telegramChatIDParam(chatID),
 		"text":    text,
 	})
 	return sanitizeTelegramError(err)
@@ -150,9 +152,31 @@ func (c *TelegramBotClient) DeleteWebhook(ctx context.Context, token string) err
 	return sanitizeTelegramError(err)
 }
 
+func telegramChatIDParam(chatID string) any {
+	chatID = strings.TrimSpace(chatID)
+	if id, err := strconv.ParseInt(chatID, 10, 64); err == nil {
+		return id
+	}
+	return chatID
+}
+
+func (c *TelegramBotClient) ChatPhotoDataURI(ctx context.Context, token, chatID string) (string, error) {
+	body, contentType, err := c.FetchChatPhoto(ctx, token, chatID)
+	if err != nil {
+		return "", err
+	}
+	if len(body) == 0 {
+		return "", nil
+	}
+	if contentType == "" {
+		contentType = "image/jpeg"
+	}
+	return fmt.Sprintf("data:%s;base64,%s", contentType, base64.StdEncoding.EncodeToString(body)), nil
+}
+
 func (c *TelegramBotClient) GetChat(ctx context.Context, token, chatID string) (telegramChat, error) {
-	raw, err := c.api(ctx, token, "getChat", map[string]string{
-		"chat_id": strings.TrimSpace(chatID),
+	raw, err := c.api(ctx, token, "getChat", map[string]any{
+		"chat_id": telegramChatIDParam(chatID),
 	})
 	if err != nil {
 		return telegramChat{}, err
@@ -169,13 +193,22 @@ func (c *TelegramBotClient) GetChatPhotoFilePath(ctx context.Context, token, cha
 	if err != nil {
 		return "", err
 	}
-	if chat.Photo == nil {
-		return "", nil
+	if path, err := c.chatPhotoPathFromChat(ctx, token, chat); err != nil {
+		return "", err
+	} else if path != "" {
+		return path, nil
 	}
-	fileID := strings.TrimSpace(chat.Photo.BigFileID)
-	if fileID == "" {
-		fileID = strings.TrimSpace(chat.Photo.SmallFileID)
+	if chat.Username != "" && !strings.HasPrefix(strings.TrimSpace(chatID), "@") {
+		byUsername, err := c.GetChat(ctx, token, "@"+chat.Username)
+		if err == nil {
+			return c.chatPhotoPathFromChat(ctx, token, byUsername)
+		}
 	}
+	return "", nil
+}
+
+func (c *TelegramBotClient) chatPhotoPathFromChat(ctx context.Context, token string, chat telegramChat) (string, error) {
+	fileID := chatPhotoFileID(chat)
 	if fileID == "" {
 		return "", nil
 	}
@@ -188,6 +221,17 @@ func (c *TelegramBotClient) GetChatPhotoFilePath(ctx context.Context, token, cha
 		return "", errors.New("telegram api: invalid getFile result")
 	}
 	return strings.TrimSpace(file.FilePath), nil
+}
+
+func chatPhotoFileID(chat telegramChat) string {
+	if chat.Photo == nil {
+		return ""
+	}
+	fileID := strings.TrimSpace(chat.Photo.BigFileID)
+	if fileID == "" {
+		fileID = strings.TrimSpace(chat.Photo.SmallFileID)
+	}
+	return fileID
 }
 
 func (c *TelegramBotClient) FetchChatPhoto(ctx context.Context, token, chatID string) ([]byte, string, error) {
@@ -224,7 +268,7 @@ func (c *TelegramBotClient) fetchTelegramFile(ctx context.Context, token, path s
 
 func (c *TelegramBotClient) GetChatMember(ctx context.Context, token, chatID string, userID int64) (telegramChatMember, error) {
 	raw, err := c.api(ctx, token, "getChatMember", map[string]any{
-		"chat_id": strings.TrimSpace(chatID),
+		"chat_id": telegramChatIDParam(chatID),
 		"user_id": userID,
 	})
 	if err != nil {
@@ -347,12 +391,23 @@ func (c *TelegramBotClient) DiscoverAdminChats(ctx context.Context, token string
 		if title == "" {
 			title = chatID
 		}
+		fullChat, err := c.GetChat(ctx, token, chatID)
+		if err == nil {
+			chat = fullChat
+			if title == chatID {
+				if t := strings.TrimSpace(fullChat.Title); t != "" {
+					title = t
+				}
+			}
+		}
+		avatarURL, _ := c.ChatPhotoDataURI(ctx, token, chatID)
 		result.Chats = append(result.Chats, model.TelegramDiscoveredChat{
 			ChatID:    chatID,
 			Title:     title,
 			Type:      chat.Type,
 			BotStatus: member.Status,
 			CanPost:   canPost,
+			AvatarURL: avatarURL,
 		})
 	}
 
