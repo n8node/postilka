@@ -107,6 +107,7 @@ func maxChannelMetadata(chat *oauthclient.MAXChat, member *oauthclient.MAXBotMem
 		CanPost:        &canPost,
 		IsAdmin:        &isAdmin,
 		BotPermissions: append([]string(nil), member.Permissions...),
+		AvatarURL:      oauthclient.MAXChatAvatarURL(chat),
 	}
 	link := oauthclient.NormalizeMAXChatLink(chat.Link)
 	if link != "" {
@@ -354,8 +355,10 @@ func (s *ChannelService) VerifyAndRefresh(
 			verifyErr = err
 			break
 		}
-		_ = token
 		ch.Status = model.ChannelStatusActive
+		if avatarURL, err := s.lookupOAuthAvatar(ctx, ch.Provider, token, ch.ChatID); err == nil {
+			meta = mergeChannelAvatar(meta, avatarURL)
+		}
 	}
 
 	if verifyErr != nil {

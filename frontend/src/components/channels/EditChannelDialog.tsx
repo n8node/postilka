@@ -8,7 +8,9 @@ import {
   type ChannelListItem,
   type ChannelUpdateRequest,
 } from "@/lib/api";
+import { channelDisplayName } from "@/lib/channelPresentation";
 import { cn } from "@/lib/utils";
+import { ChannelAvatar } from "@/components/channels/ChannelAvatar";
 
 type EditChannelDialogProps = {
   channel: ChannelListItem;
@@ -76,7 +78,19 @@ export function EditChannelDialog({ channel, open, onClose, onSaved }: EditChann
         className="w-full max-w-md rounded-xl border border-border bg-surface shadow-lg"
       >
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          <h2 className="text-base font-semibold">Редактировать канал</h2>
+          <div className="flex min-w-0 items-center gap-3">
+            <ChannelAvatar
+              name={channel.name}
+              metadata={channel.metadata}
+              channelId={channel.id}
+              provider={channel.provider}
+              size="md"
+            />
+            <div className="min-w-0">
+              <h2 className="truncate text-base font-semibold">Редактировать канал</h2>
+              <p className="truncate text-xs text-muted">{channelDisplayName(channel)}</p>
+            </div>
+          </div>
           <button
             type="button"
             onClick={onClose}

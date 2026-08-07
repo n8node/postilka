@@ -4,6 +4,7 @@ import { Eye, EyeOff, Info, Loader2, RefreshCw, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { ContextHelpLinks } from "@/components/support/ContextHelpLinks";
 import { SupportSheet } from "@/components/support/SupportSheet";
+import { ChannelAvatar } from "@/components/channels/ChannelAvatar";
 import {
   ApiError,
   connectTelegramChannels,
@@ -244,7 +245,7 @@ export function ConnectTelegramDialog({ open, onClose, onConnected }: ConnectTel
                     <li key={chat.chat_id}>
                       <label
                         className={cn(
-                          "flex cursor-pointer items-start gap-2 rounded px-2 py-1.5 text-sm hover:bg-zinc-50",
+                          "flex cursor-pointer items-start gap-3 rounded px-2 py-1.5 text-sm hover:bg-zinc-50",
                           !chat.can_post && "opacity-50",
                         )}
                       >
@@ -255,9 +256,10 @@ export function ConnectTelegramDialog({ open, onClose, onConnected }: ConnectTel
                           onChange={(e) =>
                             setSelected((prev) => ({ ...prev, [chat.chat_id]: e.target.checked }))
                           }
-                          className="mt-0.5"
+                          className="mt-2"
                         />
-                        <span>
+                        <ChannelAvatar name={chat.title} avatarUrl={chat.avatar_url} size="sm" />
+                        <span className="min-w-0 flex-1">
                           <span className="font-medium">{chat.title}</span>
                           <span className="block text-xs text-muted">
                             {chat.type} · {chat.chat_id}

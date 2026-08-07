@@ -309,6 +309,15 @@ func (s *ChannelConnectService) OAuthConnect(
 		return nil, err
 	}
 
+	accessToken, err := s.cipher.Decrypt(session.AccessTokenEncrypted)
+	if err != nil {
+		return nil, err
+	}
+	discoveredTargets, _, err := s.discoverTargets(ctx, session.Provider, accessToken)
+	if err != nil {
+		return nil, err
+	}
+
 	result := &model.ChannelConnectResult{
 		Connected: []model.ChannelListItem{},
 		Skipped:   []string{},
@@ -344,6 +353,9 @@ func (s *ChannelConnectService) OAuthConnect(
 			ChatType:          string(session.Provider),
 			BotTokenEncrypted: session.AccessTokenEncrypted,
 			Status:            model.ChannelStatusActive,
+			Metadata: mergeChannelAvatar(model.ChannelMetadata{
+				ProviderTitle: name,
+			}, lookupOAuthAvatarFromTargets(discoveredTargets, externalID)),
 		})
 		if err != nil {
 			return nil, err
@@ -420,6 +432,17 @@ func (s *ChannelConnectService) resolveMAXConnectBot(
 	return botToken, bot, maxDiscoverBotInfo(bot), postMode, nil
 }
 
+func maxConnectMetadata(chat *oauthclient.MAXChat) model.ChannelMetadata {
+	meta := model.ChannelMetadata{
+		ProviderTitle: strings.TrimSpace(chat.Title),
+	}
+	link := oauthclient.NormalizeMAXChatLink(chat.Link)
+	if link != "" {
+		meta.PublicURL = "https://max.ru/" + link
+	}
+	return mergeChannelAvatar(meta, oauthclient.MAXChatAvatarURL(chat))
+}
+
 func (s *ChannelConnectService) maxTargetsFromChats(
 	ctx context.Context,
 	botToken string,
@@ -443,6 +466,7 @@ func (s *ChannelConnectService) maxTargetsFromChats(
 			Title:      title,
 			Type:       chat.Type,
 			CanPost:    canPost,
+			AvatarURL:  oauthclient.MAXChatAvatarURL(&chat),
 		})
 	}
 	return targets
@@ -603,6 +627,7 @@ func (s *ChannelConnectService) ConnectMAX(
 				BotTokenEncrypted: encrypted,
 				MaxPostMode:       postMode,
 				Status:            model.ChannelStatusActive,
+				Metadata:          maxConnectMetadata(chat),
 			})
 			if err != nil {
 				return nil, err
@@ -632,6 +657,7 @@ func (s *ChannelConnectService) ConnectMAX(
 			BotTokenEncrypted: encrypted,
 			MaxPostMode:       postMode,
 			Status:            model.ChannelStatusActive,
+			Metadata:          maxConnectMetadata(chat),
 		})
 		if err != nil {
 			return nil, err

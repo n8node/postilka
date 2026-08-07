@@ -4,6 +4,7 @@ import { Copy, Eye, EyeOff, ExternalLink, Loader2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ContextHelpLinks } from "@/components/support/ContextHelpLinks";
 import { SupportSheet } from "@/components/support/SupportSheet";
+import { ChannelAvatar } from "@/components/channels/ChannelAvatar";
 import {
   ApiError,
   connectMAXChannels,
@@ -378,9 +379,10 @@ export function ConnectMAXDialog({ open, onClose, onConnected }: ConnectMAXDialo
                         setChannelHint(null);
                         setError(null);
                       }}
-                      className="flex w-full items-start justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-zinc-50"
+                      className="flex w-full items-center gap-3 rounded-md px-2 py-1.5 text-left text-sm hover:bg-zinc-50"
                     >
-                      <span>
+                      <ChannelAvatar name={target.title} avatarUrl={target.avatar_url} size="sm" />
+                      <span className="min-w-0 flex-1">
                         <span className="font-medium">{target.title}</span>
                         <span className="mt-0.5 block font-mono text-xs text-muted">
                           chat_id {target.external_id}
@@ -388,7 +390,7 @@ export function ConnectMAXDialog({ open, onClose, onConnected }: ConnectMAXDialo
                         </span>
                       </span>
                       {chatID === target.external_id && (
-                        <span className="text-xs text-accent">выбран</span>
+                        <span className="shrink-0 text-xs text-accent">выбран</span>
                       )}
                     </button>
                   </li>

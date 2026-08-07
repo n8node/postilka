@@ -211,6 +211,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Get("/channels/oauth/{provider}/discover", channelConnectHandler.OAuthDiscover)
 			r.Post("/channels/oauth/{provider}/connect", channelConnectHandler.OAuthConnect)
 			r.Get("/channels/{id}", channelHandler.Get)
+			r.Get("/channels/{id}/avatar", channelHandler.Avatar)
 			r.Patch("/channels/{id}", channelHandler.Update)
 			r.Post("/channels/{id}/verify", channelHandler.Verify)
 			r.Post("/channels/{id}/test-message", channelHandler.SendTestMessage)

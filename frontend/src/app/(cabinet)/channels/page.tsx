@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { CabinetPage } from "@/components/layout/CabinetPage";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { ConnectChannelMenu } from "@/components/channels/ConnectChannelMenu";
+import { ChannelAvatar } from "@/components/channels/ChannelAvatar";
 import { EditChannelDialog } from "@/components/channels/EditChannelDialog";
 import {
   ApiError,
@@ -16,6 +17,7 @@ import {
   type ChannelListItem,
   type ChannelProvider,
 } from "@/lib/api";
+import { channelDisplayName } from "@/lib/channelPresentation";
 import { cn } from "@/lib/utils";
 
 const statusLabel: Record<ChannelListItem["status"], string> = {
@@ -164,10 +166,7 @@ export default function ChannelsPage() {
     }
   }
 
-  const displayName =
-    selected?.metadata?.provider_title && selected.name.startsWith("http")
-      ? selected.metadata.provider_title
-      : selected?.name;
+  const displayName = selected ? channelDisplayName(selected) : undefined;
 
   return (
     <div>
@@ -189,6 +188,20 @@ export default function ChannelsPage() {
         right={
           selected ? (
             <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <ChannelAvatar
+                  name={selected.name}
+                  metadata={selected.metadata}
+                  channelId={selected.id}
+                  provider={selected.provider}
+                  size="lg"
+                />
+                <div className="min-w-0">
+                  <p className="truncate font-semibold">{displayName}</p>
+                  <p className="text-xs text-muted">{providerLabel[selected.provider]}</p>
+                </div>
+              </div>
+
               <div className="flex flex-wrap gap-2">
                 <ProviderBadge provider={selected.provider} />
                 <StatusBadge status={selected.status} />
@@ -332,10 +345,7 @@ export default function ChannelsPage() {
               </thead>
               <tbody>
                 {items.map((ch) => {
-                  const title =
-                    ch.metadata?.provider_title && ch.name.startsWith("http")
-                      ? ch.metadata.provider_title
-                      : ch.name;
+                  const title = channelDisplayName(ch);
                   return (
                     <tr
                       key={ch.id}
@@ -349,12 +359,23 @@ export default function ChannelsPage() {
                       )}
                     >
                       <td className="px-4 py-3">
-                        <p className="font-medium">{title}</p>
-                        {ch.metadata?.public_url && (
-                          <p className="mt-0.5 truncate text-xs text-muted">
-                            {ch.metadata.public_url.replace(/^https?:\/\//, "")}
-                          </p>
-                        )}
+                        <div className="flex items-center gap-3">
+                          <ChannelAvatar
+                            name={ch.name}
+                            metadata={ch.metadata}
+                            channelId={ch.id}
+                            provider={ch.provider}
+                            size="sm"
+                          />
+                          <div className="min-w-0">
+                            <p className="font-medium">{title}</p>
+                            {ch.metadata?.public_url && (
+                              <p className="mt-0.5 truncate text-xs text-muted">
+                                {ch.metadata.public_url.replace(/^https?:\/\//, "")}
+                              </p>
+                            )}
+                          </div>
+                        </div>
                       </td>
                       <td className="px-4 py-3">
                         <ProviderBadge provider={ch.provider} />

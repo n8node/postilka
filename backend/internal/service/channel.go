@@ -170,7 +170,7 @@ func (s *ChannelService) ConnectTelegram(ctx context.Context, userID string, r *
 			return nil, err
 		}
 
-		chat, _, err := s.botClient.VerifyBotInChat(ctx, botToken, chatID)
+		chat, member, err := s.botClient.VerifyBotInChat(ctx, botToken, chatID)
 		if err != nil {
 			return nil, err
 		}
@@ -185,6 +185,7 @@ func (s *ChannelService) ConnectTelegram(ctx context.Context, userID string, r *
 			name = chatID
 		}
 
+		meta := telegramChannelMetadata(chat, member)
 		created, err := s.channels.Create(ctx, repository.ChannelCreateParams{
 			WorkspaceID:       ws.ID,
 			Provider:          model.ChannelProviderTelegram,
@@ -194,6 +195,7 @@ func (s *ChannelService) ConnectTelegram(ctx context.Context, userID string, r *
 			BotUsername:       bot.Username,
 			BotTokenEncrypted: encrypted,
 			Status:            model.ChannelStatusActive,
+			Metadata:          meta,
 		})
 		if err != nil {
 			return nil, err

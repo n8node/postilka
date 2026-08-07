@@ -1289,6 +1289,7 @@ export type ChannelProvider =
 export type ChannelMetadata = {
   provider_title?: string;
   public_url?: string;
+  avatar_url?: string;
   can_post?: boolean;
   is_admin?: boolean;
   bot_permissions?: string[];
@@ -1335,6 +1336,7 @@ export type TelegramDiscoveredChat = {
   type: string;
   bot_status: string;
   can_post: boolean;
+  avatar_url?: string;
 };
 
 export type TelegramDiscoverResult = {

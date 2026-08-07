@@ -182,12 +182,24 @@ type MAXBotInfo struct {
 	Name     string `json:"name"`
 }
 
+type MAXImage struct {
+	URL string `json:"url"`
+}
+
 type MAXChat struct {
-	ChatID int64  `json:"chat_id"`
-	Type   string `json:"type"`
-	Title  string `json:"title"`
-	Status string `json:"status"`
-	Link   string `json:"link"`
+	ChatID int64     `json:"chat_id"`
+	Type   string    `json:"type"`
+	Title  string    `json:"title"`
+	Status string    `json:"status"`
+	Link   string    `json:"link"`
+	Icon   *MAXImage `json:"icon"`
+}
+
+func MAXChatAvatarURL(chat *MAXChat) string {
+	if chat == nil || chat.Icon == nil {
+		return ""
+	}
+	return strings.TrimSpace(chat.Icon.URL)
 }
 
 type MAXBotMembership struct {

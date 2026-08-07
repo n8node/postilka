@@ -1,0 +1,50 @@
+import type { ChannelMetadata, ChannelProvider } from "@/lib/api";
+
+export function channelDisplayName(input: {
+  name: string;
+  metadata?: ChannelMetadata;
+}) {
+  const title = input.metadata?.provider_title?.trim();
+  if (title && input.name.startsWith("http")) return title;
+  return input.name.trim() || "Канал";
+}
+
+export function channelInitials(name: string) {
+  const cleaned = name.trim();
+  if (!cleaned) return "?";
+
+  const words = cleaned.split(/\s+/).filter(Boolean);
+  if (words.length >= 2) {
+    return `${words[0]![0] ?? ""}${words[1]![0] ?? ""}`.toUpperCase();
+  }
+
+  const single = words[0] ?? cleaned;
+  const letters = [...single].filter((ch) => /\p{L}/u.test(ch));
+  if (letters.length >= 2) {
+    return `${letters[0]}${letters[1]}`.toUpperCase();
+  }
+  if (letters.length === 1) {
+    return letters[0]!.toUpperCase();
+  }
+  return single.slice(0, 2).toUpperCase();
+}
+
+export function channelAvatarSrc(input: {
+  channelId?: string;
+  metadata?: ChannelMetadata;
+  avatarUrl?: string;
+  provider?: ChannelProvider;
+}) {
+  const direct = input.avatarUrl?.trim() || input.metadata?.avatar_url?.trim();
+  if (direct) return direct;
+  if (!input.channelId) return null;
+  if (
+    input.provider &&
+    input.provider !== "telegram" &&
+    input.provider !== "max"
+  ) {
+    return null;
+  }
+  const base = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "/app/api/v1";
+  return `${base}/channels/${input.channelId}/avatar`;
+}

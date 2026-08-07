@@ -163,6 +163,23 @@ func (h *ChannelHandler) SendTestMessage(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, result)
 }
 
+func (h *ChannelHandler) Avatar(w http.ResponseWriter, r *http.Request) {
+	userID, ok := channelUserID(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
+		return
+	}
+	id := chi.URLParam(r, "id")
+	body, contentType, err := h.channels.FetchAvatar(r.Context(), userID, r, id)
+	if err != nil {
+		writeChannelError(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Cache-Control", "private, max-age=3600")
+	_, _ = w.Write(body)
+}
+
 func (h *ChannelHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	userID, ok := channelUserID(r)
 	if !ok {

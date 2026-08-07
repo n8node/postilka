@@ -164,6 +164,60 @@ func (c *TelegramBotClient) GetChat(ctx context.Context, token, chatID string) (
 	return chat, nil
 }
 
+func (c *TelegramBotClient) GetChatPhotoFilePath(ctx context.Context, token, chatID string) (string, error) {
+	chat, err := c.GetChat(ctx, token, chatID)
+	if err != nil {
+		return "", err
+	}
+	if chat.Photo == nil {
+		return "", nil
+	}
+	fileID := strings.TrimSpace(chat.Photo.BigFileID)
+	if fileID == "" {
+		fileID = strings.TrimSpace(chat.Photo.SmallFileID)
+	}
+	if fileID == "" {
+		return "", nil
+	}
+	raw, err := c.api(ctx, token, "getFile", map[string]string{"file_id": fileID})
+	if err != nil {
+		return "", err
+	}
+	var file telegramFile
+	if err := json.Unmarshal(raw, &file); err != nil {
+		return "", errors.New("telegram api: invalid getFile result")
+	}
+	return strings.TrimSpace(file.FilePath), nil
+}
+
+func (c *TelegramBotClient) FetchChatPhoto(ctx context.Context, token, chatID string) ([]byte, string, error) {
+	path, err := c.GetChatPhotoFilePath(ctx, token, chatID)
+	if err != nil {
+		return nil, "", err
+	}
+	if path == "" {
+		return nil, "", nil
+	}
+	fileURL := fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", strings.TrimSpace(token), path)
+	resp, err := c.doRequest(ctx, http.MethodGet, fileURL, "", nil)
+	if err != nil {
+		return nil, "", sanitizeTelegramError(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return nil, "", fmt.Errorf("telegram file: HTTP %d", resp.StatusCode)
+	}
+	contentType := strings.TrimSpace(resp.Header.Get("Content-Type"))
+	if contentType == "" {
+		contentType = "image/jpeg"
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	if err != nil {
+		return nil, "", err
+	}
+	return body, contentType, nil
+}
+
 func (c *TelegramBotClient) GetChatMember(ctx context.Context, token, chatID string, userID int64) (telegramChatMember, error) {
 	raw, err := c.api(ctx, token, "getChatMember", map[string]any{
 		"chat_id": strings.TrimSpace(chatID),
@@ -179,11 +233,21 @@ func (c *TelegramBotClient) GetChatMember(ctx context.Context, token, chatID str
 	return member, nil
 }
 
+type telegramChatPhoto struct {
+	SmallFileID string `json:"small_file_id"`
+	BigFileID   string `json:"big_file_id"`
+}
+
 type telegramChat struct {
-	ID       int64  `json:"id"`
-	Type     string `json:"type"`
-	Title    string `json:"title"`
-	Username string `json:"username"`
+	ID       int64              `json:"id"`
+	Type     string             `json:"type"`
+	Title    string             `json:"title"`
+	Username string             `json:"username"`
+	Photo    *telegramChatPhoto `json:"photo"`
+}
+
+type telegramFile struct {
+	FilePath string `json:"file_path"`
 }
 
 type telegramChatMember struct {

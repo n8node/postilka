@@ -2,6 +2,7 @@
 
 import { Loader2, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { ChannelAvatar } from "@/components/channels/ChannelAvatar";
 import {
   ApiError,
   connectChannelOAuth,
@@ -183,6 +184,7 @@ export function ConnectOAuthProviderDialog({
                         }
                         className="rounded border-border"
                       />
+                      <ChannelAvatar name={t.title} avatarUrl={t.avatar_url} size="sm" />
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-medium">{t.title}</span>
                         <span className="block truncate text-xs text-muted">{t.external_id}</span>

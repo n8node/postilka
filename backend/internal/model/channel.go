@@ -50,6 +50,7 @@ const (
 type ChannelMetadata struct {
 	ProviderTitle     string   `json:"provider_title,omitempty"`
 	PublicURL         string   `json:"public_url,omitempty"`
+	AvatarURL         string   `json:"avatar_url,omitempty"`
 	CanPost           *bool    `json:"can_post,omitempty"`
 	IsAdmin           *bool    `json:"is_admin,omitempty"`
 	BotPermissions    []string `json:"bot_permissions,omitempty"`
@@ -97,6 +98,7 @@ type TelegramDiscoveredChat struct {
 	Type      string `json:"type"`
 	BotStatus string `json:"bot_status"`
 	CanPost   bool   `json:"can_post"`
+	AvatarURL string `json:"avatar_url,omitempty"`
 }
 
 type TelegramDiscoverResult struct {
