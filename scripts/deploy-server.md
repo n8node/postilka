@@ -193,6 +193,9 @@ docker compose exec -T mysql mysqldump -u root -p"$WP_DB_ROOT_PASSWORD" wordpres
 
   (Отдельный пользователь `tgproxy` для Telegram — как в Erman AI; не root SSH.)
 
+  **Важно:** контейнер `telegram-proxy` (gost) берёт upstream **только из `.env`**, не из админки.
+  После правки `.env` — `up -d --force-recreate telegram-proxy`.
+
   Альтернатива одной строкой (пароль с `%` — как есть):
 
   ```bash

@@ -370,10 +370,13 @@ export function AdminTelegramPage() {
         <h2 className="font-medium text-slate-900">Прокси для Telegram API</h2>
         <p className="text-xs text-slate-500">
           Используйте, если сервер в регионе с нестабильным доступом к api.telegram.org.
-          На prod в Docker укажите внешний прокси здесь (для справки) — backend автоматически
-          ходит через <code className="rounded bg-slate-100 px-1">host.docker.internal:8889</code>,
-          если задан <code className="rounded bg-slate-100 px-1">TELEGRAM_UPSTREAM_PROXY</code> в{" "}
-          <code className="rounded bg-slate-100 px-1">.env</code>.
+          На prod backend ходит через gost на хосте{" "}
+          <code className="rounded bg-slate-100 px-1">127.0.0.1:8889</code>. Контейнер{" "}
+          <code className="rounded bg-slate-100 px-1">telegram-proxy</code> читает upstream{" "}
+          <strong>только из</strong>{" "}
+          <code className="rounded bg-slate-100 px-1">.env</code> (
+          <code className="rounded bg-slate-100 px-1">TELEGRAM_UPSTREAM_HOST/USER/PASSWORD</code>
+          ), не из этой формы. URL ниже — для backend и failover после сохранения.
         </p>
 
         <label className="flex items-center gap-2 text-sm">

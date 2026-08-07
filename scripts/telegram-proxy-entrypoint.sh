@@ -23,14 +23,16 @@ parse_proxy_url() {
   UPSTREAM_HOST="$hostpart"
 }
 
-if [ -n "${TELEGRAM_UPSTREAM_PROXY:-}" ]; then
-  parse_proxy_url "$TELEGRAM_UPSTREAM_PROXY"
-elif [ -n "${TELEGRAM_UPSTREAM_HOST:-}" ] && [ -n "${TELEGRAM_UPSTREAM_USER:-}" ]; then
+if [ -n "${TELEGRAM_UPSTREAM_HOST:-}" ] && [ -n "${TELEGRAM_UPSTREAM_USER:-}" ]; then
   UPSTREAM_HOST="$TELEGRAM_UPSTREAM_HOST"
   UPSTREAM_USER="$TELEGRAM_UPSTREAM_USER"
   UPSTREAM_PASS="${TELEGRAM_UPSTREAM_PASSWORD:-}"
+  UPSTREAM_SOURCE="split env"
+elif [ -n "${TELEGRAM_UPSTREAM_PROXY:-}" ]; then
+  parse_proxy_url "$TELEGRAM_UPSTREAM_PROXY"
+  UPSTREAM_SOURCE="TELEGRAM_UPSTREAM_PROXY"
 else
-  echo "telegram-proxy: set TELEGRAM_UPSTREAM_PROXY or TELEGRAM_UPSTREAM_HOST/USER/PASSWORD in .env" >&2
+  echo "telegram-proxy: missing upstream in .env — set TELEGRAM_UPSTREAM_HOST/USER/PASSWORD (preferred) or TELEGRAM_UPSTREAM_PROXY" >&2
   exit 1
 fi
 
@@ -44,5 +46,5 @@ cat >/tmp/gost.json <<EOF
 }
 EOF
 
-echo "telegram-proxy: v4 listening on :8889 via ${UPSTREAM_HOST} (gost -C /tmp/gost.json)"
+echo "telegram-proxy: v5 listening on :8889 via ${UPSTREAM_HOST} user=${UPSTREAM_USER} (${UPSTREAM_SOURCE})"
 exec /bin/gost -C /tmp/gost.json
