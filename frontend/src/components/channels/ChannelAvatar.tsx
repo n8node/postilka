@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ChannelMetadata, ChannelProvider } from "@/lib/api";
 import {
-  channelAvatarSrc,
   channelDisplayName,
   channelInitials,
+  channelProxyAvatarURL,
+  isPublicChannelAvatarURL,
 } from "@/lib/channelPresentation";
 import { cn } from "@/lib/utils";
 
@@ -35,9 +36,50 @@ export function ChannelAvatar({
   className,
 }: ChannelAvatarProps) {
   const [failed, setFailed] = useState(false);
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
   const displayName = channelDisplayName({ name, metadata });
   const initials = channelInitials(displayName);
-  const src = channelAvatarSrc({ channelId, metadata, avatarUrl, provider });
+
+  const directUrl = (avatarUrl?.trim() || metadata?.avatar_url?.trim() || "") || null;
+  const publicDirectUrl =
+    directUrl && isPublicChannelAvatarURL(directUrl, provider) ? directUrl : null;
+  const proxyUrl = channelId ? channelProxyAvatarURL(channelId) : null;
+  const needsProxyFetch = Boolean(
+    channelId &&
+      !publicDirectUrl &&
+      (provider === "telegram" || provider === "max" || Boolean(directUrl)),
+  );
+
+  useEffect(() => {
+    setFailed(false);
+    setBlobUrl(null);
+  }, [channelId, directUrl, provider, name]);
+
+  useEffect(() => {
+    if (!needsProxyFetch || !proxyUrl) return;
+
+    let active = true;
+    let objectUrl: string | null = null;
+
+    fetch(proxyUrl, { credentials: "include" })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(String(res.status));
+        const blob = await res.blob();
+        if (!blob.size) throw new Error("empty avatar");
+        objectUrl = URL.createObjectURL(blob);
+        if (active) setBlobUrl(objectUrl);
+      })
+      .catch(() => {
+        if (active) setFailed(true);
+      });
+
+    return () => {
+      active = false;
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [needsProxyFetch, proxyUrl]);
+
+  const src = publicDirectUrl || blobUrl;
 
   if (!src || failed) {
     return (

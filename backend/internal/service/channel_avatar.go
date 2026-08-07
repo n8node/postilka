@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/postilka/postilka/internal/model"
@@ -18,6 +19,14 @@ func mergeChannelAvatar(meta model.ChannelMetadata, avatarURL string) model.Chan
 		meta.AvatarURL = avatarURL
 	}
 	return meta
+}
+
+func telegramPublicAvatarURL(chat telegramChat) string {
+	username := strings.TrimPrefix(strings.TrimSpace(chat.Username), "@")
+	if username == "" {
+		return ""
+	}
+	return "https://t.me/i/userpic/320/" + url.PathEscape(username) + ".jpg"
 }
 
 func (s *ChannelService) FetchAvatar(
@@ -36,7 +45,7 @@ func (s *ChannelService) FetchAvatar(
 	}
 	ch := row.Channel
 
-	if url := strings.TrimSpace(ch.Metadata.AvatarURL); url != "" {
+	if url := strings.TrimSpace(ch.Metadata.AvatarURL); url != "" && ch.Provider != model.ChannelProviderMAX {
 		return fetchRemoteAvatar(ctx, url)
 	}
 
@@ -61,14 +70,14 @@ func (s *ChannelService) FetchAvatar(
 		return body, contentType, nil
 
 	case model.ChannelProviderMAX:
-		maxChat, err := s.maxClient.GetChat(ctx, token, parseMAXChatID(ch.ChatID))
+		body, contentType, err := s.maxClient.FetchChatIcon(ctx, token, parseMAXChatID(ch.ChatID))
 		if err != nil {
 			return nil, "", err
 		}
-		if url := oauthclient.MAXChatAvatarURL(maxChat); url != "" {
-			return fetchRemoteAvatar(ctx, url)
+		if len(body) == 0 {
+			return nil, "", repository.ErrNotFound
 		}
-		return nil, "", repository.ErrNotFound
+		return body, contentType, nil
 
 	default:
 		if avatarURL, err := s.lookupOAuthAvatar(ctx, ch.Provider, token, ch.ChatID); err == nil && avatarURL != "" {

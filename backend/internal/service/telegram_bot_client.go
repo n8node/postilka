@@ -349,6 +349,7 @@ func (c *TelegramBotClient) DiscoverAdminChats(ctx context.Context, token string
 			Type:      chat.Type,
 			BotStatus: member.Status,
 			CanPost:   canPost,
+			AvatarURL: telegramPublicAvatarURL(chat),
 		})
 	}
 

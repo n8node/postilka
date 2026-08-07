@@ -154,26 +154,17 @@ func (s *ChannelService) ConnectTelegram(ctx context.Context, userID string, r *
 	}
 
 	for _, input := range req.Channels {
-		chatID := strings.TrimSpace(input.ChatID)
-		if chatID == "" {
+		rawChatID := strings.TrimSpace(input.ChatID)
+		if rawChatID == "" {
 			continue
-		}
-		exists, err := s.channels.ExistsByChat(ctx, ws.ID, string(model.ChannelProviderTelegram), chatID)
-		if err != nil {
-			return nil, err
-		}
-		if exists {
-			result.Skipped = append(result.Skipped, chatID)
-			continue
-		}
-		if err := s.quota.CheckChannelQuota(ctx, ws.ID, currentCount+len(result.Connected)); err != nil {
-			return nil, err
 		}
 
-		chat, member, err := s.botClient.VerifyBotInChat(ctx, botToken, chatID)
+		chat, member, err := s.botClient.VerifyBotInChat(ctx, botToken, rawChatID)
 		if err != nil {
 			return nil, err
 		}
+		normalizedChatID := formatChatID(chat.ID)
+
 		name := strings.TrimSpace(input.Name)
 		if name == "" {
 			name = strings.TrimSpace(chat.Title)
@@ -182,15 +173,48 @@ func (s *ChannelService) ConnectTelegram(ctx context.Context, userID string, r *
 			name = "@" + chat.Username
 		}
 		if name == "" {
-			name = chatID
+			name = normalizedChatID
 		}
 
 		meta := telegramChannelMetadata(chat, member)
+
+		existing, err := s.findTelegramChannel(ctx, ws.ID, normalizedChatID, rawChatID)
+		if err != nil {
+			return nil, err
+		}
+		if existing != nil {
+			updated, err := s.channels.SaveChannel(ctx, repository.ChannelSaveParams{
+				WorkspaceID:       ws.ID,
+				ChannelID:         existing.ID,
+				Name:              name,
+				ChatType:          chat.Type,
+				BotUsername:       bot.Username,
+				BotTokenEncrypted: encrypted,
+				MaxPostMode:       existing.MaxPostMode,
+				Status:            model.ChannelStatusActive,
+				Metadata:          meta,
+				MetadataRefreshedAt: existing.MetadataRefreshedAt,
+			})
+			if err != nil {
+				return nil, err
+			}
+			result.Connected = append(result.Connected, model.ChannelListItem{
+				Channel:      *updated,
+				BotTokenSet:  true,
+				BotTokenHint: maskSecret(botToken),
+			})
+			continue
+		}
+
+		if err := s.quota.CheckChannelQuota(ctx, ws.ID, currentCount+len(result.Connected)); err != nil {
+			return nil, err
+		}
+
 		created, err := s.channels.Create(ctx, repository.ChannelCreateParams{
 			WorkspaceID:       ws.ID,
 			Provider:          model.ChannelProviderTelegram,
 			Name:              name,
-			ChatID:            chatID,
+			ChatID:            normalizedChatID,
 			ChatType:          chat.Type,
 			BotUsername:       bot.Username,
 			BotTokenEncrypted: encrypted,
@@ -207,13 +231,29 @@ func (s *ChannelService) ConnectTelegram(ctx context.Context, userID string, r *
 		})
 	}
 
-	if len(result.Connected) == 0 && len(result.Skipped) > 0 {
-		return result, ErrChannelAlreadyConnected
-	}
 	if len(result.Connected) == 0 {
 		return nil, fmt.Errorf("не удалось подключить каналы")
 	}
 	return result, nil
+}
+
+func (s *ChannelService) findTelegramChannel(
+	ctx context.Context,
+	workspaceID, normalizedChatID, rawChatID string,
+) (*model.Channel, error) {
+	for _, id := range []string{normalizedChatID, rawChatID} {
+		if strings.TrimSpace(id) == "" {
+			continue
+		}
+		ch, err := s.channels.GetByChat(ctx, workspaceID, string(model.ChannelProviderTelegram), id)
+		if err == nil {
+			return ch, nil
+		}
+		if !errors.Is(err, repository.ErrNotFound) {
+			return nil, err
+		}
+	}
+	return nil, nil
 }
 
 func (s *ChannelService) Verify(ctx context.Context, userID string, r *http.Request, channelID string) (*model.ChannelListItem, error) {

@@ -29,6 +29,20 @@ export function channelInitials(name: string) {
   return single.slice(0, 2).toUpperCase();
 }
 
+export function isPublicChannelAvatarURL(url: string, provider?: ChannelProvider) {
+  const normalized = url.trim();
+  if (!normalized) return false;
+  if (provider === "max") return false;
+  if (normalized.includes("t.me/i/userpic/")) return true;
+  if (provider === "telegram") return false;
+  return true;
+}
+
+export function channelProxyAvatarURL(channelId: string) {
+  const base = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "/app/api/v1";
+  return `${base}/channels/${channelId}/avatar`;
+}
+
 export function channelAvatarSrc(input: {
   channelId?: string;
   metadata?: ChannelMetadata;
@@ -36,15 +50,12 @@ export function channelAvatarSrc(input: {
   provider?: ChannelProvider;
 }) {
   const direct = input.avatarUrl?.trim() || input.metadata?.avatar_url?.trim();
-  if (direct) return direct;
-  if (!input.channelId) return null;
-  if (
-    input.provider &&
-    input.provider !== "telegram" &&
-    input.provider !== "max"
-  ) {
-    return null;
+  if (direct && isPublicChannelAvatarURL(direct, input.provider)) {
+    return direct;
   }
-  const base = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "/app/api/v1";
-  return `${base}/channels/${input.channelId}/avatar`;
+  if (input.channelId && (input.provider === "telegram" || input.provider === "max")) {
+    return channelProxyAvatarURL(input.channelId);
+  }
+  if (direct) return direct;
+  return null;
 }

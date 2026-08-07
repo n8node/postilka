@@ -95,6 +95,7 @@ func telegramChannelMetadata(chat telegramChat, member telegramChatMember) model
 	meta.IsAdmin = &isAdmin
 	if chat.Username != "" {
 		meta.PublicURL = "https://t.me/" + chat.Username
+		meta.AvatarURL = telegramPublicAvatarURL(chat)
 	}
 	return meta
 }
@@ -317,6 +318,7 @@ func (s *ChannelService) VerifyAndRefresh(
 		if chat.Type != "" {
 			ch.ChatType = chat.Type
 		}
+		ch.ChatID = formatChatID(chat.ID)
 		if title := strings.TrimSpace(chat.Title); title != "" && (ch.Name == "" || strings.HasPrefix(ch.Name, "http")) {
 			ch.Name = title
 		}

@@ -187,19 +187,48 @@ type MAXImage struct {
 }
 
 type MAXChat struct {
-	ChatID int64     `json:"chat_id"`
-	Type   string    `json:"type"`
-	Title  string    `json:"title"`
-	Status string    `json:"status"`
-	Link   string    `json:"link"`
-	Icon   *MAXImage `json:"icon"`
+	ChatID  int64     `json:"chat_id"`
+	Type    string    `json:"type"`
+	Title   string    `json:"title"`
+	Status  string    `json:"status"`
+	Link    string    `json:"link"`
+	Icon    *MAXImage `json:"icon"`
+	IconURL string    `json:"icon_url"`
 }
 
 func MAXChatAvatarURL(chat *MAXChat) string {
-	if chat == nil || chat.Icon == nil {
+	if chat == nil {
 		return ""
 	}
-	return strings.TrimSpace(chat.Icon.URL)
+	if chat.Icon != nil {
+		if url := strings.TrimSpace(chat.Icon.URL); url != "" {
+			return url
+		}
+	}
+	return strings.TrimSpace(chat.IconURL)
+}
+
+func (c *MAXBotClient) FetchChatIcon(ctx context.Context, token string, chatID int64) ([]byte, string, error) {
+	chat, err := c.GetChat(ctx, token, chatID)
+	if err != nil {
+		return nil, "", err
+	}
+	iconURL := MAXChatAvatarURL(chat)
+	if iconURL == "" {
+		return nil, "", nil
+	}
+	respBody, status, err := c.do(ctx, http.MethodGet, iconURL, token, nil)
+	if err != nil {
+		return nil, "", err
+	}
+	if status >= 400 {
+		return nil, "", fmt.Errorf("max icon: HTTP %d: %s", status, strings.TrimSpace(string(respBody)))
+	}
+	contentType := "image/jpeg"
+	if len(respBody) > 0 && respBody[0] == 0x89 {
+		contentType = "image/png"
+	}
+	return respBody, contentType, nil
 }
 
 type MAXBotMembership struct {

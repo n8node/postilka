@@ -328,21 +328,44 @@ func (s *ChannelConnectService) OAuthConnect(
 		if externalID == "" {
 			continue
 		}
-		exists, err := s.channels.ExistsByChat(ctx, ws.ID, string(provider), externalID)
-		if err != nil {
-			return nil, err
-		}
-		if exists {
-			result.Skipped = append(result.Skipped, externalID)
-			continue
-		}
-		if err := s.quota.CheckChannelQuota(ctx, ws.ID, currentCount+len(result.Connected)); err != nil {
-			return nil, err
-		}
 
 		name := strings.TrimSpace(input.Name)
 		if name == "" {
 			name = externalID
+		}
+		meta := mergeChannelAvatar(model.ChannelMetadata{
+			ProviderTitle: name,
+		}, lookupOAuthAvatarFromTargets(discoveredTargets, externalID))
+
+		existing, err := s.channels.GetByChat(ctx, ws.ID, string(provider), externalID)
+		if err != nil && !errors.Is(err, repository.ErrNotFound) {
+			return nil, err
+		}
+		if existing != nil {
+			updated, err := s.channels.SaveChannel(ctx, repository.ChannelSaveParams{
+				WorkspaceID:         ws.ID,
+				ChannelID:           existing.ID,
+				Name:                name,
+				ChatType:            existing.ChatType,
+				BotUsername:         existing.BotUsername,
+				BotTokenEncrypted:   session.AccessTokenEncrypted,
+				MaxPostMode:         existing.MaxPostMode,
+				Status:              model.ChannelStatusActive,
+				Metadata:            meta,
+				MetadataRefreshedAt: existing.MetadataRefreshedAt,
+			})
+			if err != nil {
+				return nil, err
+			}
+			result.Connected = append(result.Connected, model.ChannelListItem{
+				Channel:     *updated,
+				BotTokenSet: true,
+			})
+			continue
+		}
+
+		if err := s.quota.CheckChannelQuota(ctx, ws.ID, currentCount+len(result.Connected)); err != nil {
+			return nil, err
 		}
 
 		created, err := s.channels.Create(ctx, repository.ChannelCreateParams{
@@ -353,9 +376,7 @@ func (s *ChannelConnectService) OAuthConnect(
 			ChatType:          string(session.Provider),
 			BotTokenEncrypted: session.AccessTokenEncrypted,
 			Status:            model.ChannelStatusActive,
-			Metadata: mergeChannelAvatar(model.ChannelMetadata{
-				ProviderTitle: name,
-			}, lookupOAuthAvatarFromTargets(discoveredTargets, externalID)),
+			Metadata:          meta,
 		})
 		if err != nil {
 			return nil, err
@@ -366,9 +387,6 @@ func (s *ChannelConnectService) OAuthConnect(
 		})
 	}
 
-	if len(result.Connected) == 0 && len(result.Skipped) > 0 {
-		return result, ErrChannelAlreadyConnected
-	}
 	if len(result.Connected) == 0 {
 		return nil, fmt.Errorf("не удалось подключить каналы")
 	}
