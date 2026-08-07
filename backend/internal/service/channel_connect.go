@@ -581,23 +581,46 @@ func (s *ChannelConnectService) ConnectMAX(
 			return nil, err
 		}
 		chatID := strconv.FormatInt(chat.ChatID, 10)
-		exists, err := s.channels.ExistsByChat(ctx, ws.ID, string(model.ChannelProviderMAX), chatID)
-		if err != nil {
-			return nil, err
-		}
-		if exists {
-			result.Skipped = append(result.Skipped, chatID)
-			continue
-		}
-		if err := s.quota.CheckChannelQuota(ctx, ws.ID, currentCount+len(result.Connected)); err != nil {
-			return nil, err
-		}
 		name := strings.TrimSpace(input.Name)
 		if name == "" {
 			name = strings.TrimSpace(chat.Title)
 		}
 		if name == "" {
 			name = chatID
+		}
+
+		existing, err := s.channels.GetByChat(ctx, ws.ID, string(model.ChannelProviderMAX), chatID)
+		if err != nil && !errors.Is(err, repository.ErrNotFound) {
+			return nil, err
+		}
+		if existing != nil {
+			updated, err := s.channels.UpdateMAXConnection(ctx, repository.ChannelMAXReconnectParams{
+				WorkspaceID:       ws.ID,
+				ChannelID:         existing.ID,
+				Name:              name,
+				ChatType:          chat.Type,
+				BotUsername:       bot.Username,
+				BotTokenEncrypted: encrypted,
+				MaxPostMode:       postMode,
+				Status:            model.ChannelStatusActive,
+			})
+			if err != nil {
+				return nil, err
+			}
+			item := model.ChannelListItem{Channel: *updated}
+			if postMode == model.MAXPostModePlatform {
+				item.BotTokenSet = true
+				item.BotTokenHint = "Postilka"
+			} else {
+				item.BotTokenSet = true
+				item.BotTokenHint = maskSecret(botToken)
+			}
+			result.Connected = append(result.Connected, item)
+			continue
+		}
+
+		if err := s.quota.CheckChannelQuota(ctx, ws.ID, currentCount+len(result.Connected)); err != nil {
+			return nil, err
 		}
 		created, err := s.channels.Create(ctx, repository.ChannelCreateParams{
 			WorkspaceID:       ws.ID,
@@ -624,9 +647,6 @@ func (s *ChannelConnectService) ConnectMAX(
 		result.Connected = append(result.Connected, item)
 	}
 
-	if len(result.Connected) == 0 && len(result.Skipped) > 0 {
-		return result, ErrChannelAlreadyConnected
-	}
 	if len(result.Connected) == 0 {
 		return nil, fmt.Errorf("не удалось подключить каналы")
 	}

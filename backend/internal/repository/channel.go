@@ -99,6 +99,27 @@ func (r *ChannelRepository) ExistsByChat(ctx context.Context, workspaceID, provi
 	return ok, err
 }
 
+func (r *ChannelRepository) GetByChat(ctx context.Context, workspaceID, provider, chatID string) (*model.Channel, error) {
+	const q = `
+		SELECT id, workspace_id, provider, name, chat_id, chat_type, bot_username,
+		       COALESCE(max_post_mode, 'own'), status, COALESCE(last_error, ''), created_at, updated_at
+		FROM channels
+		WHERE workspace_id = $1 AND provider = $2 AND chat_id = $3
+	`
+	var ch model.Channel
+	err := r.pool.QueryRow(ctx, q, workspaceID, provider, chatID).Scan(
+		&ch.ID, &ch.WorkspaceID, &ch.Provider, &ch.Name, &ch.ChatID, &ch.ChatType,
+		&ch.BotUsername, &ch.MaxPostMode, &ch.Status, &ch.LastError, &ch.CreatedAt, &ch.UpdatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &ch, nil
+}
+
 type ChannelCreateParams struct {
 	WorkspaceID        string
 	Provider           model.ChannelProvider
@@ -168,6 +189,53 @@ func (r *ChannelRepository) UpdateToken(ctx context.Context, workspaceID, channe
 	`
 	var ch model.Channel
 	err := r.pool.QueryRow(ctx, q, channelID, workspaceID, botTokenEncrypted, botUsername, status).Scan(
+		&ch.ID, &ch.WorkspaceID, &ch.Provider, &ch.Name, &ch.ChatID, &ch.ChatType,
+		&ch.BotUsername, &ch.MaxPostMode, &ch.Status, &ch.LastError, &ch.CreatedAt, &ch.UpdatedAt,
+	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &ch, nil
+}
+
+type ChannelMAXReconnectParams struct {
+	WorkspaceID       string
+	ChannelID         string
+	Name              string
+	ChatType          string
+	BotUsername       string
+	BotTokenEncrypted string
+	MaxPostMode       model.MAXPostMode
+	Status            model.ChannelStatus
+}
+
+func (r *ChannelRepository) UpdateMAXConnection(ctx context.Context, p ChannelMAXReconnectParams) (*model.Channel, error) {
+	maxPostMode := p.MaxPostMode
+	if maxPostMode == "" {
+		maxPostMode = model.MAXPostModeOwn
+	}
+	const q = `
+		UPDATE channels
+		SET name = $3,
+		    chat_type = $4,
+		    bot_username = $5,
+		    bot_token_encrypted = NULLIF($6, ''),
+		    max_post_mode = $7,
+		    status = $8,
+		    last_error = NULL,
+		    updated_at = NOW()
+		WHERE id = $1 AND workspace_id = $2
+		RETURNING id, workspace_id, provider, name, chat_id, chat_type, bot_username,
+		          COALESCE(max_post_mode, 'own'), status, COALESCE(last_error, ''), created_at, updated_at
+	`
+	var ch model.Channel
+	err := r.pool.QueryRow(ctx, q,
+		p.ChannelID, p.WorkspaceID, p.Name, p.ChatType, p.BotUsername,
+		p.BotTokenEncrypted, maxPostMode, p.Status,
+	).Scan(
 		&ch.ID, &ch.WorkspaceID, &ch.Provider, &ch.Name, &ch.ChatID, &ch.ChatType,
 		&ch.BotUsername, &ch.MaxPostMode, &ch.Status, &ch.LastError, &ch.CreatedAt, &ch.UpdatedAt,
 	)
