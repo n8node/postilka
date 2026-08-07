@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -150,6 +151,14 @@ func (c *TelegramBotClient) DeleteWebhook(ctx context.Context, token string) err
 		"drop_pending_updates": false,
 	})
 	return sanitizeTelegramError(err)
+}
+
+func telegramPublicAvatarURL(chat telegramChat) string {
+	username := strings.TrimPrefix(strings.TrimSpace(chat.Username), "@")
+	if username == "" {
+		return ""
+	}
+	return "https://t.me/i/userpic/320/" + url.PathEscape(username) + ".jpg"
 }
 
 func telegramChatIDParam(chatID string) any {
@@ -400,7 +409,10 @@ func (c *TelegramBotClient) DiscoverAdminChats(ctx context.Context, token string
 				}
 			}
 		}
-		avatarURL, _ := c.ChatPhotoDataURI(ctx, token, chatID)
+		avatarURL := telegramPublicAvatarURL(chat)
+		if avatarURL == "" {
+			avatarURL, _ = c.ChatPhotoDataURI(ctx, token, chatID)
+		}
 		result.Chats = append(result.Chats, model.TelegramDiscoveredChat{
 			ChatID:    chatID,
 			Title:     title,

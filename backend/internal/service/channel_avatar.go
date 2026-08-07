@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
@@ -53,14 +54,25 @@ func (s *ChannelService) FetchAvatar(
 
 	switch ch.Provider {
 	case model.ChannelProviderTelegram:
+		if body, ct, ok := avatarBytesFromMetadata(ch.Metadata.AvatarURL); ok {
+			return body, ct, nil
+		}
 		body, contentType, err := s.botClient.FetchChatPhoto(ctx, token, ch.ChatID)
+		if err == nil && len(body) > 0 {
+			return body, contentType, nil
+		}
+		chat, chatErr := s.botClient.GetChat(ctx, token, ch.ChatID)
+		if chatErr == nil {
+			if publicURL := telegramPublicAvatarURL(chat); publicURL != "" {
+				if remote, ct, rerr := fetchRemoteAvatar(ctx, publicURL); rerr == nil {
+					return remote, ct, nil
+				}
+			}
+		}
 		if err != nil {
 			return nil, "", err
 		}
-		if len(body) == 0 {
-			return nil, "", repository.ErrNotFound
-		}
-		return body, contentType, nil
+		return nil, "", repository.ErrNotFound
 
 	case model.ChannelProviderMAX:
 		body, contentType, err := s.maxClient.FetchChatIcon(ctx, token, parseMAXChatID(ch.ChatID))
@@ -78,6 +90,36 @@ func (s *ChannelService) FetchAvatar(
 		}
 		return nil, "", repository.ErrNotFound
 	}
+}
+
+func avatarBytesFromMetadata(raw string) ([]byte, string, bool) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, "", false
+	}
+	if strings.HasPrefix(raw, "data:") {
+		comma := strings.Index(raw, ",")
+		if comma <= 0 {
+			return nil, "", false
+		}
+		header := raw[5:comma]
+		payload := raw[comma+1:]
+		contentType := "image/jpeg"
+		if semi := strings.Index(header, ";"); semi >= 0 {
+			contentType = header[:semi]
+		} else if header != "" && header != "base64" {
+			contentType = header
+		}
+		if !strings.Contains(header, "base64") {
+			return nil, "", false
+		}
+		body, err := base64.StdEncoding.DecodeString(payload)
+		if err != nil || len(body) == 0 {
+			return nil, "", false
+		}
+		return body, contentType, true
+	}
+	return nil, "", false
 }
 
 func fetchRemoteAvatar(ctx context.Context, rawURL string) ([]byte, string, error) {

@@ -32,7 +32,12 @@ export function channelInitials(name: string) {
 export function isPublicChannelAvatarURL(url: string, provider?: ChannelProvider) {
   const normalized = url.trim();
   if (!normalized) return false;
-  if (provider === "max" || provider === "telegram") return false;
+  if (normalized.startsWith("data:")) return true;
+  if (provider === "telegram" && normalized.startsWith("https://t.me/i/userpic/")) {
+    return true;
+  }
+  if (provider === "max") return false;
+  if (provider === "telegram") return false;
   return true;
 }
 

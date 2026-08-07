@@ -272,7 +272,9 @@ func (s *ChannelService) telegramConnectMetadata(
 	member telegramChatMember,
 ) model.ChannelMetadata {
 	meta := telegramChannelMetadata(chat, member)
-	if uri, err := s.botClient.ChatPhotoDataURI(ctx, botToken, chatID); err == nil && uri != "" {
+	if publicURL := telegramPublicAvatarURL(chat); publicURL != "" {
+		meta = mergeChannelAvatar(meta, publicURL)
+	} else if uri, err := s.botClient.ChatPhotoDataURI(ctx, botToken, chatID); err == nil && uri != "" {
 		meta = mergeChannelAvatar(meta, uri)
 	}
 	return meta

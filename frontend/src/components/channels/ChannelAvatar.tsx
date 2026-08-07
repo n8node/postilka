@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ChannelMetadata, ChannelProvider } from "@/lib/api";
 import {
   channelDisplayName,
@@ -36,54 +36,29 @@ export function ChannelAvatar({
   className,
 }: ChannelAvatarProps) {
   const [failed, setFailed] = useState(false);
-  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [useProxy, setUseProxy] = useState(false);
   const displayName = channelDisplayName({ name, metadata });
   const initials = channelInitials(displayName);
 
   const directUrl = (avatarUrl?.trim() || metadata?.avatar_url?.trim() || "") || null;
-  const inlineAvatarUrl = directUrl?.startsWith("data:") ? directUrl : null;
   const publicDirectUrl =
-    directUrl && !inlineAvatarUrl && isPublicChannelAvatarURL(directUrl, provider)
-      ? directUrl
-      : null;
+    directUrl && isPublicChannelAvatarURL(directUrl, provider) ? directUrl : null;
   const proxyUrl = channelId ? channelProxyAvatarURL(channelId) : null;
-  const needsProxyFetch = Boolean(
-    channelId &&
-      !inlineAvatarUrl &&
-      !publicDirectUrl &&
-      (provider === "telegram" || provider === "max"),
+  const canProxy = Boolean(
+    channelId && (provider === "telegram" || provider === "max") && proxyUrl,
   );
+
+  const src = useMemo(() => {
+    if (useProxy && canProxy) return proxyUrl;
+    if (publicDirectUrl) return publicDirectUrl;
+    if (canProxy) return proxyUrl;
+    return null;
+  }, [useProxy, canProxy, proxyUrl, publicDirectUrl]);
 
   useEffect(() => {
     setFailed(false);
-    setBlobUrl(null);
+    setUseProxy(false);
   }, [channelId, directUrl, provider, name]);
-
-  useEffect(() => {
-    if (!needsProxyFetch || !proxyUrl) return;
-
-    let active = true;
-    let objectUrl: string | null = null;
-
-    fetch(proxyUrl, { credentials: "include" })
-      .then(async (res) => {
-        if (!res.ok) throw new Error(String(res.status));
-        const blob = await res.blob();
-        if (!blob.size) throw new Error("empty avatar");
-        objectUrl = URL.createObjectURL(blob);
-        if (active) setBlobUrl(objectUrl);
-      })
-      .catch(() => {
-        if (active) setFailed(true);
-      });
-
-    return () => {
-      active = false;
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [needsProxyFetch, proxyUrl]);
-
-  const src = inlineAvatarUrl || publicDirectUrl || blobUrl;
 
   if (!src || failed) {
     return (
@@ -109,7 +84,13 @@ export function ChannelAvatar({
         sizeClass[size],
         className,
       )}
-      onError={() => setFailed(true)}
+      onError={() => {
+        if (!useProxy && canProxy && publicDirectUrl && src === publicDirectUrl) {
+          setUseProxy(true);
+          return;
+        }
+        setFailed(true);
+      }}
     />
   );
 }
