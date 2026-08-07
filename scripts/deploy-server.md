@@ -187,9 +187,11 @@ docker compose exec -T mysql mysqldump -u root -p"$WP_DB_ROOT_PASSWORD" wordpres
 
   ```bash
   TELEGRAM_UPSTREAM_HOST=5.35.83.120:3128
-  TELEGRAM_UPSTREAM_USER=root
+  TELEGRAM_UPSTREAM_USER=tgproxy
   TELEGRAM_UPSTREAM_PASSWORD=PASSWORD
   ```
+
+  (Отдельный пользователь `tgproxy` для Telegram — как в Erman AI; не root SSH.)
 
   Альтернатива одной строкой (пароль с `%` — как есть):
 

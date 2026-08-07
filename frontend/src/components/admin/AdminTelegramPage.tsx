@@ -92,10 +92,16 @@ export function AdminTelegramPage() {
   const [retryingQueueID, setRetryingQueueID] = useState("");
 
   const applyView = useCallback((data: TelegramAdminView) => {
+    const proxyUrls = data.settings.proxy_urls || [];
+    const proxyActive =
+      data.settings.proxy_active_url &&
+      proxyUrls.includes(data.settings.proxy_active_url)
+        ? data.settings.proxy_active_url
+        : "";
     setSettings({
       ...data.settings,
-      proxy_urls: data.settings.proxy_urls || [],
-      proxy_active_url: data.settings.proxy_active_url || "",
+      proxy_urls: proxyUrls,
+      proxy_active_url: proxyActive,
       proxy_auto_failover: data.settings.proxy_auto_failover ?? true,
       proxy_enabled: data.settings.proxy_enabled ?? false,
     });
@@ -386,14 +392,18 @@ export function AdminTelegramPage() {
           </label>
           <textarea
             value={settings.proxy_urls.join("\n")}
-            onChange={(e) =>
-              patch({
-                proxy_urls: e.target.value
-                  .split("\n")
-                  .map((s) => s.trim())
-                  .filter(Boolean),
-              })
-            }
+            onChange={(e) => {
+              const proxy_urls = e.target.value
+                .split("\n")
+                .map((s) => s.trim())
+                .filter(Boolean);
+              const proxy_active_url =
+                settings.proxy_active_url &&
+                proxy_urls.includes(settings.proxy_active_url)
+                  ? settings.proxy_active_url
+                  : "";
+              patch({ proxy_urls, proxy_active_url });
+            }}
             rows={3}
             placeholder="http://user:pass@5.35.83.120:3128"
             className="w-full rounded-lg border border-slate-200 px-3 py-2 font-mono text-sm"

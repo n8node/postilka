@@ -123,11 +123,8 @@ func validateTelegramSettings(cfg model.TelegramSettings) error {
 				return fmt.Errorf("%w: proxy url %q: only http:// proxies are supported", ErrInvalidTelegramSettings, raw)
 			}
 		}
-		if cfg.ProxyActiveURL == "" {
+		if cfg.ProxyActiveURL == "" || !containsProxyURL(cfg.ProxyURLs, cfg.ProxyActiveURL) {
 			cfg.ProxyActiveURL = cfg.ProxyURLs[0]
-		}
-		if !containsProxyURL(cfg.ProxyURLs, cfg.ProxyActiveURL) {
-			return fmt.Errorf("%w: active proxy must be one of proxy_urls", ErrInvalidTelegramSettings)
 		}
 	} else {
 		cfg.ProxyActiveURL = ""
