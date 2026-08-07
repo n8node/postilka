@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/postilka/postilka/internal/model"
@@ -61,12 +63,13 @@ func (h *TelegramSettingsHandler) UpdateAdmin(w http.ResponseWriter, r *http.Req
 }
 
 func (h *TelegramSettingsHandler) SendTest(w http.ResponseWriter, r *http.Request) {
-	ok, msg := h.telegram.SendTest(r.Context())
+	ctx, cancel := context.WithTimeout(r.Context(), 45*time.Second)
+	defer cancel()
+
+	ok, msg := h.telegram.SendTest(ctx)
 	result := model.TelegramTestResult{OK: ok, Message: msg}
-	if ok {
-		st := h.telegram.GetRuntimeStatus()
-		result.Runtime = &st
-	}
+	st := h.telegram.GetRuntimeStatus()
+	result.Runtime = &st
 	writeJSON(w, http.StatusOK, result)
 }
 

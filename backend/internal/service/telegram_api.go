@@ -51,7 +51,7 @@ func (s *TelegramService) doTelegramRequest(
 		return makeRequest(client)
 	}
 
-	proxies := proxyOrder(cfg.ProxyActiveURL, cfg.ProxyURLs)
+	proxies := proxyOrder(cfg.ProxyActiveURL, normalizeProxyURLs(cfg.ProxyURLs))
 	var lastErr error
 	for idx, proxyURL := range proxies {
 		proxyClient, err := httpClientForProxy(client, proxyURL)

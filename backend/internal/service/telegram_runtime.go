@@ -43,8 +43,11 @@ func NewTelegramService(
 	return &TelegramService{
 		settings: settings,
 		queue:    queue,
-		client:   &http.Client{Timeout: 60 * time.Second},
-		logger:   logger,
+		client: &http.Client{
+			Timeout:   60 * time.Second,
+			Transport: directHTTPTransport(),
+		},
+		logger: logger,
 		runtime: model.TelegramBotRuntimeStatus{
 			Status:  model.TelegramBotStatusDisabled,
 			Message: "Супервизор не запущен",

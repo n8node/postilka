@@ -14,6 +14,18 @@ import (
 	"strings"
 )
 
+func noHTTPProxy(*http.Request) (*url.URL, error) {
+	return nil, nil
+}
+
+func directHTTPTransport() *http.Transport {
+	return &http.Transport{
+		Proxy:              noHTTPProxy,
+		ForceAttemptHTTP2:  false,
+		TLSNextProto:       map[string]func(string, *tls.Conn) http.RoundTripper{},
+	}
+}
+
 func normalizeProxyURLs(in []string) []string {
 	if len(in) == 0 {
 		return []string{}
@@ -103,13 +115,10 @@ func proxyOrder(activeURL string, urls []string) []string {
 
 func transportViaHTTPConnectProxy(proxyURL *url.URL) *http.Transport {
 	proxy := cloneProxyURL(proxyURL)
-	return &http.Transport{
-		Proxy:              nil,
-		ForceAttemptHTTP2:  false,
-		TLSNextProto:       map[string]func(string, *tls.Conn) http.RoundTripper{},
-		DialContext:        directDialContext,
-		DialTLSContext:     dialTLSViaHTTPConnectProxy(proxy),
-	}
+	t := directHTTPTransport()
+	t.DialContext = directDialContext
+	t.DialTLSContext = dialTLSViaHTTPConnectProxy(proxy)
+	return t
 }
 
 func cloneProxyURL(u *url.URL) *url.URL {

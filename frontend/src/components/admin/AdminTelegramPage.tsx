@@ -80,6 +80,7 @@ export function AdminTelegramPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [testMessage, setTestMessage] = useState<string | null>(null);
+  const [testOk, setTestOk] = useState<boolean | null>(null);
   const [runtime, setRuntime] = useState<TelegramRuntimeStatus>(DEFAULT_RUNTIME);
   const [restarting, setRestarting] = useState(false);
   const [queueItems, setQueueItems] = useState<TelegramNotificationRecord[]>([]);
@@ -195,6 +196,7 @@ export function AdminTelegramPage() {
     setTesting(true);
     setError(null);
     setTestMessage(null);
+    setTestOk(null);
     try {
       if (tokenInput.trim()) {
         const saved = await updateAdminTelegramSettings({
@@ -205,8 +207,12 @@ export function AdminTelegramPage() {
         setTokenInput("");
       }
       const result = await sendAdminTelegramTest();
+      setTestOk(result.ok);
       setTestMessage(result.message);
       if (result.runtime) setRuntime(result.runtime);
+      if (!result.ok) {
+        setError(result.message);
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Не удалось отправить тест");
     } finally {
@@ -484,7 +490,14 @@ export function AdminTelegramPage() {
           Отправит тестовое сообщение в указанный чат
         </p>
         {testMessage && (
-          <p className="mt-2 text-sm text-slate-600">{testMessage}</p>
+          <p
+            className={cn(
+              "mt-2 text-sm",
+              testOk ? "text-emerald-700" : "text-red-600",
+            )}
+          >
+            {testMessage}
+          </p>
         )}
         <button
           type="button"
