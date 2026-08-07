@@ -186,10 +186,18 @@ docker compose exec -T mysql mysqldump -u root -p"$WP_DB_ROOT_PASSWORD" wordpres
   В `.env` на сервере (**до** `make prod-backend`):
 
   ```bash
+  TELEGRAM_UPSTREAM_HOST=5.35.83.120:3128
+  TELEGRAM_UPSTREAM_USER=root
+  TELEGRAM_UPSTREAM_PASSWORD=PASSWORD
+  ```
+
+  Альтернатива одной строкой (пароль с `%` — как есть):
+
+  ```bash
   TELEGRAM_UPSTREAM_PROXY=http://root:PASSWORD@5.35.83.120:3128
   ```
 
-  Пароль с символом `%` указывайте **как есть** в `TELEGRAM_UPSTREAM_PROXY` (entrypoint кодирует `user:pass` в base64 для gost `?auth=`).
+  Предпочтительны **отдельные переменные** — Docker/env не ломает `%` в URL.
 
   После `git pull`, если менялся `scripts/telegram-proxy-entrypoint.sh`, **обязательно** пересоздайте контейнер (bind-mount не подхватывается без recreate):
 
@@ -203,6 +211,9 @@ docker compose exec -T mysql mysqldump -u root -p"$WP_DB_ROOT_PASSWORD" wordpres
   docker compose --env-file .env -f docker-compose.yml -f docker-compose.prod.yml logs --tail=30 telegram-proxy
   ss -ltnp | grep 8889 || true
   ```
+
+  В логах должны быть **две** строки: `telegram-proxy: v4 listening...` и `route.go:700: http://:8889 on ...`.
+  Если только первая — gost упал; смотрите `logs --tail=30`. Если `ss` пустой — порт не слушается.
 
   Проверка gost на хосте:
 

@@ -34,9 +34,15 @@ else
   exit 1
 fi
 
-# gost v2: ?auth= is base64(user:pass) — avoids url.Parse on passwords containing %.
+# gost v2 ChainNodes: URI string with ?auth=base64(user:pass) — safe for passwords containing %.
 AUTH_B64=$(printf '%s' "${UPSTREAM_USER}:${UPSTREAM_PASS}" | base64 | tr -d '\n')
-AUTH_QUERY=$(printf '%s' "$AUTH_B64" | sed 's/+/%2B/g; s/\//%2F/g; s/=/%3D/g')
 
-echo "telegram-proxy: v3 listening on 0.0.0.0:8889 via ${UPSTREAM_HOST} (gost auth=base64)"
-exec gost -L="http://0.0.0.0:8889" -F="http://${UPSTREAM_HOST}?auth=${AUTH_QUERY}"
+cat >/tmp/gost.json <<EOF
+{
+  "ServeNodes": ["http://:8889"],
+  "ChainNodes": ["http://${UPSTREAM_HOST}?auth=${AUTH_B64}"]
+}
+EOF
+
+echo "telegram-proxy: v4 listening on :8889 via ${UPSTREAM_HOST} (gost -C /tmp/gost.json)"
+exec /bin/gost -C /tmp/gost.json
