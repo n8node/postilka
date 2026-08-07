@@ -1,6 +1,6 @@
 "use client";
 
-import { Eye, EyeOff, Loader2, RefreshCw, X } from "lucide-react";
+import { Eye, EyeOff, Info, Loader2, RefreshCw, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import {
   ApiError,
@@ -10,6 +10,12 @@ import {
   type TelegramDiscoveredChat,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
+
+const ANONYMITY_HINT =
+  "При назначении бота администратором не включайте «Оставаться анонимным» (Remain Anonymous). Анонимный админ не может публиковать сообщения от имени бота — Postilka не сможет постить в этот чат.";
+
+const MANUAL_HINT =
+  "Если чат не появился в списке, укажите chat_id вручную (например −1001234567890 или @public_channel). Бот должен быть администратором канала или группы с правом публикации — иначе автопостинг работать не будет.";
 
 type ConnectTelegramDialogProps = {
   open: boolean;
@@ -24,11 +30,14 @@ export function ConnectTelegramDialog({ open, onClose, onConnected }: ConnectTel
   const [showToken, setShowToken] = useState(false);
   const [discovering, setDiscovering] = useState(false);
   const [connecting, setConnecting] = useState(false);
+  const [discoveredOnce, setDiscoveredOnce] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
   const [botUsername, setBotUsername] = useState<string | null>(null);
   const [chats, setChats] = useState<TelegramDiscoveredChat[]>([]);
   const [selected, setSelected] = useState<Record<string, boolean>>({});
+  const [manualChatID, setManualChatID] = useState("");
+  const [manualName, setManualName] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -46,6 +55,9 @@ export function ConnectTelegramDialog({ open, onClose, onConnected }: ConnectTel
     setSelected({});
     setHint(null);
     setBotUsername(null);
+    setDiscoveredOnce(false);
+    setManualChatID("");
+    setManualName("");
     setError(null);
   }, []);
 
@@ -53,10 +65,17 @@ export function ConnectTelegramDialog({ open, onClose, onConnected }: ConnectTel
     if (!open) resetForm();
   }, [open, resetForm]);
 
+  const hasToken = botToken.trim().length > 0;
+  const pickedFromList = chats.filter((c) => selected[c.chat_id]);
+  const manualChatTrimmed = manualChatID.trim();
+  const canConnect =
+    hasToken && (pickedFromList.length > 0 || manualChatTrimmed.length > 0);
+
   async function handleDiscover() {
     setDiscovering(true);
     setError(null);
     setHint(null);
+    setDiscoveredOnce(true);
     try {
       const result = await discoverTelegramChannels(botToken.trim());
       setBotUsername(result.bot.username ? `@${result.bot.username}` : null);
@@ -75,17 +94,31 @@ export function ConnectTelegramDialog({ open, onClose, onConnected }: ConnectTel
   }
 
   async function handleConnect() {
-    const picked = chats.filter((c) => selected[c.chat_id]);
-    if (picked.length === 0) {
-      setError("Выберите хотя бы один канал или группу");
+    if (!canConnect) {
+      setError("Выберите чат из списка или укажите chat_id вручную");
       return;
     }
     setConnecting(true);
     setError(null);
+
+    const channels: { chat_id: string; name?: string }[] = pickedFromList.map((c) => ({
+      chat_id: c.chat_id,
+      name: c.title,
+    }));
+    if (manualChatTrimmed) {
+      const alreadyListed = channels.some((c) => c.chat_id === manualChatTrimmed);
+      if (!alreadyListed) {
+        channels.push({
+          chat_id: manualChatTrimmed,
+          ...(manualName.trim() ? { name: manualName.trim() } : {}),
+        });
+      }
+    }
+
     try {
       await connectTelegramChannels({
         bot_token: botToken.trim(),
-        channels: picked.map((c) => ({ chat_id: c.chat_id, name: c.title })),
+        channels,
       });
       onConnected();
       onClose();
@@ -143,10 +176,17 @@ export function ConnectTelegramDialog({ open, onClose, onConnected }: ConnectTel
             </div>
           </div>
 
+          {hasToken && (
+            <div className="flex gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+              <Info className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
+              <p>{ANONYMITY_HINT}</p>
+            </div>
+          )}
+
           <button
             type="button"
             onClick={handleDiscover}
-            disabled={!enabled || discovering || !botToken.trim()}
+            disabled={!enabled || discovering || !hasToken}
             className="inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm hover:bg-zinc-50 disabled:opacity-50"
           >
             {discovering ? (
@@ -163,7 +203,7 @@ export function ConnectTelegramDialog({ open, onClose, onConnected }: ConnectTel
             </p>
           )}
 
-          {hint && chats.length === 0 && (
+          {hint && chats.length === 0 && discoveredOnce && (
             <p className="text-sm text-amber-700">{hint}</p>
           )}
 
@@ -202,6 +242,37 @@ export function ConnectTelegramDialog({ open, onClose, onConnected }: ConnectTel
             </div>
           )}
 
+          {hasToken && (
+            <div className="space-y-3 rounded-lg border border-dashed border-border bg-zinc-50 p-3">
+              <p className="text-sm font-medium">Добавить вручную</p>
+              <p className="text-xs text-muted">{MANUAL_HINT}</p>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-muted">Chat ID</label>
+                <input
+                  type="text"
+                  value={manualChatID}
+                  onChange={(e) => setManualChatID(e.target.value)}
+                  placeholder="-1001234567890"
+                  className="w-full rounded-md border border-border bg-white px-3 py-2 font-mono text-sm"
+                  disabled={!enabled}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-medium text-muted">
+                  Название (необязательно)
+                </label>
+                <input
+                  type="text"
+                  value={manualName}
+                  onChange={(e) => setManualName(e.target.value)}
+                  placeholder="Мой канал"
+                  className="w-full rounded-md border border-border bg-white px-3 py-2 text-sm"
+                  disabled={!enabled}
+                />
+              </div>
+            </div>
+          )}
+
           {error && (
             <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
               {error}
@@ -220,7 +291,7 @@ export function ConnectTelegramDialog({ open, onClose, onConnected }: ConnectTel
           <button
             type="button"
             onClick={handleConnect}
-            disabled={!enabled || connecting || chats.length === 0}
+            disabled={!enabled || connecting || !canConnect}
             className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
           >
             {connecting ? "Подключение…" : "Подключить"}

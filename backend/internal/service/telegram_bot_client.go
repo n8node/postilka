@@ -304,6 +304,11 @@ func (c *TelegramBotClient) VerifyBotInChat(ctx context.Context, token, chatID s
 		return telegramChat{}, telegramChatMember{}, fmt.Errorf("бот не является администратором этого чата")
 	}
 	if !canPostInChat(chat.Type, member) {
+		if member.IsAnonymous {
+			return telegramChat{}, telegramChatMember{}, fmt.Errorf(
+				"бот назначен анонимным администратором — отключите «Оставаться анонимным» в правах бота",
+			)
+		}
 		return telegramChat{}, telegramChatMember{}, fmt.Errorf("у бота нет права публиковать сообщения")
 	}
 	return chat, member, nil
