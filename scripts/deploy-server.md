@@ -183,13 +183,13 @@ docker compose exec -T mysql mysqldump -u root -p"$WP_DB_ROOT_PASSWORD" wordpres
 
 - **Telegram admin / `context deadline exceeded` через внешний прокси:** из Docker bridge часто **нет** прямого TCP к внешнему HTTP-прокси (как с VK). Используйте **gost** на хосте (`telegram-proxy`, порт **8889**).
 
-  В `.env` на сервере:
+  В `.env` на сервере (**до** `make prod-backend`):
 
   ```bash
   TELEGRAM_UPSTREAM_PROXY=http://root:PASSWORD@5.35.83.120:3128
   ```
 
-  Пароль с символом `%` указывайте **как есть** (не `%25`).
+  Пароль с символом `%` указывайте **как есть** (не `%25`). Без этой переменной `telegram-proxy` (gost) не стартует.
 
   ```bash
   cd /opt/postilka && git pull

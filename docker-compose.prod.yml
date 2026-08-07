@@ -28,8 +28,9 @@ services:
         max-file: "2"
 
   # Telegram Bot API: bridge cannot reach external HTTP proxy reliably — gost on host forwards to upstream.
+  # Requires TELEGRAM_UPSTREAM_PROXY in .env before deploy (see .env.example).
   telegram-proxy:
-    image: ginuerzh/gost:2.11-alpine
+    image: ginuerzh/gost:latest
     network_mode: host
     restart: unless-stopped
     env_file: .env
