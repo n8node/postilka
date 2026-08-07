@@ -106,7 +106,7 @@ func DefaultSocialProviderSettings(provider SocialProvider) SocialProviderSettin
 		def.ConnectHelpText = "1. Войдите через Одноклассники.\n2. Выберите группу, где вы администратор.\n3. Подтвердите подключение."
 	case SocialProviderMAX:
 		def.ConnectHelpURL = "https://postilka.ru/docs/max"
-		def.ConnectHelpText = "1. Создайте бота в MAX и скопируйте токен.\n2. Добавьте бота в канал с правом публикации.\n3. Вставьте токен и укажите chat_id канала."
+		def.ConnectHelpText = "1. Создайте бота через @MasterBot или business.max.ru и скопируйте токен.\n2. В Postilka нажмите «Проверить бота» — появится @username для поиска.\n3. В MAX: канал → Участники → Добавить → ищите бота по @username (не по названию и не по ID).\n4. Канал → Администраторы → добавьте бота с правом «Публикация».\n5. Вернитесь в Postilka, укажите ссылку на канал и подключите."
 	case SocialProviderRutube:
 		def.ConnectHelpURL = "https://postilka.ru/docs/rutube"
 		def.ConnectHelpText = "1. Войдите через Rutube.\n2. Выберите канал для публикации.\n3. Подтвердите права."
@@ -140,9 +140,18 @@ type DiscoveredChannelTarget struct {
 }
 
 type ChannelDiscoverResult struct {
-	Provider SocialProvider          `json:"provider"`
+	Provider SocialProvider            `json:"provider"`
 	Targets  []DiscoveredChannelTarget `json:"targets"`
-	Hint     string                  `json:"hint,omitempty"`
+	Hint     string                    `json:"hint,omitempty"`
+	Bot      *MAXDiscoverBot           `json:"bot,omitempty"`
+}
+
+type MAXDiscoverBot struct {
+	Username   string `json:"username"`
+	Name       string `json:"name"`
+	UserID     int64  `json:"user_id"`
+	ProfileURL string `json:"profile_url"`
+	SearchQuery string `json:"search_query"`
 }
 
 type ChannelConnectTargetInput struct {

@@ -365,6 +365,41 @@ func (s *ChannelConnectService) OAuthConnect(
 	return result, nil
 }
 
+func maxDiscoverBotInfo(bot *oauthclient.MAXBotInfo) *model.MAXDiscoverBot {
+	if bot == nil {
+		return nil
+	}
+	username := strings.TrimPrefix(strings.TrimSpace(bot.Username), "@")
+	name := strings.TrimSpace(bot.Name)
+	profileURL := ""
+	searchQuery := ""
+	if username != "" {
+		profileURL = "https://max.ru/" + username
+		searchQuery = "@" + username
+	}
+	return &model.MAXDiscoverBot{
+		Username:    username,
+		Name:        name,
+		UserID:      bot.UserID,
+		ProfileURL:  profileURL,
+		SearchQuery: searchQuery,
+	}
+}
+
+func maxBotAddHint(bot *model.MAXDiscoverBot) string {
+	if bot == nil || bot.SearchQuery == "" {
+		return "Токен принят. Добавьте бота в канал MAX и укажите ссылку на канал."
+	}
+	return fmt.Sprintf(
+		"Ищите бота в MAX по нику %s (не по названию «%s» и не по user_id %d). "+
+			"Канал → Участники → Добавить → введите %s → затем Администраторы → добавьте бота с правом «Публикация».",
+		bot.SearchQuery,
+		fallbackString(bot.Name, bot.Username),
+		bot.UserID,
+		bot.SearchQuery,
+	)
+}
+
 func (s *ChannelConnectService) DiscoverMAX(
 	ctx context.Context,
 	userID string,
@@ -385,6 +420,7 @@ func (s *ChannelConnectService) DiscoverMAX(
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s", ErrInvalidBotToken, err.Error())
 	}
+	botInfo := maxDiscoverBotInfo(bot)
 
 	targets := []model.DiscoveredChannelTarget{}
 	rawChat := strings.TrimSpace(req.ChatID)
@@ -421,17 +457,15 @@ func (s *ChannelConnectService) DiscoverMAX(
 			Provider: model.SocialProviderMAX,
 			Targets:  targets,
 			Hint:     hint,
+			Bot:      botInfo,
 		}, nil
 	}
 
-	hint := fmt.Sprintf(
-		"Бот @%s найден. Укажите chat_id (число) или ссылку на канал: channel_name или https://max.ru/channel_name. Бот должен быть администратором канала с правом публикации.",
-		bot.Username,
-	)
 	return &model.ChannelDiscoverResult{
 		Provider: model.SocialProviderMAX,
 		Targets:  targets,
-		Hint:     hint,
+		Hint:     maxBotAddHint(botInfo),
+		Bot:      botInfo,
 	}, nil
 }
 

@@ -1336,6 +1336,13 @@ export type ChannelDiscoverResult = {
   provider: string;
   targets: DiscoveredChannelTarget[];
   hint?: string;
+  bot?: {
+    username: string;
+    name: string;
+    user_id: number;
+    profile_url: string;
+    search_query: string;
+  };
 };
 
 export function fetchChannels() {
