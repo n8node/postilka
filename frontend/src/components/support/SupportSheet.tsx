@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import type { ChannelProviderInfo } from "@/lib/api";
 
-export type SupportContext = "general" | "telegram_connect";
+export type SupportContext = "general" | "telegram_connect" | "max_connect";
 
 type SupportSheetProps = {
   open: boolean;
@@ -104,8 +104,15 @@ export function SupportSheet({
             </div>
           )}
 
+          {context === "max_connect" && (
+            <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+              Не получается подключить MAX? Ищите бота только по @username из шага 1, добавьте его
+              администратором канала с правом «Публикация» и укажите chat_id из списка каналов бота.
+            </div>
+          )}
+
           <div className="space-y-2">
-            {data.connect_help_url && context === "telegram_connect" && (
+            {data.connect_help_url && context !== "general" && (
               <SupportRow
                 icon={BookOpen}
                 title="Инструкция"
