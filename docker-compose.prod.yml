@@ -27,9 +27,25 @@ services:
         max-size: "5m"
         max-file: "2"
 
+  # Telegram Bot API: bridge cannot reach external HTTP proxy reliably — gost on host forwards to upstream.
+  telegram-proxy:
+    image: ginuerzh/gost:2.11-alpine
+    network_mode: host
+    restart: unless-stopped
+    env_file: .env
+    command:
+      - -L=http://:8889
+      - -F=${TELEGRAM_UPSTREAM_PROXY}
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+
   backend:
     depends_on:
       - outbound-proxy
+      - telegram-proxy
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
@@ -42,6 +58,7 @@ services:
       http_proxy: http://host.docker.internal:8888
       NO_PROXY: postgres,mysql,backend,frontend,nginx,wordpress,localhost,127.0.0.1
       no_proxy: postgres,mysql,backend,frontend,nginx,wordpress,localhost,127.0.0.1
+      TELEGRAM_LOCAL_PROXY: http://host.docker.internal:8889
     logging:
       driver: json-file
       options:

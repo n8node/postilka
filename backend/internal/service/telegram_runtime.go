@@ -18,10 +18,11 @@ const telegramQueueInterval = 5 * time.Second
 // TelegramService sends admin notifications and runs a background health supervisor
 // that starts with the backend process (container restart / server reboot).
 type TelegramService struct {
-	settings *TelegramSettingsService
-	queue    *repository.TelegramNotificationQueueRepository
-	client   *http.Client
-	logger   *slog.Logger
+	settings    *TelegramSettingsService
+	queue       *repository.TelegramNotificationQueueRepository
+	localProxy  string
+	client      *http.Client
+	logger      *slog.Logger
 
 	mu                sync.RWMutex
 	runtime           model.TelegramBotRuntimeStatus
@@ -35,14 +36,16 @@ type TelegramService struct {
 func NewTelegramService(
 	settings *TelegramSettingsService,
 	queue *repository.TelegramNotificationQueueRepository,
+	localProxy string,
 	logger *slog.Logger,
 ) *TelegramService {
 	if logger == nil {
 		logger = slog.Default()
 	}
 	return &TelegramService{
-		settings: settings,
-		queue:    queue,
+		settings:   settings,
+		queue:      queue,
+		localProxy: strings.TrimSpace(localProxy),
 		client: &http.Client{
 			Timeout:   60 * time.Second,
 			Transport: directHTTPTransport(),

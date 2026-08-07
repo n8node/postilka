@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 )
 
@@ -51,12 +52,17 @@ func (s *TelegramService) doTelegramRequest(
 		return makeRequest(client)
 	}
 
-	proxies := proxyOrder(cfg.ProxyActiveURL, normalizeProxyURLs(cfg.ProxyURLs))
+	var proxies []string
+	if hop := strings.TrimSpace(s.localProxy); hop != "" {
+		proxies = []string{hop}
+	} else {
+		proxies = proxyOrder(cfg.ProxyActiveURL, normalizeProxyURLs(cfg.ProxyURLs))
+	}
 	var lastErr error
 	for idx, proxyURL := range proxies {
 		proxyClient, err := httpClientForProxy(client, proxyURL)
 		if err != nil {
-			lastErr = fmt.Errorf("proxy %q: %w", proxyURL, err)
+			lastErr = fmt.Errorf("proxy %s: %w", maskProxyURLForError(proxyURL), err)
 			if !cfg.ProxyAutoFailover {
 				return nil, lastErr
 			}
@@ -66,7 +72,7 @@ func (s *TelegramService) doTelegramRequest(
 		if reqErr == nil {
 			return resp, nil
 		}
-		lastErr = fmt.Errorf("proxy %q: %w", proxyURL, reqErr)
+		lastErr = fmt.Errorf("proxy %s: %w", maskProxyURLForError(proxyURL), sanitizeTelegramError(reqErr))
 		if !cfg.ProxyAutoFailover || idx == len(proxies)-1 {
 			return nil, lastErr
 		}
@@ -93,7 +99,7 @@ func (s *TelegramService) telegramAPI(ctx context.Context, token, method string,
 
 	resp, err := s.doTelegramRequest(ctx, http.MethodPost, url, "application/json", body)
 	if err != nil {
-		return nil, err
+		return nil, sanitizeTelegramError(err)
 	}
 	defer resp.Body.Close()
 
@@ -143,5 +149,15 @@ func (s *TelegramService) telegramSendMessage(ctx context.Context, token, chatID
 		"text":    text,
 	}
 	_, err := s.telegramAPI(ctx, token, "sendMessage", payload)
-	return err
+	return sanitizeTelegramError(err)
+}
+
+var telegramTokenInError = regexp.MustCompile(`bot\d+:[A-Za-z0-9_-]+`)
+
+func sanitizeTelegramError(err error) error {
+	if err == nil {
+		return nil
+	}
+	msg := telegramTokenInError.ReplaceAllString(err.Error(), "bot***")
+	return errors.New(msg)
 }

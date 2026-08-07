@@ -69,7 +69,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	telegramSettingsRepo := repository.NewTelegramSettingsRepository(db.Pool)
 	telegramQueueRepo := repository.NewTelegramNotificationQueueRepository(db.Pool)
 	telegramSettingsSvc := service.NewTelegramSettingsService(telegramSettingsRepo)
-	telegramSvc := service.NewTelegramService(telegramSettingsSvc, telegramQueueRepo, logger)
+	telegramSvc := service.NewTelegramService(telegramSettingsSvc, telegramQueueRepo, cfg.TelegramLocalProxy, logger)
 	telegramSettingsSvc.BindRuntimeStatus(telegramSvc.GetRuntimeStatus)
 	telegramSvc.Start()
 

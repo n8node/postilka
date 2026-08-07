@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"slices"
 	"strings"
+	"time"
 )
 
 func noHTTPProxy(*http.Request) (*url.URL, error) {
@@ -84,6 +85,21 @@ func parseHTTPProxyURL(raw string) (*url.URL, error) {
 	return u, nil
 }
 
+func maskProxyURLForError(raw string) string {
+	u, err := parseHTTPProxyURL(raw)
+	if err != nil || u.Host == "" {
+		return "proxy"
+	}
+	host := u.Hostname()
+	if p := u.Port(); p != "" {
+		host = net.JoinHostPort(host, p)
+	}
+	if u.User != nil {
+		return host + " (authenticated)"
+	}
+	return host
+}
+
 func containsProxyURL(items []string, target string) bool {
 	target = strings.TrimSpace(target)
 	for _, item := range items {
@@ -131,6 +147,7 @@ func cloneProxyURL(u *url.URL) *url.URL {
 
 func directDialContext(ctx context.Context, network, addr string) (net.Conn, error) {
 	var dialer net.Dialer
+	dialer.Timeout = 15 * time.Second
 	return dialer.DialContext(ctx, network, addr)
 }
 
@@ -176,6 +193,7 @@ func connectViaHTTPProxy(ctx context.Context, proxyURL *url.URL, targetAddr stri
 	}
 
 	var dialer net.Dialer
+	dialer.Timeout = 15 * time.Second
 	conn, err := dialer.DialContext(ctx, "tcp", proxyAddr)
 	if err != nil {
 		return nil, fmt.Errorf("proxy dial: %w", err)

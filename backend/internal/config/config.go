@@ -23,6 +23,9 @@ type Config struct {
 	Domain       string `env:"DOMAIN" envDefault:"localhost"`
 
 	WorkerPublishConcurrency int `env:"WORKER_PUBLISH_CONCURRENCY" envDefault:"3"`
+
+	// Optional local hop for Telegram Bot API (Docker: host.docker.internal:8889 → gost → upstream).
+	TelegramLocalProxy string `env:"TELEGRAM_LOCAL_PROXY"`
 }
 
 func Load() (*Config, error) {

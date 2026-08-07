@@ -181,6 +181,35 @@ docker compose exec -T mysql mysqldump -u root -p"$WP_DB_ROOT_PASSWORD" wordpres
 
   Если `--network host` OK, а bridge timeout — нужен `outbound-proxy` (не `extra_hosts`).
 
+- **Telegram admin / `context deadline exceeded` через внешний прокси:** из Docker bridge часто **нет** прямого TCP к внешнему HTTP-прокси (как с VK). Используйте **gost** на хосте (`telegram-proxy`, порт **8889**).
+
+  В `.env` на сервере:
+
+  ```bash
+  TELEGRAM_UPSTREAM_PROXY=http://root:PASSWORD@5.35.83.120:3128
+  ```
+
+  Пароль с символом `%` указывайте **как есть** (не `%25`).
+
+  ```bash
+  cd /opt/postilka && git pull
+  make prod-backend
+  ```
+
+  Проверка gost на хосте:
+
+  ```bash
+  curl -x http://127.0.0.1:8889 -I --max-time 20 https://api.telegram.org/
+  ```
+
+  Проверка из backend-контейнера (должен идти через `TELEGRAM_LOCAL_PROXY`):
+
+  ```bash
+  docker compose exec backend wget -T 20 -S --spider https://api.telegram.org/ 2>&1
+  ```
+
+  В админке Telegram: прокси **включён**, URL питерского прокси в списке (для учёта), backend сам использует `host.docker.internal:8889`. Напишите боту `/start`, затем тестовое сообщение.
+
 - **MAX OAuth / webhook не приходит, `curl platform-api2.max.ru` → `SSL certificate problem`:** API MAX подписан сертификатами **НУЦ Минцифры**. Без них backend не регистрирует webhook.
 
   **На хосте (Ubuntu) для ручной проверки curl:**
