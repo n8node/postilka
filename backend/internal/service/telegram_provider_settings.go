@@ -98,3 +98,42 @@ func (s *TelegramProviderSettingsService) ConnectHelpText(ctx context.Context) s
 	}
 	return strings.TrimSpace(cfg.ConnectHelpText)
 }
+
+func (s *TelegramProviderSettingsService) ChannelProviderInfo(ctx context.Context) model.ChannelProviderInfo {
+	cfg, err := s.GetEffective(ctx)
+	if err != nil {
+		cfg = model.DefaultTelegramProviderSettings()
+	}
+	def := model.DefaultTelegramProviderSettings()
+	info := model.ChannelProviderInfo{
+		TelegramEnabled:         cfg.Enabled,
+		ConnectHelpText:         strings.TrimSpace(cfg.ConnectHelpText),
+		ConnectHelpURL:          fallbackString(cfg.ConnectHelpURL, def.ConnectHelpURL),
+		DocsURL:                 fallbackString(cfg.DocsURL, def.DocsURL),
+		SupportTelegramUsername: fallbackString(cfg.SupportTelegramUsername, def.SupportTelegramUsername),
+		SupportEmail:            fallbackString(cfg.SupportEmail, def.SupportEmail),
+		SupportHoursText:        fallbackString(cfg.SupportHoursText, def.SupportHoursText),
+	}
+	info.SupportTelegramURL = buildSupportTelegramURL(info.SupportTelegramUsername, "connect_help")
+	return info
+}
+
+func fallbackString(value, def string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return def
+	}
+	return value
+}
+
+func buildSupportTelegramURL(username, startParam string) string {
+	username = strings.TrimPrefix(strings.TrimSpace(username), "@")
+	if username == "" {
+		return ""
+	}
+	url := "https://t.me/" + username
+	if startParam = strings.TrimSpace(startParam); startParam != "" {
+		url += "?start=" + startParam
+	}
+	return url
+}

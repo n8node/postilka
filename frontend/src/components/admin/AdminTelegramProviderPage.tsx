@@ -17,6 +17,11 @@ const DEFAULT_SETTINGS: TelegramProviderSettings = {
   proxy_auto_failover: true,
   proxy_urls: [],
   connect_help_text: "",
+  connect_help_url: "https://postilka.ru/docs/telegram",
+  docs_url: "https://postilka.ru/docs",
+  support_telegram_username: "postilka_support",
+  support_email: "support@postilka.ru",
+  support_hours_text: "пн–вс 10:00–19:00 (МСК)",
 };
 
 export function AdminTelegramProviderPage() {
@@ -180,9 +185,76 @@ export function AdminTelegramProviderPage() {
       </section>
 
       <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
+        <h2 className="font-medium text-slate-900">Помощь и поддержка</h2>
+        <p className="text-xs text-slate-500">
+          Ссылки показываются в диалоге «Подключить Telegram» и окне поддержки.
+        </p>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">
+            URL инструкции по Telegram
+          </label>
+          <input
+            type="url"
+            value={settings.connect_help_url}
+            onChange={(e) => patch({ connect_help_url: e.target.value })}
+            placeholder="https://postilka.ru/docs/telegram"
+            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">URL центра помощи</label>
+          <input
+            type="url"
+            value={settings.docs_url}
+            onChange={(e) => patch({ docs_url: e.target.value })}
+            placeholder="https://postilka.ru/docs"
+            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+          />
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">
+              Telegram поддержки (без @)
+            </label>
+            <input
+              type="text"
+              value={settings.support_telegram_username}
+              onChange={(e) => patch({ support_telegram_username: e.target.value })}
+              placeholder="postilka_support"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Email поддержки</label>
+            <input
+              type="email"
+              value={settings.support_email}
+              onChange={(e) => patch({ support_email: e.target.value })}
+              placeholder="support@postilka.ru"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">Часы работы поддержки</label>
+          <input
+            type="text"
+            value={settings.support_hours_text}
+            onChange={(e) => patch({ support_hours_text: e.target.value })}
+            placeholder="пн–вс 10:00–19:00 (МСК)"
+            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+          />
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
         <h2 className="font-medium text-slate-900">Инструкция для пользователей</h2>
         <p className="text-xs text-slate-500">
-          Показывается в диалоге «Подключить Telegram» в приложении.
+          Подробные шаги — по ссылке «Показать шаги подключения» в диалоге.
         </p>
         <textarea
           value={settings.connect_help_text}

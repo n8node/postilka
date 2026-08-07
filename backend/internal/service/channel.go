@@ -253,12 +253,8 @@ func (s *ChannelService) Delete(ctx context.Context, userID string, r *http.Requ
 	return s.channels.Delete(ctx, ws.ID, channelID)
 }
 
-func (s *ChannelService) ProviderHelp(ctx context.Context) (string, bool, error) {
-	cfg, err := s.provider.GetEffective(ctx)
-	if err != nil {
-		return "", false, err
-	}
-	return strings.TrimSpace(cfg.ConnectHelpText), cfg.Enabled, nil
+func (s *ChannelService) ProviderInfo(ctx context.Context) model.ChannelProviderInfo {
+	return s.provider.ChannelProviderInfo(ctx)
 }
 
 func (s *ChannelService) UpdateTelegramToken(ctx context.Context, userID string, r *http.Request, channelID, botToken string) (*model.ChannelListItem, error) {

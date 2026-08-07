@@ -1139,6 +1139,11 @@ export type TelegramProviderSettings = {
   proxy_auto_failover: boolean;
   proxy_urls: string[];
   connect_help_text: string;
+  connect_help_url: string;
+  docs_url: string;
+  support_telegram_username: string;
+  support_email: string;
+  support_hours_text: string;
 };
 
 export type TelegramProviderAdminView = {
@@ -1200,6 +1205,12 @@ export type TelegramDiscoverResult = {
 export type ChannelProviderInfo = {
   telegram_enabled: boolean;
   connect_help_text: string;
+  connect_help_url: string;
+  docs_url: string;
+  support_telegram_username: string;
+  support_telegram_url: string;
+  support_email: string;
+  support_hours_text: string;
 };
 
 export function fetchChannels() {

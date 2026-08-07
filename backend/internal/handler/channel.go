@@ -48,15 +48,8 @@ func (h *ChannelHandler) ProviderInfo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = userID
-	help, enabled, err := h.channels.ProviderHelp(r.Context())
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Не удалось загрузить настройки провайдера")
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"telegram_enabled": enabled,
-		"connect_help_text": help,
-	})
+	info := h.channels.ProviderInfo(r.Context())
+	writeJSON(w, http.StatusOK, info)
 }
 
 func (h *ChannelHandler) DiscoverTelegram(w http.ResponseWriter, r *http.Request) {
