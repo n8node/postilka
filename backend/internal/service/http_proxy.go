@@ -34,6 +34,44 @@ func normalizeProxyURLs(in []string) []string {
 	return out
 }
 
+// parseHTTPProxyURL parses http://user:pass@host:port without treating literal
+// percent signs in credentials as URL escapes (net/url.Parse fails on "%Ok" etc.).
+func parseHTTPProxyURL(raw string) (*url.URL, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, fmt.Errorf("empty proxy url")
+	}
+	if !strings.HasPrefix(strings.ToLower(raw), "http://") {
+		return nil, fmt.Errorf("only http:// proxies are supported")
+	}
+
+	rest := raw[len("http://"):]
+	if rest == "" {
+		return nil, fmt.Errorf("missing host")
+	}
+
+	hostPart := rest
+	userinfo := ""
+	if at := strings.LastIndex(rest, "@"); at >= 0 {
+		userinfo = rest[:at]
+		hostPart = rest[at+1:]
+	}
+	if strings.TrimSpace(hostPart) == "" {
+		return nil, fmt.Errorf("missing host")
+	}
+
+	u := &url.URL{Scheme: "http", Host: hostPart}
+	if userinfo != "" {
+		user, pass, hasPass := strings.Cut(userinfo, ":")
+		if hasPass {
+			u.User = url.UserPassword(user, pass)
+		} else {
+			u.User = url.User(userinfo)
+		}
+	}
+	return u, nil
+}
+
 func containsProxyURL(items []string, target string) bool {
 	target = strings.TrimSpace(target)
 	for _, item := range items {
@@ -172,11 +210,11 @@ func connectViaHTTPProxy(ctx context.Context, proxyURL *url.URL, targetAddr stri
 }
 
 func httpClientForProxy(base *http.Client, proxyURL string) (*http.Client, error) {
-	parsed, err := url.Parse(strings.TrimSpace(proxyURL))
+	parsed, err := parseHTTPProxyURL(proxyURL)
 	if err != nil {
 		return nil, err
 	}
-	if parsed.Scheme == "" || parsed.Host == "" {
+	if parsed.Host == "" {
 		return nil, fmt.Errorf("invalid proxy url %q", proxyURL)
 	}
 	if base == nil {

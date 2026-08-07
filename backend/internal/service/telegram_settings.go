@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/url"
 	"strings"
 
 	"github.com/postilka/postilka/internal/model"
@@ -116,8 +115,8 @@ func validateTelegramSettings(cfg model.TelegramSettings) error {
 			return fmt.Errorf("%w: add at least one proxy url", ErrInvalidTelegramSettings)
 		}
 		for _, raw := range cfg.ProxyURLs {
-			u, err := url.Parse(raw)
-			if err != nil || u.Scheme == "" || u.Host == "" {
+			u, err := parseHTTPProxyURL(raw)
+			if err != nil || u.Host == "" {
 				return fmt.Errorf("%w: invalid proxy url %q", ErrInvalidTelegramSettings, raw)
 			}
 			if strings.ToLower(u.Scheme) != "http" {
