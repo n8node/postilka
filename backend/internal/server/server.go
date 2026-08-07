@@ -44,6 +44,8 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	)
 	wsSvc := service.NewWorkspaceService(wsRepo, planRepo)
 	planSvc := service.NewPlanService(planRepo, wsRepo)
+	publicPageRepo := repository.NewPublicPageRepository(db.Pool)
+	publicPageSvc := service.NewPublicPageService(publicPageRepo)
 	adminUserSvc := service.NewAdminUserService(userRepo)
 	adminWorkspaceSvc := service.NewAdminWorkspaceService(wsRepo, userRepo)
 	smtpSettingsRepo := repository.NewSMTPSettingsRepository(db.Pool)
@@ -111,6 +113,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	telegramHandler := handler.NewTelegramSettingsHandler(telegramSettingsSvc, telegramSvc)
 	telegramProviderHandler := handler.NewTelegramProviderSettingsHandler(telegramProviderSettingsSvc)
 	channelHandler := handler.NewChannelHandler(channelSvc)
+	publicPageHandler := handler.NewPublicPageHandler(publicPageSvc)
 	paymentWebhookHandler := handler.NewPaymentWebhookHandler(paymentSettingsSvc, checkoutSvc, logger)
 	billingHandler := handler.NewBillingHandler(billingSvc, checkoutSvc, wsSvc)
 
@@ -208,6 +211,12 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Get("/plans/{planID}", adminHandler.GetPlan)
 				r.Put("/plans/{planID}", adminHandler.UpdatePlan)
 				r.Delete("/plans/{planID}", adminHandler.DeletePlan)
+
+				r.Get("/public-pages", publicPageHandler.ListAdmin)
+				r.Post("/public-pages", publicPageHandler.CreateAdmin)
+				r.Get("/public-pages/{pageID}", publicPageHandler.GetAdmin)
+				r.Put("/public-pages/{pageID}", publicPageHandler.UpdateAdmin)
+				r.Delete("/public-pages/{pageID}", publicPageHandler.DeleteAdmin)
 
 				r.Get("/auth-settings", adminInviteHandler.AuthSettingsGet)
 				r.Put("/auth-settings", adminInviteHandler.AuthSettingsPut)

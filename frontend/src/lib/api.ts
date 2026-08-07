@@ -582,6 +582,61 @@ export function deleteAdminPlan(id: string) {
   });
 }
 
+export type PublicPageCategory =
+  | "instruction"
+  | "help_center"
+  | "legal"
+  | "other";
+
+export type PublicPage = {
+  id: string;
+  title: string;
+  slug: string;
+  meta_description: string;
+  external_url: string;
+  category: PublicPageCategory;
+  provider: string | null;
+  is_published: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PublicPageInput = {
+  title: string;
+  slug?: string;
+  meta_description?: string;
+  external_url?: string;
+  category?: PublicPageCategory;
+  provider?: string | null;
+  is_published?: boolean;
+  sort_order?: number;
+};
+
+export function fetchAdminPublicPages() {
+  return apiFetch<{ pages: PublicPage[] }>("/admin/public-pages");
+}
+
+export function createAdminPublicPage(body: PublicPageInput) {
+  return apiFetch<PublicPage>("/admin/public-pages", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function updateAdminPublicPage(id: string, body: PublicPageInput) {
+  return apiFetch<PublicPage>(`/admin/public-pages/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteAdminPublicPage(id: string) {
+  return apiFetch<{ status: string }>(`/admin/public-pages/${id}`, {
+    method: "DELETE",
+  });
+}
+
 export function assignAdminUserPlan(userId: string, planId: string) {
   return apiFetch<{ plan: Plan }>(`/admin/users/${userId}/plan`, {
     method: "PUT",
