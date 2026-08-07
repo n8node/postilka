@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"strings"
 
 	"github.com/postilka/postilka/internal/model"
@@ -19,14 +18,6 @@ func mergeChannelAvatar(meta model.ChannelMetadata, avatarURL string) model.Chan
 		meta.AvatarURL = avatarURL
 	}
 	return meta
-}
-
-func telegramPublicAvatarURL(chat telegramChat) string {
-	username := strings.TrimPrefix(strings.TrimSpace(chat.Username), "@")
-	if username == "" {
-		return ""
-	}
-	return "https://t.me/i/userpic/320/" + url.PathEscape(username) + ".jpg"
 }
 
 func (s *ChannelService) FetchAvatar(
@@ -45,7 +36,9 @@ func (s *ChannelService) FetchAvatar(
 	}
 	ch := row.Channel
 
-	if url := strings.TrimSpace(ch.Metadata.AvatarURL); url != "" && ch.Provider != model.ChannelProviderMAX {
+	if url := strings.TrimSpace(ch.Metadata.AvatarURL); url != "" &&
+		ch.Provider != model.ChannelProviderMAX &&
+		ch.Provider != model.ChannelProviderTelegram {
 		return fetchRemoteAvatar(ctx, url)
 	}
 

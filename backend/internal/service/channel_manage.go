@@ -95,7 +95,6 @@ func telegramChannelMetadata(chat telegramChat, member telegramChatMember) model
 	meta.IsAdmin = &isAdmin
 	if chat.Username != "" {
 		meta.PublicURL = "https://t.me/" + chat.Username
-		meta.AvatarURL = telegramPublicAvatarURL(chat)
 	}
 	return meta
 }

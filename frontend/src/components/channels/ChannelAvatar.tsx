@@ -47,7 +47,7 @@ export function ChannelAvatar({
   const needsProxyFetch = Boolean(
     channelId &&
       !publicDirectUrl &&
-      (provider === "telegram" || provider === "max" || Boolean(directUrl)),
+      (provider === "telegram" || provider === "max"),
   );
 
   useEffect(() => {

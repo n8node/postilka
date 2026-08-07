@@ -195,9 +195,13 @@ func (c *TelegramBotClient) FetchChatPhoto(ctx context.Context, token, chatID st
 	if err != nil {
 		return nil, "", err
 	}
-	if path == "" {
-		return nil, "", nil
+	if path != "" {
+		return c.fetchTelegramFile(ctx, token, path)
 	}
+	return nil, "", nil
+}
+
+func (c *TelegramBotClient) fetchTelegramFile(ctx context.Context, token, path string) ([]byte, string, error) {
 	fileURL := fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", strings.TrimSpace(token), path)
 	resp, err := c.doRequest(ctx, http.MethodGet, fileURL, "", nil)
 	if err != nil {
@@ -349,7 +353,6 @@ func (c *TelegramBotClient) DiscoverAdminChats(ctx context.Context, token string
 			Type:      chat.Type,
 			BotStatus: member.Status,
 			CanPost:   canPost,
-			AvatarURL: telegramPublicAvatarURL(chat),
 		})
 	}
 
