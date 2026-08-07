@@ -228,7 +228,7 @@ func (c *MAXBotClient) GetChatByLink(ctx context.Context, token, chatLink string
 	if chatLink == "" {
 		return nil, fmt.Errorf("некорректная ссылка на канал MAX")
 	}
-	endpoint := maxAPIBase + "/chats/" + url.PathEscape(chatLink)
+	endpoint := maxAPIBase + "/chats/" + chatLink
 	respBody, status, err := c.do(ctx, http.MethodGet, endpoint, token, nil)
 	if err != nil {
 		return nil, err
@@ -244,6 +244,200 @@ func (c *MAXBotClient) GetChatByLink(ctx context.Context, token, chatLink string
 		return nil, fmt.Errorf("канал MAX не найден по ссылке %q", chatLink)
 	}
 	return &chat, nil
+}
+
+type maxChatsListResponse struct {
+	Chats  []MAXChat `json:"chats"`
+	Marker *int64    `json:"marker"`
+}
+
+type maxUpdatesResponse struct {
+	Updates []maxUpdate `json:"updates"`
+	Marker  *int64      `json:"marker"`
+}
+
+type maxUpdate struct {
+	UpdateType string `json:"update_type"`
+	ChatID     int64  `json:"chat_id"`
+	IsChannel  bool   `json:"is_channel"`
+}
+
+func maxChatLinkMatches(chat *MAXChat, raw string) bool {
+	if chat == nil {
+		return false
+	}
+	want := NormalizeMAXChatLink(raw)
+	if want == "" {
+		return false
+	}
+	if NormalizeMAXChatLink(chat.Link) == want {
+		return true
+	}
+	link := strings.ToLower(strings.TrimSpace(chat.Link))
+	if link != "" && (strings.HasSuffix(link, "/"+want) || strings.Contains(link, want)) {
+		return true
+	}
+	return false
+}
+
+func (c *MAXBotClient) ListChats(ctx context.Context, token string, count int, marker *int64) (*maxChatsListResponse, error) {
+	if count <= 0 {
+		count = 100
+	}
+	q := url.Values{}
+	q.Set("count", strconv.Itoa(count))
+	if marker != nil {
+		q.Set("marker", strconv.FormatInt(*marker, 10))
+	}
+	endpoint := maxAPIBase + "/chats?" + q.Encode()
+	respBody, status, err := c.do(ctx, http.MethodGet, endpoint, token, nil)
+	if err != nil {
+		return nil, err
+	}
+	if status >= 400 {
+		return nil, fmt.Errorf("max chats list: HTTP %d: %s", status, strings.TrimSpace(string(respBody)))
+	}
+	var parsed maxChatsListResponse
+	if err := json.Unmarshal(respBody, &parsed); err != nil {
+		return nil, err
+	}
+	return &parsed, nil
+}
+
+func (c *MAXBotClient) GetUpdates(
+	ctx context.Context,
+	token string,
+	limit int,
+	timeoutSec int,
+	marker *int64,
+	types []string,
+) (*maxUpdatesResponse, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	if timeoutSec < 0 {
+		timeoutSec = 0
+	}
+	q := url.Values{}
+	q.Set("limit", strconv.Itoa(limit))
+	q.Set("timeout", strconv.Itoa(timeoutSec))
+	if marker != nil {
+		q.Set("marker", strconv.FormatInt(*marker, 10))
+	}
+	if len(types) > 0 {
+		q.Set("types", strings.Join(types, ","))
+	}
+	endpoint := maxAPIBase + "/updates?" + q.Encode()
+	respBody, status, err := c.do(ctx, http.MethodGet, endpoint, token, nil)
+	if err != nil {
+		return nil, err
+	}
+	if status >= 400 {
+		return nil, fmt.Errorf("max updates: HTTP %d: %s", status, strings.TrimSpace(string(respBody)))
+	}
+	var parsed maxUpdatesResponse
+	if err := json.Unmarshal(respBody, &parsed); err != nil {
+		return nil, err
+	}
+	return &parsed, nil
+}
+
+func (c *MAXBotClient) DiscoverMemberChats(ctx context.Context, token string) ([]MAXChat, error) {
+	seen := map[int64]struct{}{}
+	var result []MAXChat
+
+	var marker *int64
+	for page := 0; page < 10; page++ {
+		list, err := c.ListChats(ctx, token, 100, marker)
+		if err != nil {
+			break
+		}
+		for _, chat := range list.Chats {
+			if chat.ChatID == 0 {
+				continue
+			}
+			if _, ok := seen[chat.ChatID]; ok {
+				continue
+			}
+			seen[chat.ChatID] = struct{}{}
+			result = append(result, chat)
+		}
+		if list.Marker == nil {
+			break
+		}
+		marker = list.Marker
+	}
+
+	upd, err := c.GetUpdates(ctx, token, 100, 0, nil, []string{
+		"bot_added",
+		"bot_removed",
+		"message_created",
+		"message_edited",
+		"chat_title_changed",
+		"user_added",
+	})
+	if err == nil {
+		for _, update := range upd.Updates {
+			if update.ChatID == 0 {
+				continue
+			}
+			if _, ok := seen[update.ChatID]; ok {
+				continue
+			}
+			chat, chatErr := c.GetChat(ctx, token, update.ChatID)
+			if chatErr != nil {
+				continue
+			}
+			seen[update.ChatID] = struct{}{}
+			result = append(result, *chat)
+		}
+	}
+
+	return result, nil
+}
+
+func (c *MAXBotClient) resolveChatFromMembership(ctx context.Context, token, raw string) (*MAXChat, error) {
+	want := NormalizeMAXChatLink(raw)
+	if want == "" {
+		return nil, fmt.Errorf("некорректная ссылка на канал MAX")
+	}
+
+	chats, err := c.DiscoverMemberChats(ctx, token)
+	if err != nil {
+		return nil, err
+	}
+	if len(chats) == 0 {
+		return nil, fmt.Errorf(
+			"канал %q не найден: MAX не ищет каналы по публичной ссылке. "+
+				"Добавьте бота администратором с правом «Публикация», затем укажите числовой chat_id",
+			want,
+		)
+	}
+
+	var matches []MAXChat
+	for _, chat := range chats {
+		if maxChatLinkMatches(&chat, want) {
+			matches = append(matches, chat)
+		}
+	}
+	switch len(matches) {
+	case 1:
+		return &matches[0], nil
+	case 0:
+		if len(chats) == 1 {
+			return &chats[0], nil
+		}
+		return nil, fmt.Errorf(
+			"канал %q не найден среди %d каналов бота — выберите chat_id из списка или заново добавьте бота в канал",
+			want,
+			len(chats),
+		)
+	default:
+		return nil, fmt.Errorf(
+			"найдено несколько каналов по ссылке %q — укажите числовой chat_id",
+			want,
+		)
+	}
 }
 
 func (c *MAXBotClient) GetBotMembership(ctx context.Context, token string, chatID int64) (*MAXBotMembership, error) {
@@ -292,7 +486,10 @@ func (c *MAXBotClient) ResolveChat(ctx context.Context, token, raw string) (*MAX
 	if id, err := strconv.ParseInt(raw, 10, 64); err == nil {
 		return c.GetChat(ctx, token, id)
 	}
-	return c.GetChatByLink(ctx, token, raw)
+	if chat, err := c.GetChatByLink(ctx, token, raw); err == nil {
+		return chat, nil
+	}
+	return c.resolveChatFromMembership(ctx, token, raw)
 }
 
 func (c *MAXBotClient) VerifyChannelPostAccess(ctx context.Context, token string, chatID int64) error {

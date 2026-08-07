@@ -386,6 +386,34 @@ func maxDiscoverBotInfo(bot *oauthclient.MAXBotInfo) *model.MAXDiscoverBot {
 	}
 }
 
+func (s *ChannelConnectService) maxTargetsFromChats(
+	ctx context.Context,
+	botToken string,
+	chats []oauthclient.MAXChat,
+) []model.DiscoveredChannelTarget {
+	targets := make([]model.DiscoveredChannelTarget, 0, len(chats))
+	for _, chat := range chats {
+		canPost := true
+		if err := s.maxClient.VerifyChannelPostAccess(ctx, botToken, chat.ChatID); err != nil {
+			canPost = false
+		}
+		title := strings.TrimSpace(chat.Title)
+		if title == "" {
+			title = oauthclient.NormalizeMAXChatLink(chat.Link)
+		}
+		if title == "" {
+			title = strconv.FormatInt(chat.ChatID, 10)
+		}
+		targets = append(targets, model.DiscoveredChannelTarget{
+			ExternalID: strconv.FormatInt(chat.ChatID, 10),
+			Title:      title,
+			Type:       chat.Type,
+			CanPost:    canPost,
+		})
+	}
+	return targets
+}
+
 func (s *ChannelConnectService) DiscoverMAX(
 	ctx context.Context,
 	userID string,
@@ -413,6 +441,15 @@ func (s *ChannelConnectService) DiscoverMAX(
 	if rawChat != "" {
 		chat, resolveErr := s.maxClient.ResolveChat(ctx, botToken, rawChat)
 		if resolveErr != nil {
+			known, _ := s.maxClient.DiscoverMemberChats(ctx, botToken)
+			if len(known) > 0 {
+				return &model.ChannelDiscoverResult{
+					Provider: model.SocialProviderMAX,
+					Targets:  s.maxTargetsFromChats(ctx, botToken, known),
+					Hint: "Ссылка max.ru не находится через API MAX. Выберите канал из списка или укажите chat_id.",
+					Bot:      botInfo,
+				}, nil
+			}
 			return nil, fmt.Errorf("не удалось найти канал: %w", resolveErr)
 		}
 		canPost := true
@@ -445,6 +482,11 @@ func (s *ChannelConnectService) DiscoverMAX(
 			Hint:     hint,
 			Bot:      botInfo,
 		}, nil
+	}
+
+	memberChats, _ := s.maxClient.DiscoverMemberChats(ctx, botToken)
+	if len(memberChats) > 0 {
+		targets = s.maxTargetsFromChats(ctx, botToken, memberChats)
 	}
 
 	return &model.ChannelDiscoverResult{

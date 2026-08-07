@@ -81,7 +81,7 @@ export function ConnectMAXDialog({ open, onClose, onConnected }: ConnectMAXDialo
     try {
       const result = await discoverMAXChannels(botToken.trim(), chatID.trim());
       setChannelHint(result.hint ?? null);
-      if (result.bot) setBotResult(result);
+      setBotResult(result);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Не удалось проверить канал");
     } finally {
@@ -232,6 +232,42 @@ export function ConnectMAXDialog({ open, onClose, onConnected }: ConnectMAXDialo
             </div>
           )}
 
+          {botResult?.targets && botResult.targets.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Каналы, где есть бот</p>
+              <ul className="space-y-1 rounded-lg border border-border p-2">
+                {botResult.targets.map((target) => (
+                  <li key={target.external_id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setChatID(target.external_id);
+                        setChatName(target.title);
+                        setChannelHint(null);
+                        setError(null);
+                      }}
+                      className="flex w-full items-start justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-zinc-50"
+                    >
+                      <span>
+                        <span className="font-medium">{target.title}</span>
+                        <span className="mt-0.5 block font-mono text-xs text-muted">
+                          chat_id {target.external_id}
+                          {!target.can_post ? " · нет права публикации" : ""}
+                        </span>
+                      </span>
+                      {chatID === target.external_id && (
+                        <span className="text-xs text-accent">выбран</span>
+                      )}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <p className="text-xs text-muted">
+                Ссылка max.ru часто не находится через API — выберите канал из списка или вставьте chat_id.
+              </p>
+            </div>
+          )}
+
           <div className="text-sm">
             <p className="font-medium">2. Добавьте бота в канал MAX</p>
             <ol className="mt-1.5 list-decimal space-y-1 pl-4 text-xs leading-relaxed text-muted">
@@ -255,15 +291,18 @@ export function ConnectMAXDialog({ open, onClose, onConnected }: ConnectMAXDialo
           </div>
 
           <label className="block space-y-1.5">
-            <span className="text-sm font-medium">3. Ссылка на канал</span>
+            <span className="text-sm font-medium">3. Канал</span>
             <input
               type="text"
               value={chatID}
               onChange={(e) => setChatID(e.target.value)}
-              placeholder="channel_postilka или https://max.ru/channel_postilka"
+              placeholder="chat_id или channel_postilka"
               disabled={!enabled}
               className="w-full rounded-md border border-border px-3 py-2 text-sm"
             />
+            <p className="text-xs text-muted">
+              Надёжнее указать chat_id из списка выше. Публичная ссылка max.ru в API MAX часто не находится.
+            </p>
           </label>
 
           <label className="block space-y-1.5">
