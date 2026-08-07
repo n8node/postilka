@@ -223,6 +223,33 @@ type maxInlineButton struct {
 	URL  string `json:"url"`
 }
 
+func (c *MAXBotClient) SendText(ctx context.Context, botToken, chatID, text string) error {
+	botToken = strings.TrimSpace(botToken)
+	chatID = strings.TrimSpace(chatID)
+	if botToken == "" {
+		return fmt.Errorf("max message: empty bot token")
+	}
+	if chatID == "" {
+		return fmt.Errorf("max message: empty chat_id")
+	}
+
+	body := maxMessageLinkRequest{Text: text}
+	payload, err := json.Marshal(body)
+	if err != nil {
+		return err
+	}
+
+	endpoint := maxAPIBase + "/messages?" + url.Values{"chat_id": {chatID}}.Encode()
+	respBody, status, err := c.do(ctx, http.MethodPost, endpoint, botToken, payload)
+	if err != nil {
+		return err
+	}
+	if status >= 400 {
+		return fmt.Errorf("max messages: HTTP %d: %s", status, strings.TrimSpace(string(respBody)))
+	}
+	return nil
+}
+
 func (c *MAXBotClient) SendMessageLink(
 	ctx context.Context,
 	botToken, userID, chatID, text, buttonText, linkURL string,

@@ -187,6 +187,48 @@ func ParseVKGroupExternalID(externalID string) (int64, error) {
 	return -n, nil
 }
 
+func (c *VKCommunityClient) PostWallMessage(ctx context.Context, accessToken string, ownerID int64, message string) (int64, error) {
+	values := url.Values{}
+	values.Set("access_token", accessToken)
+	values.Set("v", vkAPIVersion)
+	values.Set("owner_id", strconv.FormatInt(ownerID, 10))
+	values.Set("message", message)
+	values.Set("from_group", "1")
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, vkAPIBase+"/wall.post", strings.NewReader(values.Encode()))
+	if err != nil {
+		return 0, err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := c.http().Do(req)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return 0, err
+	}
+
+	var parsed struct {
+		Response struct {
+			PostID int64 `json:"post_id"`
+		} `json:"response"`
+		Error *struct {
+			ErrorMsg string `json:"error_msg"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return 0, err
+	}
+	if parsed.Error != nil {
+		return 0, fmt.Errorf("vk wall.post: %s", parsed.Error.ErrorMsg)
+	}
+	return parsed.Response.PostID, nil
+}
+
 func (c *VKCommunityClient) http() *http.Client {
 	if c.HTTP != nil {
 		return c.HTTP

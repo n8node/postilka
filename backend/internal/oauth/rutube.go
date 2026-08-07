@@ -130,3 +130,31 @@ func (c *RutubeClient) http() *http.Client {
 func RutubeChannelExternalID(id int) string {
 	return fmt.Sprintf("%d", id)
 }
+
+func (c *RutubeClient) PostChannelText(ctx context.Context, accessToken, channelID, text string) error {
+	form := url.Values{}
+	form.Set("text", text)
+
+	endpoint := fmt.Sprintf("%s/video/person/%s/feed/", rutubeAPIBase, url.PathEscape(channelID))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(form.Encode()))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := c.http().Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("rutube post: HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	return nil
+}

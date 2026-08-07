@@ -123,6 +123,14 @@ func (c *TelegramBotClient) doRequest(
 	return nil, errors.New("proxy request failed")
 }
 
+func (c *TelegramBotClient) SendMessage(ctx context.Context, token, chatID, text string) error {
+	_, err := c.api(ctx, token, "sendMessage", map[string]any{
+		"chat_id": strings.TrimSpace(chatID),
+		"text":    text,
+	})
+	return sanitizeTelegramError(err)
+}
+
 func (c *TelegramBotClient) GetMe(ctx context.Context, token string) (*telegramUser, error) {
 	raw, err := c.api(ctx, token, "getMe", nil)
 	if err != nil {

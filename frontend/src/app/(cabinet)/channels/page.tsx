@@ -9,7 +9,7 @@ import {
   ApiError,
   deleteChannel,
   fetchChannels,
-  verifyChannel,
+  sendChannelTestMessage,
   type ChannelListItem,
   type ChannelProvider,
 } from "@/lib/api";
@@ -36,6 +36,7 @@ export default function ChannelsPage() {
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
+  const [testSuccess, setTestSuccess] = useState<string | null>(null);
 
   const selected = items.find((c) => c.id === selectedId) ?? null;
 
@@ -56,14 +57,18 @@ export default function ChannelsPage() {
     void load();
   }, [load]);
 
-  async function handleVerify() {
+  async function handleTestMessage() {
     if (!selected) return;
     setActionLoading(true);
+    setTestSuccess(null);
+    setError(null);
     try {
-      const updated = await verifyChannel(selected.id);
-      setItems((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+      const result = await sendChannelTestMessage(selected.id);
+      setTestSuccess(result.message);
+      await load();
+      setSelectedId(selected.id);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Проверка не удалась");
+      setError(err instanceof ApiError ? err.message : "Не удалось отправить тестовое сообщение");
     } finally {
       setActionLoading(false);
     }
@@ -128,16 +133,19 @@ export default function ChannelsPage() {
                   <p className="text-sm text-red-600">{selected.last_error}</p>
                 </div>
               )}
-              {selected.provider === "telegram" && (
-                <button
-                  type="button"
-                  onClick={handleVerify}
-                  disabled={actionLoading}
-                  className="w-full rounded-md border border-border px-3 py-2 text-sm hover:bg-zinc-50 disabled:opacity-50"
-                >
-                  Проверить подключение
-                </button>
+              {testSuccess && (
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+                  {testSuccess}
+                </div>
               )}
+              <button
+                type="button"
+                onClick={handleTestMessage}
+                disabled={actionLoading}
+                className="w-full rounded-md bg-accent px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+              >
+                {actionLoading ? "Отправка…" : "Отправить тестовое сообщение"}
+              </button>
               <button
                 type="button"
                 onClick={handleDelete}
@@ -171,7 +179,10 @@ export default function ChannelsPage() {
                 {items.map((ch) => (
                   <tr
                     key={ch.id}
-                    onClick={() => setSelectedId(ch.id)}
+                    onClick={() => {
+                      setSelectedId(ch.id);
+                      setTestSuccess(null);
+                    }}
                     className={cn(
                       "cursor-pointer border-b border-border last:border-0 hover:bg-zinc-50",
                       selectedId === ch.id && "bg-zinc-50",

@@ -15,10 +15,11 @@ import (
 type ChannelHandler struct {
 	channels *service.ChannelService
 	connect  *service.ChannelConnectService
+	test     *service.ChannelTestService
 }
 
-func NewChannelHandler(channels *service.ChannelService, connect *service.ChannelConnectService) *ChannelHandler {
-	return &ChannelHandler{channels: channels, connect: connect}
+func NewChannelHandler(channels *service.ChannelService, connect *service.ChannelConnectService, test *service.ChannelTestService) *ChannelHandler {
+	return &ChannelHandler{channels: channels, connect: connect, test: test}
 }
 
 func channelUserID(r *http.Request) (string, bool) {
@@ -108,6 +109,23 @@ func (h *ChannelHandler) Verify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, item)
+}
+
+func (h *ChannelHandler) SendTestMessage(w http.ResponseWriter, r *http.Request) {
+	userID, ok := channelUserID(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
+		return
+	}
+	id := chi.URLParam(r, "id")
+	var req model.ChannelTestMessageRequest
+	_ = json.NewDecoder(r.Body).Decode(&req)
+	result, err := h.test.SendTestMessage(r.Context(), userID, r, id, req.Text)
+	if err != nil {
+		writeChannelError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (h *ChannelHandler) Delete(w http.ResponseWriter, r *http.Request) {

@@ -1370,6 +1370,16 @@ export function verifyChannel(id: string) {
   return apiFetch<ChannelListItem>(`/channels/${id}/verify`, { method: "POST" });
 }
 
+export function sendChannelTestMessage(id: string, text?: string) {
+  return apiFetch<{ success: boolean; message: string; provider_post_id?: string }>(
+    `/channels/${id}/test-message`,
+    {
+      method: "POST",
+      body: JSON.stringify(text ? { text } : {}),
+    },
+  );
+}
+
 export function deleteChannel(id: string) {
   return apiFetch<{ status: string }>(`/channels/${id}`, { method: "DELETE" });
 }

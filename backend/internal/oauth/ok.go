@@ -170,3 +170,56 @@ func OKGroupExternalID(groupID string) string {
 func ParseOKGroupID(externalID string) (int64, error) {
 	return strconv.ParseInt(strings.TrimSpace(externalID), 10, 64)
 }
+
+func (c *OKClient) PostGroupText(ctx context.Context, accessToken, groupID, text string) error {
+	attachment := fmt.Sprintf(`{"media":[{"type":"text","text":%s}]}`, jsonString(text))
+	params := map[string]string{
+		"method":       "mediatopic.post",
+		"access_token": accessToken,
+		"gid":          groupID,
+		"type":         "GROUP_THEME",
+		"attachment":   attachment,
+	}
+	sig := okSign(accessToken, c.AppSecret, params)
+
+	values := url.Values{}
+	for k, v := range params {
+		values.Set(k, v)
+	}
+	values.Set("sig", sig)
+	values.Set("application_key", c.AppID)
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, okAPIBase, strings.NewReader(values.Encode()))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := c.http().Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return err
+	}
+
+	var parsed struct {
+		ErrorCode int    `json:"error_code"`
+		ErrorMsg  string `json:"error_msg"`
+	}
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return fmt.Errorf("ok mediatopic.post: %s", strings.TrimSpace(string(body)))
+	}
+	if parsed.ErrorCode != 0 {
+		return fmt.Errorf("ok mediatopic.post: %s", parsed.ErrorMsg)
+	}
+	return nil
+}
+
+func jsonString(s string) string {
+	b, _ := json.Marshal(s)
+	return string(b)
+}

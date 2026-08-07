@@ -115,6 +115,50 @@ func (c *DzenClient) ListChannels(ctx context.Context, accessToken string) ([]Dz
 	return parsed.Channels, nil
 }
 
+func (c *DzenClient) PostBrief(ctx context.Context, accessToken, channelID, text string) (string, error) {
+	payload, err := json.Marshal(map[string]any{
+		"channel_id": channelID,
+		"content": map[string]any{
+			"type": "brief",
+			"brief": map[string]string{
+				"text": text,
+			},
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, zenAPIBase+"/publications", strings.NewReader(string(payload)))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", "OAuth "+accessToken)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.http().Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return "", err
+	}
+	if resp.StatusCode >= 400 {
+		return "", fmt.Errorf("dzen publications: HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	var parsed struct {
+		ID string `json:"id"`
+	}
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return "", nil
+	}
+	return parsed.ID, nil
+}
+
 func (c *DzenClient) http() *http.Client {
 	if c.HTTP != nil {
 		return c.HTTP

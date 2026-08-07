@@ -89,6 +89,9 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 		channelRepo, channelOAuthSessionRepo, socialProviderSettingsSvc,
 		telegramProviderSettingsSvc, wsSvc, quotaSvc, secretCipher, cfg,
 	)
+	channelTestSvc := service.NewChannelTestService(
+		channelRepo, telegramBotClient, socialProviderSettingsSvc, wsSvc, secretCipher,
+	)
 	telegramSvc := service.NewTelegramService(telegramSettingsSvc, telegramQueueRepo, cfg.TelegramLocalProxy, logger)
 	telegramSettingsSvc.BindRuntimeStatus(telegramSvc.GetRuntimeStatus)
 	telegramSvc.Start()
@@ -120,7 +123,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	telegramHandler := handler.NewTelegramSettingsHandler(telegramSettingsSvc, telegramSvc)
 	telegramProviderHandler := handler.NewTelegramProviderSettingsHandler(telegramProviderSettingsSvc)
 	socialProviderHandler := handler.NewSocialProviderSettingsHandler(socialProviderSettingsSvc)
-	channelHandler := handler.NewChannelHandler(channelSvc, channelConnectSvc)
+	channelHandler := handler.NewChannelHandler(channelSvc, channelConnectSvc, channelTestSvc)
 	channelConnectHandler := handler.NewChannelConnectHandler(channelConnectSvc, cfg)
 	publicPageHandler := handler.NewPublicPageHandler(publicPageSvc)
 	paymentWebhookHandler := handler.NewPaymentWebhookHandler(paymentSettingsSvc, checkoutSvc, logger)
@@ -207,6 +210,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Get("/channels/oauth/{provider}/discover", channelConnectHandler.OAuthDiscover)
 			r.Post("/channels/oauth/{provider}/connect", channelConnectHandler.OAuthConnect)
 			r.Post("/channels/{id}/verify", channelHandler.Verify)
+			r.Post("/channels/{id}/test-message", channelHandler.SendTestMessage)
 			r.Put("/channels/{id}/telegram-token", channelHandler.UpdateTelegramToken)
 			r.Delete("/channels/{id}", channelHandler.Delete)
 		})

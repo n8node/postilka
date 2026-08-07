@@ -97,3 +97,15 @@ type TelegramConnectResult struct {
 type TelegramDiscoverRequest struct {
 	BotToken string `json:"bot_token"`
 }
+
+const DefaultChannelTestMessage = "✅ Тестовое сообщение от Postilka. Канал подключён корректно."
+
+type ChannelTestMessageResult struct {
+	Success        bool   `json:"success"`
+	Message        string `json:"message"`
+	ProviderPostID string `json:"provider_post_id,omitempty"`
+}
+
+type ChannelTestMessageRequest struct {
+	Text string `json:"text,omitempty"`
+}
