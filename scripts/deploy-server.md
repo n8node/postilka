@@ -194,6 +194,10 @@ docker compose exec -T mysql mysqldump -u root -p"$WP_DB_ROOT_PASSWORD" wordpres
   ```bash
   cd /opt/postilka && git pull
   make prod-backend
+
+  docker compose --env-file .env -f docker-compose.yml -f docker-compose.prod.yml ps telegram-proxy
+  docker compose --env-file .env -f docker-compose.yml -f docker-compose.prod.yml logs --tail=30 telegram-proxy
+  ss -ltnp | grep 8889 || true
   ```
 
   Проверка gost на хосте:
