@@ -120,34 +120,38 @@ export function ConnectMAXDialog({ open, onClose, onConnected }: ConnectMAXDialo
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-surface p-6 shadow-xl">
-        <button
-          type="button"
-          onClick={onClose}
-          className="absolute right-4 top-4 text-muted hover:text-foreground"
-          aria-label="Закрыть"
-        >
-          <X className="h-5 w-5" />
-        </button>
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b border-border px-5 py-4">
+          <div>
+            <h2 className="text-lg font-semibold">Подключить MAX</h2>
+            <p className="mt-0.5 text-sm text-muted">
+              Проверьте токен — Postilka покажет @username для поиска в MAX.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="shrink-0 text-muted hover:text-foreground"
+            aria-label="Закрыть"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
 
-        <h2 className="text-lg font-semibold">Подключить MAX</h2>
-        <p className="mt-1 text-sm text-muted">
-          Сначала проверьте токен — Postilka покажет <strong>@username</strong> бота для поиска в MAX.
-        </p>
-
+        <div className="space-y-4 px-5 py-4">
         {!enabled && (
-          <p className="mt-4 text-sm text-amber-700">
+          <p className="text-sm text-amber-700">
             Подключение MAX временно отключено администратором.
           </p>
         )}
 
         {error && (
-          <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+          <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
             {error}
           </div>
         )}
 
-        <div className="mt-6 space-y-4">
+        <div className="space-y-4">
           <label className="block space-y-1.5">
             <span className="text-sm font-medium">1. Токен бота MAX</span>
             <div className="relative">
@@ -183,52 +187,70 @@ export function ConnectMAXDialog({ open, onClose, onConnected }: ConnectMAXDialo
           </button>
 
           {bot && (
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950">
-              <p className="font-medium">Бот найден</p>
-              {bot.name && <p className="mt-1">Название: {bot.name}</p>}
-              <p className="mt-2">
-                Ищите в MAX по нику:{" "}
-                <code className="rounded bg-white px-1.5 py-0.5 font-mono text-sm">{bot.search_query}</code>
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => void copyText("nick", bot.search_query)}
-                  className="inline-flex items-center gap-1 rounded-md border border-emerald-300 bg-white px-2.5 py-1 text-xs hover:bg-emerald-100"
-                >
-                  <Copy className="h-3.5 w-3.5" />
-                  {copied === "nick" ? "Скопировано" : "Копировать @ник"}
-                </button>
-                {bot.profile_url && (
-                  <a
-                    href={bot.profile_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 rounded-md border border-emerald-300 bg-white px-2.5 py-1 text-xs hover:bg-emerald-100"
+            <div className="rounded-lg border border-border bg-zinc-50/80 px-3.5 py-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs text-muted">Ник для поиска в MAX</p>
+                  <p className="mt-0.5 truncate font-mono text-[15px] font-semibold tracking-tight">
+                    {bot.search_query}
+                  </p>
+                  {(bot.name || bot.user_id) && (
+                    <p className="mt-1.5 text-xs text-muted">
+                      {bot.name}
+                      {bot.name && bot.user_id ? (
+                        <span className="mx-1.5 text-border">·</span>
+                      ) : null}
+                      {bot.user_id ? `id ${bot.user_id}` : null}
+                    </p>
+                  )}
+                </div>
+                <div className="flex shrink-0 gap-0.5">
+                  <button
+                    type="button"
+                    onClick={() => void copyText("nick", bot.search_query)}
+                    title={copied === "nick" ? "Скопировано" : "Копировать @ник"}
+                    className="rounded-md p-2 text-muted hover:bg-white hover:text-foreground"
                   >
-                    <ExternalLink className="h-3.5 w-3.5" />
-                    Открыть max.ru
-                  </a>
-                )}
+                    <Copy className="h-4 w-4" />
+                  </button>
+                  {bot.profile_url && (
+                    <a
+                      href={bot.profile_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title="Открыть max.ru"
+                      className="rounded-md p-2 text-muted hover:bg-white hover:text-foreground"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                    </a>
+                  )}
+                </div>
               </div>
-              <p className="mt-3 text-xs text-emerald-900">
-                В поиске MAX не работают название бота и user_id ({bot.user_id}). Только {bot.search_query}.
+              <p className="mt-2.5 text-xs leading-relaxed text-muted">
+                В MAX ищите бота только по этому нику — название и числовой id в поиске не работают.
               </p>
             </div>
           )}
 
-          {botResult?.hint && !channelHint && (
-            <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
-              {botResult.hint}
-            </div>
-          )}
-
-          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+          <div className="text-sm">
             <p className="font-medium">2. Добавьте бота в канал MAX</p>
-            <ol className="mt-1 list-inside list-decimal space-y-0.5 text-xs">
-              <li>Канал → <strong>Участники</strong> → <strong>Добавить</strong></li>
-              <li>В поиске введите <strong>@username</strong> бота (из шага 1)</li>
-              <li>Канал → <strong>Администраторы</strong> → добавьте бота с правом «Публикация»</li>
+            <ol className="mt-1.5 list-decimal space-y-1 pl-4 text-xs leading-relaxed text-muted">
+              <li>
+                Канал → <span className="text-foreground">Участники</span> →{" "}
+                <span className="text-foreground">Добавить</span>
+              </li>
+              <li>
+                В поиске введите{" "}
+                {bot ? (
+                  <span className="font-mono text-foreground">{bot.search_query}</span>
+                ) : (
+                  <span className="text-foreground">@username</span>
+                )}{" "}
+                из шага 1
+              </li>
+              <li>
+                Канал → <span className="text-foreground">Администраторы</span> → право «Публикация»
+              </li>
             </ol>
           </div>
 
@@ -256,29 +278,36 @@ export function ConnectMAXDialog({ open, onClose, onConnected }: ConnectMAXDialo
           </label>
 
           {channelHint && (
-            <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800">
+            <p
+              className={
+                channelHint.includes("нет права")
+                  ? "text-sm text-amber-700"
+                  : "text-sm text-muted"
+              }
+            >
               {channelHint}
-            </div>
+            </p>
           )}
+        </div>
+        </div>
 
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => void handleVerifyChannel()}
-              disabled={!enabled || loadingChannel || !botToken.trim() || !chatID.trim()}
-              className="flex-1 rounded-md border border-border px-3 py-2 text-sm hover:bg-zinc-50 disabled:opacity-50"
-            >
-              {loadingChannel ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "Проверить канал"}
-            </button>
-            <button
-              type="button"
-              onClick={() => void handleConnect()}
-              disabled={!enabled || connecting || !botToken.trim() || !chatID.trim()}
-              className="flex-1 rounded-md bg-accent px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
-            >
-              {connecting ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "Подключить"}
-            </button>
-          </div>
+        <div className="flex gap-2 border-t border-border px-5 py-4">
+          <button
+            type="button"
+            onClick={() => void handleVerifyChannel()}
+            disabled={!enabled || loadingChannel || !botToken.trim() || !chatID.trim()}
+            className="flex-1 rounded-md border border-border px-3 py-2 text-sm hover:bg-zinc-50 disabled:opacity-50"
+          >
+            {loadingChannel ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "Проверить канал"}
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleConnect()}
+            disabled={!enabled || connecting || !botToken.trim() || !chatID.trim()}
+            className="flex-1 rounded-md bg-accent px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+          >
+            {connecting ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : "Подключить"}
+          </button>
         </div>
       </div>
     </div>

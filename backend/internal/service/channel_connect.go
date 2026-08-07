@@ -386,20 +386,6 @@ func maxDiscoverBotInfo(bot *oauthclient.MAXBotInfo) *model.MAXDiscoverBot {
 	}
 }
 
-func maxBotAddHint(bot *model.MAXDiscoverBot) string {
-	if bot == nil || bot.SearchQuery == "" {
-		return "Токен принят. Добавьте бота в канал MAX и укажите ссылку на канал."
-	}
-	return fmt.Sprintf(
-		"Ищите бота в MAX по нику %s (не по названию «%s» и не по user_id %d). "+
-			"Канал → Участники → Добавить → введите %s → затем Администраторы → добавьте бота с правом «Публикация».",
-		bot.SearchQuery,
-		fallbackString(bot.Name, bot.Username),
-		bot.UserID,
-		bot.SearchQuery,
-	)
-}
-
 func (s *ChannelConnectService) DiscoverMAX(
 	ctx context.Context,
 	userID string,
@@ -464,7 +450,6 @@ func (s *ChannelConnectService) DiscoverMAX(
 	return &model.ChannelDiscoverResult{
 		Provider: model.SocialProviderMAX,
 		Targets:  targets,
-		Hint:     maxBotAddHint(botInfo),
 		Bot:      botInfo,
 	}, nil
 }
