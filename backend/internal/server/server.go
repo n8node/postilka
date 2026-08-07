@@ -72,6 +72,8 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	telegramSvc := service.NewTelegramService(telegramSettingsSvc, telegramQueueRepo, cfg.TelegramLocalProxy, logger)
 	telegramSettingsSvc.BindRuntimeStatus(telegramSvc.GetRuntimeStatus)
 	telegramSvc.Start()
+	telegramHealthMonitor := service.NewTelegramHealthMonitor(telegramSvc, emailSvc, userRepo, cfg, logger)
+	telegramHealthMonitor.Start()
 
 	authSvc := service.NewAuthService(userRepo, wsRepo, planRepo, inviteSvc, db.Pool, authMW, emailVerificationSvc, passwordResetSvc, telegramSvc)
 	emailVerificationSvc.BindTelegram(telegramSvc)

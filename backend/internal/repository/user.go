@@ -210,6 +210,32 @@ func (r *UserRepository) SetPlatformAdminByEmail(ctx context.Context, email stri
 	return u, err
 }
 
+func (r *UserRepository) ListPlatformAdminEmails(ctx context.Context) ([]string, error) {
+	const q = `
+		SELECT email FROM users
+		WHERE is_platform_admin = true AND NOT is_blocked
+		ORDER BY created_at ASC
+	`
+	rows, err := r.pool.Query(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]string, 0, 2)
+	for rows.Next() {
+		var email string
+		if err := rows.Scan(&email); err != nil {
+			return nil, err
+		}
+		email = strings.TrimSpace(email)
+		if email != "" {
+			out = append(out, email)
+		}
+	}
+	return out, rows.Err()
+}
+
 func (r *UserRepository) SetBlocked(ctx context.Context, userID string, blocked bool) (*model.User, error) {
 	const q = `
 		UPDATE users

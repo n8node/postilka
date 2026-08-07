@@ -232,6 +232,8 @@ docker compose exec -T mysql mysqldump -u root -p"$WP_DB_ROOT_PASSWORD" wordpres
   docker compose exec backend wget -T 20 -S --spider https://api.telegram.org/ 2>&1
   ```
 
+- **Самодиагностика (каждые 30 мин):** backend отправляет отчёт в admin Telegram-чат; при сбое бота/прокси — email всем `is_platform_admin` пользователям. Первый запуск через 2 мин после старта backend.
+
   В админке Telegram: прокси **включён**, URL питерского прокси в списке (для учёта), backend сам использует `host.docker.internal:8889`. Напишите боту `/start`, затем тестовое сообщение.
 
 - **MAX OAuth / webhook не приходит, `curl platform-api2.max.ru` → `SSL certificate problem`:** API MAX подписан сертификатами **НУЦ Минцифры**. Без них backend не регистрирует webhook.

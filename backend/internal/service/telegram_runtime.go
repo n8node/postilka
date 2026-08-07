@@ -102,6 +102,23 @@ func (s *TelegramService) Restart(ctx context.Context) model.TelegramBotRuntimeS
 	return s.GetRuntimeStatus()
 }
 
+// RunHealthCheck performs a fresh bot/proxy health check (ops monitor, 30 min).
+func (s *TelegramService) RunHealthCheck(ctx context.Context) model.TelegramBotRuntimeStatus {
+	return s.checkHealth(ctx)
+}
+
+// SendDirectAdminMessage sends an ops message directly, bypassing the notification queue.
+func (s *TelegramService) SendDirectAdminMessage(ctx context.Context, text string) error {
+	cfg, err := s.settings.GetEffective(ctx)
+	if err != nil {
+		return err
+	}
+	if !cfg.Enabled {
+		return ErrTelegramDisabled
+	}
+	return s.send(ctx, cfg, text)
+}
+
 func (s *TelegramService) GetRuntimeStatus() model.TelegramBotRuntimeStatus {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
