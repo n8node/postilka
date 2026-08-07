@@ -1087,11 +1087,11 @@ export type TelegramNotificationListResult = {
 };
 
 export function fetchAdminTelegramSettings() {
-  return apiFetch<TelegramAdminView>("/admin/telegram");
+  return apiFetch<TelegramAdminView>("/admin/telegram/notifications");
 }
 
 export function updateAdminTelegramSettings(payload: TelegramAdminUpdateRequest) {
-  return apiFetch<TelegramAdminView>("/admin/telegram", {
+  return apiFetch<TelegramAdminView>("/admin/telegram/notifications", {
     method: "PUT",
     body: JSON.stringify(payload),
   });
@@ -1129,5 +1129,118 @@ export function fetchAdminTelegramQueue(params?: {
 export function retryAdminTelegramQueueItem(id: string) {
   return apiFetch<{ status: string }>(`/admin/telegram/queue/${id}/retry`, {
     method: "POST",
+  });
+}
+
+export type TelegramProviderSettings = {
+  enabled: boolean;
+  proxy_enabled: boolean;
+  proxy_active_url: string;
+  proxy_auto_failover: boolean;
+  proxy_urls: string[];
+  connect_help_text: string;
+};
+
+export type TelegramProviderAdminView = {
+  settings: TelegramProviderSettings;
+  updated_at?: string;
+};
+
+export function fetchAdminTelegramProviderSettings() {
+  return apiFetch<TelegramProviderAdminView>("/admin/telegram/provider");
+}
+
+export function updateAdminTelegramProviderSettings(settings: TelegramProviderSettings) {
+  return apiFetch<TelegramProviderAdminView>("/admin/telegram/provider", {
+    method: "PUT",
+    body: JSON.stringify(settings),
+  });
+}
+
+export type ChannelStatus = "active" | "needs_reconnect" | "disabled";
+
+export type Channel = {
+  id: string;
+  workspace_id: string;
+  provider: "telegram";
+  name: string;
+  chat_id: string;
+  chat_type: string;
+  bot_username?: string;
+  status: ChannelStatus;
+  last_error?: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ChannelListItem = Channel & {
+  bot_token_set: boolean;
+  bot_token_hint?: string;
+};
+
+export type TelegramDiscoverBot = {
+  id: number;
+  username: string;
+};
+
+export type TelegramDiscoveredChat = {
+  chat_id: string;
+  title: string;
+  type: string;
+  bot_status: string;
+  can_post: boolean;
+};
+
+export type TelegramDiscoverResult = {
+  bot: TelegramDiscoverBot;
+  chats: TelegramDiscoveredChat[];
+  hint?: string;
+};
+
+export type ChannelProviderInfo = {
+  telegram_enabled: boolean;
+  connect_help_text: string;
+};
+
+export function fetchChannels() {
+  return apiFetch<{ items: ChannelListItem[] }>("/channels");
+}
+
+export function fetchChannelProviderInfo() {
+  return apiFetch<ChannelProviderInfo>("/channels/provider-info");
+}
+
+export function discoverTelegramChannels(botToken: string) {
+  return apiFetch<TelegramDiscoverResult>("/channels/telegram/discover", {
+    method: "POST",
+    body: JSON.stringify({ bot_token: botToken }),
+  });
+}
+
+export function connectTelegramChannels(payload: {
+  bot_token: string;
+  channels: { chat_id: string; name?: string }[];
+}) {
+  return apiFetch<{ connected: ChannelListItem[]; skipped?: string[] }>(
+    "/channels/telegram/connect",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export function verifyChannel(id: string) {
+  return apiFetch<ChannelListItem>(`/channels/${id}/verify`, { method: "POST" });
+}
+
+export function deleteChannel(id: string) {
+  return apiFetch<{ status: string }>(`/channels/${id}`, { method: "DELETE" });
+}
+
+export function updateChannelTelegramToken(id: string, botToken: string) {
+  return apiFetch<ChannelListItem>(`/channels/${id}/telegram-token`, {
+    method: "PUT",
+    body: JSON.stringify({ bot_token: botToken }),
   });
 }

@@ -1,49 +1,105 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { CabinetPage } from "@/components/layout/CabinetPage";
 import { EmptyState } from "@/components/layout/EmptyState";
-import { StubBadge } from "@/components/layout/StubBadge";
+import { ConnectTelegramDialog } from "@/components/channels/ConnectTelegramDialog";
+import {
+  ApiError,
+  deleteChannel,
+  fetchChannels,
+  verifyChannel,
+  type ChannelListItem,
+} from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-type ChannelStub = {
-  id: string;
-  name: string;
-  network: string;
-  status: "active" | "expired" | "error";
+const statusLabel: Record<ChannelListItem["status"], string> = {
+  active: "Активен",
+  needs_reconnect: "Нужно переподключить",
+  disabled: "Отключён",
 };
 
-const stubs: ChannelStub[] = [
-  { id: "1", name: "Postilka News", network: "Telegram", status: "active" },
-  { id: "2", name: "Бренд VK", network: "VK", status: "expired" },
-];
-
-const statusLabel = {
-  active: "Активен",
-  expired: "Токен истёк",
-  error: "Ошибка",
-} as const;
+const providerLabel: Record<ChannelListItem["provider"], string> = {
+  telegram: "Telegram",
+};
 
 export default function ChannelsPage() {
-  const [selectedId, setSelectedId] = useState<string | null>(stubs[0]?.id ?? null);
-  const selected = stubs.find((c) => c.id === selectedId) ?? null;
+  const [items, setItems] = useState<ChannelListItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [connectOpen, setConnectOpen] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+
+  const selected = items.find((c) => c.id === selectedId) ?? null;
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await fetchChannels();
+      setItems(data.items);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Не удалось загрузить каналы");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  async function handleVerify() {
+    if (!selected) return;
+    setActionLoading(true);
+    try {
+      const updated = await verifyChannel(selected.id);
+      setItems((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Проверка не удалась");
+    } finally {
+      setActionLoading(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!selected) return;
+    if (!window.confirm(`Отключить канал «${selected.name}»?`)) return;
+    setActionLoading(true);
+    try {
+      await deleteChannel(selected.id);
+      setItems((prev) => prev.filter((c) => c.id !== selected.id));
+      setSelectedId(null);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Не удалось удалить канал");
+    } finally {
+      setActionLoading(false);
+    }
+  }
 
   return (
     <div>
       <PageHeader
         title="Каналы"
-        description="Подключённые соцсети workspace. Сейчас — макет без OAuth."
+        description="Подключённые Telegram-каналы и группы workspace."
         actions={
           <button
             type="button"
-            disabled
-            className="rounded-md bg-accent px-3 py-2 text-sm font-medium text-white opacity-60"
+            onClick={() => setConnectOpen(true)}
+            className="rounded-md bg-accent px-3 py-2 text-sm font-medium text-white"
           >
-            Подключить канал
+            Подключить Telegram
           </button>
         }
       />
+
+      {error && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      )}
 
       <CabinetPage
         rightTitle={selected ? selected.name : undefined}
@@ -53,32 +109,54 @@ export default function ChannelsPage() {
             <div className="space-y-4">
               <div>
                 <p className="text-xs text-muted">Сеть</p>
-                <p className="font-medium">{selected.network}</p>
+                <p className="font-medium">{providerLabel[selected.provider]}</p>
               </div>
+              <div>
+                <p className="text-xs text-muted">Chat ID</p>
+                <p className="font-mono text-sm">{selected.chat_id}</p>
+              </div>
+              {selected.bot_username && (
+                <div>
+                  <p className="text-xs text-muted">Бот</p>
+                  <p className="font-medium">@{selected.bot_username}</p>
+                </div>
+              )}
               <div>
                 <p className="text-xs text-muted">Статус</p>
                 <p className="font-medium">{statusLabel[selected.status]}</p>
               </div>
-              <div>
-                <p className="text-xs text-muted">Capabilities</p>
-                <p className="text-muted">Текст, фото, отложенная публикация — заглушка</p>
-              </div>
+              {selected.last_error && (
+                <div>
+                  <p className="text-xs text-muted">Ошибка</p>
+                  <p className="text-sm text-red-600">{selected.last_error}</p>
+                </div>
+              )}
               <button
                 type="button"
-                disabled
-                className="w-full rounded-md border border-border px-3 py-2 text-sm opacity-60"
+                onClick={handleVerify}
+                disabled={actionLoading}
+                className="w-full rounded-md border border-border px-3 py-2 text-sm hover:bg-zinc-50 disabled:opacity-50"
               >
-                Переподключить
+                Проверить подключение
               </button>
-              <StubBadge label="Волна 3" />
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={actionLoading}
+                className="w-full rounded-md border border-red-200 px-3 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+              >
+                Отключить канал
+              </button>
             </div>
           ) : undefined
         }
       >
-        {stubs.length === 0 ? (
+        {loading ? (
+          <p className="text-sm text-muted">Загрузка каналов…</p>
+        ) : items.length === 0 ? (
           <EmptyState
             title="Нет каналов"
-            description="Подключите Telegram или VK, чтобы публиковать посты."
+            description="Подключите Telegram-бота, чтобы публиковать посты в каналы и группы."
           />
         ) : (
           <div className="overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
@@ -91,7 +169,7 @@ export default function ChannelsPage() {
                 </tr>
               </thead>
               <tbody>
-                {stubs.map((ch) => (
+                {items.map((ch) => (
                   <tr
                     key={ch.id}
                     onClick={() => setSelectedId(ch.id)}
@@ -101,7 +179,7 @@ export default function ChannelsPage() {
                     )}
                   >
                     <td className="px-4 py-3 font-medium">{ch.name}</td>
-                    <td className="px-4 py-3 text-muted">{ch.network}</td>
+                    <td className="px-4 py-3 text-muted">{providerLabel[ch.provider]}</td>
                     <td className="px-4 py-3">{statusLabel[ch.status]}</td>
                   </tr>
                 ))}
@@ -110,6 +188,12 @@ export default function ChannelsPage() {
           </div>
         )}
       </CabinetPage>
+
+      <ConnectTelegramDialog
+        open={connectOpen}
+        onClose={() => setConnectOpen(false)}
+        onConnected={() => void load()}
+      />
     </div>
   );
 }

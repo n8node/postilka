@@ -18,6 +18,8 @@ type Config struct {
 
 	JWTSecret  string `env:"JWT_SECRET,required"`
 	APIKeySalt string `env:"API_KEY_SALT,required"`
+	// Optional; falls back to JWT_SECRET for encrypting channel bot tokens at rest.
+	EncryptionKey string `env:"ENCRYPTION_KEY"`
 
 	PublicAppURL string `env:"PUBLIC_APP_URL" envDefault:"http://localhost/app"`
 	Domain       string `env:"DOMAIN" envDefault:"localhost"`

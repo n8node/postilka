@@ -3,6 +3,7 @@ package server
 import (
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -65,10 +66,20 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	usageRepo := repository.NewUsageRepository(db.Pool)
 	subscriptionRepo := repository.NewSubscriptionRepository(db.Pool)
 	subscriptionSvc := service.NewSubscriptionService(subscriptionRepo, planRepo, wsRepo)
-	quotaSvc := service.NewQuotaService(planRepo, wsRepo, subscriptionRepo, usageRepo)
+	channelRepo := repository.NewChannelRepository(db.Pool)
+	quotaSvc := service.NewQuotaService(planRepo, wsRepo, subscriptionRepo, usageRepo, channelRepo)
 	telegramSettingsRepo := repository.NewTelegramSettingsRepository(db.Pool)
 	telegramQueueRepo := repository.NewTelegramNotificationQueueRepository(db.Pool)
 	telegramSettingsSvc := service.NewTelegramSettingsService(telegramSettingsRepo)
+	telegramProviderSettingsRepo := repository.NewTelegramProviderSettingsRepository(db.Pool)
+	telegramProviderSettingsSvc := service.NewTelegramProviderSettingsService(telegramProviderSettingsRepo)
+	telegramBotClient := service.NewTelegramBotClient(telegramProviderSettingsSvc, cfg.TelegramLocalProxy)
+	encKey := cfg.EncryptionKey
+	if strings.TrimSpace(encKey) == "" {
+		encKey = cfg.JWTSecret
+	}
+	secretCipher, _ := service.NewSecretCipher(encKey)
+	channelSvc := service.NewChannelService(channelRepo, telegramProviderSettingsSvc, telegramBotClient, wsSvc, quotaSvc, secretCipher)
 	telegramSvc := service.NewTelegramService(telegramSettingsSvc, telegramQueueRepo, cfg.TelegramLocalProxy, logger)
 	telegramSettingsSvc.BindRuntimeStatus(telegramSvc.GetRuntimeStatus)
 	telegramSvc.Start()
@@ -98,6 +109,8 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	emailTemplateHandler := handler.NewEmailTemplateSettingsHandler(emailTemplateSettingsSvc, emailSvc)
 	paymentSettingsHandler := handler.NewPaymentSettingsHandler(paymentSettingsSvc)
 	telegramHandler := handler.NewTelegramSettingsHandler(telegramSettingsSvc, telegramSvc)
+	telegramProviderHandler := handler.NewTelegramProviderSettingsHandler(telegramProviderSettingsSvc)
+	channelHandler := handler.NewChannelHandler(channelSvc)
 	paymentWebhookHandler := handler.NewPaymentWebhookHandler(paymentSettingsSvc, checkoutSvc, logger)
 	billingHandler := handler.NewBillingHandler(billingSvc, checkoutSvc, wsSvc)
 
@@ -170,6 +183,17 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Post("/workspaces/invites/accept", wsInviteHandler.Accept)
 		})
 
+		r.Group(func(r chi.Router) {
+			r.Use(authMW.Required)
+			r.Get("/channels", channelHandler.List)
+			r.Get("/channels/provider-info", channelHandler.ProviderInfo)
+			r.Post("/channels/telegram/discover", channelHandler.DiscoverTelegram)
+			r.Post("/channels/telegram/connect", channelHandler.ConnectTelegram)
+			r.Post("/channels/{id}/verify", channelHandler.Verify)
+			r.Put("/channels/{id}/telegram-token", channelHandler.UpdateTelegramToken)
+			r.Delete("/channels/{id}", channelHandler.Delete)
+		})
+
 		r.Route("/admin", func(r chi.Router) {
 			r.Group(func(r chi.Router) {
 				r.Use(authMW.Required, middleware.RequirePlatformAdmin(userRepo))
@@ -199,6 +223,10 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Post("/payment-settings/test", paymentSettingsHandler.TestConnection)
 				r.Get("/telegram", telegramHandler.GetAdmin)
 				r.Put("/telegram", telegramHandler.UpdateAdmin)
+				r.Get("/telegram/notifications", telegramHandler.GetAdmin)
+				r.Put("/telegram/notifications", telegramHandler.UpdateAdmin)
+				r.Get("/telegram/provider", telegramProviderHandler.GetAdmin)
+				r.Put("/telegram/provider", telegramProviderHandler.UpdateAdmin)
 				r.Get("/telegram/status", telegramHandler.GetStatus)
 				r.Post("/telegram/restart", telegramHandler.Restart)
 				r.Post("/telegram/test", telegramHandler.SendTest)

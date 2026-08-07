@@ -10,10 +10,11 @@ import (
 )
 
 type QuotaService struct {
-	plans    *repository.PlanRepository
+	plans      *repository.PlanRepository
 	workspaces *repository.WorkspaceRepository
-	subs     *repository.SubscriptionRepository
-	usage    *repository.UsageRepository
+	subs       *repository.SubscriptionRepository
+	usage      *repository.UsageRepository
+	channels   *repository.ChannelRepository
 }
 
 func NewQuotaService(
@@ -21,8 +22,9 @@ func NewQuotaService(
 	workspaces *repository.WorkspaceRepository,
 	subs *repository.SubscriptionRepository,
 	usage *repository.UsageRepository,
+	channels *repository.ChannelRepository,
 ) *QuotaService {
-	return &QuotaService{plans: plans, workspaces: workspaces, subs: subs, usage: usage}
+	return &QuotaService{plans: plans, workspaces: workspaces, subs: subs, usage: usage, channels: channels}
 }
 
 func (s *QuotaService) periodStartForWorkspace(ctx context.Context, workspaceID string, fallback time.Time) time.Time {
@@ -47,8 +49,14 @@ func (s *QuotaService) GetUsage(ctx context.Context, workspaceID string, planAss
 	if err != nil {
 		return model.BillingUsage{}, err
 	}
+	channelsUsed := 0
+	if s.channels != nil {
+		if n, err := s.channels.CountByWorkspace(ctx, workspaceID); err == nil {
+			channelsUsed = n
+		}
+	}
 	return model.BillingUsage{
-		ChannelsUsed:       0,
+		ChannelsUsed:       channelsUsed,
 		PostsUsed:          posts,
 		AITextTokensUsed:   aiText,
 		AIMediaCreditsUsed: aiMedia,
