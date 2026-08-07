@@ -11,9 +11,9 @@ type ContextHelpLinksProps = {
 
 export function ContextHelpLinks({
   helpURL,
-  helpLabel = "Открыть инструкцию",
+  helpLabel = "Инструкция",
   onSupportClick,
-  supportLabel = "Спросить в поддержке",
+  supportLabel = "Помощь",
 }: ContextHelpLinksProps) {
   return (
     <div className={helpURL ? "grid gap-2 sm:grid-cols-2" : "grid gap-2"}>

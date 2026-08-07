@@ -107,7 +107,7 @@ export function SupportSheet({
             {data.connect_help_url && context === "telegram_connect" && (
               <SupportRow
                 icon={BookOpen}
-                title="Инструкция: подключение Telegram"
+                title="Инструкция"
                 description="Пошаговое руководство в центре помощи"
                 href={data.connect_help_url}
               />

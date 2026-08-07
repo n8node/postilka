@@ -163,9 +163,7 @@ export function ConnectTelegramDialog({ open, onClose, onConnected }: ConnectTel
 
             <ContextHelpLinks
               helpURL={providerInfo?.connect_help_url}
-              helpLabel="Инструкция по подключению Telegram"
               onSupportClick={() => setSupportOpen(true)}
-              supportLabel="Помощь с подключением"
             />
 
             {providerInfo?.connect_help_text && (
