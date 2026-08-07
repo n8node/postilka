@@ -39,6 +39,12 @@ func resolveChannelPublishToken(
 }
 
 func channelPostModeLabel(ch model.Channel) string {
+	if ch.Provider == model.ChannelProviderVK {
+		if ch.VKOAuthMode == model.VKOAuthModePlatform {
+			return "Приложение Postilka"
+		}
+		return "Своё приложение"
+	}
 	if ch.Provider != model.ChannelProviderMAX {
 		if ch.Provider == model.ChannelProviderTelegram {
 			return "Свой бот"

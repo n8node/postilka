@@ -29,7 +29,7 @@ const PROVIDER_MENU: { key: ProviderKey; label: string; connectFlow: string }[] 
 function connectFlowLabel(flow: string): string {
   switch (flow) {
     case "user_oauth":
-      return "Своё приложение";
+      return "Своё / платформа";
     case "oauth":
       return "OAuth платформы";
     case "bot_token":
@@ -176,8 +176,8 @@ export function AdminSocialProvidersPage() {
           Соцсети — подключение каналов
         </h1>
         <p className="mt-1 text-sm text-slate-500">
-          Включение провайдеров и инструкции для пользователей. VK, Telegram и MAX — ключи
-          пользователя; OK, Rutube и Дзен — OAuth-приложение платформы.
+          Включение провайдеров и инструкции для пользователей. VK и MAX — своё приложение или
+          платформа; Telegram — токен бота; OK, Rutube и Дзен — OAuth платформы.
         </p>
       </div>
 
@@ -398,17 +398,20 @@ function SocialSettingsForm({
   saving: boolean;
 }) {
   const isUserOAuthApp = connectFlow === "user_oauth";
+  const isVK = provider === "vk";
 
   return (
     <div className="mx-auto max-w-2xl space-y-5">
       <div>
         <h2 className="text-lg font-medium text-slate-900">{label}</h2>
         <p className="text-sm text-slate-500">
-          {isUserOAuthApp
-            ? "Пользователи подключают сообщества через своё приложение VK."
-            : connectFlow === "oauth"
-              ? "OAuth-приложение платформы для подключения каналов пользователями."
-              : "Подключение через токен бота MAX."}
+          {isVK
+            ? "Пользователи подключают сообщества через своё приложение VK или OAuth Postilka."
+            : isUserOAuthApp
+              ? "Пользователи подключают сообщества через своё приложение VK."
+              : connectFlow === "oauth"
+                ? "OAuth-приложение платформы для подключения каналов пользователями."
+                : "Подключение через токен бота MAX."}
         </p>
       </div>
 
@@ -424,7 +427,68 @@ function SocialSettingsForm({
         </label>
       </Section>
 
-      {isUserOAuthApp ? (
+      {isVK ? (
+        <>
+          <Section title="OAuth приложение Postilka (опционально)">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={Boolean(settings.platform_oauth_enabled)}
+                onChange={(e) => onPatch({ platform_oauth_enabled: e.target.checked })}
+                className="rounded border-slate-300"
+              />
+              Разрешить вход через приложение Postilka
+            </label>
+            <p className="text-xs text-slate-500">
+              Если включено, пользователи могут выбрать «Приложение Postilka» без своих ключей.
+              Redirect URI:
+            </p>
+            <code className="block rounded bg-slate-100 px-2 py-1.5 text-xs">
+              https://postilka.ru/app/api/v1/channels/oauth/vk/callback
+            </code>
+            {settings.platform_oauth_enabled && (
+              <>
+                <label className="block space-y-1.5">
+                  <span className="text-sm font-medium text-slate-700">App ID</span>
+                  <input
+                    type="text"
+                    value={settings.oauth_client_id}
+                    onChange={(e) => onPatch({ oauth_client_id: e.target.value })}
+                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+                  />
+                </label>
+                <label className="block space-y-1.5">
+                  <span className="text-sm font-medium text-slate-700">Защищённый ключ</span>
+                  <input
+                    type="password"
+                    value={settings.oauth_client_secret}
+                    onChange={(e) => onPatch({ oauth_client_secret: e.target.value })}
+                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+                  />
+                </label>
+              </>
+            )}
+          </Section>
+          <Section title="Своё приложение VK">
+            <p className="text-xs text-slate-500">
+              Всегда доступно, когда провайдер включён. Пользователь создаёт Standalone-приложение на{" "}
+              <a
+                href="https://vk.com/apps?act=manage"
+                target="_blank"
+                rel="noreferrer"
+                className="text-slate-700 underline"
+              >
+                vk.com/apps
+              </a>{" "}
+              и вводит ключи в диалоге «Подключить VK».
+            </p>
+            <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              Ключи VK ID в разделе «Авторизация» — только для входа в Postilka, не для публикации в
+              сообщества.
+            </p>
+          </Section>
+        </>
+      ) : isUserOAuthApp ? (
         <Section title="Приложение VK пользователя">
           <p className="text-xs text-slate-500">
             Здесь не нужны ключи платформы. Каждый пользователь создаёт Standalone-приложение на{" "}

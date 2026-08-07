@@ -12,6 +12,7 @@ import {
 import { cn } from "@/lib/utils";
 import { ConnectTelegramDialog } from "./ConnectTelegramDialog";
 import { ConnectOAuthProviderDialog } from "./ConnectOAuthProviderDialog";
+import { ConnectVKDialog } from "./ConnectVKDialog";
 import { ConnectMAXDialog } from "./ConnectMAXDialog";
 
 const PROVIDER_LABELS: Record<ChannelProvider, string> = {
@@ -116,7 +117,15 @@ export function ConnectChannelMenu({ onConnected }: ConnectChannelMenuProps) {
         />
       )}
 
-      {activeProvider && ["vk", "ok", "rutube", "dzen"].includes(activeProvider) && (
+      {activeProvider === "vk" && (
+        <ConnectVKDialog
+          open
+          onClose={() => setActiveProvider(null)}
+          onConnected={handleConnected}
+        />
+      )}
+
+      {activeProvider && ["ok", "rutube", "dzen"].includes(activeProvider) && (
         <ConnectOAuthProviderDialog
           open
           provider={activeProvider as SocialProviderKey}

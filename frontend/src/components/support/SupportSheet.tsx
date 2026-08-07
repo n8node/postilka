@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import type { ChannelProviderInfo } from "@/lib/api";
 
-export type SupportContext = "general" | "telegram_connect" | "max_connect";
+export type SupportContext = "general" | "telegram_connect" | "max_connect" | "vk_connect";
 
 type SupportSheetProps = {
   open: boolean;

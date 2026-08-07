@@ -89,9 +89,14 @@ func (s *SocialProviderSettingsService) UpdateAdmin(
 	cfg.SupportEmail = strings.TrimSpace(cfg.SupportEmail)
 	cfg = normalizeSocialProviderAdminSettings(provider, cfg)
 
-	if cfg.Enabled && provider.ConnectFlow() == "oauth" {
+	if cfg.Enabled && provider.ConnectFlow() == "oauth" && provider != model.SocialProviderVK {
 		if cfg.OAuthClientID == "" {
 			return nil, fmt.Errorf("%w: укажите OAuth Client ID", ErrInvalidSocialProviderSettings)
+		}
+	}
+	if cfg.Enabled && provider == model.SocialProviderVK && cfg.PlatformOAuthEnabled {
+		if cfg.OAuthClientID == "" {
+			return nil, fmt.Errorf("%w: укажите OAuth Client ID для приложения Postilka", ErrInvalidSocialProviderSettings)
 		}
 	}
 
@@ -143,6 +148,11 @@ func (s *SocialProviderSettingsService) PublicInfo(ctx context.Context, provider
 			info.PlatformBot = bot
 		}
 	}
+	if provider == model.SocialProviderVK && cfg.PlatformOAuthEnabled {
+		if strings.TrimSpace(cfg.OAuthClientID) != "" && strings.TrimSpace(cfg.OAuthClientSecret) != "" {
+			info.PlatformOAuthEnabled = true
+		}
+	}
 	info.SupportTelegramURL = buildSupportTelegramURL(info.SupportTelegramUsername, "connect_"+string(provider))
 	return info
 }
@@ -163,6 +173,9 @@ func (s *SocialProviderSettingsService) EnsureReady(ctx context.Context, provide
 	if !cfg.Enabled {
 		return cfg, ErrSocialProviderDisabled
 	}
+	if provider == model.SocialProviderVK {
+		return cfg, nil
+	}
 	if provider.ConnectFlow() == "oauth" && strings.TrimSpace(cfg.OAuthClientID) == "" {
 		return cfg, ErrSocialProviderNotReady
 	}
@@ -173,14 +186,20 @@ func normalizeSocialProviderAdminSettings(
 	provider model.SocialProvider,
 	cfg model.SocialProviderSettings,
 ) model.SocialProviderSettings {
+	if provider == model.SocialProviderVK {
+		def := model.DefaultSocialProviderSettings(provider)
+		if strings.TrimSpace(cfg.ConnectHelpURL) == "" {
+			cfg.ConnectHelpURL = def.ConnectHelpURL
+		}
+		return cfg
+	}
 	if !provider.UsesUserOAuthApp() {
 		return cfg
 	}
 	cfg.OAuthClientID = ""
 	cfg.OAuthClientSecret = ""
 	def := model.DefaultSocialProviderSettings(provider)
-	if strings.TrimSpace(cfg.ConnectHelpText) == "" ||
-		strings.Contains(cfg.ConnectHelpText, "Войдите через VK под аккаунтом") {
+	if strings.TrimSpace(cfg.ConnectHelpText) == "" {
 		cfg.ConnectHelpText = def.ConnectHelpText
 	}
 	if strings.TrimSpace(cfg.ConnectHelpURL) == "" {

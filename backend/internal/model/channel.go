@@ -47,6 +47,13 @@ const (
 	MAXPostModePlatform MAXPostMode = "platform"
 )
 
+type VKOAuthMode string
+
+const (
+	VKOAuthModeOwn      VKOAuthMode = "own"
+	VKOAuthModePlatform VKOAuthMode = "platform"
+)
+
 type ChannelMetadata struct {
 	ProviderTitle     string   `json:"provider_title,omitempty"`
 	PublicURL         string   `json:"public_url,omitempty"`
@@ -66,6 +73,7 @@ type Channel struct {
 	ChatType            string          `json:"chat_type"`
 	BotUsername         string          `json:"bot_username,omitempty"`
 	MaxPostMode         MAXPostMode     `json:"max_post_mode,omitempty"`
+	VKOAuthMode         VKOAuthMode     `json:"vk_oauth_mode,omitempty"`
 	Status              ChannelStatus   `json:"status"`
 	LastError           string          `json:"last_error,omitempty"`
 	Metadata            ChannelMetadata `json:"metadata"`

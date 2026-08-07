@@ -13,7 +13,7 @@ import (
 
 const channelSelectSQL = `
 	id, workspace_id, provider, name, chat_id, chat_type, bot_username,
-	COALESCE(max_post_mode, 'own'), status, COALESCE(last_error, ''),
+	COALESCE(max_post_mode, 'own'), COALESCE(vk_oauth_mode, 'own'), status, COALESCE(last_error, ''),
 	COALESCE(metadata, '{}'), metadata_refreshed_at, created_at, updated_at
 `
 
@@ -42,7 +42,7 @@ func (r *ChannelRepository) scanChannel(row pgx.Row, ch *model.Channel) error {
 	var metaRaw []byte
 	err := row.Scan(
 		&ch.ID, &ch.WorkspaceID, &ch.Provider, &ch.Name, &ch.ChatID, &ch.ChatType,
-		&ch.BotUsername, &ch.MaxPostMode, &ch.Status, &ch.LastError,
+		&ch.BotUsername, &ch.MaxPostMode, &ch.VKOAuthMode, &ch.Status, &ch.LastError,
 		&metaRaw, &ch.MetadataRefreshedAt, &ch.CreatedAt, &ch.UpdatedAt,
 	)
 	if err != nil {
@@ -67,7 +67,7 @@ func (r *ChannelRepository) ListRowsByWorkspace(ctx context.Context, workspaceID
 		err := rows.Scan(
 			&row.Channel.ID, &row.Channel.WorkspaceID, &row.Channel.Provider, &row.Channel.Name,
 			&row.Channel.ChatID, &row.Channel.ChatType, &row.Channel.BotUsername,
-			&row.Channel.MaxPostMode, &row.Channel.Status, &row.Channel.LastError,
+			&row.Channel.MaxPostMode, &row.Channel.VKOAuthMode, &row.Channel.Status, &row.Channel.LastError,
 			&metaRaw, &row.Channel.MetadataRefreshedAt, &row.Channel.CreatedAt, &row.Channel.UpdatedAt,
 			&row.BotTokenEncrypted,
 		)
@@ -109,7 +109,7 @@ func (r *ChannelRepository) GetRowByID(ctx context.Context, workspaceID, channel
 	err := r.pool.QueryRow(ctx, q, channelID, workspaceID).Scan(
 		&row.Channel.ID, &row.Channel.WorkspaceID, &row.Channel.Provider, &row.Channel.Name,
 		&row.Channel.ChatID, &row.Channel.ChatType, &row.Channel.BotUsername,
-		&row.Channel.MaxPostMode, &row.Channel.Status, &row.Channel.LastError,
+		&row.Channel.MaxPostMode, &row.Channel.VKOAuthMode, &row.Channel.Status, &row.Channel.LastError,
 		&metaRaw, &row.Channel.MetadataRefreshedAt, &row.Channel.CreatedAt, &row.Channel.UpdatedAt,
 		&row.BotTokenEncrypted,
 	)
@@ -182,6 +182,7 @@ type ChannelCreateParams struct {
 	BotUsername         string
 	BotTokenEncrypted   string
 	MaxPostMode         model.MAXPostMode
+	VKOAuthMode         model.VKOAuthMode
 	Status              model.ChannelStatus
 	Metadata            model.ChannelMetadata
 	MetadataRefreshedAt *time.Time
@@ -192,6 +193,10 @@ func (r *ChannelRepository) Create(ctx context.Context, p ChannelCreateParams) (
 	if maxPostMode == "" {
 		maxPostMode = model.MAXPostModeOwn
 	}
+	vkOAuthMode := p.VKOAuthMode
+	if vkOAuthMode == "" {
+		vkOAuthMode = model.VKOAuthModeOwn
+	}
 	metaRaw, err := json.Marshal(p.Metadata)
 	if err != nil {
 		return nil, err
@@ -199,13 +204,13 @@ func (r *ChannelRepository) Create(ctx context.Context, p ChannelCreateParams) (
 	const q = `
 		INSERT INTO channels (
 			workspace_id, provider, name, chat_id, chat_type, bot_username,
-			bot_token_encrypted, max_post_mode, status, metadata, metadata_refreshed_at
-		) VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, ''), $8, $9, $10, $11)
+			bot_token_encrypted, max_post_mode, vk_oauth_mode, status, metadata, metadata_refreshed_at
+		) VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, ''), $8, $9, $10, $11, $12)
 		RETURNING ` + channelSelectSQL
 	var ch model.Channel
 	err = r.scanChannel(r.pool.QueryRow(ctx, q,
 		p.WorkspaceID, p.Provider, p.Name, p.ChatID, p.ChatType, p.BotUsername,
-		p.BotTokenEncrypted, maxPostMode, p.Status, metaRaw, p.MetadataRefreshedAt,
+		p.BotTokenEncrypted, maxPostMode, vkOAuthMode, p.Status, metaRaw, p.MetadataRefreshedAt,
 	), &ch)
 	if err != nil {
 		return nil, err
@@ -238,6 +243,7 @@ type ChannelSaveParams struct {
 	BotUsername         string
 	BotTokenEncrypted   string
 	MaxPostMode         model.MAXPostMode
+	VKOAuthMode         model.VKOAuthMode
 	Status              model.ChannelStatus
 	Metadata            model.ChannelMetadata
 	MetadataRefreshedAt *time.Time
@@ -247,6 +253,10 @@ func (r *ChannelRepository) SaveChannel(ctx context.Context, p ChannelSaveParams
 	maxPostMode := p.MaxPostMode
 	if maxPostMode == "" {
 		maxPostMode = model.MAXPostModeOwn
+	}
+	vkOAuthMode := p.VKOAuthMode
+	if vkOAuthMode == "" {
+		vkOAuthMode = model.VKOAuthModeOwn
 	}
 	metaRaw, err := json.Marshal(p.Metadata)
 	if err != nil {
@@ -259,9 +269,10 @@ func (r *ChannelRepository) SaveChannel(ctx context.Context, p ChannelSaveParams
 		    bot_username = $6,
 		    bot_token_encrypted = NULLIF($7, ''),
 		    max_post_mode = $8,
-		    status = $9,
-		    metadata = $10,
-		    metadata_refreshed_at = $11,
+		    vk_oauth_mode = $9,
+		    status = $10,
+		    metadata = $11,
+		    metadata_refreshed_at = $12,
 		    last_error = NULL,
 		    updated_at = NOW()
 		WHERE id = $1 AND workspace_id = $2 AND provider = $3
@@ -269,7 +280,7 @@ func (r *ChannelRepository) SaveChannel(ctx context.Context, p ChannelSaveParams
 	var ch model.Channel
 	err = r.scanChannel(r.pool.QueryRow(ctx, q,
 		p.ChannelID, p.WorkspaceID, p.Provider, p.Name, p.ChatType, p.BotUsername,
-		p.BotTokenEncrypted, maxPostMode, p.Status, metaRaw, p.MetadataRefreshedAt,
+		p.BotTokenEncrypted, maxPostMode, vkOAuthMode, p.Status, metaRaw, p.MetadataRefreshedAt,
 	), &ch)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -309,6 +320,7 @@ type ChannelMAXReconnectParams struct {
 	BotUsername         string
 	BotTokenEncrypted   string
 	MaxPostMode         model.MAXPostMode
+	VKOAuthMode         model.VKOAuthMode
 	Status              model.ChannelStatus
 	Metadata            model.ChannelMetadata
 	MetadataRefreshedAt *time.Time
@@ -324,6 +336,39 @@ func (r *ChannelRepository) UpdateMAXConnection(ctx context.Context, p ChannelMA
 		BotUsername:         p.BotUsername,
 		BotTokenEncrypted:   p.BotTokenEncrypted,
 		MaxPostMode:         p.MaxPostMode,
+		VKOAuthMode:         model.VKOAuthModeOwn,
+		Status:              p.Status,
+		Metadata:            p.Metadata,
+		MetadataRefreshedAt: p.MetadataRefreshedAt,
+	})
+}
+
+type ChannelVKReconnectParams struct {
+	WorkspaceID         string
+	ChannelID           string
+	Name                string
+	ChatType            string
+	BotTokenEncrypted   string
+	VKOAuthMode         model.VKOAuthMode
+	Status              model.ChannelStatus
+	Metadata            model.ChannelMetadata
+	MetadataRefreshedAt *time.Time
+}
+
+func (r *ChannelRepository) UpdateVKConnection(ctx context.Context, p ChannelVKReconnectParams) (*model.Channel, error) {
+	vkMode := p.VKOAuthMode
+	if vkMode == "" {
+		vkMode = model.VKOAuthModeOwn
+	}
+	return r.SaveChannel(ctx, ChannelSaveParams{
+		WorkspaceID:         p.WorkspaceID,
+		ChannelID:           p.ChannelID,
+		Provider:            model.ChannelProviderVK,
+		Name:                p.Name,
+		ChatType:            p.ChatType,
+		BotTokenEncrypted:   p.BotTokenEncrypted,
+		MaxPostMode:         model.MAXPostModeOwn,
+		VKOAuthMode:         vkMode,
 		Status:              p.Status,
 		Metadata:            p.Metadata,
 		MetadataRefreshedAt: p.MetadataRefreshedAt,

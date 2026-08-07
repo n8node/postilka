@@ -1224,6 +1224,7 @@ export type SocialProviderSettings = {
   oauth_client_id: string;
   oauth_client_secret: string;
   platform_bot_enabled?: boolean;
+  platform_oauth_enabled?: boolean;
   connect_help_text: string;
   connect_help_url: string;
   docs_url: string;
@@ -1305,6 +1306,7 @@ export type Channel = {
   chat_type: string;
   bot_username?: string;
   max_post_mode?: "own" | "platform";
+  vk_oauth_mode?: "own" | "platform";
   status: ChannelStatus;
   last_error?: string;
   metadata?: ChannelMetadata;
@@ -1351,6 +1353,7 @@ export type SocialProviderPublicInfo = {
   enabled: boolean;
   connect_flow: "oauth" | "user_oauth" | "bot_token";
   platform_bot_enabled?: boolean;
+  platform_oauth_enabled?: boolean;
   platform_bot?: {
     username: string;
     name: string;
@@ -1466,19 +1469,24 @@ export function updateChannelTelegramToken(id: string, botToken: string) {
 
 export function startChannelOAuth(
   provider: SocialProviderKey,
-  credentials?: { oauth_client_id: string; oauth_client_secret: string },
+  options?: {
+    oauth_app_mode?: "own" | "platform";
+    oauth_client_id?: string;
+    oauth_client_secret?: string;
+  },
 ) {
-  if (credentials) {
+  if (options && Object.keys(options).length > 0) {
     return apiFetch<{ redirect_url: string; state_token: string }>(
       `/channels/oauth/${provider}/start`,
       {
         method: "POST",
-        body: JSON.stringify(credentials),
+        body: JSON.stringify(options),
       },
     );
   }
   return apiFetch<{ redirect_url: string; state_token: string }>(
     `/channels/oauth/${provider}/start`,
+    { method: "POST" },
   );
 }
 

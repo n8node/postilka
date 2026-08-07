@@ -89,11 +89,16 @@ func (s *ChannelConnectService) OAuthStart(
 	}
 
 	sessionMeta := map[string]any{}
-	appID, appSecret, err := s.resolveOAuthAppCredentials(provider, cfg, req)
+	oauthAppMode := model.VKOAuthModeOwn
+	if provider == model.SocialProviderVK {
+		oauthAppMode = normalizeVKOAuthMode(req.OAuthAppMode)
+		sessionMeta["oauth_app_mode"] = string(oauthAppMode)
+	}
+	appID, appSecret, err := s.resolveOAuthAppCredentials(provider, cfg, req, oauthAppMode)
 	if err != nil {
 		return nil, err
 	}
-	if provider == model.SocialProviderVK {
+	if provider == model.SocialProviderVK && oauthAppMode == model.VKOAuthModeOwn {
 		if s.cipher == nil {
 			return nil, ErrCryptoUnavailable
 		}
@@ -360,6 +365,8 @@ func (s *ChannelConnectService) OAuthConnect(
 		meta := mergeChannelAvatar(model.ChannelMetadata{
 			ProviderTitle: name,
 		}, lookupOAuthAvatarFromTargets(discoveredTargets, externalID))
+		metaRefreshed := oauthConnectMetadataRefreshed(meta)
+		vkOAuthMode := sessionOAuthAppMode(session)
 
 		existing, err := s.channels.GetByChat(ctx, ws.ID, string(provider), externalID)
 		if err != nil && !errors.Is(err, repository.ErrNotFound) {
@@ -371,26 +378,39 @@ func (s *ChannelConnectService) OAuthConnect(
 			}
 		}
 		if existing != nil {
-			updated, err := s.channels.SaveChannel(ctx, repository.ChannelSaveParams{
-				WorkspaceID:         ws.ID,
-				ChannelID:           existing.ID,
-				Provider:            provider,
-				Name:                name,
-				ChatType:            existing.ChatType,
-				BotUsername:         existing.BotUsername,
-				BotTokenEncrypted:   session.AccessTokenEncrypted,
-				MaxPostMode:         existing.MaxPostMode,
-				Status:              model.ChannelStatusActive,
-				Metadata:            meta,
-				MetadataRefreshedAt: existing.MetadataRefreshedAt,
-			})
+			var updated *model.Channel
+			if provider == model.ChannelProviderVK {
+				updated, err = s.channels.UpdateVKConnection(ctx, repository.ChannelVKReconnectParams{
+					WorkspaceID:         ws.ID,
+					ChannelID:           existing.ID,
+					Name:                name,
+					ChatType:            existing.ChatType,
+					BotTokenEncrypted:   session.AccessTokenEncrypted,
+					VKOAuthMode:         vkOAuthMode,
+					Status:              model.ChannelStatusActive,
+					Metadata:            meta,
+					MetadataRefreshedAt: metaRefreshed,
+				})
+			} else {
+				updated, err = s.channels.SaveChannel(ctx, repository.ChannelSaveParams{
+					WorkspaceID:         ws.ID,
+					ChannelID:           existing.ID,
+					Provider:            provider,
+					Name:                name,
+					ChatType:            existing.ChatType,
+					BotUsername:         existing.BotUsername,
+					BotTokenEncrypted:   session.AccessTokenEncrypted,
+					MaxPostMode:         existing.MaxPostMode,
+					VKOAuthMode:         existing.VKOAuthMode,
+					Status:              model.ChannelStatusActive,
+					Metadata:            meta,
+					MetadataRefreshedAt: metaRefreshed,
+				})
+			}
 			if err != nil {
 				return nil, err
 			}
-			result.Connected = append(result.Connected, model.ChannelListItem{
-				Channel:     *updated,
-				BotTokenSet: true,
-			})
+			result.Connected = append(result.Connected, buildChannelListItem(*updated, session.AccessTokenEncrypted, s.cipher))
 			continue
 		}
 
@@ -398,23 +418,25 @@ func (s *ChannelConnectService) OAuthConnect(
 			return nil, err
 		}
 
-		created, err := s.channels.Create(ctx, repository.ChannelCreateParams{
-			WorkspaceID:       ws.ID,
-			Provider:          provider,
-			Name:              name,
-			ChatID:            externalID,
-			ChatType:          string(session.Provider),
-			BotTokenEncrypted: session.AccessTokenEncrypted,
-			Status:            model.ChannelStatusActive,
-			Metadata:          meta,
-		})
+		createParams := repository.ChannelCreateParams{
+			WorkspaceID:         ws.ID,
+			Provider:            provider,
+			Name:                name,
+			ChatID:              externalID,
+			ChatType:            string(session.Provider),
+			BotTokenEncrypted:   session.AccessTokenEncrypted,
+			Status:              model.ChannelStatusActive,
+			Metadata:            meta,
+			MetadataRefreshedAt: metaRefreshed,
+		}
+		if provider == model.ChannelProviderVK {
+			createParams.VKOAuthMode = vkOAuthMode
+		}
+		created, err := s.channels.Create(ctx, createParams)
 		if err != nil {
 			return nil, err
 		}
-		result.Connected = append(result.Connected, model.ChannelListItem{
-			Channel:     *created,
-			BotTokenSet: true,
-		})
+		result.Connected = append(result.Connected, buildChannelListItem(*created, session.AccessTokenEncrypted, s.cipher))
 	}
 
 	if len(result.Connected) == 0 {
@@ -872,8 +894,20 @@ func (s *ChannelConnectService) resolveOAuthAppCredentials(
 	provider model.SocialProvider,
 	cfg model.SocialProviderSettings,
 	req model.ChannelOAuthStartRequest,
+	vkMode model.VKOAuthMode,
 ) (appID, appSecret string, err error) {
 	if provider == model.SocialProviderVK {
+		if vkMode == model.VKOAuthModePlatform {
+			if !cfg.PlatformOAuthEnabled {
+				return "", "", fmt.Errorf("подключение через приложение Postilka отключено администратором")
+			}
+			appID = strings.TrimSpace(cfg.OAuthClientID)
+			appSecret = strings.TrimSpace(cfg.OAuthClientSecret)
+			if appID == "" || appSecret == "" {
+				return "", "", ErrSocialProviderNotReady
+			}
+			return appID, appSecret, nil
+		}
 		appID = strings.TrimSpace(req.OAuthClientID)
 		appSecret = strings.TrimSpace(req.OAuthClientSecret)
 		if appID == "" || appSecret == "" {
@@ -894,6 +928,18 @@ func (s *ChannelConnectService) oauthAppCredentialsFromSession(
 	cfg model.SocialProviderSettings,
 ) (appID, appSecret string, err error) {
 	if session.Provider == model.SocialProviderVK {
+		mode := sessionOAuthAppMode(session)
+		if mode == model.VKOAuthModePlatform {
+			if !cfg.PlatformOAuthEnabled {
+				return "", "", fmt.Errorf("подключение через приложение Postilka отключено — переподключите канал")
+			}
+			appID = strings.TrimSpace(cfg.OAuthClientID)
+			appSecret = strings.TrimSpace(cfg.OAuthClientSecret)
+			if appID == "" || appSecret == "" {
+				return "", "", ErrSocialProviderNotReady
+			}
+			return appID, appSecret, nil
+		}
 		if s.cipher == nil {
 			return "", "", ErrCryptoUnavailable
 		}
@@ -910,4 +956,29 @@ func (s *ChannelConnectService) oauthAppCredentialsFromSession(
 		return appID, appSecret, nil
 	}
 	return strings.TrimSpace(cfg.OAuthClientID), strings.TrimSpace(cfg.OAuthClientSecret), nil
+}
+
+func normalizeVKOAuthMode(raw string) model.VKOAuthMode {
+	switch strings.TrimSpace(strings.ToLower(raw)) {
+	case string(model.VKOAuthModePlatform):
+		return model.VKOAuthModePlatform
+	default:
+		return model.VKOAuthModeOwn
+	}
+}
+
+func sessionOAuthAppMode(session *model.ChannelOAuthSession) model.VKOAuthMode {
+	if session == nil || session.Provider != model.SocialProviderVK {
+		return model.VKOAuthModeOwn
+	}
+	raw, _ := session.Metadata["oauth_app_mode"].(string)
+	return normalizeVKOAuthMode(raw)
+}
+
+func oauthConnectMetadataRefreshed(meta model.ChannelMetadata) *time.Time {
+	if strings.TrimSpace(meta.AvatarURL) == "" {
+		return nil
+	}
+	now := time.Now()
+	return &now
 }

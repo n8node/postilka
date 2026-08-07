@@ -49,7 +49,7 @@ func (p SocialProvider) ConnectFlow() string {
 }
 
 func (p SocialProvider) UsesUserOAuthApp() bool {
-	return p == SocialProviderVK
+	return false
 }
 
 type SocialProviderSettings struct {
@@ -57,6 +57,7 @@ type SocialProviderSettings struct {
 	OAuthClientID           string `json:"oauth_client_id"`
 	OAuthClientSecret       string `json:"oauth_client_secret"`
 	PlatformBotEnabled      bool   `json:"platform_bot_enabled"`
+	PlatformOAuthEnabled    bool   `json:"platform_oauth_enabled"`
 	ConnectHelpText         string `json:"connect_help_text"`
 	ConnectHelpURL          string `json:"connect_help_url"`
 	DocsURL                 string `json:"docs_url"`
@@ -89,6 +90,7 @@ type SocialProviderPublicInfo struct {
 	Enabled                 bool           `json:"enabled"`
 	ConnectFlow             string         `json:"connect_flow"`
 	PlatformBotEnabled      bool           `json:"platform_bot_enabled,omitempty"`
+	PlatformOAuthEnabled    bool           `json:"platform_oauth_enabled,omitempty"`
 	PlatformBot             *MAXDiscoverBot `json:"platform_bot,omitempty"`
 	ConnectHelpText         string         `json:"connect_help_text"`
 	ConnectHelpURL          string         `json:"connect_help_url"`
@@ -122,7 +124,7 @@ func DefaultSocialProviderSettings(provider SocialProvider) SocialProviderSettin
 	switch provider {
 	case SocialProviderVK:
 		def.ConnectHelpURL = "https://postilka.ru/docs/vk"
-		def.ConnectHelpText = "1. Создайте Standalone-приложение VK (vk.com/apps?act=manage) и укажите Redirect URI из Postilka.\n2. Скопируйте ID приложения и защищённый ключ.\n3. В Postilka вставьте ключи и войдите через VK.\n4. Выберите сообщества, где вы администратор.\n5. Права приложения: wall, photos, video, groups, offline."
+		def.ConnectHelpText = "1. Выберите «Своё приложение» или «Приложение Postilka».\n2. Для своего приложения: создайте Standalone-приложение на vk.com/apps, укажите Redirect URI из Postilka, скопируйте ID и защищённый ключ.\n3. Войдите через VK и выберите сообщества, где вы администратор.\n4. Права приложения: wall, photos, video, groups, offline."
 	case SocialProviderOK:
 		def.ConnectHelpURL = "https://postilka.ru/docs/ok"
 		def.ConnectHelpText = "1. Войдите через Одноклассники.\n2. Выберите группу, где вы администратор.\n3. Подтвердите подключение."
@@ -204,6 +206,7 @@ type MAXConnectRequest struct {
 }
 
 type ChannelOAuthStartRequest struct {
+	OAuthAppMode      string `json:"oauth_app_mode,omitempty"`
 	OAuthClientID     string `json:"oauth_client_id,omitempty"`
 	OAuthClientSecret string `json:"oauth_client_secret,omitempty"`
 }
