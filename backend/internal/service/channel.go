@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/postilka/postilka/internal/model"
+	oauthclient "github.com/postilka/postilka/internal/oauth"
 	"github.com/postilka/postilka/internal/repository"
 )
 
@@ -18,29 +19,34 @@ var (
 )
 
 type ChannelService struct {
-	channels  *repository.ChannelRepository
-	provider  *TelegramProviderSettingsService
-	botClient *TelegramBotClient
-	wsSvc     *WorkspaceService
-	quota     *QuotaService
-	cipher    *SecretCipher
+	channels       *repository.ChannelRepository
+	provider       *TelegramProviderSettingsService
+	socialSettings *SocialProviderSettingsService
+	botClient      *TelegramBotClient
+	maxClient      *oauthclient.MAXBotClient
+	wsSvc          *WorkspaceService
+	quota          *QuotaService
+	cipher         *SecretCipher
 }
 
 func NewChannelService(
 	channels *repository.ChannelRepository,
 	provider *TelegramProviderSettingsService,
+	socialSettings *SocialProviderSettingsService,
 	botClient *TelegramBotClient,
 	wsSvc *WorkspaceService,
 	quota *QuotaService,
 	cipher *SecretCipher,
 ) *ChannelService {
 	return &ChannelService{
-		channels:  channels,
-		provider:  provider,
-		botClient: botClient,
-		wsSvc:     wsSvc,
-		quota:     quota,
-		cipher:    cipher,
+		channels:       channels,
+		provider:       provider,
+		socialSettings: socialSettings,
+		botClient:      botClient,
+		maxClient:      oauthclient.NewMAXBotClient(),
+		wsSvc:          wsSvc,
+		quota:          quota,
+		cipher:         cipher,
 	}
 }
 
@@ -82,16 +88,13 @@ func (s *ChannelService) List(ctx context.Context, userID string, r *http.Reques
 	if err != nil {
 		return nil, err
 	}
-	items, err := s.channels.ListByWorkspace(ctx, ws.ID)
+	rows, err := s.channels.ListRowsByWorkspace(ctx, ws.ID)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]model.ChannelListItem, 0, len(items))
-	for _, ch := range items {
-		out = append(out, model.ChannelListItem{
-			Channel:     ch,
-			BotTokenSet: true,
-		})
+	out := make([]model.ChannelListItem, 0, len(rows))
+	for _, row := range rows {
+		out = append(out, buildChannelListItem(row.Channel, row.BotTokenEncrypted, s.cipher))
 	}
 	return out, nil
 }
@@ -212,37 +215,7 @@ func (s *ChannelService) ConnectTelegram(ctx context.Context, userID string, r *
 }
 
 func (s *ChannelService) Verify(ctx context.Context, userID string, r *http.Request, channelID string) (*model.ChannelListItem, error) {
-	ws, err := s.requireAdmin(ctx, userID, r)
-	if err != nil {
-		return nil, err
-	}
-	ch, err := s.channels.GetByID(ctx, ws.ID, channelID)
-	if err != nil {
-		return nil, err
-	}
-	if s.cipher == nil {
-		return nil, ErrCryptoUnavailable
-	}
-	enc, err := s.channels.GetTokenEncrypted(ctx, ws.ID, channelID)
-	if err != nil {
-		return nil, err
-	}
-	token, err := s.cipher.Decrypt(enc)
-	if err != nil {
-		return nil, err
-	}
-	if _, _, verr := s.botClient.VerifyBotInChat(ctx, token, ch.ChatID); verr != nil {
-		_ = s.channels.UpdateStatus(ctx, ws.ID, channelID, model.ChannelStatusNeedsReconnect, verr.Error())
-		return nil, verr
-	}
-	if err := s.channels.UpdateStatus(ctx, ws.ID, channelID, model.ChannelStatusActive, ""); err != nil {
-		return nil, err
-	}
-	refreshed, err := s.channels.GetByID(ctx, ws.ID, channelID)
-	if err != nil {
-		return nil, err
-	}
-	return &model.ChannelListItem{Channel: *refreshed, BotTokenSet: true}, nil
+	return s.VerifyAndRefresh(ctx, userID, r, channelID)
 }
 
 func (s *ChannelService) Delete(ctx context.Context, userID string, r *http.Request, channelID string) error {
@@ -258,42 +231,11 @@ func (s *ChannelService) ProviderInfo(ctx context.Context) model.ChannelProvider
 }
 
 func (s *ChannelService) UpdateTelegramToken(ctx context.Context, userID string, r *http.Request, channelID, botToken string) (*model.ChannelListItem, error) {
-	ws, err := s.requireAdmin(ctx, userID, r)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.ensureProviderEnabled(ctx); err != nil {
-		return nil, err
-	}
 	botToken = strings.TrimSpace(botToken)
 	if botToken == "" {
 		return nil, ErrInvalidBotToken
 	}
-	if s.cipher == nil {
-		return nil, ErrCryptoUnavailable
-	}
-	ch, err := s.channels.GetByID(ctx, ws.ID, channelID)
-	if err != nil {
-		return nil, err
-	}
-	bot, err := s.botClient.GetMe(ctx, botToken)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %s", ErrInvalidBotToken, sanitizeTelegramError(err).Error())
-	}
-	if _, _, err := s.botClient.VerifyBotInChat(ctx, botToken, ch.ChatID); err != nil {
-		return nil, err
-	}
-	encrypted, err := s.cipher.Encrypt(botToken)
-	if err != nil {
-		return nil, err
-	}
-	updated, err := s.channels.UpdateToken(ctx, ws.ID, channelID, encrypted, bot.Username, model.ChannelStatusActive)
-	if err != nil {
-		return nil, err
-	}
-	return &model.ChannelListItem{
-		Channel:      *updated,
-		BotTokenSet:  true,
-		BotTokenHint: maskSecret(botToken),
-	}, nil
+	return s.Update(ctx, userID, r, channelID, model.ChannelUpdateRequest{
+		BotToken: &botToken,
+	})
 }

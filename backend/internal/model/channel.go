@@ -47,25 +47,43 @@ const (
 	MAXPostModePlatform MAXPostMode = "platform"
 )
 
+type ChannelMetadata struct {
+	ProviderTitle     string   `json:"provider_title,omitempty"`
+	PublicURL         string   `json:"public_url,omitempty"`
+	CanPost           *bool    `json:"can_post,omitempty"`
+	IsAdmin           *bool    `json:"is_admin,omitempty"`
+	BotPermissions    []string `json:"bot_permissions,omitempty"`
+	ParticipantsCount *int     `json:"participants_count,omitempty"`
+}
+
 type Channel struct {
-	ID          string          `json:"id"`
-	WorkspaceID string          `json:"workspace_id"`
-	Provider    ChannelProvider `json:"provider"`
-	Name        string          `json:"name"`
-	ChatID      string          `json:"chat_id"`
-	ChatType    string          `json:"chat_type"`
-	BotUsername string          `json:"bot_username,omitempty"`
-	MaxPostMode MAXPostMode     `json:"max_post_mode,omitempty"`
-	Status      ChannelStatus   `json:"status"`
-	LastError   string          `json:"last_error,omitempty"`
-	CreatedAt   time.Time       `json:"created_at"`
-	UpdatedAt   time.Time       `json:"updated_at"`
+	ID                  string          `json:"id"`
+	WorkspaceID         string          `json:"workspace_id"`
+	Provider            ChannelProvider `json:"provider"`
+	Name                string          `json:"name"`
+	ChatID              string          `json:"chat_id"`
+	ChatType            string          `json:"chat_type"`
+	BotUsername         string          `json:"bot_username,omitempty"`
+	MaxPostMode         MAXPostMode     `json:"max_post_mode,omitempty"`
+	Status              ChannelStatus   `json:"status"`
+	LastError           string          `json:"last_error,omitempty"`
+	Metadata            ChannelMetadata `json:"metadata"`
+	MetadataRefreshedAt *time.Time      `json:"metadata_refreshed_at,omitempty"`
+	CreatedAt           time.Time       `json:"created_at"`
+	UpdatedAt           time.Time       `json:"updated_at"`
 }
 
 type ChannelListItem struct {
 	Channel
 	BotTokenSet  bool   `json:"bot_token_set"`
 	BotTokenHint string `json:"bot_token_hint,omitempty"`
+	PostModeLabel string `json:"post_mode_label,omitempty"`
+}
+
+type ChannelUpdateRequest struct {
+	Name        *string    `json:"name,omitempty"`
+	BotToken    *string    `json:"bot_token,omitempty"`
+	MaxPostMode *MAXPostMode `json:"max_post_mode,omitempty"`
 }
 
 type TelegramDiscoverBot struct {

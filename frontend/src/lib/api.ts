@@ -1286,6 +1286,15 @@ export type ChannelProvider =
   | "rutube"
   | "dzen";
 
+export type ChannelMetadata = {
+  provider_title?: string;
+  public_url?: string;
+  can_post?: boolean;
+  is_admin?: boolean;
+  bot_permissions?: string[];
+  participants_count?: number;
+};
+
 export type Channel = {
   id: string;
   workspace_id: string;
@@ -1297,6 +1306,8 @@ export type Channel = {
   max_post_mode?: "own" | "platform";
   status: ChannelStatus;
   last_error?: string;
+  metadata?: ChannelMetadata;
+  metadata_refreshed_at?: string;
   created_at: string;
   updated_at: string;
 };
@@ -1304,6 +1315,13 @@ export type Channel = {
 export type ChannelListItem = Channel & {
   bot_token_set: boolean;
   bot_token_hint?: string;
+  post_mode_label?: string;
+};
+
+export type ChannelUpdateRequest = {
+  name?: string;
+  bot_token?: string;
+  max_post_mode?: "own" | "platform";
 };
 
 export type TelegramDiscoverBot = {
@@ -1382,6 +1400,17 @@ export type ChannelDiscoverResult = {
 
 export function fetchChannels() {
   return apiFetch<{ items: ChannelListItem[] }>("/channels");
+}
+
+export function fetchChannel(id: string) {
+  return apiFetch<ChannelListItem>(`/channels/${id}`);
+}
+
+export function updateChannel(id: string, payload: ChannelUpdateRequest) {
+  return apiFetch<ChannelListItem>(`/channels/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
 }
 
 export function fetchChannelProviderInfo() {

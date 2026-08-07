@@ -2,47 +2,96 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/postilka/postilka/internal/model"
 )
 
+const channelSelectSQL = `
+	id, workspace_id, provider, name, chat_id, chat_type, bot_username,
+	COALESCE(max_post_mode, 'own'), status, COALESCE(last_error, ''),
+	COALESCE(metadata, '{}'), metadata_refreshed_at, created_at, updated_at
+`
+
 type ChannelRepository struct {
 	pool *pgxpool.Pool
+}
+
+type ChannelRow struct {
+	Channel           model.Channel
+	BotTokenEncrypted string
 }
 
 func NewChannelRepository(pool *pgxpool.Pool) *ChannelRepository {
 	return &ChannelRepository{pool: pool}
 }
 
-func (r *ChannelRepository) ListByWorkspace(ctx context.Context, workspaceID string) ([]model.Channel, error) {
-	const q = `
-		SELECT id, workspace_id, provider, name, chat_id, chat_type, bot_username,
-		       COALESCE(max_post_mode, 'own'), status, COALESCE(last_error, ''), created_at, updated_at
-		FROM channels
-		WHERE workspace_id = $1
-		ORDER BY created_at DESC
-	`
+func scanChannelMeta(raw []byte, meta *model.ChannelMetadata) error {
+	if len(raw) == 0 {
+		*meta = model.ChannelMetadata{}
+		return nil
+	}
+	return json.Unmarshal(raw, meta)
+}
+
+func (r *ChannelRepository) scanChannel(row pgx.Row, ch *model.Channel) error {
+	var metaRaw []byte
+	err := row.Scan(
+		&ch.ID, &ch.WorkspaceID, &ch.Provider, &ch.Name, &ch.ChatID, &ch.ChatType,
+		&ch.BotUsername, &ch.MaxPostMode, &ch.Status, &ch.LastError,
+		&metaRaw, &ch.MetadataRefreshedAt, &ch.CreatedAt, &ch.UpdatedAt,
+	)
+	if err != nil {
+		return err
+	}
+	return scanChannelMeta(metaRaw, &ch.Metadata)
+}
+
+func (r *ChannelRepository) ListRowsByWorkspace(ctx context.Context, workspaceID string) ([]ChannelRow, error) {
+	q := `SELECT ` + channelSelectSQL + `, COALESCE(bot_token_encrypted, '')
+		FROM channels WHERE workspace_id = $1 ORDER BY created_at DESC`
 	rows, err := r.pool.Query(ctx, q, workspaceID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var items []model.Channel
+	var items []ChannelRow
 	for rows.Next() {
-		var ch model.Channel
-		if err := rows.Scan(
-			&ch.ID, &ch.WorkspaceID, &ch.Provider, &ch.Name, &ch.ChatID, &ch.ChatType,
-			&ch.BotUsername, &ch.MaxPostMode, &ch.Status, &ch.LastError, &ch.CreatedAt, &ch.UpdatedAt,
-		); err != nil {
+		var row ChannelRow
+		var metaRaw []byte
+		err := rows.Scan(
+			&row.Channel.ID, &row.Channel.WorkspaceID, &row.Channel.Provider, &row.Channel.Name,
+			&row.Channel.ChatID, &row.Channel.ChatType, &row.Channel.BotUsername,
+			&row.Channel.MaxPostMode, &row.Channel.Status, &row.Channel.LastError,
+			&metaRaw, &row.Channel.MetadataRefreshedAt, &row.Channel.CreatedAt, &row.Channel.UpdatedAt,
+			&row.BotTokenEncrypted,
+		)
+		if err != nil {
 			return nil, err
 		}
-		items = append(items, ch)
+		if err := scanChannelMeta(metaRaw, &row.Channel.Metadata); err != nil {
+			return nil, err
+		}
+		items = append(items, row)
 	}
 	return items, rows.Err()
+}
+
+func (r *ChannelRepository) ListByWorkspace(ctx context.Context, workspaceID string) ([]model.Channel, error) {
+	rows, err := r.ListRowsByWorkspace(ctx, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	items := make([]model.Channel, 0, len(rows))
+	for _, row := range rows {
+		items = append(items, row.Channel)
+	}
+	return items, nil
 }
 
 func (r *ChannelRepository) CountByWorkspace(ctx context.Context, workspaceID string) (int, error) {
@@ -52,17 +101,17 @@ func (r *ChannelRepository) CountByWorkspace(ctx context.Context, workspaceID st
 	return n, err
 }
 
-func (r *ChannelRepository) GetByID(ctx context.Context, workspaceID, channelID string) (*model.Channel, error) {
-	const q = `
-		SELECT id, workspace_id, provider, name, chat_id, chat_type, bot_username,
-		       COALESCE(max_post_mode, 'own'), status, COALESCE(last_error, ''), created_at, updated_at
-		FROM channels
-		WHERE id = $1 AND workspace_id = $2
-	`
-	var ch model.Channel
+func (r *ChannelRepository) GetRowByID(ctx context.Context, workspaceID, channelID string) (*ChannelRow, error) {
+	q := `SELECT ` + channelSelectSQL + `, COALESCE(bot_token_encrypted, '')
+		FROM channels WHERE id = $1 AND workspace_id = $2`
+	var row ChannelRow
+	var metaRaw []byte
 	err := r.pool.QueryRow(ctx, q, channelID, workspaceID).Scan(
-		&ch.ID, &ch.WorkspaceID, &ch.Provider, &ch.Name, &ch.ChatID, &ch.ChatType,
-		&ch.BotUsername, &ch.MaxPostMode, &ch.Status, &ch.LastError, &ch.CreatedAt, &ch.UpdatedAt,
+		&row.Channel.ID, &row.Channel.WorkspaceID, &row.Channel.Provider, &row.Channel.Name,
+		&row.Channel.ChatID, &row.Channel.ChatType, &row.Channel.BotUsername,
+		&row.Channel.MaxPostMode, &row.Channel.Status, &row.Channel.LastError,
+		&metaRaw, &row.Channel.MetadataRefreshedAt, &row.Channel.CreatedAt, &row.Channel.UpdatedAt,
+		&row.BotTokenEncrypted,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -70,12 +119,23 @@ func (r *ChannelRepository) GetByID(ctx context.Context, workspaceID, channelID 
 	if err != nil {
 		return nil, err
 	}
-	return &ch, nil
+	if err := scanChannelMeta(metaRaw, &row.Channel.Metadata); err != nil {
+		return nil, err
+	}
+	return &row, nil
+}
+
+func (r *ChannelRepository) GetByID(ctx context.Context, workspaceID, channelID string) (*model.Channel, error) {
+	row, err := r.GetRowByID(ctx, workspaceID, channelID)
+	if err != nil {
+		return nil, err
+	}
+	return &row.Channel, nil
 }
 
 func (r *ChannelRepository) GetTokenEncrypted(ctx context.Context, workspaceID, channelID string) (string, error) {
 	const q = `
-		SELECT bot_token_encrypted
+		SELECT COALESCE(bot_token_encrypted, '')
 		FROM channels
 		WHERE id = $1 AND workspace_id = $2
 	`
@@ -100,36 +160,30 @@ func (r *ChannelRepository) ExistsByChat(ctx context.Context, workspaceID, provi
 }
 
 func (r *ChannelRepository) GetByChat(ctx context.Context, workspaceID, provider, chatID string) (*model.Channel, error) {
-	const q = `
-		SELECT id, workspace_id, provider, name, chat_id, chat_type, bot_username,
-		       COALESCE(max_post_mode, 'own'), status, COALESCE(last_error, ''), created_at, updated_at
-		FROM channels
-		WHERE workspace_id = $1 AND provider = $2 AND chat_id = $3
-	`
+	q := `SELECT ` + channelSelectSQL + `
+		FROM channels WHERE workspace_id = $1 AND provider = $2 AND chat_id = $3`
 	var ch model.Channel
-	err := r.pool.QueryRow(ctx, q, workspaceID, provider, chatID).Scan(
-		&ch.ID, &ch.WorkspaceID, &ch.Provider, &ch.Name, &ch.ChatID, &ch.ChatType,
-		&ch.BotUsername, &ch.MaxPostMode, &ch.Status, &ch.LastError, &ch.CreatedAt, &ch.UpdatedAt,
-	)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrNotFound
-	}
-	if err != nil {
+	row := r.pool.QueryRow(ctx, q, workspaceID, provider, chatID)
+	if err := r.scanChannel(row, &ch); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrNotFound
+		}
 		return nil, err
 	}
 	return &ch, nil
 }
 
 type ChannelCreateParams struct {
-	WorkspaceID        string
-	Provider           model.ChannelProvider
-	Name               string
-	ChatID             string
-	ChatType           string
-	BotUsername        string
-	BotTokenEncrypted  string
-	MaxPostMode        model.MAXPostMode
-	Status             model.ChannelStatus
+	WorkspaceID       string
+	Provider          model.ChannelProvider
+	Name              string
+	ChatID            string
+	ChatType          string
+	BotUsername       string
+	BotTokenEncrypted string
+	MaxPostMode       model.MAXPostMode
+	Status            model.ChannelStatus
+	Metadata          model.ChannelMetadata
 }
 
 func (r *ChannelRepository) Create(ctx context.Context, p ChannelCreateParams) (*model.Channel, error) {
@@ -137,22 +191,21 @@ func (r *ChannelRepository) Create(ctx context.Context, p ChannelCreateParams) (
 	if maxPostMode == "" {
 		maxPostMode = model.MAXPostModeOwn
 	}
+	metaRaw, err := json.Marshal(p.Metadata)
+	if err != nil {
+		return nil, err
+	}
 	const q = `
 		INSERT INTO channels (
 			workspace_id, provider, name, chat_id, chat_type, bot_username,
-			bot_token_encrypted, max_post_mode, status
-		) VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, ''), $8, $9)
-		RETURNING id, workspace_id, provider, name, chat_id, chat_type, bot_username,
-		          COALESCE(max_post_mode, 'own'), status, COALESCE(last_error, ''), created_at, updated_at
-	`
+			bot_token_encrypted, max_post_mode, status, metadata
+		) VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, ''), $8, $9, $10)
+		RETURNING ` + channelSelectSQL
 	var ch model.Channel
-	err := r.pool.QueryRow(ctx, q,
+	err = r.scanChannel(r.pool.QueryRow(ctx, q,
 		p.WorkspaceID, p.Provider, p.Name, p.ChatID, p.ChatType, p.BotUsername,
-		p.BotTokenEncrypted, maxPostMode, p.Status,
-	).Scan(
-		&ch.ID, &ch.WorkspaceID, &ch.Provider, &ch.Name, &ch.ChatID, &ch.ChatType,
-		&ch.BotUsername, &ch.MaxPostMode, &ch.Status, &ch.LastError, &ch.CreatedAt, &ch.UpdatedAt,
-	)
+		p.BotTokenEncrypted, maxPostMode, p.Status, metaRaw,
+	), &ch)
 	if err != nil {
 		return nil, err
 	}
@@ -175,23 +228,68 @@ func (r *ChannelRepository) UpdateStatus(ctx context.Context, workspaceID, chann
 	return nil
 }
 
+type ChannelSaveParams struct {
+	WorkspaceID         string
+	ChannelID           string
+	Name                string
+	ChatType            string
+	BotUsername         string
+	BotTokenEncrypted   string
+	MaxPostMode         model.MAXPostMode
+	Status              model.ChannelStatus
+	Metadata            model.ChannelMetadata
+	MetadataRefreshedAt *time.Time
+}
+
+func (r *ChannelRepository) SaveChannel(ctx context.Context, p ChannelSaveParams) (*model.Channel, error) {
+	maxPostMode := p.MaxPostMode
+	if maxPostMode == "" {
+		maxPostMode = model.MAXPostModeOwn
+	}
+	metaRaw, err := json.Marshal(p.Metadata)
+	if err != nil {
+		return nil, err
+	}
+	const q = `
+		UPDATE channels
+		SET name = $3,
+		    chat_type = $4,
+		    bot_username = $5,
+		    bot_token_encrypted = NULLIF($6, ''),
+		    max_post_mode = $7,
+		    status = $8,
+		    metadata = $9,
+		    metadata_refreshed_at = $10,
+		    last_error = NULL,
+		    updated_at = NOW()
+		WHERE id = $1 AND workspace_id = $2
+		RETURNING ` + channelSelectSQL
+	var ch model.Channel
+	err = r.scanChannel(r.pool.QueryRow(ctx, q,
+		p.ChannelID, p.WorkspaceID, p.Name, p.ChatType, p.BotUsername,
+		p.BotTokenEncrypted, maxPostMode, p.Status, metaRaw, p.MetadataRefreshedAt,
+	), &ch)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &ch, nil
+}
+
 func (r *ChannelRepository) UpdateToken(ctx context.Context, workspaceID, channelID, botTokenEncrypted, botUsername string, status model.ChannelStatus) (*model.Channel, error) {
 	const q = `
 		UPDATE channels
-		SET bot_token_encrypted = $3,
+		SET bot_token_encrypted = NULLIF($3, ''),
 		    bot_username = $4,
 		    status = $5,
 		    last_error = NULL,
 		    updated_at = NOW()
 		WHERE id = $1 AND workspace_id = $2
-		RETURNING id, workspace_id, provider, name, chat_id, chat_type, bot_username,
-		          COALESCE(max_post_mode, 'own'), status, COALESCE(last_error, ''), created_at, updated_at
-	`
+		RETURNING ` + channelSelectSQL
 	var ch model.Channel
-	err := r.pool.QueryRow(ctx, q, channelID, workspaceID, botTokenEncrypted, botUsername, status).Scan(
-		&ch.ID, &ch.WorkspaceID, &ch.Provider, &ch.Name, &ch.ChatID, &ch.ChatType,
-		&ch.BotUsername, &ch.MaxPostMode, &ch.Status, &ch.LastError, &ch.CreatedAt, &ch.UpdatedAt,
-	)
+	err := r.scanChannel(r.pool.QueryRow(ctx, q, channelID, workspaceID, botTokenEncrypted, botUsername, status), &ch)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -210,42 +308,23 @@ type ChannelMAXReconnectParams struct {
 	BotTokenEncrypted string
 	MaxPostMode       model.MAXPostMode
 	Status            model.ChannelStatus
+	Metadata          model.ChannelMetadata
+	MetadataRefreshedAt *time.Time
 }
 
 func (r *ChannelRepository) UpdateMAXConnection(ctx context.Context, p ChannelMAXReconnectParams) (*model.Channel, error) {
-	maxPostMode := p.MaxPostMode
-	if maxPostMode == "" {
-		maxPostMode = model.MAXPostModeOwn
-	}
-	const q = `
-		UPDATE channels
-		SET name = $3,
-		    chat_type = $4,
-		    bot_username = $5,
-		    bot_token_encrypted = NULLIF($6, ''),
-		    max_post_mode = $7,
-		    status = $8,
-		    last_error = NULL,
-		    updated_at = NOW()
-		WHERE id = $1 AND workspace_id = $2
-		RETURNING id, workspace_id, provider, name, chat_id, chat_type, bot_username,
-		          COALESCE(max_post_mode, 'own'), status, COALESCE(last_error, ''), created_at, updated_at
-	`
-	var ch model.Channel
-	err := r.pool.QueryRow(ctx, q,
-		p.ChannelID, p.WorkspaceID, p.Name, p.ChatType, p.BotUsername,
-		p.BotTokenEncrypted, maxPostMode, p.Status,
-	).Scan(
-		&ch.ID, &ch.WorkspaceID, &ch.Provider, &ch.Name, &ch.ChatID, &ch.ChatType,
-		&ch.BotUsername, &ch.MaxPostMode, &ch.Status, &ch.LastError, &ch.CreatedAt, &ch.UpdatedAt,
-	)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrNotFound
-	}
-	if err != nil {
-		return nil, err
-	}
-	return &ch, nil
+	return r.SaveChannel(ctx, ChannelSaveParams{
+		WorkspaceID:         p.WorkspaceID,
+		ChannelID:           p.ChannelID,
+		Name:                p.Name,
+		ChatType:            p.ChatType,
+		BotUsername:         p.BotUsername,
+		BotTokenEncrypted:   p.BotTokenEncrypted,
+		MaxPostMode:         p.MaxPostMode,
+		Status:              p.Status,
+		Metadata:            p.Metadata,
+		MetadataRefreshedAt: p.MetadataRefreshedAt,
+	})
 }
 
 func (r *ChannelRepository) Delete(ctx context.Context, workspaceID, channelID string) error {

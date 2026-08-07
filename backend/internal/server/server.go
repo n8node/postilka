@@ -84,7 +84,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 		encKey = cfg.JWTSecret
 	}
 	secretCipher, _ := service.NewSecretCipher(encKey)
-	channelSvc := service.NewChannelService(channelRepo, telegramProviderSettingsSvc, telegramBotClient, wsSvc, quotaSvc, secretCipher)
+	channelSvc := service.NewChannelService(channelRepo, telegramProviderSettingsSvc, socialProviderSettingsSvc, telegramBotClient, wsSvc, quotaSvc, secretCipher)
 	channelConnectSvc := service.NewChannelConnectService(
 		channelRepo, channelOAuthSessionRepo, socialProviderSettingsSvc,
 		telegramProviderSettingsSvc, wsSvc, quotaSvc, secretCipher, cfg,
@@ -210,6 +210,8 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Get("/channels/oauth/{provider}/start", channelConnectHandler.OAuthStart)
 			r.Get("/channels/oauth/{provider}/discover", channelConnectHandler.OAuthDiscover)
 			r.Post("/channels/oauth/{provider}/connect", channelConnectHandler.OAuthConnect)
+			r.Get("/channels/{id}", channelHandler.Get)
+			r.Patch("/channels/{id}", channelHandler.Update)
 			r.Post("/channels/{id}/verify", channelHandler.Verify)
 			r.Post("/channels/{id}/test-message", channelHandler.SendTestMessage)
 			r.Put("/channels/{id}/telegram-token", channelHandler.UpdateTelegramToken)

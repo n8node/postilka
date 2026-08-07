@@ -96,6 +96,41 @@ func (h *ChannelHandler) ConnectTelegram(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, result)
 }
 
+func (h *ChannelHandler) Get(w http.ResponseWriter, r *http.Request) {
+	userID, ok := channelUserID(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
+		return
+	}
+	id := chi.URLParam(r, "id")
+	item, err := h.channels.Get(r.Context(), userID, r, id)
+	if err != nil {
+		writeChannelError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
+func (h *ChannelHandler) Update(w http.ResponseWriter, r *http.Request) {
+	userID, ok := channelUserID(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
+		return
+	}
+	id := chi.URLParam(r, "id")
+	var req model.ChannelUpdateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Некорректное тело запроса")
+		return
+	}
+	item, err := h.channels.Update(r.Context(), userID, r, id, req)
+	if err != nil {
+		writeChannelError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
 func (h *ChannelHandler) Verify(w http.ResponseWriter, r *http.Request) {
 	userID, ok := channelUserID(r)
 	if !ok {
