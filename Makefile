@@ -15,7 +15,8 @@ prod:
 
 # Deploy only the services affected by a release; each target checks the public edge.
 prod-backend:
-	$(COMPOSE_PROD) up --build -d outbound-proxy telegram-proxy backend worker
+	$(COMPOSE_PROD) up --build -d outbound-proxy backend worker
+	$(COMPOSE_PROD) up -d --force-recreate telegram-proxy
 	bash scripts/verify-release.sh
 
 prod-backend-nocache:

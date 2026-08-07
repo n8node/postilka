@@ -1,10 +1,6 @@
 #!/bin/sh
 set -eu
 
-json_escape() {
-  printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
-}
-
 parse_proxy_url() {
   raw="$1"
   case "$raw" in
@@ -38,24 +34,9 @@ else
   exit 1
 fi
 
-USER_JSON=$(json_escape "$UPSTREAM_USER")
-PASS_JSON=$(json_escape "$UPSTREAM_PASS")
+# gost v2: ?auth= is base64(user:pass) — avoids url.Parse on passwords containing %.
+AUTH_B64=$(printf '%s' "${UPSTREAM_USER}:${UPSTREAM_PASS}" | base64 | tr -d '\n')
+AUTH_QUERY=$(printf '%s' "$AUTH_B64" | sed 's/+/%2B/g; s/\//%2F/g; s/=/%3D/g')
 
-cat >/tmp/gost.json <<EOF
-{
-  "ServeNodes": ["http://0.0.0.0:8889"],
-  "ChainNodes": [
-    {
-      "Name": "http",
-      "Addr": "${UPSTREAM_HOST}",
-      "Connector": {"Type": "http"},
-      "Dialer": {"Type": "tcp"},
-      "User": "${USER_JSON}",
-      "Pass": "${PASS_JSON}"
-    }
-  ]
-}
-EOF
-
-echo "telegram-proxy: listening on 0.0.0.0:8889 via ${UPSTREAM_HOST}"
-exec gost -C /tmp/gost.json
+echo "telegram-proxy: v3 listening on 0.0.0.0:8889 via ${UPSTREAM_HOST} (gost auth=base64)"
+exec gost -L="http://0.0.0.0:8889" -F="http://${UPSTREAM_HOST}?auth=${AUTH_QUERY}"

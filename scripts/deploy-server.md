@@ -189,11 +189,15 @@ docker compose exec -T mysql mysqldump -u root -p"$WP_DB_ROOT_PASSWORD" wordpres
   TELEGRAM_UPSTREAM_PROXY=http://root:PASSWORD@5.35.83.120:3128
   ```
 
-  Пароль с символом `%` указывайте **как есть** в `TELEGRAM_UPSTREAM_PROXY` (gost получает его через JSON, не через URL parse).
+  Пароль с символом `%` указывайте **как есть** в `TELEGRAM_UPSTREAM_PROXY` (entrypoint кодирует `user:pass` в base64 для gost `?auth=`).
+
+  После `git pull`, если менялся `scripts/telegram-proxy-entrypoint.sh`, **обязательно** пересоздайте контейнер (bind-mount не подхватывается без recreate):
 
   ```bash
   cd /opt/postilka && git pull
   make prod-backend
+  # или только прокси:
+  docker compose --env-file .env -f docker-compose.yml -f docker-compose.prod.yml up -d --force-recreate telegram-proxy
 
   docker compose --env-file .env -f docker-compose.yml -f docker-compose.prod.yml ps telegram-proxy
   docker compose --env-file .env -f docker-compose.yml -f docker-compose.prod.yml logs --tail=30 telegram-proxy
