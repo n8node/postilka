@@ -340,7 +340,15 @@ func canPostInChat(chatType string, member telegramChatMember) bool {
 	case "channel":
 		return member.CanPostMessages
 	case "group", "supergroup":
-		return member.CanSendMessages || member.CanPostMessages || member.Status == "creator"
+		// ChatMemberAdministrator in groups/supergroups does not include can_send_messages
+		// (that field is for ChatMemberRestricted only). Admin/creator may post unless anonymous.
+		if member.Status == "creator" {
+			return true
+		}
+		if member.Status == "administrator" {
+			return !member.IsAnonymous
+		}
+		return member.CanSendMessages
 	default:
 		return false
 	}
