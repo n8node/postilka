@@ -189,7 +189,7 @@ docker compose exec -T mysql mysqldump -u root -p"$WP_DB_ROOT_PASSWORD" wordpres
   TELEGRAM_UPSTREAM_PROXY=http://root:PASSWORD@5.35.83.120:3128
   ```
 
-  Пароль с символом `%` указывайте **как есть** (не `%25`). Без этой переменной `telegram-proxy` (gost) не стартует.
+  Пароль с символом `%` указывайте **как есть** в `TELEGRAM_UPSTREAM_PROXY` (gost получает его через JSON, не через URL parse).
 
   ```bash
   cd /opt/postilka && git pull
