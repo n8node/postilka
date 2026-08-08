@@ -14,11 +14,14 @@ import {
   Upload,
   Video,
   Clock,
-  FileText,
 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { EmptyState } from "@/components/layout/EmptyState";
+import { FileCirclePreview } from "@/components/files/FileCirclePreview";
+import { MoveTargetDialog, type MoveTarget } from "@/components/files/MoveTargetDialog";
+import { UploadProgressPanel } from "@/components/files/UploadProgressPanel";
 import { cn, formatBytes } from "@/lib/utils";
+import { setActiveWorkspace } from "@/lib/api";
 import {
   type FilesSection,
   type StorageStats,
@@ -36,18 +39,14 @@ import {
   listFiles,
   listFolders,
   listTrash,
-  moveFile,
   permanentDeleteTrash,
   renameFile,
   renameFolder,
   restoreTrash,
-  uploadFile,
+  transferFile,
 } from "@/lib/files-api";
+import { uploadQueue, type UploadJob } from "@/lib/upload-queue";
 import { useAuth } from "@/context/AuthContext";
-
-type Selectable =
-  | { kind: "file"; item: WorkspaceFile }
-  | { kind: "folder"; item: WorkspaceFolder };
 
 const SECTIONS: { id: FilesSection; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
   { id: "my-files", label: "Мои файлы", icon: Folder },
@@ -56,12 +55,6 @@ const SECTIONS: { id: FilesSection; label: string; icon: React.ComponentType<{ c
   { id: "videos", label: "Видео", icon: Video },
   { id: "trash", label: "Корзина", icon: Trash2 },
 ];
-
-function fileIcon(mime: string) {
-  if (mime.startsWith("image/")) return ImageIcon;
-  if (mime.startsWith("video/")) return Video;
-  return FileText;
-}
 
 function groupByDate(items: WorkspaceFile[]) {
   const map = new Map<string, WorkspaceFile[]>();
@@ -76,6 +69,18 @@ function groupByDate(items: WorkspaceFile[]) {
     map.get(key)!.push(f);
   }
   return [...map.entries()];
+}
+
+function formatFileTime(iso: string) {
+  const d = new Date(iso);
+  const now = new Date();
+  const sameDay =
+    d.getDate() === now.getDate() &&
+    d.getMonth() === now.getMonth() &&
+    d.getFullYear() === now.getFullYear();
+  const time = d.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+  if (sameDay) return `Сегодня ${time}`;
+  return d.toLocaleDateString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
 export function FileManager() {
@@ -94,7 +99,9 @@ export function FileManager() {
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [selectedKinds, setSelectedKinds] = useState<Map<string, "file" | "folder">>(new Map());
-  const [uploading, setUploading] = useState(false);
+  const [uploadJobs, setUploadJobs] = useState<UploadJob[]>([]);
+  const [appearIds, setAppearIds] = useState<Set<string>>(new Set());
+  const [moveDialog, setMoveDialog] = useState<{ mode: "move" | "copy" } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const refresh = useCallback(async () => {
@@ -128,6 +135,36 @@ export function FileManager() {
     void refresh();
   }, [refresh]);
 
+  useEffect(() => {
+    if (!uploadQueue) return;
+    void uploadQueue.hydrate();
+    return uploadQueue.subscribe(setUploadJobs);
+  }, []);
+
+  useEffect(() => {
+    if (!uploadQueue) return;
+    return uploadQueue.onComplete((file) => {
+      void getStorageStats().then(setStats);
+      const inCurrentFolder =
+        section === "my-files" &&
+        (file.folder_id ?? null) === folderId &&
+        file.workspace_id === active_workspace?.id;
+      if (!inCurrentFolder) return;
+      setFiles((prev) => {
+        if (prev.some((f) => f.id === file.id)) return prev;
+        return [file, ...prev];
+      });
+      setAppearIds((prev) => new Set(prev).add(file.id));
+      window.setTimeout(() => {
+        setAppearIds((prev) => {
+          const next = new Set(prev);
+          next.delete(file.id);
+          return next;
+        });
+      }, 600);
+    });
+  }, [section, folderId, active_workspace?.id]);
+
   const toggleSelect = (id: string, kind: "file" | "folder") => {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -151,20 +188,13 @@ export function FileManager() {
     return sum;
   }, [files, selected]);
 
-  const handleUpload = async (fileList: FileList | null) => {
-    if (!fileList?.length || !canEdit) return;
-    setUploading(true);
-    setError(null);
-    try {
-      for (const file of [...fileList]) {
-        await uploadFile(file, section === "my-files" ? folderId : null);
-      }
-      await refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Ошибка загрузки");
-    } finally {
-      setUploading(false);
-    }
+  const handleUpload = (fileList: FileList | null) => {
+    if (!fileList?.length || !canEdit || !uploadQueue || !active_workspace?.id) return;
+    void uploadQueue.enqueue(
+      [...fileList],
+      section === "my-files" ? folderId : null,
+      active_workspace.id,
+    );
   };
 
   const handleCreateFolder = async () => {
@@ -213,31 +243,36 @@ export function FileManager() {
     }
   };
 
-  const handleMoveSelected = async () => {
-    const target = window.prompt("ID целевой папки (пусто = корень)");
-    const folderTarget = target?.trim() ? target.trim() : null;
-    const fileIds = [...selected].filter((id) => selectedKinds.get(id) === "file");
-    const folderIds = [...selected].filter((id) => selectedKinds.get(id) === "folder");
-    try {
-      if (fileIds.length) await bulkFiles(fileIds, "move", folderTarget);
-      if (folderIds.length) await bulkFolders(folderIds, "move", folderTarget);
-      await refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Ошибка перемещения");
-    }
+  const restoreWorkspace = async () => {
+    if (active_workspace?.id) await setActiveWorkspace(active_workspace.id);
   };
 
-  const handleCopySelected = async () => {
-    const target = window.prompt("ID целевой папки (пусто = корень)");
-    const folderTarget = target?.trim() ? target.trim() : null;
+  const handleMoveDialogClose = () => {
+    setMoveDialog(null);
+    void restoreWorkspace();
+  };
+
+  const handleMoveConfirm = async (target: MoveTarget) => {
     const fileIds = [...selected].filter((id) => selectedKinds.get(id) === "file");
     const folderIds = [...selected].filter((id) => selectedKinds.get(id) === "folder");
     try {
-      if (fileIds.length) await bulkFiles(fileIds, "copy", folderTarget);
-      if (folderIds.length) await bulkFolders(folderIds, "copy", folderTarget);
+      if (target.workspaceId === active_workspace?.id) {
+        const action = moveDialog?.mode ?? "move";
+        if (fileIds.length) await bulkFiles(fileIds, action, target.folderId);
+        if (folderIds.length) await bulkFolders(folderIds, action, target.folderId);
+      } else {
+        if (folderIds.length) {
+          throw new Error("Копирование папок между пространствами пока недоступно");
+        }
+        for (const id of fileIds) {
+          await transferFile(id, target.workspaceId, target.folderId, "copy");
+        }
+      }
+      setSelected(new Set());
+      setSelectedKinds(new Map());
       await refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Ошибка копирования");
+    } finally {
+      await restoreWorkspace();
     }
   };
 
@@ -251,6 +286,9 @@ export function FileManager() {
   };
 
   const grouped = section !== "trash" && section !== "my-files" ? groupByDate(files) : null;
+  const isUploading = uploadJobs.some(
+    (j) => j.status === "pending" || j.status === "uploading",
+  );
 
   return (
     <div className="flex flex-col gap-4 lg:flex-row">
@@ -258,12 +296,12 @@ export function FileManager() {
         {canEdit && (
           <button
             type="button"
-            disabled={uploading || section === "trash"}
+            disabled={section === "trash"}
             onClick={() => fileInputRef.current?.click()}
             className="flex w-full items-center justify-center gap-2 rounded-lg bg-accent px-3 py-2.5 text-sm font-medium text-white hover:bg-accent/90 disabled:opacity-60"
           >
             <Upload className="h-4 w-4" />
-            {uploading ? "Загрузка…" : "Загрузить"}
+            {isUploading ? "Загрузка…" : "Загрузить"}
           </button>
         )}
         <input
@@ -272,7 +310,7 @@ export function FileManager() {
           multiple
           className="hidden"
           onChange={(e) => {
-            void handleUpload(e.target.files);
+            handleUpload(e.target.files);
             e.target.value = "";
           }}
         />
@@ -374,6 +412,14 @@ export function FileManager() {
           </button>
         )}
 
+        {uploadJobs.length > 0 && (
+          <UploadProgressPanel
+            jobs={uploadJobs}
+            onCancel={() => uploadQueue?.cancelAll()}
+            onDismiss={() => uploadQueue?.dismissCompleted()}
+          />
+        )}
+
         {error && (
           <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
             {error}
@@ -392,41 +438,62 @@ export function FileManager() {
             }
           />
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-6">
             {section === "my-files" && folders.length > 0 && (
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {folders.map((fo) => (
-                  <div
-                    key={fo.id}
-                    className="flex items-center gap-2 rounded-xl border border-border bg-surface p-3"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selected.has(fo.id)}
-                      onChange={() => toggleSelect(fo.id, "folder")}
-                      className="shrink-0"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setFolderId(fo.id)}
-                      className="flex min-w-0 flex-1 items-center gap-2 text-left"
+              <section>
+                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
+                  Папки ({folders.length})
+                </h3>
+                <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface">
+                  {folders.map((fo) => (
+                    <div
+                      key={fo.id}
+                      className="group flex items-center gap-3 px-3 py-2.5 hover:bg-zinc-50"
                     >
-                      <Folder className="h-5 w-5 shrink-0 text-amber-500" />
-                      <span className="truncate font-medium">{fo.name}</span>
-                    </button>
-                    {canEdit && (
                       <button
                         type="button"
-                        title="Переименовать"
-                        onClick={() => void handleRename("folder", fo.id, fo.name)}
-                        className="rounded p-1 text-muted hover:bg-zinc-100"
+                        onClick={() => toggleSelect(fo.id, "folder")}
+                        className={cn(
+                          "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
+                          selected.has(fo.id)
+                            ? "border-accent bg-accent"
+                            : "border-zinc-300 hover:border-accent/50",
+                        )}
+                        aria-label="Выбрать папку"
                       >
-                        <Pencil className="h-4 w-4" />
+                        {selected.has(fo.id) && (
+                          <span className="h-2 w-2 rounded-full bg-white" />
+                        )}
                       </button>
-                    )}
-                  </div>
-                ))}
-              </div>
+                      <button
+                        type="button"
+                        onClick={() => setFolderId(fo.id)}
+                        className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                      >
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border bg-amber-50">
+                          <Folder className="h-5 w-5 text-amber-500" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">{fo.name}</p>
+                          <p className="text-xs text-muted">
+                            Папка · Файлов: {fo.files_count ?? 0} · {formatFileTime(fo.created_at)}
+                          </p>
+                        </div>
+                      </button>
+                      {canEdit && (
+                        <button
+                          type="button"
+                          title="Переименовать"
+                          onClick={() => void handleRename("folder", fo.id, fo.name)}
+                          className="rounded p-1 text-muted opacity-0 transition-opacity hover:bg-zinc-100 group-hover:opacity-100"
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </section>
             )}
 
             {section === "trash" && folders.length > 0 && (
@@ -447,94 +514,118 @@ export function FileManager() {
             )}
 
             {(grouped ?? [["", files] as [string, WorkspaceFile[]]]).map(([label, groupFiles]) => (
-              <div key={label || "all"}>
-                {label && <h3 className="mb-2 text-sm font-medium capitalize text-muted">{label}</h3>}
+              <section key={label || "all"}>
+                {section === "my-files" && groupFiles.length > 0 && (
+                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">
+                    Файлы ({groupFiles.length})
+                  </h3>
+                )}
+                {label && (
+                  <h3 className="mb-2 text-sm font-medium capitalize text-muted">{label}</h3>
+                )}
                 <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface">
-                  {groupFiles.map((f) => {
-                    const Icon = fileIcon(f.mime_type);
-                    return (
-                      <div
-                        key={f.id}
-                        className="group flex items-center gap-3 px-3 py-2.5 hover:bg-zinc-50"
+                  {groupFiles.map((f) => (
+                    <div
+                      key={f.id}
+                      className={cn(
+                        "group flex items-center gap-3 px-3 py-2.5 hover:bg-zinc-50",
+                        appearIds.has(f.id) && "file-appear",
+                      )}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => toggleSelect(f.id, "file")}
+                        className={cn(
+                          "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
+                          selected.has(f.id)
+                            ? "border-accent bg-accent"
+                            : "border-zinc-300 hover:border-accent/50",
+                        )}
+                        aria-label="Выбрать файл"
                       >
-                        <input
-                          type="checkbox"
-                          checked={selected.has(f.id)}
-                          onChange={() => toggleSelect(f.id, "file")}
-                        />
-                        <Icon className="h-5 w-5 shrink-0 text-muted" />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-sm font-medium">{f.name}</p>
-                          <p className="text-xs text-muted">
-                            {formatBytes(f.size)} ·{" "}
-                            {new Date(f.created_at).toLocaleString("ru-RU")}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                          {section !== "trash" && (
+                        {selected.has(f.id) && (
+                          <span className="h-2 w-2 rounded-full bg-white" />
+                        )}
+                      </button>
+                      <FileCirclePreview
+                        fileId={f.id}
+                        name={f.name}
+                        mimeType={f.mime_type}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">{f.name}</p>
+                        <p className="text-xs text-muted">
+                          {formatBytes(f.size)} · {formatFileTime(f.created_at)}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                        {section !== "trash" && (
+                          <button
+                            type="button"
+                            title="Скачать"
+                            onClick={() =>
+                              void downloadFile(f.id).then(({ url }) => window.open(url, "_blank"))
+                            }
+                            className="rounded p-1.5 text-muted hover:bg-zinc-100"
+                          >
+                            <Download className="h-4 w-4" />
+                          </button>
+                        )}
+                        {canEdit && section !== "trash" && (
+                          <>
                             <button
                               type="button"
-                              title="Скачать"
-                              onClick={() => void downloadFile(f.id).then(({ url }) => window.open(url, "_blank"))}
+                              title="Переименовать"
+                              onClick={() => void handleRename("file", f.id, f.name)}
                               className="rounded p-1.5 text-muted hover:bg-zinc-100"
                             >
-                              <Download className="h-4 w-4" />
+                              <Pencil className="h-4 w-4" />
                             </button>
-                          )}
-                          {canEdit && section !== "trash" && (
-                            <>
-                              <button
-                                type="button"
-                                title="Переименовать"
-                                onClick={() => void handleRename("file", f.id, f.name)}
-                                className="rounded p-1.5 text-muted hover:bg-zinc-100"
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </button>
-                              <button
-                                type="button"
-                                title="Копировать"
-                                onClick={() => void copyFile(f.id, folderId).then(refresh)}
-                                className="rounded p-1.5 text-muted hover:bg-zinc-100"
-                              >
-                                <Copy className="h-4 w-4" />
-                              </button>
-                              <button
-                                type="button"
-                                title="Удалить"
-                                onClick={() => void deleteFile(f.id).then(refresh)}
-                                className="rounded p-1.5 text-red-500 hover:bg-red-50"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            </>
-                          )}
-                          {section === "trash" && canEdit && (
-                            <>
-                              <button
-                                type="button"
-                                title="Восстановить"
-                                onClick={() => void handleRestore([f.id], [])}
-                                className="rounded p-1.5 text-muted hover:bg-zinc-100"
-                              >
-                                <RotateCcw className="h-4 w-4" />
-                              </button>
-                              <button
-                                type="button"
-                                title="Удалить навсегда"
-                                onClick={() => void permanentDeleteTrash(f.id, "file").then(refresh)}
-                                className="rounded p-1.5 text-red-500 hover:bg-red-50"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            </>
-                          )}
-                        </div>
+                            <button
+                              type="button"
+                              title="Копировать"
+                              onClick={() => void copyFile(f.id, folderId).then(refresh)}
+                              className="rounded p-1.5 text-muted hover:bg-zinc-100"
+                            >
+                              <Copy className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              title="Удалить"
+                              onClick={() => void deleteFile(f.id).then(refresh)}
+                              className="rounded p-1.5 text-red-500 hover:bg-red-50"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </>
+                        )}
+                        {section === "trash" && canEdit && (
+                          <>
+                            <button
+                              type="button"
+                              title="Восстановить"
+                              onClick={() => void handleRestore([f.id], [])}
+                              className="rounded p-1.5 text-muted hover:bg-zinc-100"
+                            >
+                              <RotateCcw className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              title="Удалить навсегда"
+                              onClick={() =>
+                                void permanentDeleteTrash(f.id, "file").then(refresh)
+                              }
+                              className="rounded p-1.5 text-red-500 hover:bg-red-50"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </>
+                        )}
                       </div>
-                    );
-                  })}
+                    </div>
+                  ))}
                 </div>
-              </div>
+              </section>
             ))}
           </div>
         )}
@@ -557,14 +648,14 @@ export function FileManager() {
               <>
                 <button
                   type="button"
-                  onClick={() => void handleMoveSelected()}
+                  onClick={() => setMoveDialog({ mode: "move" })}
                   className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-sm hover:bg-zinc-100"
                 >
                   <FolderInput className="h-4 w-4" /> Переместить
                 </button>
                 <button
                   type="button"
-                  onClick={() => void handleCopySelected()}
+                  onClick={() => setMoveDialog({ mode: "copy" })}
                   className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-sm hover:bg-zinc-100"
                 >
                   <Copy className="h-4 w-4" /> Копировать
@@ -590,6 +681,16 @@ export function FileManager() {
             </button>
           </div>
         </div>
+      )}
+
+      {moveDialog && active_workspace?.id && (
+        <MoveTargetDialog
+          open
+          mode={moveDialog.mode}
+          currentWorkspaceId={active_workspace.id}
+          onClose={handleMoveDialogClose}
+          onConfirm={handleMoveConfirm}
+        />
       )}
     </div>
   );

@@ -55,6 +55,10 @@ export function listFolders(parentId?: string | null) {
   return apiFetch<{ folders: WorkspaceFolder[] }>(`/folders${q ? `?${q}` : ""}`);
 }
 
+export function listAllFolders() {
+  return apiFetch<{ folders: WorkspaceFolder[] }>("/folders?scope=all");
+}
+
 export function initUpload(input: {
   name: string;
   size: number;

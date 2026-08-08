@@ -244,7 +244,8 @@ func (h *FileStorageHandler) ListFolders(w http.ResponseWriter, r *http.Request)
 	if v := r.URL.Query().Get("parent_id"); v != "" {
 		parentID = &v
 	}
-	items, err := h.files.ListFolders(r.Context(), userID, r, parentID)
+	scopeAll := r.URL.Query().Get("scope") == "all"
+	items, err := h.files.ListFolders(r.Context(), userID, r, parentID, scopeAll)
 	if err != nil {
 		writeFileStorageError(w, err)
 		return

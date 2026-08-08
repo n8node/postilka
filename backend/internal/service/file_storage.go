@@ -267,12 +267,12 @@ func (s *FileStorageService) ListFiles(ctx context.Context, userID string, r *ht
 	return s.files.List(ctx, filter)
 }
 
-func (s *FileStorageService) ListFolders(ctx context.Context, userID string, r *http.Request, parentID *string) ([]model.WorkspaceFolder, error) {
+func (s *FileStorageService) ListFolders(ctx context.Context, userID string, r *http.Request, parentID *string, scopeAll bool) ([]model.WorkspaceFolder, error) {
 	ws, err := s.resolveWorkspace(ctx, userID, r, model.RoleViewer)
 	if err != nil {
 		return nil, err
 	}
-	items, err := s.folders.List(ctx, ws.ID, parentID, false)
+	items, err := s.folders.List(ctx, ws.ID, parentID, scopeAll)
 	if err != nil {
 		return nil, err
 	}

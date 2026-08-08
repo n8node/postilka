@@ -5,3 +5,18 @@
 body {
   @apply bg-bg text-text antialiased;
 }
+
+@keyframes file-appear {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.file-appear {
+  animation: file-appear 0.4s ease-out;
+}
