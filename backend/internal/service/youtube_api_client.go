@@ -50,15 +50,14 @@ func (t youtubeProxyTransport) RoundTrip(req *http.Request) (*http.Response, err
 		}
 		req.Body = io.NopCloser(bytes.NewReader(body))
 	}
-	contentType := strings.TrimSpace(req.Header.Get("Content-Type"))
-	return t.client.doRequest(req.Context(), req.Method, req.URL.String(), contentType, body)
+	return t.client.doRequest(req.Context(), req.Method, req.URL.String(), req.Header.Clone(), body)
 }
 
 func (c *YouTubeAPIClient) doRequest(
 	ctx context.Context,
 	method string,
 	endpoint string,
-	contentType string,
+	headers http.Header,
 	body []byte,
 ) (*http.Response, error) {
 	reqBody := body
@@ -70,12 +69,17 @@ func (c *YouTubeAPIClient) doRequest(
 		if err != nil {
 			return nil, err
 		}
-		if contentType != "" {
-			req.Header.Set("Content-Type", contentType)
+		for key, values := range headers {
+			for _, value := range values {
+				req.Header.Add(key, value)
+			}
 		}
 		return client.Do(req)
 	}
 
+	if c.providerSettings == nil {
+		return makeRequest(c.client)
+	}
 	cfg, err := c.providerSettings.GetEffective(ctx)
 	if err != nil || !cfg.ProxyEnabled || len(cfg.ProxyURLs) == 0 {
 		return makeRequest(c.client)
