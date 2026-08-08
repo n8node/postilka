@@ -38,7 +38,7 @@ const mainNav: NavItem[] = [
   { href: "/channels", label: "Каналы", icon: Radio },
   { href: "/posts", label: "Посты", icon: PenSquare },
   { href: "/calendar", label: "Календарь", icon: CalendarDays },
-  { href: "/media", label: "Медиатека", icon: ImageIcon },
+  { href: "/files", label: "Файлы", icon: ImageIcon },
   { href: "/ai", label: "AI", icon: Sparkles },
   { href: "/plans", label: "Тариф и кошелёк", icon: Wallet },
   { href: "/team", label: "Команда", icon: Users },

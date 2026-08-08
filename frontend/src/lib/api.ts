@@ -68,6 +68,7 @@ export type Plan = {
   max_posts_per_period: number | null;
   max_seats: number | null;
   storage_bytes: number | null;
+  trash_retention_days: number;
   ai_text_tokens_quota: number | null;
   ai_media_credits_quota: number | null;
   free_plan_duration_days: number | null;
@@ -89,6 +90,7 @@ export type PlanInput = {
   max_posts_per_period?: number | null;
   max_seats?: number | null;
   storage_bytes?: number | null;
+  trash_retention_days?: number;
   ai_text_tokens_quota?: number | null;
   ai_media_credits_quota?: number | null;
   free_plan_duration_days?: number | null;

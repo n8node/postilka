@@ -118,6 +118,7 @@ type planBody struct {
 	MaxPostsPerPeriod    *int   `json:"max_posts_per_period"`
 	MaxSeats             *int   `json:"max_seats"`
 	StorageBytes         *int64 `json:"storage_bytes"`
+	TrashRetentionDays   int    `json:"trash_retention_days"`
 	AITextTokensQuota    *int   `json:"ai_text_tokens_quota"`
 	AIMediaCreditsQuota  *int   `json:"ai_media_credits_quota"`
 	FreePlanDurationDays *int   `json:"free_plan_duration_days"`
@@ -142,6 +143,7 @@ func (b planBody) toInput() service.PlanInput {
 		MaxPostsPerPeriod:    b.MaxPostsPerPeriod,
 		MaxSeats:             b.MaxSeats,
 		StorageBytes:         b.StorageBytes,
+		TrashRetentionDays:   b.TrashRetentionDays,
 		AITextTokensQuota:    b.AITextTokensQuota,
 		AIMediaCreditsQuota:  b.AIMediaCreditsQuota,
 		FreePlanDurationDays: b.FreePlanDurationDays,

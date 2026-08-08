@@ -50,6 +50,7 @@ type PlanInput struct {
 	MaxPostsPerPeriod    *int
 	MaxSeats             *int
 	StorageBytes         *int64
+	TrashRetentionDays   int
 	AITextTokensQuota    *int
 	AIMediaCreditsQuota  *int
 	FreePlanDurationDays *int
@@ -86,6 +87,7 @@ func (s *PlanService) Create(ctx context.Context, in PlanInput) (*model.Plan, er
 		MaxPostsPerPeriod:    in.MaxPostsPerPeriod,
 		MaxSeats:             in.MaxSeats,
 		StorageBytes:         in.StorageBytes,
+		TrashRetentionDays:   in.TrashRetentionDays,
 		AITextTokensQuota:    in.AITextTokensQuota,
 		AIMediaCreditsQuota:  in.AIMediaCreditsQuota,
 		FreePlanDurationDays: in.FreePlanDurationDays,
@@ -133,6 +135,7 @@ func (s *PlanService) Update(ctx context.Context, id string, in PlanInput) (*mod
 		MaxPostsPerPeriod:    in.MaxPostsPerPeriod,
 		MaxSeats:             in.MaxSeats,
 		StorageBytes:         in.StorageBytes,
+		TrashRetentionDays:   in.TrashRetentionDays,
 		AITextTokensQuota:    in.AITextTokensQuota,
 		AIMediaCreditsQuota:  in.AIMediaCreditsQuota,
 		FreePlanDurationDays: in.FreePlanDurationDays,

@@ -136,7 +136,15 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	channelConnectHandler := handler.NewChannelConnectHandler(channelConnectSvc, cfg)
 	publicPageHandler := handler.NewPublicPageHandler(publicPageSvc)
 	paymentWebhookHandler := handler.NewPaymentWebhookHandler(paymentSettingsSvc, checkoutSvc, logger)
+	fileStorageRepo := repository.NewWorkspaceFileRepository(db.Pool)
+	folderStorageRepo := repository.NewWorkspaceFolderRepository(db.Pool)
+	objectStorage := service.NewObjectStorage(storageSettingsSvc)
+	uploadSessions := service.NewUploadSessionService(cfg.JWTSecret)
+	fileStorageSvc := service.NewFileStorageService(
+		fileStorageRepo, folderStorageRepo, wsRepo, planRepo, wsSvc, objectStorage, uploadSessions,
+	)
 	billingHandler := handler.NewBillingHandler(billingSvc, checkoutSvc, wsSvc)
+	fileStorageHandler := handler.NewFileStorageHandler(fileStorageSvc)
 
 	r.Get("/health", health.ServeHTTP)
 
@@ -230,6 +238,34 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 		})
 
 		r.Get("/channels/oauth/{provider}/callback", channelConnectHandler.OAuthCallback)
+
+		r.Group(func(r chi.Router) {
+			r.Use(authMW.Required)
+			r.Get("/storage", fileStorageHandler.GetStorage)
+			r.Post("/files/upload/init", fileStorageHandler.UploadInit)
+			r.Post("/files/upload/complete", fileStorageHandler.UploadComplete)
+			r.Get("/files", fileStorageHandler.ListFiles)
+			r.Post("/files/bulk", fileStorageHandler.BulkFiles)
+			r.Route("/files/{id}", func(r chi.Router) {
+				r.Patch("/", fileStorageHandler.PatchFile)
+				r.Delete("/", fileStorageHandler.DeleteFile)
+				r.Get("/download", fileStorageHandler.DownloadFile)
+				r.Post("/copy", fileStorageHandler.CopyFile)
+				r.Post("/transfer", fileStorageHandler.TransferFile)
+			})
+			r.Get("/folders", fileStorageHandler.ListFolders)
+			r.Post("/folders", fileStorageHandler.CreateFolder)
+			r.Post("/folders/bulk", fileStorageHandler.BulkFolders)
+			r.Route("/folders/{id}", func(r chi.Router) {
+				r.Patch("/", fileStorageHandler.PatchFolder)
+				r.Delete("/", fileStorageHandler.DeleteFolder)
+				r.Get("/breadcrumbs", fileStorageHandler.Breadcrumbs)
+			})
+			r.Get("/trash", fileStorageHandler.ListTrash)
+			r.Post("/trash/restore", fileStorageHandler.RestoreTrash)
+			r.Post("/trash/empty", fileStorageHandler.EmptyTrash)
+			r.Delete("/trash/{id}", fileStorageHandler.PermanentDeleteTrashItem)
+		})
 
 		r.Route("/admin", func(r chi.Router) {
 			r.Group(func(r chi.Router) {

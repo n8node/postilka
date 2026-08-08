@@ -46,6 +46,17 @@ func main() {
 	channelRepo := repository.NewChannelRepository(db.Pool)
 	youtubeReconnectNotifier := service.NewYouTubeOAuthReconnectNotifier(channelRepo, wsRepo, emailSvc, cfg, logger)
 
+	storageSettingsRepo := repository.NewStorageSettingsRepository(db.Pool)
+	storageSettingsSvc := service.NewStorageSettingsService(storageSettingsRepo, cfg)
+	wsSvc := service.NewWorkspaceService(wsRepo, planRepo)
+	objectStorage := service.NewObjectStorage(storageSettingsSvc)
+	uploadSessions := service.NewUploadSessionService(cfg.JWTSecret)
+	fileStorageRepo := repository.NewWorkspaceFileRepository(db.Pool)
+	folderStorageRepo := repository.NewWorkspaceFolderRepository(db.Pool)
+	fileStorageSvc := service.NewFileStorageService(
+		fileStorageRepo, folderStorageRepo, wsRepo, planRepo, wsSvc, objectStorage, uploadSessions,
+	)
+
 	logger.Info("worker started", "publish_concurrency", cfg.WorkerPublishConcurrency, "version", config.Version)
 
 	ticker := time.NewTicker(30 * time.Second)
@@ -66,6 +77,11 @@ func main() {
 			}
 			if err := youtubeReconnectNotifier.Process(ctx); err != nil {
 				logger.Warn("youtube reconnect notify tick failed", "error", err)
+			}
+			if n, err := fileStorageSvc.PurgeExpiredTrash(ctx); err != nil {
+				logger.Warn("purge trash tick failed", "error", err)
+			} else if n > 0 {
+				logger.Info("purged expired trash files", "count", n)
 			}
 		case <-quit:
 			logger.Info("worker stopped")

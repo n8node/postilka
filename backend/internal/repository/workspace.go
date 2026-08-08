@@ -256,3 +256,35 @@ func scanWorkspace(row pgx.Row) (*model.Workspace, error) {
 	ws.CreatedAt = createdAt
 	return &ws, nil
 }
+
+func (r *WorkspaceRepository) GetStorageUsed(ctx context.Context, workspaceID string) (int64, error) {
+	var used int64
+	err := r.pool.QueryRow(ctx, `SELECT storage_used FROM workspaces WHERE id = $1::uuid`, workspaceID).Scan(&used)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return 0, ErrNotFound
+	}
+	return used, err
+}
+
+func (r *WorkspaceRepository) TryIncrementStorage(ctx context.Context, workspaceID string, delta int64, quota *int64) (bool, error) {
+	if quota == nil {
+		tag, err := r.pool.Exec(ctx, `
+			UPDATE workspaces SET storage_used = storage_used + $2, updated_at = NOW()
+			WHERE id = $1::uuid
+		`, workspaceID, delta)
+		return tag.RowsAffected() > 0, err
+	}
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE workspaces SET storage_used = storage_used + $2, updated_at = NOW()
+		WHERE id = $1::uuid AND storage_used + $2 <= $3
+	`, workspaceID, delta, *quota)
+	return tag.RowsAffected() > 0, err
+}
+
+func (r *WorkspaceRepository) DecrementStorage(ctx context.Context, workspaceID string, delta int64) error {
+	_, err := r.pool.Exec(ctx, `
+		UPDATE workspaces SET storage_used = GREATEST(0, storage_used - $2), updated_at = NOW()
+		WHERE id = $1::uuid
+	`, workspaceID, delta)
+	return err
+}
