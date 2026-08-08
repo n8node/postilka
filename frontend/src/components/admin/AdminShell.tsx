@@ -37,6 +37,7 @@ const nav: NavSection[] = [
       { href: "/admin/email-settings", label: "Email / SMTP" },
       { href: "/admin/email-templates", label: "Шаблоны писем" },
       { href: "/admin/payment-settings", label: "Платёжный шлюз" },
+      { href: "/admin/storage-settings", label: "S3 — хранилище" },
       { href: "/admin/telegram/notifications", label: "Telegram — уведомления" },
       { href: "/admin/social-providers", label: "Соцсети — каналы" },
       { href: "/admin/max-platform-bot", label: "MAX — бот Postilka" },
@@ -52,6 +53,7 @@ function breadcrumbLabel(pathname: string) {
   if (pathname.startsWith("/admin/email-templates")) return "Шаблоны писем";
   if (pathname.startsWith("/admin/email-settings")) return "Email / SMTP";
   if (pathname.startsWith("/admin/payment-settings")) return "Платёжный шлюз";
+  if (pathname.startsWith("/admin/storage-settings")) return "S3 — хранилище";
   if (pathname.startsWith("/admin/social-providers")) return "Соцсети — каналы";
   if (pathname.startsWith("/admin/max-platform-bot")) return "MAX — бот Postilka";
   if (pathname.startsWith("/admin/telegram/notifications")) return "Telegram — уведомления";

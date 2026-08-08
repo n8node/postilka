@@ -937,6 +937,55 @@ export function testAdminPaymentConnection() {
   });
 }
 
+export type StorageAdminView = {
+  endpoint: string;
+  bucket: string;
+  region: string;
+  access_key: string;
+  secret_key_set: boolean;
+  secret_key_hint?: string;
+  use_ssl: boolean;
+  path_style: boolean;
+  enabled: boolean;
+  cors_origins: string[];
+  cors_xml: string;
+  updated_at?: string;
+};
+
+export type StorageAdminUpdateRequest = {
+  endpoint: string;
+  bucket: string;
+  region: string;
+  access_key: string;
+  secret_key?: string;
+  use_ssl: boolean;
+  path_style: boolean;
+  enabled: boolean;
+};
+
+export type StorageTestResult = {
+  ok: boolean;
+  message: string;
+};
+
+export function fetchAdminStorageSettings() {
+  return apiFetch<StorageAdminView>("/admin/storage-settings");
+}
+
+export function updateAdminStorageSettings(payload: StorageAdminUpdateRequest) {
+  return apiFetch<StorageAdminView>("/admin/storage-settings", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function testAdminStorageConnection() {
+  return apiFetch<StorageTestResult>("/admin/storage-settings/test", {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
 export type BillingPeriod = "monthly" | "yearly";
 
 export type BillingUsage = {
