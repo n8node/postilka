@@ -68,6 +68,7 @@ export type Plan = {
   max_posts_per_period: number | null;
   max_seats: number | null;
   storage_bytes: number | null;
+  max_file_size_bytes: number | null;
   trash_retention_days: number;
   ai_text_tokens_quota: number | null;
   ai_media_credits_quota: number | null;
@@ -90,6 +91,7 @@ export type PlanInput = {
   max_posts_per_period?: number | null;
   max_seats?: number | null;
   storage_bytes?: number | null;
+  max_file_size_bytes?: number | null;
   trash_retention_days?: number;
   ai_text_tokens_quota?: number | null;
   ai_media_credits_quota?: number | null;
@@ -1064,6 +1066,31 @@ export function testAdminStorageConnection() {
   return apiFetch<StorageTestResult>("/admin/storage-settings/test", {
     method: "POST",
     body: JSON.stringify({}),
+  });
+}
+
+export type UploadFileSettings = {
+  allowed_extensions: string[];
+  max_size_image_mb: number;
+  max_size_video_mb: number;
+  max_size_audio_mb: number;
+  max_size_archive_mb: number;
+  max_size_other_mb: number;
+};
+
+export type UploadFileSettingsRecord = {
+  config: UploadFileSettings;
+  updated_at: string;
+};
+
+export function fetchAdminUploadFileSettings() {
+  return apiFetch<UploadFileSettingsRecord>("/admin/settings/upload-files");
+}
+
+export function updateAdminUploadFileSettings(payload: UploadFileSettings) {
+  return apiFetch<UploadFileSettingsRecord>("/admin/settings/upload-files", {
+    method: "PUT",
+    body: JSON.stringify(payload),
   });
 }
 

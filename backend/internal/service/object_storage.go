@@ -237,33 +237,18 @@ func fileCategoryFromMime(mimeType, fileName string) string {
 	if strings.HasPrefix(m, "video/") {
 		return "video"
 	}
+	if strings.HasPrefix(m, "audio/") {
+		return "audio"
+	}
 	if strings.Contains(m, "zip") || strings.Contains(m, "tar") || strings.Contains(m, "rar") {
 		return "archive"
 	}
 	if strings.HasSuffix(n, ".zip") || strings.HasSuffix(n, ".rar") || strings.HasSuffix(n, ".7z") {
 		return "archive"
 	}
-	return "other"
-}
-
-const (
-	maxFileSizeImageMB  = 150
-	maxFileSizeVideoMB  = 500
-	maxFileSizeArchiveMB = 200
-	maxFileSizeOtherMB  = 512
-)
-
-func maxFileSizeBytes(category string) int64 {
-	var mb int64
-	switch category {
-	case "image":
-		mb = maxFileSizeImageMB
-	case "video":
-		mb = maxFileSizeVideoMB
-	case "archive":
-		mb = maxFileSizeArchiveMB
-	default:
-		mb = maxFileSizeOtherMB
+	if strings.HasSuffix(n, ".mp3") || strings.HasSuffix(n, ".wav") || strings.HasSuffix(n, ".ogg") ||
+		strings.HasSuffix(n, ".m4a") || strings.HasSuffix(n, ".aac") || strings.HasSuffix(n, ".flac") {
+		return "audio"
 	}
-	return mb * 1024 * 1024
+	return "other"
 }

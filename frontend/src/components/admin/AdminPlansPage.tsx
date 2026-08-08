@@ -40,6 +40,7 @@ function emptyForm(): PlanInput {
     max_posts_per_period: 100,
     max_seats: 3,
     storage_bytes: 5 * 1024 * 1024 * 1024,
+    max_file_size_bytes: 100 * 1024 * 1024,
     trash_retention_days: 7,
     ai_text_tokens_quota: 100000,
     ai_media_credits_quota: 20,
@@ -62,6 +63,7 @@ function planToForm(p: Plan): PlanInput {
     max_posts_per_period: p.max_posts_per_period,
     max_seats: p.max_seats,
     storage_bytes: p.storage_bytes,
+    max_file_size_bytes: p.max_file_size_bytes,
     trash_retention_days: p.trash_retention_days,
     ai_text_tokens_quota: p.ai_text_tokens_quota,
     ai_media_credits_quota: p.ai_media_credits_quota,
@@ -395,11 +397,24 @@ function PlanFormModal({
             />
           </label>
           <label className="text-xs font-medium text-slate-500">
-            Storage (байты)
+            Хранилище (байты, пусто = ∞)
             <input
               value={form.storage_bytes ?? ""}
               onChange={(e) =>
                 setField("storage_bytes", parseOptionalInt(e.target.value) as number | null)
+              }
+              className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="text-xs font-medium text-slate-500">
+            Макс. размер файла (байты, пусто = только глобальные лимиты)
+            <input
+              value={form.max_file_size_bytes ?? ""}
+              onChange={(e) =>
+                setField(
+                  "max_file_size_bytes",
+                  parseOptionalInt(e.target.value) as number | null,
+                )
               }
               className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
             />

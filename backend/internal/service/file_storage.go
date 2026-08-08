@@ -24,13 +24,14 @@ var (
 )
 
 type FileStorageService struct {
-	files      *repository.WorkspaceFileRepository
-	folders    *repository.WorkspaceFolderRepository
-	workspaces *repository.WorkspaceRepository
-	plans      *repository.PlanRepository
-	wsSvc      *WorkspaceService
-	storage    *ObjectStorage
-	sessions   *UploadSessionService
+	files          *repository.WorkspaceFileRepository
+	folders        *repository.WorkspaceFolderRepository
+	workspaces     *repository.WorkspaceRepository
+	plans          *repository.PlanRepository
+	wsSvc          *WorkspaceService
+	storage        *ObjectStorage
+	sessions       *UploadSessionService
+	uploadSettings *UploadFileSettingsService
 }
 
 func NewFileStorageService(
@@ -41,10 +42,11 @@ func NewFileStorageService(
 	wsSvc *WorkspaceService,
 	storage *ObjectStorage,
 	sessions *UploadSessionService,
+	uploadSettings *UploadFileSettingsService,
 ) *FileStorageService {
 	return &FileStorageService{
 		files: files, folders: folders, workspaces: workspaces, plans: plans,
-		wsSvc: wsSvc, storage: storage, sessions: sessions,
+		wsSvc: wsSvc, storage: storage, sessions: sessions, uploadSettings: uploadSettings,
 	}
 }
 
@@ -59,30 +61,30 @@ func (s *FileStorageService) resolveWorkspace(ctx context.Context, userID string
 	return s.wsSvc.RequireMembership(ctx, userID, ws.ID, minRole)
 }
 
-func (s *FileStorageService) planQuota(ctx context.Context, workspaceID string) (*int64, int, error) {
+func (s *FileStorageService) planQuota(ctx context.Context, workspaceID string) (*int64, *int64, int, error) {
 	planID, _, err := s.workspaces.GetPlanMeta(ctx, workspaceID)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			free, freeErr := s.plans.GetDefaultFree(ctx)
 			if freeErr != nil {
-				return nil, 0, freeErr
+				return nil, nil, 0, freeErr
 			}
-			return free.StorageBytes, free.TrashRetentionDays, nil
+			return free.StorageBytes, free.MaxFileSizeBytes, free.TrashRetentionDays, nil
 		}
-		return nil, 0, err
+		return nil, nil, 0, err
 	}
 	plan, err := s.plans.GetByID(ctx, planID)
 	if err != nil {
-		return nil, 0, err
+		return nil, nil, 0, err
 	}
-	return plan.StorageBytes, plan.TrashRetentionDays, nil
+	return plan.StorageBytes, plan.MaxFileSizeBytes, plan.TrashRetentionDays, nil
 }
 
 func (s *FileStorageService) reserveStorage(ctx context.Context, workspaceID string, size int64) error {
 	if size <= 0 {
 		return ErrEmptyFile
 	}
-	quota, _, err := s.planQuota(ctx, workspaceID)
+	quota, _, _, err := s.planQuota(ctx, workspaceID)
 	if err != nil {
 		return err
 	}
@@ -117,7 +119,7 @@ func (s *FileStorageService) GetStorageStats(ctx context.Context, userID string,
 	if err != nil {
 		return nil, err
 	}
-	quota, retention, err := s.planQuota(ctx, ws.ID)
+	quota, _, retention, err := s.planQuota(ctx, ws.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -128,6 +130,18 @@ func (s *FileStorageService) GetStorageStats(ctx context.Context, userID string,
 		TrashRetentionDays: retention,
 		FileCount:          count,
 	}, nil
+}
+
+func (s *FileStorageService) GetUploadLimits(ctx context.Context, userID string, r *http.Request) (*model.UploadFileLimitsView, error) {
+	ws, err := s.resolveWorkspace(ctx, userID, r, model.RoleViewer)
+	if err != nil {
+		return nil, err
+	}
+	storageQuota, maxFileSize, _, err := s.planQuota(ctx, ws.ID)
+	if err != nil {
+		return nil, err
+	}
+	return s.uploadSettings.BuildLimitsView(ctx, maxFileSize, storageQuota)
 }
 
 func (s *FileStorageService) UploadInit(ctx context.Context, userID string, r *http.Request, req model.FileUploadInitRequest) (*model.FileUploadInitResponse, error) {
@@ -142,10 +156,12 @@ func (s *FileStorageService) UploadInit(ctx context.Context, userID string, r *h
 	if req.Size <= 0 {
 		return nil, ErrEmptyFile
 	}
-	cat := fileCategoryFromMime(req.MimeType, name)
-	maxSize := maxFileSizeBytes(cat)
-	if req.Size > maxSize {
-		return nil, ErrFileTooLarge
+	_, maxFileSize, _, err := s.planQuota(ctx, ws.ID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.uploadSettings.ValidateUpload(ctx, req.MimeType, name, req.Size, maxFileSize); err != nil {
+		return nil, err
 	}
 	if err := s.folders.FolderExistsActive(ctx, ws.ID, req.FolderID); err != nil {
 		return nil, ErrFolderNotFound
@@ -154,7 +170,7 @@ func (s *FileStorageService) UploadInit(ctx context.Context, userID string, r *h
 	if err != nil {
 		return nil, err
 	}
-	quota, _, err := s.planQuota(ctx, ws.ID)
+	quota, _, _, err := s.planQuota(ctx, ws.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -476,7 +492,7 @@ func (s *FileStorageService) DeleteFile(ctx context.Context, userID string, r *h
 	if err != nil {
 		return false, err
 	}
-	_, retention, err := s.planQuota(ctx, ws.ID)
+	_, _, retention, err := s.planQuota(ctx, ws.ID)
 	if err != nil {
 		return false, err
 	}
@@ -516,7 +532,7 @@ func (s *FileStorageService) DeleteFolder(ctx context.Context, userID string, r 
 	} else if err != nil {
 		return false, err
 	}
-	_, retention, err := s.planQuota(ctx, ws.ID)
+	_, _, retention, err := s.planQuota(ctx, ws.ID)
 	if err != nil {
 		return false, err
 	}
@@ -844,7 +860,7 @@ func (s *FileStorageService) PurgeExpiredTrash(ctx context.Context) (int, error)
 	}
 	total := 0
 	for _, wsID := range workspaceIDs {
-		_, retention, err := s.planQuota(ctx, wsID)
+		_, _, retention, err := s.planQuota(ctx, wsID)
 		if err != nil {
 			continue
 		}

@@ -65,6 +65,8 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	paymentSettingsSvc := service.NewPaymentSettingsService(paymentSettingsRepo, cfg)
 	storageSettingsRepo := repository.NewStorageSettingsRepository(db.Pool)
 	storageSettingsSvc := service.NewStorageSettingsService(storageSettingsRepo, cfg)
+	uploadFileSettingsRepo := repository.NewUploadFileSettingsRepository(db.Pool)
+	uploadFileSettingsSvc := service.NewUploadFileSettingsService(uploadFileSettingsRepo)
 	planCheckoutRepo := repository.NewPlanCheckoutRepository(db.Pool)
 	walletRepo := repository.NewWalletRepository(db.Pool)
 	usageRepo := repository.NewUsageRepository(db.Pool)
@@ -129,6 +131,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	emailTemplateHandler := handler.NewEmailTemplateSettingsHandler(emailTemplateSettingsSvc, emailSvc)
 	paymentSettingsHandler := handler.NewPaymentSettingsHandler(paymentSettingsSvc)
 	storageSettingsHandler := handler.NewStorageSettingsHandler(storageSettingsSvc)
+	uploadFileSettingsHandler := handler.NewUploadFileSettingsHandler(uploadFileSettingsSvc)
 	telegramHandler := handler.NewTelegramSettingsHandler(telegramSettingsSvc, telegramSvc)
 	telegramProviderHandler := handler.NewTelegramProviderSettingsHandler(telegramProviderSettingsSvc)
 	youtubeProviderHandler := handler.NewYouTubeProviderSettingsHandler(youtubeProviderSettingsSvc)
@@ -141,7 +144,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	objectStorage := service.NewObjectStorage(storageSettingsSvc)
 	uploadSessions := service.NewUploadSessionService(cfg.JWTSecret)
 	fileStorageSvc := service.NewFileStorageService(
-		fileStorageRepo, folderStorageRepo, wsRepo, planRepo, wsSvc, objectStorage, uploadSessions,
+		fileStorageRepo, folderStorageRepo, wsRepo, planRepo, wsSvc, objectStorage, uploadSessions, uploadFileSettingsSvc,
 	)
 	billingHandler := handler.NewBillingHandler(billingSvc, checkoutSvc, wsSvc)
 	fileStorageHandler := handler.NewFileStorageHandler(fileStorageSvc)
@@ -242,6 +245,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 		r.Group(func(r chi.Router) {
 			r.Use(authMW.Required)
 			r.Get("/storage", fileStorageHandler.GetStorage)
+			r.Get("/storage/limits", fileStorageHandler.GetUploadLimits)
 			r.Post("/files/upload/init", fileStorageHandler.UploadInit)
 			r.Post("/files/upload/complete", fileStorageHandler.UploadComplete)
 			r.Get("/files", fileStorageHandler.ListFiles)
@@ -303,6 +307,8 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Get("/storage-settings", storageSettingsHandler.GetAdmin)
 				r.Put("/storage-settings", storageSettingsHandler.UpdateAdmin)
 				r.Post("/storage-settings/test", storageSettingsHandler.TestConnection)
+				r.Get("/settings/upload-files", uploadFileSettingsHandler.GetAdmin)
+				r.Put("/settings/upload-files", uploadFileSettingsHandler.UpdateAdmin)
 				r.Get("/telegram", telegramHandler.GetAdmin)
 				r.Put("/telegram", telegramHandler.UpdateAdmin)
 				r.Get("/telegram/notifications", telegramHandler.GetAdmin)

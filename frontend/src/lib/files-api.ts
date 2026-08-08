@@ -31,6 +31,22 @@ export type StorageStats = {
   file_count: number;
 };
 
+export type UploadLimits = {
+  allowed_extensions: string[];
+  max_size_image_bytes: number;
+  max_size_video_bytes: number;
+  max_size_audio_bytes: number;
+  max_size_archive_bytes: number;
+  max_size_other_bytes: number;
+  plan_max_file_size_bytes?: number | null;
+  plan_storage_bytes?: number | null;
+  updated_at: string;
+};
+
+export function fetchUploadLimits() {
+  return apiFetch<UploadLimits>("/storage/limits");
+}
+
 export type FilesSection =
   | "my-files"
   | "recent"

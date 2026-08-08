@@ -23,7 +23,7 @@ func NewPlanRepository(pool *pgxpool.Pool) *PlanRepository {
 const planColumns = `
 	id, slug, name, description, is_free, is_active, is_popular,
 	price_monthly_cents, price_yearly_cents,
-	max_channels, max_posts_per_period, max_seats, storage_bytes, trash_retention_days,
+	max_channels, max_posts_per_period, max_seats, storage_bytes, max_file_size_bytes, trash_retention_days,
 	ai_text_tokens_quota, ai_media_credits_quota, free_plan_duration_days,
 	sort_order, created_at, updated_at
 `
@@ -76,16 +76,16 @@ func (r *PlanRepository) Create(ctx context.Context, p *model.Plan) (*model.Plan
 		INSERT INTO plans (
 			slug, name, description, is_free, is_active, is_popular,
 			price_monthly_cents, price_yearly_cents,
-			max_channels, max_posts_per_period, max_seats, storage_bytes, trash_retention_days,
+			max_channels, max_posts_per_period, max_seats, storage_bytes, max_file_size_bytes, trash_retention_days,
 			ai_text_tokens_quota, ai_media_credits_quota, free_plan_duration_days, sort_order
 		) VALUES (
-			$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17
+			$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18
 		)
 		RETURNING ` + planColumns
 	return scanPlan(r.pool.QueryRow(ctx, q,
 		p.Slug, p.Name, p.Description, p.IsFree, p.IsActive, p.IsPopular,
 		p.PriceMonthlyCents, p.PriceYearlyCents,
-		p.MaxChannels, p.MaxPostsPerPeriod, p.MaxSeats, p.StorageBytes, p.TrashRetentionDays,
+		p.MaxChannels, p.MaxPostsPerPeriod, p.MaxSeats, p.StorageBytes, p.MaxFileSizeBytes, p.TrashRetentionDays,
 		p.AITextTokensQuota, p.AIMediaCreditsQuota, p.FreePlanDurationDays, p.SortOrder,
 	))
 }
@@ -105,18 +105,19 @@ func (r *PlanRepository) Update(ctx context.Context, p *model.Plan) (*model.Plan
 			max_posts_per_period = $11,
 			max_seats = $12,
 			storage_bytes = $13,
-			trash_retention_days = $14,
-			ai_text_tokens_quota = $15,
-			ai_media_credits_quota = $16,
-			free_plan_duration_days = $17,
-			sort_order = $18,
+			max_file_size_bytes = $14,
+			trash_retention_days = $15,
+			ai_text_tokens_quota = $16,
+			ai_media_credits_quota = $17,
+			free_plan_duration_days = $18,
+			sort_order = $19,
 			updated_at = NOW()
 		WHERE id = $1
 		RETURNING ` + planColumns
 	out, err := scanPlan(r.pool.QueryRow(ctx, q,
 		p.ID, p.Slug, p.Name, p.Description, p.IsFree, p.IsActive, p.IsPopular,
 		p.PriceMonthlyCents, p.PriceYearlyCents,
-		p.MaxChannels, p.MaxPostsPerPeriod, p.MaxSeats, p.StorageBytes, p.TrashRetentionDays,
+		p.MaxChannels, p.MaxPostsPerPeriod, p.MaxSeats, p.StorageBytes, p.MaxFileSizeBytes, p.TrashRetentionDays,
 		p.AITextTokensQuota, p.AIMediaCreditsQuota, p.FreePlanDurationDays, p.SortOrder,
 	))
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -164,7 +165,7 @@ func scanPlan(row planScanner) (*model.Plan, error) {
 	err := row.Scan(
 		&p.ID, &p.Slug, &p.Name, &p.Description, &p.IsFree, &p.IsActive, &p.IsPopular,
 		&p.PriceMonthlyCents, &p.PriceYearlyCents,
-		&p.MaxChannels, &p.MaxPostsPerPeriod, &p.MaxSeats, &p.StorageBytes, &p.TrashRetentionDays,
+		&p.MaxChannels, &p.MaxPostsPerPeriod, &p.MaxSeats, &p.StorageBytes, &p.MaxFileSizeBytes, &p.TrashRetentionDays,
 		&p.AITextTokensQuota, &p.AIMediaCreditsQuota, &p.FreePlanDurationDays,
 		&p.SortOrder, &createdAt, &updatedAt,
 	)

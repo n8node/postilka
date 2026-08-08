@@ -1,0 +1,280 @@
+"use client";
+
+import { Save } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import Link from "next/link";
+import {
+  ApiError,
+  fetchAdminUploadFileSettings,
+  updateAdminUploadFileSettings,
+  type UploadFileSettings,
+} from "@/lib/api";
+import { cn } from "@/lib/utils";
+
+type SettingsKey = "upload-files";
+
+const SETTINGS_MENU: { key: SettingsKey; label: string; description: string }[] = [
+  {
+    key: "upload-files",
+    label: "Загрузка файлов",
+    description: "Форматы и лимиты размера",
+  },
+];
+
+const DEFAULT_SETTINGS: UploadFileSettings = {
+  allowed_extensions: [
+    "jpg", "jpeg", "png", "gif", "webp", "bmp", "svg", "heic", "heif", "tiff", "tif", "ico",
+    "mp4", "mov", "avi", "mkv", "webm", "m4v", "mpeg", "mpg", "wmv", "flv",
+    "mp3", "wav", "ogg", "m4a", "aac", "flac", "wma",
+    "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "csv", "rtf", "md",
+    "zip", "rar", "7z", "tar", "gz", "bz2",
+  ],
+  max_size_image_mb: 150,
+  max_size_video_mb: 500,
+  max_size_audio_mb: 100,
+  max_size_archive_mb: 200,
+  max_size_other_mb: 512,
+};
+
+function parseExtensionsInput(raw: string): string[] {
+  return raw
+    .split(/[\s,;]+/)
+    .map((s) => s.trim().replace(/^\./, "").toLowerCase())
+    .filter(Boolean);
+}
+
+function formatExtensionsInput(exts: string[]): string {
+  return exts.join(", ");
+}
+
+function UploadFilesSettingsForm({
+  form,
+  onChange,
+}: {
+  form: UploadFileSettings;
+  onChange: (next: UploadFileSettings) => void;
+}) {
+  const [extensionsText, setExtensionsText] = useState(formatExtensionsInput(form.allowed_extensions));
+
+  useEffect(() => {
+    setExtensionsText(formatExtensionsInput(form.allowed_extensions));
+  }, [form.allowed_extensions]);
+
+  function patch(partial: Partial<UploadFileSettings>) {
+    onChange({ ...form, ...partial });
+  }
+
+  function handleExtensionsBlur() {
+    patch({ allowed_extensions: parseExtensionsInput(extensionsText) });
+  }
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-lg font-semibold text-slate-900">Загрузка файлов</h2>
+        <p className="mt-1 text-sm text-slate-500">
+          Глобальные ограничения платформы: разрешённые расширения и максимальный размер по категориям.
+          Лимиты хранилища и максимальный размер одного файла для конкретного тарифа настраиваются в{" "}
+          <Link href="/admin/plans" className="text-blue-600 hover:underline">
+            Тарифах
+          </Link>
+          .
+        </p>
+      </div>
+
+      <label className="block text-sm">
+        <span className="font-medium text-slate-700">Разрешённые расширения</span>
+        <span className="mt-1 block text-xs text-slate-500">
+          Через запятую или с новой строки, без точки (например: jpg, png, mp4, pdf)
+        </span>
+        <textarea
+          value={extensionsText}
+          onChange={(e) => setExtensionsText(e.target.value)}
+          onBlur={handleExtensionsBlur}
+          rows={6}
+          className="mt-2 w-full rounded-md border border-slate-200 px-3 py-2 font-mono text-sm"
+        />
+        <span className="mt-1 block text-xs text-slate-400">
+          Сейчас разрешено: {form.allowed_extensions.length} форматов
+        </span>
+      </label>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {(
+          [
+            ["max_size_image_mb", "Изображения", "jpg, png, webp…"],
+            ["max_size_video_mb", "Видео", "mp4, mov, webm…"],
+            ["max_size_audio_mb", "Аудио", "mp3, wav, ogg…"],
+            ["max_size_archive_mb", "Архивы", "zip, rar, 7z…"],
+            ["max_size_other_mb", "Прочие", "pdf, doc, txt…"],
+          ] as const
+        ).map(([key, label, hint]) => (
+          <label key={key} className="text-xs font-medium text-slate-500">
+            {label}
+            <span className="mt-0.5 block font-normal text-slate-400">{hint}</span>
+            <div className="mt-1 flex items-center gap-2">
+              <input
+                type="number"
+                min={1}
+                max={10240}
+                value={form[key]}
+                onChange={(e) => patch({ [key]: Math.max(1, Number(e.target.value) || 1) })}
+                className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+              />
+              <span className="shrink-0 text-sm text-slate-500">МБ</span>
+            </div>
+          </label>
+        ))}
+      </div>
+
+      <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
+        При загрузке применяется меньший из двух лимитов: глобальный по категории файла и максимальный
+        размер файла из тарифа workspace (если задан).
+      </div>
+    </div>
+  );
+}
+
+export function AdminSettingsPage() {
+  const searchParams = useSearchParams();
+  const initialSection = (searchParams.get("section") as SettingsKey) || "upload-files";
+
+  const [selected, setSelected] = useState<SettingsKey>(
+    SETTINGS_MENU.some((m) => m.key === initialSection) ? initialSection : "upload-files",
+  );
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [form, setForm] = useState<UploadFileSettings>(DEFAULT_SETTINGS);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await fetchAdminUploadFileSettings();
+      setForm({ ...DEFAULT_SETTINGS, ...data.config });
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Не удалось загрузить настройки");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  useEffect(() => {
+    const section = searchParams.get("section") as SettingsKey | null;
+    if (section && SETTINGS_MENU.some((m) => m.key === section)) {
+      setSelected(section);
+    }
+  }, [searchParams]);
+
+  async function handleSave() {
+    setSaving(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const data = await updateAdminUploadFileSettings(form);
+      setForm({ ...DEFAULT_SETTINGS, ...data.config });
+      setSuccess("Настройки загрузки файлов сохранены");
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Не удалось сохранить");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const menuItem = SETTINGS_MENU.find((m) => m.key === selected)!;
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Настройки платформы</h1>
+        <p className="mt-1 text-sm text-slate-500">
+          Глобальные параметры Postilka. Подразделы сгруппированы по темам — как в разделе «Соцсети».
+        </p>
+      </div>
+
+      {error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          {error}
+        </div>
+      )}
+      {success && (
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+          {success}
+        </div>
+      )}
+
+      <div className="flex min-h-[620px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+        <aside className="flex w-56 shrink-0 flex-col border-r border-slate-200 bg-slate-50">
+          <div className="border-b border-slate-200 px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Разделы</p>
+          </div>
+          <nav className="flex-1 overflow-y-auto p-2">
+            <ul className="space-y-0.5">
+              {SETTINGS_MENU.map((item) => {
+                const active = selected === item.key;
+                return (
+                  <li key={item.key}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelected(item.key);
+                        setSuccess(null);
+                        setError(null);
+                      }}
+                      className={cn(
+                        "w-full rounded-md px-3 py-2 text-left text-sm transition-colors",
+                        active
+                          ? "bg-white font-medium text-slate-900 shadow-sm"
+                          : "text-slate-600 hover:bg-white/70 hover:text-slate-900",
+                      )}
+                    >
+                      <span>{item.label}</span>
+                      <span className="mt-0.5 block text-xs text-slate-400">{item.description}</span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </nav>
+        </aside>
+
+        <div className="flex min-w-0 flex-1 flex-col">
+          <div className="flex-1 overflow-y-auto p-6">
+            {loading ? (
+              <p className="text-sm text-slate-500">Загрузка…</p>
+            ) : selected === "upload-files" ? (
+              <UploadFilesSettingsForm
+                form={form}
+                onChange={(next) => {
+                  setForm(next);
+                  setSuccess(null);
+                }}
+              />
+            ) : (
+              <p className="text-sm text-slate-500">Раздел «{menuItem.label}» скоро.</p>
+            )}
+          </div>
+
+          <div className="flex items-center justify-end gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
+            <button
+              type="button"
+              onClick={() => void handleSave()}
+              disabled={saving || loading}
+              className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              <Save className="h-4 w-4" />
+              {saving ? "Сохранение…" : "Сохранить"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

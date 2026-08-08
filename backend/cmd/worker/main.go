@@ -48,13 +48,15 @@ func main() {
 
 	storageSettingsRepo := repository.NewStorageSettingsRepository(db.Pool)
 	storageSettingsSvc := service.NewStorageSettingsService(storageSettingsRepo, cfg)
+	uploadFileSettingsRepo := repository.NewUploadFileSettingsRepository(db.Pool)
+	uploadFileSettingsSvc := service.NewUploadFileSettingsService(uploadFileSettingsRepo)
 	wsSvc := service.NewWorkspaceService(wsRepo, planRepo)
 	objectStorage := service.NewObjectStorage(storageSettingsSvc)
 	uploadSessions := service.NewUploadSessionService(cfg.JWTSecret)
 	fileStorageRepo := repository.NewWorkspaceFileRepository(db.Pool)
 	folderStorageRepo := repository.NewWorkspaceFolderRepository(db.Pool)
 	fileStorageSvc := service.NewFileStorageService(
-		fileStorageRepo, folderStorageRepo, wsRepo, planRepo, wsSvc, objectStorage, uploadSessions,
+		fileStorageRepo, folderStorageRepo, wsRepo, planRepo, wsSvc, objectStorage, uploadSessions, uploadFileSettingsSvc,
 	)
 
 	logger.Info("worker started", "publish_concurrency", cfg.WorkerPublishConcurrency, "version", config.Version)

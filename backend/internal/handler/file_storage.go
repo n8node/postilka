@@ -33,6 +33,20 @@ func (h *FileStorageHandler) GetStorage(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, stats)
 }
 
+func (h *FileStorageHandler) GetUploadLimits(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
+		return
+	}
+	limits, err := h.files.GetUploadLimits(r.Context(), userID, r)
+	if err != nil {
+		writeFileStorageError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, limits)
+}
+
 func (h *FileStorageHandler) UploadInit(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
@@ -447,6 +461,8 @@ func writeFileStorageError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusForbidden, "Превышен лимит хранилища")
 	case errors.Is(err, service.ErrFileTooLarge):
 		writeError(w, http.StatusRequestEntityTooLarge, "Файл слишком большой")
+	case errors.Is(err, service.ErrFileTypeNotAllowed):
+		writeError(w, http.StatusUnsupportedMediaType, "Формат файла не разрешён")
 	case errors.Is(err, service.ErrEmptyFile):
 		writeError(w, http.StatusBadRequest, "Пустые файлы загружать нельзя")
 	case errors.Is(err, service.ErrStorageNotConfigured):
