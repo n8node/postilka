@@ -61,7 +61,8 @@ type ChannelMetadata struct {
 	ProviderTitle     string     `json:"provider_title,omitempty"`
 	PublicURL         string     `json:"public_url,omitempty"`
 	AvatarURL         string     `json:"avatar_url,omitempty"`
-	OAuthConnectedAt  *time.Time `json:"oauth_connected_at,omitempty"`
+	OAuthConnectedAt         *time.Time `json:"oauth_connected_at,omitempty"`
+	OAuthReconnectNotifiedAt *time.Time `json:"oauth_reconnect_notified_at,omitempty"`
 	CanPost           *bool      `json:"can_post,omitempty"`
 	IsAdmin           *bool      `json:"is_admin,omitempty"`
 	BotPermissions    []string   `json:"bot_permissions,omitempty"`

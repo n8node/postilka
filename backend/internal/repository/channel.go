@@ -426,6 +426,54 @@ func (r *ChannelRepository) UpdateOAuthTokens(
 	return nil
 }
 
+func (r *ChannelRepository) ListActiveByProvider(ctx context.Context, provider model.ChannelProvider) ([]model.Channel, error) {
+	const q = `
+		SELECT ` + channelSelectSQL + `
+		FROM channels
+		WHERE provider = $1 AND status = 'active'
+		ORDER BY created_at ASC
+	`
+	rows, err := r.pool.Query(ctx, q, provider)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]model.Channel, 0)
+	for rows.Next() {
+		var ch model.Channel
+		if err := r.scanChannel(rows, &ch); err != nil {
+			return nil, err
+		}
+		items = append(items, ch)
+	}
+	return items, rows.Err()
+}
+
+func (r *ChannelRepository) UpdateChannelMetadata(
+	ctx context.Context,
+	workspaceID, channelID string,
+	metadata model.ChannelMetadata,
+) error {
+	metaRaw, err := json.Marshal(metadata)
+	if err != nil {
+		return err
+	}
+	const q = `
+		UPDATE channels
+		SET metadata = $3, updated_at = NOW()
+		WHERE id = $1 AND workspace_id = $2
+	`
+	ct, err := r.pool.Exec(ctx, q, channelID, workspaceID, metaRaw)
+	if err != nil {
+		return err
+	}
+	if ct.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (r *ChannelRepository) Delete(ctx context.Context, workspaceID, channelID string) error {
 	const q = `DELETE FROM channels WHERE id = $1 AND workspace_id = $2`
 	ct, err := r.pool.Exec(ctx, q, channelID, workspaceID)

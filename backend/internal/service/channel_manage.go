@@ -35,21 +35,8 @@ func channelPostModeLabel(ch model.Channel) string {
 	return "Свой бот"
 }
 
-const youtubeOAuthTestingReconnectAfter = 6 * 24 * time.Hour
-
 func youtubeOAuthReconnectBy(ch model.Channel) *time.Time {
-	if ch.Provider != model.ChannelProviderYouTube {
-		return nil
-	}
-	connectedAt := ch.Metadata.OAuthConnectedAt
-	if connectedAt == nil {
-		connectedAt = &ch.CreatedAt
-	}
-	if connectedAt == nil {
-		return nil
-	}
-	t := connectedAt.Add(youtubeOAuthTestingReconnectAfter)
-	return &t
+	return YouTubeOAuthReconnectBy(ch)
 }
 
 func buildChannelListItem(ch model.Channel, tokenEnc string, cipher *SecretCipher) model.ChannelListItem {

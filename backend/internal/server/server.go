@@ -220,6 +220,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Get("/channels/{id}/avatar", channelHandler.Avatar)
 			r.Patch("/channels/{id}", channelHandler.Update)
 			r.Post("/channels/{id}/verify", channelHandler.Verify)
+			r.Post("/channels/{id}/oauth/youtube/reconnect/start", channelHandler.YouTubeReconnectStart)
 			r.Post("/channels/{id}/test-message", channelHandler.SendTestMessage)
 			r.Put("/channels/{id}/telegram-token", channelHandler.UpdateTelegramToken)
 			r.Delete("/channels/{id}", channelHandler.Delete)

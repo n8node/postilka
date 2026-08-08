@@ -1513,6 +1513,13 @@ export function updateChannelTelegramToken(id: string, botToken: string) {
   });
 }
 
+export function startYouTubeChannelReconnect(channelId: string) {
+  return apiFetch<{ redirect_url: string; state_token: string }>(
+    `/channels/${channelId}/oauth/youtube/reconnect/start`,
+    { method: "POST" },
+  );
+}
+
 export function startChannelOAuth(
   provider: SocialProviderKey,
   options?: {

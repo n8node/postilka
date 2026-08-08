@@ -180,6 +180,21 @@ func (h *ChannelHandler) Avatar(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write(body)
 }
 
+func (h *ChannelHandler) YouTubeReconnectStart(w http.ResponseWriter, r *http.Request) {
+	userID, ok := channelUserID(r)
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
+		return
+	}
+	id := chi.URLParam(r, "id")
+	result, err := h.connect.YouTubeReconnectStart(r.Context(), userID, r, id)
+	if err != nil {
+		writeChannelConnectError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
 func (h *ChannelHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	userID, ok := channelUserID(r)
 	if !ok {

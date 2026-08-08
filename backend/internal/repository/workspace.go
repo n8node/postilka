@@ -213,6 +213,39 @@ func (r *WorkspaceRepository) GetByID(ctx context.Context, workspaceID string) (
 	return ws, err
 }
 
+type WorkspaceMemberEmail struct {
+	Email string
+	Name  string
+}
+
+func (r *WorkspaceRepository) ListEditorMemberEmails(ctx context.Context, workspaceID string) ([]WorkspaceMemberEmail, error) {
+	const q = `
+		SELECT DISTINCT u.email, COALESCE(NULLIF(u.name, ''), u.email)
+		FROM workspace_members wm
+		JOIN users u ON u.id = wm.user_id
+		WHERE wm.workspace_id = $1
+		  AND wm.role IN ('admin', 'editor')
+		  AND u.is_blocked = false
+		  AND NULLIF(u.email, '') IS NOT NULL
+		ORDER BY u.email
+	`
+	rows, err := r.pool.Query(ctx, q, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]WorkspaceMemberEmail, 0)
+	for rows.Next() {
+		var item WorkspaceMemberEmail
+		if err := rows.Scan(&item.Email, &item.Name); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
 func scanWorkspace(row pgx.Row) (*model.Workspace, error) {
 	var ws model.Workspace
 	var createdAt time.Time

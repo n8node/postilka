@@ -36,6 +36,15 @@ func main() {
 	subscriptionRepo := repository.NewSubscriptionRepository(db.Pool)
 	subscriptionSvc := service.NewSubscriptionService(subscriptionRepo, planRepo, wsRepo)
 	renewalSvc := service.NewRenewalService(subscriptionRepo, planRepo, walletRepo, wsRepo, subscriptionSvc, logger)
+	smtpSettingsRepo := repository.NewSMTPSettingsRepository(db.Pool)
+	smtpSettingsSvc := service.NewSMTPSettingsService(smtpSettingsRepo)
+	mailSvc := service.NewMailService(smtpSettingsSvc)
+	emailTemplateSettingsRepo := repository.NewEmailTemplateSettingsRepository(db.Pool)
+	emailTemplateSettingsSvc := service.NewEmailTemplateSettingsService(emailTemplateSettingsRepo)
+	emailRenderer := service.NewEmailRenderer()
+	emailSvc := service.NewEmailService(mailSvc, emailTemplateSettingsSvc, emailRenderer)
+	channelRepo := repository.NewChannelRepository(db.Pool)
+	youtubeReconnectNotifier := service.NewYouTubeOAuthReconnectNotifier(channelRepo, wsRepo, emailSvc, cfg, logger)
 
 	logger.Info("worker started", "publish_concurrency", cfg.WorkerPublishConcurrency, "version", config.Version)
 
@@ -54,6 +63,9 @@ func main() {
 			}
 			if err := renewalSvc.Process(ctx); err != nil {
 				logger.Warn("subscription renewal tick failed", "error", err)
+			}
+			if err := youtubeReconnectNotifier.Process(ctx); err != nil {
+				logger.Warn("youtube reconnect notify tick failed", "error", err)
 			}
 		case <-quit:
 			logger.Info("worker stopped")

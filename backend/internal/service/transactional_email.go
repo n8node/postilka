@@ -6,6 +6,7 @@ import (
 	"html"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/postilka/postilka/internal/config"
 	"github.com/postilka/postilka/internal/model"
@@ -151,6 +152,27 @@ func WalletTopupPaidEmailBody(name, amount, appURL string) EmailBody {
 		ContentHTML: content,
 		CTALabel:    "Открыть кошелёк",
 		CTAURL:      appURL + "/plans",
+	}
+}
+
+func YouTubeReconnectEmailBody(channelName, workspaceName string, reconnectBy time.Time, channelsURL string) EmailBody {
+	wsLine := ""
+	if strings.TrimSpace(workspaceName) != "" {
+		wsLine = emailParagraphRow(fmt.Sprintf("Workspace: <strong>%s</strong>", html.EscapeString(workspaceName)))
+	}
+	dateLabel := reconnectBy.In(time.Local).Format("02.01.2006 15:04")
+	content := emailParagraphRow(
+		fmt.Sprintf("Для YouTube-канала <strong>%s</strong> пора обновить доступ Google OAuth (Testing).",
+			html.EscapeString(channelName))) +
+		wsLine +
+		emailParagraphRow(fmt.Sprintf("В Postilka кнопка «Переподключить» доступна с <strong>%s</strong>.", html.EscapeString(dateLabel))) +
+		emailNoteRow("Client ID и Secret менять не нужно — достаточно снова войти через Google.")
+
+	return EmailBody{
+		Preheader:   "Переподключите YouTube-канал в Postilka",
+		ContentHTML: content,
+		CTALabel:    "Открыть каналы",
+		CTAURL:      channelsURL,
 	}
 }
 
