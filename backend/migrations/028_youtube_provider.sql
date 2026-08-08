@@ -12,6 +12,11 @@ INSERT INTO youtube_provider_settings (id, config) VALUES (1, '{
   "proxy_urls": []
 }'::jsonb);
 
+ALTER TABLE social_provider_settings DROP CONSTRAINT IF EXISTS social_provider_settings_provider_check;
+ALTER TABLE social_provider_settings ADD CONSTRAINT social_provider_settings_provider_check CHECK (
+    provider IN ('vk', 'ok', 'max', 'rutube', 'dzen', 'youtube')
+);
+
 INSERT INTO social_provider_settings (provider, config) VALUES
 ('youtube', '{
   "enabled": false,
@@ -37,6 +42,11 @@ ALTER TABLE channels ADD CONSTRAINT channels_provider_check CHECK (
 );
 
 -- +goose Down
+ALTER TABLE social_provider_settings DROP CONSTRAINT IF EXISTS social_provider_settings_provider_check;
+ALTER TABLE social_provider_settings ADD CONSTRAINT social_provider_settings_provider_check CHECK (
+    provider IN ('vk', 'ok', 'max', 'rutube', 'dzen')
+);
+
 ALTER TABLE channels DROP CONSTRAINT IF EXISTS channels_provider_check;
 ALTER TABLE channels ADD CONSTRAINT channels_provider_check CHECK (
     provider IN ('telegram', 'vk', 'ok', 'max', 'rutube', 'dzen')

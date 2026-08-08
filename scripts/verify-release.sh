@@ -14,6 +14,7 @@ require_running() {
   local service="$1"
   if ! "${COMPOSE[@]}" ps --status running --services | grep -qx "$service"; then
     echo "Service is not running: $service" >&2
+    "${COMPOSE[@]}" logs --tail=40 "$service" >&2 || true
     return 1
   fi
 }
