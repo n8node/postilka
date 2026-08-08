@@ -1315,10 +1315,20 @@ export type Channel = {
   updated_at: string;
 };
 
+export type PublishCapabilities = {
+  text: boolean;
+  photo?: boolean;
+  video?: boolean;
+  feed?: boolean;
+  schedule?: boolean;
+  formats?: string[];
+};
+
 export type ChannelListItem = Channel & {
   bot_token_set: boolean;
   bot_token_hint?: string;
   post_mode_label?: string;
+  publish_capabilities?: PublishCapabilities;
 };
 
 export type ChannelUpdateRequest = {
@@ -1351,7 +1361,7 @@ export type SocialProviderPublicInfo = {
   provider: SocialProviderKey;
   label: string;
   enabled: boolean;
-  connect_flow: "oauth" | "user_oauth" | "bot_token";
+  connect_flow: "oauth" | "user_oauth" | "bot_token" | "telegram_crosspost";
   platform_bot_enabled?: boolean;
   platform_oauth_enabled?: boolean;
   platform_bot?: {
@@ -1368,6 +1378,7 @@ export type SocialProviderPublicInfo = {
   support_telegram_url: string;
   support_email: string;
   support_hours_text: string;
+  publish_capabilities?: PublishCapabilities;
 };
 
 export type ChannelProviderInfo = {
@@ -1450,7 +1461,9 @@ export type ChannelTestMessagePayload = {
   text?: string;
   title?: string;
   photo_url?: string;
-  content_type?: "brief" | "article";
+  video_url?: string;
+  content_type?: "brief" | "article" | "feed" | "video";
+  publish_at?: string;
 };
 
 export function sendChannelTestMessage(id: string, payload?: ChannelTestMessagePayload) {

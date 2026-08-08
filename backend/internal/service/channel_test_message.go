@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/postilka/postilka/internal/model"
 	oauthclient "github.com/postilka/postilka/internal/oauth"
@@ -67,11 +68,28 @@ func (s *ChannelTestService) SendTestMessage(
 	photoURL := strings.TrimSpace(req.PhotoURL)
 	videoURL := strings.TrimSpace(req.VideoURL)
 	contentType := strings.TrimSpace(req.ContentType)
-	if photoURL != "" && videoURL != "" {
+	if photoURL != "" && videoURL != "" && ch.Provider != model.ChannelProviderRutube {
 		return nil, fmt.Errorf("укажите photo_url или video_url, но не оба сразу")
 	}
 	if ch.Provider == model.ChannelProviderDzen && videoURL != "" {
 		return nil, fmt.Errorf("Дзен не поддерживает видео — используйте текст, бриф с картинкой или статью")
+	}
+	if ch.Provider == model.ChannelProviderRutube {
+		ct := strings.ToLower(contentType)
+		if ct == "" {
+			if videoURL != "" {
+				ct = string(oauthclient.RutubeContentVideo)
+			} else {
+				ct = string(oauthclient.RutubeContentFeed)
+			}
+			contentType = ct
+		}
+		if ct == string(oauthclient.RutubeContentVideo) && videoURL == "" {
+			return nil, fmt.Errorf("для видео Rutube укажите video_url — Rutube скачает файл по ссылке")
+		}
+		if ct == string(oauthclient.RutubeContentFeed) && text == "" && photoURL == "" && videoURL == "" {
+			text = model.DefaultChannelTestMessage
+		}
 	}
 	if ch.Provider == model.ChannelProviderDzen && strings.EqualFold(contentType, "article") {
 		if title == "" {
@@ -84,7 +102,16 @@ func (s *ChannelTestService) SendTestMessage(
 		text = model.DefaultChannelTestMessage
 	}
 
-	postID, sendErr := s.publish(ctx, ch, token, req.Text, req.Title, req.PhotoURL, req.VideoURL, req.ContentType)
+	var publishAt *time.Time
+	if ch.Provider == model.ChannelProviderRutube && strings.TrimSpace(req.PublishAt) != "" {
+		t, err := time.Parse(time.RFC3339, strings.TrimSpace(req.PublishAt))
+		if err != nil {
+			return nil, fmt.Errorf("publish_at: укажите дату в формате RFC3339")
+		}
+		publishAt = &t
+	}
+
+	postID, sendErr := s.publish(ctx, ch, token, text, title, photoURL, videoURL, contentType, publishAt)
 	if sendErr != nil {
 		_ = s.channels.UpdateStatus(ctx, ws.ID, channelID, model.ChannelStatusNeedsReconnect, sendErr.Error())
 		return nil, sendErr
@@ -97,6 +124,7 @@ func (s *ChannelTestService) SendTestMessage(
 	}
 	if postID != "" {
 		result.ProviderPostID = postID
+		result.Message = "Публикация отправлена (ID: " + postID + ")"
 	}
 	return result, nil
 }
@@ -105,6 +133,7 @@ func (s *ChannelTestService) publish(
 	ctx context.Context,
 	ch *model.Channel,
 	token, text, title, photoURL, videoURL, contentType string,
+	publishAt *time.Time,
 ) (string, error) {
 	if ch.Provider == model.ChannelProviderDzen && videoURL != "" {
 		return "", fmt.Errorf("Дзен не поддерживает видео в этой публикации — используйте текст, бриф с картинкой или статью")
@@ -154,11 +183,15 @@ func (s *ChannelTestService) publish(
 		return "", nil
 
 	case model.ChannelProviderRutube:
-		client := &oauthclient.RutubeClient{}
-		if err := client.PostChannelText(ctx, token, ch.ChatID, text); err != nil {
+		cfg, err := s.socialSettings.GetEffective(ctx, model.SocialProviderRutube)
+		if err != nil {
 			return "", err
 		}
-		return "", nil
+		client := &oauthclient.RutubeClient{
+			ClientID:     cfg.OAuthClientID,
+			ClientSecret: cfg.OAuthClientSecret,
+		}
+		return publishToRutube(ctx, client, token, ch.ChatID, contentType, text, title, photoURL, videoURL, publishAt)
 
 	case model.ChannelProviderDzen:
 		cfg, err := s.socialSettings.GetEffective(ctx, model.SocialProviderDzen)

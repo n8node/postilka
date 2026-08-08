@@ -545,6 +545,7 @@ function SocialSettingsForm({
         </Section>
       ) : (
         connectFlow === "oauth" && (
+          <>
           <Section title="OAuth-приложение платформы">
             <p className="text-xs text-slate-500">
               Эти ключи использует Postilka для подключения каналов всех пользователей {label}.
@@ -553,6 +554,12 @@ function SocialSettingsForm({
                 https://postilka.ru/app/api/v1/channels/oauth/{provider}/callback
               </code>
             </p>
+            {provider === "rutube" && (
+              <p className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900">
+                OAuth-приложение Rutube выдаётся через партнёрскую программу Rutube (studio.rutube.ru
+                или business-account.rutube.ru). После одобрения укажите Client ID и Secret здесь.
+              </p>
+            )}
             <label className="block space-y-1.5">
               <span className="text-sm font-medium text-slate-700">Client ID / App ID</span>
               <input
@@ -572,6 +579,22 @@ function SocialSettingsForm({
               />
             </label>
           </Section>
+          {provider === "rutube" && (
+            <Section title="Возможности публикации">
+              <ul className="list-inside list-disc space-y-1 text-sm text-slate-600">
+                <li>Посты в ленту канала (текст)</li>
+                <li>Загрузка видео и клипов по HTTPS-ссылке</li>
+                <li>Обложка видео по URL</li>
+                <li>Отложенная публикация видео</li>
+                <li>Автообновление OAuth-токена</li>
+              </ul>
+              <p className="text-xs text-slate-500">
+                Rutube скачивает видео по URL и конвертирует на своей стороне — обработка может
+                занять несколько минут.
+              </p>
+            </Section>
+          )}
+          </>
         )
       )}
 

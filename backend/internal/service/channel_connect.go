@@ -432,12 +432,13 @@ func (s *ChannelConnectService) OAuthConnect(
 			return nil, err
 		}
 
+		chatType := oauthChannelChatType(session.Provider, externalID, discoveredTargets)
 		createParams := repository.ChannelCreateParams{
 			WorkspaceID:           ws.ID,
 			Provider:              provider,
 			Name:                  name,
 			ChatID:                externalID,
-			ChatType:              string(session.Provider),
+			ChatType:              chatType,
 			BotTokenEncrypted:     oauthTokens.AccessTokenEncrypted,
 			RefreshTokenEncrypted: oauthTokens.RefreshTokenEncrypted,
 			TokenExpiresAt:        oauthTokens.TokenExpiresAt,
@@ -848,6 +849,7 @@ func (s *ChannelConnectService) discoverTargets(
 				Type:       "channel",
 				CanPost:    true,
 				AvatarURL:  ch.Icon,
+				PublicURL:  strings.TrimSpace(ch.URL),
 			})
 		}
 		return targets, "", nil

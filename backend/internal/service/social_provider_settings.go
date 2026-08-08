@@ -154,6 +154,7 @@ func (s *SocialProviderSettingsService) PublicInfo(ctx context.Context, provider
 		}
 	}
 	info.SupportTelegramURL = buildSupportTelegramURL(info.SupportTelegramUsername, "connect_"+string(provider))
+	info.PublishCapabilities = provider.PublishCapabilities()
 	return info
 }
 

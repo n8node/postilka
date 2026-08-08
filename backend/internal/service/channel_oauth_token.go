@@ -66,7 +66,8 @@ func ensureOAuthAccessToken(
 		return "", err
 	}
 
-	if ch.Provider != model.ChannelProviderDzen {
+	provider, ok := oauthProviderFromChannel(ch.Provider)
+	if !ok || !providerUsesOAuthRefresh(provider) {
 		return accessToken, nil
 	}
 	if row.TokenExpiresAt == nil || time.Now().Add(oauthTokenRefreshSkew).Before(*row.TokenExpiresAt) {
@@ -81,39 +82,76 @@ func ensureOAuthAccessToken(
 		return "", err
 	}
 
-	cfg, err := social.GetEffective(ctx, model.SocialProviderDzen)
+	cfg, err := social.GetEffective(ctx, provider)
 	if err != nil {
 		return "", err
 	}
-	client := &oauthclient.DzenClient{
-		ClientID:     cfg.OAuthClientID,
-		ClientSecret: cfg.OAuthClientSecret,
-	}
-	token, err := client.RefreshToken(ctx, refreshPlain)
-	if err != nil {
-		return "", fmt.Errorf("не удалось обновить токен Дзен — переподключите канал: %w", err)
+
+	var (
+		newAccess  string
+		newRefresh string
+		expiresIn  int
+	)
+	switch provider {
+	case model.SocialProviderDzen:
+		client := &oauthclient.DzenClient{
+			ClientID:     cfg.OAuthClientID,
+			ClientSecret: cfg.OAuthClientSecret,
+		}
+		token, err := client.RefreshToken(ctx, refreshPlain)
+		if err != nil {
+			return "", fmt.Errorf("не удалось обновить токен Дзен — переподключите канал: %w", err)
+		}
+		newAccess = token.AccessToken
+		newRefresh = token.RefreshToken
+		expiresIn = token.ExpiresIn
+
+	case model.SocialProviderRutube:
+		client := &oauthclient.RutubeClient{
+			ClientID:     cfg.OAuthClientID,
+			ClientSecret: cfg.OAuthClientSecret,
+		}
+		token, err := client.RefreshToken(ctx, refreshPlain)
+		if err != nil {
+			return "", fmt.Errorf("не удалось обновить токен Rutube — переподключите канал: %w", err)
+		}
+		newAccess = token.AccessToken
+		newRefresh = token.RefreshToken
+		expiresIn = token.ExpiresIn
+
+	default:
+		return accessToken, nil
 	}
 
-	encAccess, err := cipher.Encrypt(token.AccessToken)
+	encAccess, err := cipher.Encrypt(newAccess)
 	if err != nil {
 		return "", err
 	}
 	encRefresh := row.RefreshTokenEncrypted
-	if token.RefreshToken != "" {
-		encRefresh, err = cipher.Encrypt(token.RefreshToken)
+	if newRefresh != "" {
+		encRefresh, err = cipher.Encrypt(newRefresh)
 		if err != nil {
 			return "", err
 		}
 	}
 	var expiresAt *time.Time
-	if token.ExpiresIn > 0 {
-		t := time.Now().Add(time.Duration(token.ExpiresIn) * time.Second)
+	if expiresIn > 0 {
+		t := time.Now().Add(time.Duration(expiresIn) * time.Second)
 		expiresAt = &t
 	}
 	if err := channels.UpdateOAuthTokens(ctx, ch.WorkspaceID, ch.ID, encAccess, encRefresh, expiresAt); err != nil {
 		return "", err
 	}
-	return token.AccessToken, nil
+	return newAccess, nil
+}
+
+func providerUsesOAuthRefresh(provider model.SocialProvider) bool {
+	switch provider {
+	case model.SocialProviderDzen, model.SocialProviderRutube:
+		return true
+	default:
+		return false
+	}
 }
 
 func publishToDzen(
@@ -140,4 +178,29 @@ func publishToDzen(
 		}
 	}
 	return client.Publish(ctx, token, input)
+}
+
+func publishToRutube(
+	ctx context.Context,
+	client *oauthclient.RutubeClient,
+	token, channelID, contentType, text, title, photoURL, videoURL string,
+	publishAt *time.Time,
+) (string, error) {
+	ct := oauthclient.RutubeContentType(strings.TrimSpace(strings.ToLower(contentType)))
+	if ct == "" {
+		if strings.TrimSpace(videoURL) != "" {
+			ct = oauthclient.RutubeContentVideo
+		} else {
+			ct = oauthclient.RutubeContentFeed
+		}
+	}
+	return client.Publish(ctx, token, oauthclient.RutubePublishInput{
+		ChannelID:   channelID,
+		ContentType: ct,
+		Text:        text,
+		Title:       title,
+		PhotoURL:    photoURL,
+		VideoURL:    videoURL,
+		PublishAt:   publishAt,
+	})
 }

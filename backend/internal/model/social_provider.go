@@ -99,7 +99,8 @@ type SocialProviderPublicInfo struct {
 	SupportTelegramUsername string         `json:"support_telegram_username"`
 	SupportTelegramURL      string         `json:"support_telegram_url"`
 	SupportEmail            string         `json:"support_email"`
-	SupportHoursText        string         `json:"support_hours_text"`
+	SupportHoursText        string               `json:"support_hours_text"`
+	PublishCapabilities     PublishCapabilities  `json:"publish_capabilities"`
 }
 
 type MAXPlatformBotAdminView struct {
@@ -134,7 +135,7 @@ func DefaultSocialProviderSettings(provider SocialProvider) SocialProviderSettin
 		def.ConnectHelpText = "1. Создайте бота через @MasterBot или business.max.ru и скопируйте токен.\n2. В Postilka нажмите «Проверить бота» — появится @username для поиска.\n3. В MAX: канал → Участники → Добавить → ищите бота по @username (не по названию и не по ID).\n4. Канал → Администраторы → добавьте бота с правом «Публикация».\n5. Вернитесь в Postilka, укажите ссылку на канал и подключите."
 	case SocialProviderRutube:
 		def.ConnectHelpURL = "https://postilka.ru/docs/rutube"
-		def.ConnectHelpText = "1. Войдите через Rutube.\n2. Выберите канал для публикации.\n3. Подтвердите права."
+		def.ConnectHelpText = "1. Войдите через Rutube под аккаунтом владельца канала.\n2. Выберите канал, в который будете публиковать.\n3. Подтвердите права приложения Postilka.\n4. После подключения доступны: посты в ленту канала, загрузка видео и клипов по ссылке, обложка и отложенная публикация."
 	case SocialProviderDzen:
 		def.ConnectHelpURL = "https://dzen.ru/help/ru/channel/cross-platform.html"
 		def.ConnectHelpText = "1. Подключите публичный Telegram-канал в Postilka.\n2. В Студии Дзена: Настройки → Кросспостинг → Telegram → получите код доступа.\n3. В Telegram откройте @zen_sync_bot, отправьте код и ссылку на канал.\n4. Добавьте @zen_sync_bot администратором Telegram-канала.\n5. Планируйте посты в Postilka — они попадут в Telegram, бот перенесёт их в Дзен."

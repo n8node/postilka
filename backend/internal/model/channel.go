@@ -84,9 +84,10 @@ type Channel struct {
 
 type ChannelListItem struct {
 	Channel
-	BotTokenSet  bool   `json:"bot_token_set"`
-	BotTokenHint string `json:"bot_token_hint,omitempty"`
-	PostModeLabel string `json:"post_mode_label,omitempty"`
+	BotTokenSet         bool                 `json:"bot_token_set"`
+	BotTokenHint        string               `json:"bot_token_hint,omitempty"`
+	PostModeLabel       string               `json:"post_mode_label,omitempty"`
+	PublishCapabilities PublishCapabilities  `json:"publish_capabilities"`
 }
 
 type ChannelUpdateRequest struct {
@@ -147,5 +148,6 @@ type ChannelTestMessageRequest struct {
 	Title       string `json:"title,omitempty"`
 	PhotoURL    string `json:"photo_url,omitempty"`
 	VideoURL    string `json:"video_url,omitempty"`
-	ContentType string `json:"content_type,omitempty"` // brief | article (dzen)
+	ContentType string `json:"content_type,omitempty"` // brief | article (dzen); feed | video (rutube)
+	PublishAt   string `json:"publish_at,omitempty"`   // RFC3339, rutube video schedule
 }

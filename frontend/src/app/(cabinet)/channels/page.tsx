@@ -97,6 +97,11 @@ export default function ChannelsPage() {
   const [actionLoading, setActionLoading] = useState(false);
   const [testSuccess, setTestSuccess] = useState<string | null>(null);
   const [dzenTestType, setDzenTestType] = useState<"brief" | "article">("brief");
+  const [rutubeTestType, setRutubeTestType] = useState<"feed" | "video">("feed");
+  const [rutubeVideoURL, setRutubeVideoURL] = useState("");
+  const [rutubeVideoTitle, setRutubeVideoTitle] = useState("");
+  const [rutubeThumbURL, setRutubeThumbURL] = useState("");
+  const [rutubePublishAt, setRutubePublishAt] = useState("");
   const [editOpen, setEditOpen] = useState(false);
 
   const selected = items.find((c) => c.id === selectedId) ?? null;
@@ -168,10 +173,27 @@ export default function ChannelsPage() {
     setTestSuccess(null);
     setError(null);
     try {
-      const payload =
-        selected.provider === "dzen"
-          ? { content_type: dzenTestType }
-          : undefined;
+      let payload: Parameters<typeof sendChannelTestMessage>[1];
+      if (selected.provider === "dzen") {
+        payload = { content_type: dzenTestType };
+      } else if (selected.provider === "rutube") {
+        payload = { content_type: rutubeTestType };
+        if (rutubeTestType === "video") {
+          if (!rutubeVideoURL.trim()) {
+            setError("Укажите ссылку на видео — Rutube скачает файл по URL");
+            return;
+          }
+          payload = {
+            ...payload,
+            video_url: rutubeVideoURL.trim(),
+            title: rutubeVideoTitle.trim() || undefined,
+            photo_url: rutubeThumbURL.trim() || undefined,
+            publish_at: rutubePublishAt.trim()
+              ? new Date(rutubePublishAt).toISOString()
+              : undefined,
+          };
+        }
+      }
       const result = await sendChannelTestMessage(selected.id, payload);
       setTestSuccess(result.message);
       await load();
@@ -317,6 +339,14 @@ export default function ChannelsPage() {
                 </div>
               )}
 
+              {selected.publish_capabilities?.formats && selected.publish_capabilities.formats.length > 0 && (
+                <DetailRow label="Форматы публикации">
+                  <span className="text-muted">
+                    {selected.publish_capabilities.formats.join(", ")}
+                  </span>
+                </DetailRow>
+              )}
+
               {selected.provider === "dzen" && (
                 <DetailRow label="Тип тестовой публикации">
                   <div className="flex flex-wrap gap-2">
@@ -348,6 +378,86 @@ export default function ChannelsPage() {
                 </DetailRow>
               )}
 
+              {selected.provider === "rutube" && (
+                <>
+                  <DetailRow label="Тип тестовой публикации">
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setRutubeTestType("feed")}
+                        className={cn(
+                          "rounded-md border px-2.5 py-1 text-xs",
+                          rutubeTestType === "feed"
+                            ? "border-accent bg-accent/10 text-accent"
+                            : "border-border hover:bg-zinc-50",
+                        )}
+                      >
+                        Пост в ленту
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setRutubeTestType("video")}
+                        className={cn(
+                          "rounded-md border px-2.5 py-1 text-xs",
+                          rutubeTestType === "video"
+                            ? "border-accent bg-accent/10 text-accent"
+                            : "border-border hover:bg-zinc-50",
+                        )}
+                      >
+                        Видео / клип
+                      </button>
+                    </div>
+                  </DetailRow>
+                  {rutubeTestType === "video" && (
+                    <div className="space-y-3 rounded-lg border border-border bg-zinc-50/80 p-3">
+                      <label className="block space-y-1">
+                        <span className="text-xs text-muted">Ссылка на видео (HTTPS)</span>
+                        <input
+                          type="url"
+                          value={rutubeVideoURL}
+                          onChange={(e) => setRutubeVideoURL(e.target.value)}
+                          placeholder="https://…/video.mp4"
+                          className="w-full rounded-md border border-border bg-white px-2.5 py-1.5 text-sm"
+                        />
+                      </label>
+                      <label className="block space-y-1">
+                        <span className="text-xs text-muted">Название</span>
+                        <input
+                          type="text"
+                          value={rutubeVideoTitle}
+                          onChange={(e) => setRutubeVideoTitle(e.target.value)}
+                          placeholder="Необязательно"
+                          className="w-full rounded-md border border-border bg-white px-2.5 py-1.5 text-sm"
+                        />
+                      </label>
+                      <label className="block space-y-1">
+                        <span className="text-xs text-muted">Обложка (URL картинки)</span>
+                        <input
+                          type="url"
+                          value={rutubeThumbURL}
+                          onChange={(e) => setRutubeThumbURL(e.target.value)}
+                          placeholder="Необязательно"
+                          className="w-full rounded-md border border-border bg-white px-2.5 py-1.5 text-sm"
+                        />
+                      </label>
+                      <label className="block space-y-1">
+                        <span className="text-xs text-muted">Отложенная публикация</span>
+                        <input
+                          type="datetime-local"
+                          value={rutubePublishAt}
+                          onChange={(e) => setRutubePublishAt(e.target.value)}
+                          className="w-full rounded-md border border-border bg-white px-2.5 py-1.5 text-sm"
+                        />
+                      </label>
+                      <p className="text-xs text-muted">
+                        Rutube скачивает видео по ссылке. Обработка и конвертация могут занять несколько
+                        минут.
+                      </p>
+                    </div>
+                  )}
+                </>
+              )}
+
               <div className="space-y-2 pt-1">
                 <button
                   type="button"
@@ -373,7 +483,9 @@ export default function ChannelsPage() {
                   disabled={actionLoading}
                   className="w-full rounded-md bg-accent px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
                 >
-                  {actionLoading ? "Отправка…" : "Отправить тестовое сообщение"}
+                  {actionLoading ? "Отправка…" : selected.provider === "rutube" && rutubeTestType === "video"
+                    ? "Отправить тестовое видео"
+                    : "Отправить тестовое сообщение"}
                 </button>
                 <button
                   type="button"

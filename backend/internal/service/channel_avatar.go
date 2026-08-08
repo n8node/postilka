@@ -260,3 +260,17 @@ func lookupOAuthPublicURLFromTargets(targets []model.DiscoveredChannelTarget, ex
 	}
 	return ""
 }
+
+func oauthChannelChatType(provider model.SocialProvider, externalID string, targets []model.DiscoveredChannelTarget) string {
+	for _, t := range targets {
+		if t.ExternalID == externalID && strings.TrimSpace(t.Type) != "" {
+			return t.Type
+		}
+	}
+	switch provider {
+	case model.SocialProviderVK:
+		return "group"
+	default:
+		return "channel"
+	}
+}

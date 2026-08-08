@@ -34,8 +34,9 @@ func channelPostModeLabel(ch model.Channel) string {
 
 func buildChannelListItem(ch model.Channel, tokenEnc string, cipher *SecretCipher) model.ChannelListItem {
 	item := model.ChannelListItem{
-		Channel:       ch,
-		PostModeLabel: channelPostModeLabel(ch),
+		Channel:             ch,
+		PostModeLabel:       channelPostModeLabel(ch),
+		PublishCapabilities: ch.Provider.PublishCapabilities(),
 	}
 	if ch.Provider == model.ChannelProviderMAX && ch.MaxPostMode == model.MAXPostModePlatform {
 		item.BotTokenSet = true
