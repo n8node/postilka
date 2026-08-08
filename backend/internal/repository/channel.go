@@ -22,10 +22,12 @@ type ChannelRepository struct {
 }
 
 type ChannelRow struct {
-	Channel               model.Channel
-	BotTokenEncrypted     string
-	RefreshTokenEncrypted string
-	TokenExpiresAt        *time.Time
+	Channel                       model.Channel
+	BotTokenEncrypted             string
+	RefreshTokenEncrypted         string
+	TokenExpiresAt                *time.Time
+	OAuthClientID                 string
+	OAuthClientSecretEncrypted    string
 }
 
 func NewChannelRepository(pool *pgxpool.Pool) *ChannelRepository {
@@ -55,7 +57,8 @@ func (r *ChannelRepository) scanChannel(row pgx.Row, ch *model.Channel) error {
 
 func (r *ChannelRepository) ListRowsByWorkspace(ctx context.Context, workspaceID string) ([]ChannelRow, error) {
 	q := `SELECT ` + channelSelectSQL + `, COALESCE(bot_token_encrypted, ''),
-		COALESCE(refresh_token_encrypted, ''), token_expires_at
+		COALESCE(refresh_token_encrypted, ''), token_expires_at,
+		COALESCE(oauth_client_id, ''), COALESCE(oauth_client_secret_encrypted, '')
 		FROM channels WHERE workspace_id = $1 ORDER BY created_at DESC`
 	rows, err := r.pool.Query(ctx, q, workspaceID)
 	if err != nil {
@@ -73,6 +76,7 @@ func (r *ChannelRepository) ListRowsByWorkspace(ctx context.Context, workspaceID
 			&row.Channel.MaxPostMode, &row.Channel.VKOAuthMode, &row.Channel.Status, &row.Channel.LastError,
 			&metaRaw, &row.Channel.MetadataRefreshedAt, &row.Channel.CreatedAt, &row.Channel.UpdatedAt,
 			&row.BotTokenEncrypted, &row.RefreshTokenEncrypted, &row.TokenExpiresAt,
+			&row.OAuthClientID, &row.OAuthClientSecretEncrypted,
 		)
 		if err != nil {
 			return nil, err
@@ -106,7 +110,8 @@ func (r *ChannelRepository) CountByWorkspace(ctx context.Context, workspaceID st
 
 func (r *ChannelRepository) GetRowByID(ctx context.Context, workspaceID, channelID string) (*ChannelRow, error) {
 	q := `SELECT ` + channelSelectSQL + `, COALESCE(bot_token_encrypted, ''),
-		COALESCE(refresh_token_encrypted, ''), token_expires_at
+		COALESCE(refresh_token_encrypted, ''), token_expires_at,
+		COALESCE(oauth_client_id, ''), COALESCE(oauth_client_secret_encrypted, '')
 		FROM channels WHERE id = $1 AND workspace_id = $2`
 	var row ChannelRow
 	var metaRaw []byte
@@ -116,6 +121,7 @@ func (r *ChannelRepository) GetRowByID(ctx context.Context, workspaceID, channel
 		&row.Channel.MaxPostMode, &row.Channel.VKOAuthMode, &row.Channel.Status, &row.Channel.LastError,
 		&metaRaw, &row.Channel.MetadataRefreshedAt, &row.Channel.CreatedAt, &row.Channel.UpdatedAt,
 		&row.BotTokenEncrypted, &row.RefreshTokenEncrypted, &row.TokenExpiresAt,
+		&row.OAuthClientID, &row.OAuthClientSecretEncrypted,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -189,7 +195,9 @@ type ChannelCreateParams struct {
 	TokenExpiresAt        *time.Time
 	MaxPostMode           model.MAXPostMode
 	VKOAuthMode           model.VKOAuthMode
-	Status                model.ChannelStatus
+	OAuthClientID                 string
+	OAuthClientSecretEncrypted    string
+	Status                        model.ChannelStatus
 	Metadata              model.ChannelMetadata
 	MetadataRefreshedAt   *time.Time
 }
@@ -211,14 +219,16 @@ func (r *ChannelRepository) Create(ctx context.Context, p ChannelCreateParams) (
 		INSERT INTO channels (
 			workspace_id, provider, name, chat_id, chat_type, bot_username,
 			bot_token_encrypted, refresh_token_encrypted, token_expires_at,
-			max_post_mode, vk_oauth_mode, status, metadata, metadata_refreshed_at
-		) VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, ''), NULLIF($8, ''), $9, $10, $11, $12, $13, $14)
+			max_post_mode, vk_oauth_mode, oauth_client_id, oauth_client_secret_encrypted,
+			status, metadata, metadata_refreshed_at
+		) VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, ''), NULLIF($8, ''), $9, $10, $11, NULLIF($12, ''), NULLIF($13, ''), $14, $15, $16)
 		RETURNING ` + channelSelectSQL
 	var ch model.Channel
 	err = r.scanChannel(r.pool.QueryRow(ctx, q,
 		p.WorkspaceID, p.Provider, p.Name, p.ChatID, p.ChatType, p.BotUsername,
 		p.BotTokenEncrypted, p.RefreshTokenEncrypted, p.TokenExpiresAt,
-		maxPostMode, vkOAuthMode, p.Status, metaRaw, p.MetadataRefreshedAt,
+		maxPostMode, vkOAuthMode, p.OAuthClientID, p.OAuthClientSecretEncrypted,
+		p.Status, metaRaw, p.MetadataRefreshedAt,
 	), &ch)
 	if err != nil {
 		return nil, err
@@ -254,7 +264,9 @@ type ChannelSaveParams struct {
 	TokenExpiresAt        *time.Time
 	MaxPostMode           model.MAXPostMode
 	VKOAuthMode           model.VKOAuthMode
-	Status                model.ChannelStatus
+	OAuthClientID                 string
+	OAuthClientSecretEncrypted    string
+	Status                        model.ChannelStatus
 	Metadata              model.ChannelMetadata
 	MetadataRefreshedAt   *time.Time
 }
@@ -282,9 +294,11 @@ func (r *ChannelRepository) SaveChannel(ctx context.Context, p ChannelSaveParams
 		    token_expires_at = COALESCE($9, token_expires_at),
 		    max_post_mode = $10,
 		    vk_oauth_mode = $11,
-		    status = $12,
-		    metadata = $13,
-		    metadata_refreshed_at = $14,
+		    oauth_client_id = CASE WHEN NULLIF($12, '') IS NULL THEN oauth_client_id ELSE $12 END,
+		    oauth_client_secret_encrypted = CASE WHEN NULLIF($13, '') IS NULL THEN oauth_client_secret_encrypted ELSE $13 END,
+		    status = $14,
+		    metadata = $15,
+		    metadata_refreshed_at = $16,
 		    last_error = NULL,
 		    updated_at = NOW()
 		WHERE id = $1 AND workspace_id = $2 AND provider = $3
@@ -293,7 +307,8 @@ func (r *ChannelRepository) SaveChannel(ctx context.Context, p ChannelSaveParams
 	err = r.scanChannel(r.pool.QueryRow(ctx, q,
 		p.ChannelID, p.WorkspaceID, p.Provider, p.Name, p.ChatType, p.BotUsername,
 		p.BotTokenEncrypted, p.RefreshTokenEncrypted, p.TokenExpiresAt,
-		maxPostMode, vkOAuthMode, p.Status, metaRaw, p.MetadataRefreshedAt,
+		maxPostMode, vkOAuthMode, p.OAuthClientID, p.OAuthClientSecretEncrypted,
+		p.Status, metaRaw, p.MetadataRefreshedAt,
 	), &ch)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound

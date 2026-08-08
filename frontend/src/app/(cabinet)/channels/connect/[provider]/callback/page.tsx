@@ -4,6 +4,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ConnectOAuthProviderDialog } from "@/components/channels/ConnectOAuthProviderDialog";
 import { ConnectVKDialog } from "@/components/channels/ConnectVKDialog";
+import { ConnectYouTubeDialog } from "@/components/channels/ConnectYouTubeDialog";
 import type { SocialProviderKey } from "@/lib/api";
 
 const OAUTH_PROVIDERS: SocialProviderKey[] = ["vk", "rutube", "dzen", "youtube"];
@@ -61,6 +62,17 @@ export default function ChannelOAuthCallbackPage({
   if (provider === "vk") {
     return (
       <ConnectVKDialog
+        open
+        initialSessionId={sessionId}
+        onClose={() => router.push("/channels")}
+        onConnected={() => router.push("/channels")}
+      />
+    );
+  }
+
+  if (provider === "youtube") {
+    return (
+      <ConnectYouTubeDialog
         open
         initialSessionId={sessionId}
         onClose={() => router.push("/channels")}

@@ -174,7 +174,7 @@ func (s *SocialProviderSettingsService) EnsureReady(ctx context.Context, provide
 	if !cfg.Enabled {
 		return cfg, ErrSocialProviderDisabled
 	}
-	if provider == model.SocialProviderVK {
+	if provider == model.SocialProviderVK || provider == model.SocialProviderYouTube {
 		return cfg, nil
 	}
 	if provider.ConnectFlow() == "oauth" && strings.TrimSpace(cfg.OAuthClientID) == "" {
@@ -187,7 +187,7 @@ func normalizeSocialProviderAdminSettings(
 	provider model.SocialProvider,
 	cfg model.SocialProviderSettings,
 ) model.SocialProviderSettings {
-	if provider == model.SocialProviderVK {
+	if provider == model.SocialProviderVK || provider == model.SocialProviderYouTube {
 		def := model.DefaultSocialProviderSettings(provider)
 		if strings.TrimSpace(cfg.ConnectHelpURL) == "" {
 			cfg.ConnectHelpURL = def.ConnectHelpURL

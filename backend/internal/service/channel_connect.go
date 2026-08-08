@@ -112,6 +112,17 @@ func (s *ChannelConnectService) OAuthStart(
 		sessionMeta["oauth_app_id"] = appID
 		sessionMeta["oauth_app_secret_encrypted"] = encSecret
 	}
+	if provider == model.SocialProviderYouTube {
+		if s.cipher == nil {
+			return nil, ErrCryptoUnavailable
+		}
+		encSecret, err := s.cipher.Encrypt(appSecret)
+		if err != nil {
+			return nil, err
+		}
+		sessionMeta["oauth_app_id"] = appID
+		sessionMeta["oauth_app_secret_encrypted"] = encSecret
+	}
 
 	session, err := s.oauthSessions.Create(ctx, repository.ChannelOAuthSessionCreateParams{
 		UserID:      userID,
@@ -150,7 +161,7 @@ func (s *ChannelConnectService) OAuthStart(
 		}
 		authURL = client.AuthorizeURL(state)
 	case model.SocialProviderYouTube:
-		client := s.youtubeOAuthClient(cfg, redirectURI)
+		client := buildYouTubeOAuthClient(s.youtubeAPI, appID, appSecret, redirectURI)
 		authURL = client.AuthorizeURL(state)
 	default:
 		return nil, fmt.Errorf("неподдерживаемый провайдер")
@@ -250,7 +261,11 @@ func (s *ChannelConnectService) OAuthCallback(
 			expiresAt = &t
 		}
 	case model.SocialProviderYouTube:
-		client := s.youtubeOAuthClient(cfg, redirectURI)
+		appID, appSecret, err := s.oauthAppCredentialsFromSession(session, cfg)
+		if err != nil {
+			return nil, err
+		}
+		client := buildYouTubeOAuthClient(s.youtubeAPI, appID, appSecret, redirectURI)
 		token, err := client.ExchangeCode(ctx, code)
 		if err != nil {
 			return nil, err
@@ -397,6 +412,11 @@ func (s *ChannelConnectService) OAuthConnect(
 		metaRefreshed := oauthConnectMetadataRefreshed(meta)
 		vkOAuthMode := sessionOAuthAppMode(session)
 		oauthTokens := s.oauthCredentialsFromSession(session)
+		youtubeClientID, youtubeClientSecretEnc := "", ""
+		if session.Provider == model.SocialProviderYouTube {
+			youtubeClientID, _ = session.Metadata["oauth_app_id"].(string)
+			youtubeClientSecretEnc, _ = session.Metadata["oauth_app_secret_encrypted"].(string)
+		}
 
 		existing, err := s.channels.GetByChat(ctx, ws.ID, string(provider), externalID)
 		if err != nil && !errors.Is(err, repository.ErrNotFound) {
@@ -434,6 +454,8 @@ func (s *ChannelConnectService) OAuthConnect(
 					TokenExpiresAt:        oauthTokens.TokenExpiresAt,
 					MaxPostMode:           existing.MaxPostMode,
 					VKOAuthMode:           existing.VKOAuthMode,
+					OAuthClientID:         youtubeClientID,
+					OAuthClientSecretEncrypted: youtubeClientSecretEnc,
 					Status:                model.ChannelStatusActive,
 					Metadata:              meta,
 					MetadataRefreshedAt:   metaRefreshed,
@@ -466,6 +488,10 @@ func (s *ChannelConnectService) OAuthConnect(
 		}
 		if provider == model.ChannelProviderVK {
 			createParams.VKOAuthMode = vkOAuthMode
+		}
+		if provider == model.ChannelProviderYouTube {
+			createParams.OAuthClientID = youtubeClientID
+			createParams.OAuthClientSecretEncrypted = youtubeClientSecretEnc
 		}
 		created, err := s.channels.Create(ctx, createParams)
 		if err != nil {
@@ -894,7 +920,11 @@ func (s *ChannelConnectService) discoverTargets(
 		return targets, "", nil
 
 	case model.SocialProviderYouTube:
-		client := s.youtubeOAuthClient(cfg, redirectURI)
+		appID, appSecret, err := s.oauthAppCredentialsFromSession(session, cfg)
+		if err != nil {
+			return nil, "", err
+		}
+		client := buildYouTubeOAuthClient(s.youtubeAPI, appID, appSecret, redirectURI)
 		channels, err := client.ListMyChannels(ctx, accessToken)
 		if err != nil {
 			return nil, "", err
@@ -976,6 +1006,14 @@ func (s *ChannelConnectService) resolveOAuthAppCredentials(
 		}
 		return appID, appSecret, nil
 	}
+	if provider == model.SocialProviderYouTube {
+		appID = strings.TrimSpace(req.OAuthClientID)
+		appSecret = strings.TrimSpace(req.OAuthClientSecret)
+		if appID == "" || appSecret == "" {
+			return "", "", fmt.Errorf("укажите OAuth Client ID и Client Secret Google")
+		}
+		return appID, appSecret, nil
+	}
 	appID = strings.TrimSpace(cfg.OAuthClientID)
 	appSecret = strings.TrimSpace(cfg.OAuthClientSecret)
 	if appID == "" {
@@ -1016,6 +1054,9 @@ func (s *ChannelConnectService) oauthAppCredentialsFromSession(
 		}
 		return appID, appSecret, nil
 	}
+	if session.Provider == model.SocialProviderYouTube {
+		return youtubeOAuthCredentialsFromSession(session.Metadata, s.cipher)
+	}
 	return strings.TrimSpace(cfg.OAuthClientID), strings.TrimSpace(cfg.OAuthClientSecret), nil
 }
 
@@ -1042,16 +1083,4 @@ func oauthConnectMetadataRefreshed(meta model.ChannelMetadata) *time.Time {
 	}
 	now := time.Now()
 	return &now
-}
-
-func (s *ChannelConnectService) youtubeOAuthClient(cfg model.SocialProviderSettings, redirectURI string) *oauthclient.YouTubeClient {
-	client := &oauthclient.YouTubeClient{
-		ClientID:     cfg.OAuthClientID,
-		ClientSecret: cfg.OAuthClientSecret,
-		RedirectURI:  redirectURI,
-	}
-	if s.youtubeAPI != nil {
-		client.HTTP = s.youtubeAPI.HTTPClient()
-	}
-	return client
 }

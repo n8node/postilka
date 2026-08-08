@@ -25,7 +25,7 @@ const PROVIDER_MENU: { key: ProviderKey; label: string; connectFlow: string }[] 
   { key: "vk", label: "VK", connectFlow: "user_oauth" },
   { key: "max", label: "MAX", connectFlow: "bot_token" },
   { key: "rutube", label: "Rutube", connectFlow: "oauth" },
-  { key: "youtube", label: "YouTube", connectFlow: "oauth" },
+  { key: "youtube", label: "YouTube", connectFlow: "user_oauth" },
   { key: "dzen", label: "Дзен", connectFlow: "telegram_crosspost" },
 ];
 
@@ -461,7 +461,8 @@ function YouTubeSettingsForm({
       <div>
         <h2 className="text-lg font-medium text-slate-900">YouTube</h2>
         <p className="text-sm text-slate-500">
-          OAuth Google + прокси для YouTube Data API с РФ-сервера.
+          Пользователи подключают каналы со своими OAuth-ключами Google Cloud; квоты YouTube API — на
+          их проекте. Запросы к Google идут через прокси Postilka.
         </p>
       </div>
 
@@ -477,32 +478,14 @@ function YouTubeSettingsForm({
         </label>
       </Section>
 
-      <Section title="OAuth Google Cloud">
+      <Section title="Подключение пользователями">
         <p className="text-xs text-slate-500">
-          В Google Cloud Console включите YouTube Data API v3 и создайте OAuth Client (Web).
-          Redirect URI:
+          Ключи Google OAuth вводятся в диалоге «Подключить YouTube», не здесь. Redirect URI для
+          их OAuth Client:
         </p>
         <code className="block rounded bg-slate-100 px-2 py-1.5 text-xs">
           https://postilka.ru/app/api/v1/channels/oauth/youtube/callback
         </code>
-        <label className="block space-y-1.5">
-          <span className="text-sm font-medium text-slate-700">Client ID</span>
-          <input
-            type="text"
-            value={settings.oauth_client_id}
-            onChange={(e) => onPatch({ oauth_client_id: e.target.value })}
-            className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
-          />
-        </label>
-        <label className="block space-y-1.5">
-          <span className="text-sm font-medium text-slate-700">Client Secret</span>
-          <input
-            type="password"
-            value={settings.oauth_client_secret}
-            onChange={(e) => onPatch({ oauth_client_secret: e.target.value })}
-            className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
-          />
-        </label>
       </Section>
 
       <Section title="Прокси для YouTube / Google APIs">

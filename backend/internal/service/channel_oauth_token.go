@@ -120,10 +120,11 @@ func ensureOAuthAccessToken(
 		expiresIn = token.ExpiresIn
 
 	case model.SocialProviderYouTube:
-		client := &oauthclient.YouTubeClient{
-			ClientID:     cfg.OAuthClientID,
-			ClientSecret: cfg.OAuthClientSecret,
+		clientID, clientSecret, err := youtubeOAuthCredentialsFromRow(row, cipher)
+		if err != nil {
+			return "", err
 		}
+		client := buildYouTubeOAuthClient(defaultYouTubeAPI, clientID, clientSecret, "")
 		token, err := client.RefreshToken(ctx, refreshPlain)
 		if err != nil {
 			return "", fmt.Errorf("не удалось обновить токен YouTube — переподключите канал: %w", err)

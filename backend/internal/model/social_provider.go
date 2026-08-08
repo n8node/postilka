@@ -49,14 +49,14 @@ func (p SocialProvider) ConnectFlow() string {
 	case SocialProviderDzen:
 		return "telegram_crosspost"
 	case SocialProviderYouTube:
-		return "oauth"
+		return "user_oauth"
 	default:
 		return "oauth"
 	}
 }
 
 func (p SocialProvider) UsesUserOAuthApp() bool {
-	return false
+	return p == SocialProviderVK || p == SocialProviderYouTube
 }
 
 type SocialProviderSettings struct {
@@ -147,7 +147,7 @@ func DefaultSocialProviderSettings(provider SocialProvider) SocialProviderSettin
 		def.ConnectHelpText = "1. Подключите публичный Telegram-канал в Postilka.\n2. В Студии Дзена: Настройки → Кросспостинг → Telegram → получите код доступа.\n3. В Telegram откройте @zen_sync_bot, отправьте код и ссылку на канал.\n4. Добавьте @zen_sync_bot администратором Telegram-канала.\n5. Планируйте посты в Postilka — они попадут в Telegram, бот перенесёт их в Дзен."
 	case SocialProviderYouTube:
 		def.ConnectHelpURL = "https://postilka.ru/docs/youtube"
-		def.ConnectHelpText = "1. В Google Cloud Console создайте OAuth Client (Web) и включите YouTube Data API v3.\n2. Redirect URI: https://postilka.ru/app/api/v1/channels/oauth/youtube/callback\n3. Войдите через Google под аккаунтом владельца YouTube-канала.\n4. Выберите канал для публикации.\n5. Для работы с РФ-сервера включите прокси YouTube в админке Postilka."
+		def.ConnectHelpText = "1. В Google Cloud Console создайте OAuth Client (Web) и включите YouTube Data API v3.\n2. Redirect URI: https://postilka.ru/app/api/v1/channels/oauth/youtube/callback\n3. В Postilka укажите Client ID и Client Secret своего проекта Google.\n4. Войдите через Google под аккаунтом владельца YouTube-канала и выберите канал.\n5. Квоты YouTube API расходуются с вашего Google Cloud проекта; запросы к API идут через прокси Postilka."
 	}
 	return def
 }

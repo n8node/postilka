@@ -14,6 +14,7 @@ import { ConnectOAuthProviderDialog } from "./ConnectOAuthProviderDialog";
 import { ConnectVKDialog } from "./ConnectVKDialog";
 import { ConnectMAXDialog } from "./ConnectMAXDialog";
 import { ConnectDzenDialog } from "./ConnectDzenDialog";
+import { ConnectYouTubeDialog } from "./ConnectYouTubeDialog";
 
 const PROVIDER_LABELS: Partial<Record<ChannelProvider, string>> = {
   telegram: "Telegram",
@@ -144,10 +145,8 @@ export function ConnectChannelMenu({ onConnected }: ConnectChannelMenuProps) {
       )}
 
       {activeProvider === "youtube" && (
-        <ConnectOAuthProviderDialog
+        <ConnectYouTubeDialog
           open
-          provider="youtube"
-          label={PROVIDER_LABELS.youtube ?? "YouTube"}
           onClose={() => setActiveProvider(null)}
           onConnected={handleConnected}
         />

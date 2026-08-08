@@ -14,7 +14,8 @@ export type SupportContext =
   | "telegram_connect"
   | "max_connect"
   | "vk_connect"
-  | "dzen_connect";
+  | "dzen_connect"
+  | "youtube_connect";
 
 type SupportSheetProps = {
   open: boolean;

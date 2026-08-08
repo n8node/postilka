@@ -82,6 +82,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	channelOAuthSessionRepo := repository.NewChannelOAuthSessionRepository(db.Pool)
 	telegramBotClient := service.NewTelegramBotClient(telegramProviderSettingsSvc, cfg.TelegramLocalProxy)
 	youtubeAPIClient := service.NewYouTubeAPIClient(youtubeProviderSettingsSvc, cfg.YouTubeLocalProxy)
+	service.SetYouTubeAPIClient(youtubeAPIClient)
 	encKey := cfg.EncryptionKey
 	if strings.TrimSpace(encKey) == "" {
 		encKey = cfg.JWTSecret

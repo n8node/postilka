@@ -215,17 +215,15 @@ func (s *ChannelTestService) publish(
 		return pubID, nil
 
 	case model.ChannelProviderYouTube:
-		cfg, err := s.socialSettings.GetEffective(ctx, model.SocialProviderYouTube)
+		row, err := s.channels.GetRowByID(ctx, ch.WorkspaceID, ch.ID)
 		if err != nil {
 			return "", err
 		}
-		client := &oauthclient.YouTubeClient{
-			ClientID:     cfg.OAuthClientID,
-			ClientSecret: cfg.OAuthClientSecret,
+		clientID, clientSecret, err := youtubeOAuthCredentialsFromRow(row, s.cipher)
+		if err != nil {
+			return "", err
 		}
-		if s.youtubeAPI != nil {
-			client.HTTP = s.youtubeAPI.HTTPClient()
-		}
+		client := buildYouTubeOAuthClient(s.youtubeAPI, clientID, clientSecret, "")
 		verified, err := client.VerifyChannelAccess(ctx, token, ch.ChatID)
 		if err != nil {
 			return "", err

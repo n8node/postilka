@@ -20,6 +20,9 @@ func channelPostModeLabel(ch model.Channel) string {
 		}
 		return "Своё приложение"
 	}
+	if ch.Provider == model.ChannelProviderYouTube {
+		return "Своё приложение Google"
+	}
 	if ch.Provider != model.ChannelProviderMAX {
 		if ch.Provider == model.ChannelProviderTelegram {
 			return "Свой бот"
