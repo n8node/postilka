@@ -66,9 +66,7 @@ export function MoveTargetDialog({
     setLoading(true);
     setError(null);
     try {
-      if (wsId !== currentWorkspaceId) {
-        await setActiveWorkspace(wsId);
-      }
+      await setActiveWorkspace(wsId);
       const res = await listAllFolders();
       setFolders(res.folders);
     } catch (e) {
@@ -77,7 +75,7 @@ export function MoveTargetDialog({
     } finally {
       setLoading(false);
     }
-  }, [currentWorkspaceId]);
+  }, []);
 
   useEffect(() => {
     if (!open) return;

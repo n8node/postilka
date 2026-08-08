@@ -19,6 +19,7 @@ export type UploadJob = {
   status: UploadJobStatus;
   error?: string;
   resultFile?: WorkspaceFile;
+  queuedAt: number;
 };
 
 type StoredJob = UploadJob & {
@@ -34,6 +35,7 @@ const STORE = "jobs";
 
 type QueueListener = (jobs: UploadJob[]) => void;
 type CompleteListener = (file: WorkspaceFile) => void;
+type IdleListener = () => void;
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -108,13 +110,14 @@ function putWithProgress(
 class UploadQueueManager {
   private listeners = new Set<QueueListener>();
   private completeListeners = new Set<CompleteListener>();
+  private idleListeners = new Set<IdleListener>();
   private jobs: UploadJob[] = [];
   private running = false;
   private cancelled = false;
 
   subscribe(fn: QueueListener) {
     this.listeners.add(fn);
-    fn(this.jobs);
+    fn(this.sortedJobs());
     return () => {
       this.listeners.delete(fn);
     };
@@ -127,8 +130,38 @@ class UploadQueueManager {
     };
   }
 
+  onIdle(fn: IdleListener) {
+    this.idleListeners.add(fn);
+    return () => {
+      this.idleListeners.delete(fn);
+    };
+  }
+
+  private sortedJobs(): UploadJob[] {
+    return [...this.jobs].sort((a, b) => a.queuedAt - b.queuedAt);
+  }
+
   private emit() {
-    for (const fn of this.listeners) fn([...this.jobs]);
+    const sorted = this.sortedJobs();
+    for (const fn of this.listeners) fn(sorted);
+  }
+
+  private sortStored(stored: StoredJob[]): StoredJob[] {
+    return [...stored].sort((a, b) => (a.queuedAt ?? 0) - (b.queuedAt ?? 0));
+  }
+
+  private pickNextJob(stored: StoredJob[]): StoredJob | undefined {
+    const sorted = this.sortStored(stored);
+    const uploading = sorted.find((j) => j.status === "uploading");
+    if (uploading) return uploading;
+    return sorted.find((j) => j.status === "pending");
+  }
+
+  private notifyIdleIfDone() {
+    if (this.jobs.length === 0) return;
+    const allSuccess = this.jobs.every((j) => j.status === "completed");
+    if (!allSuccess) return;
+    for (const fn of this.idleListeners) fn();
   }
 
   private toPublic(stored: StoredJob): UploadJob {
@@ -143,11 +176,12 @@ class UploadQueueManager {
       status: stored.status,
       error: stored.error,
       resultFile: stored.resultFile,
+      queuedAt: stored.queuedAt ?? 0,
     };
   }
 
   async hydrate() {
-    const stored = await dbGetAll();
+    const stored = this.sortStored(await dbGetAll());
     const active: UploadJob[] = [];
     for (const row of stored) {
       if (row.status === "uploading" || (row.status === "error" && row.blob)) {
@@ -166,7 +200,9 @@ class UploadQueueManager {
   }
 
   async enqueue(files: File[], folderId: string | null, workspaceId: string) {
-    for (const file of files) {
+    const base = Date.now();
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
       const id = crypto.randomUUID();
       const job: StoredJob = {
         id,
@@ -177,6 +213,7 @@ class UploadQueueManager {
         workspaceId,
         progress: 0,
         status: "pending",
+        queuedAt: base + i,
         blob: file,
       };
       await dbPut(job);
@@ -227,13 +264,16 @@ class UploadQueueManager {
 
     while (!this.cancelled) {
       const stored = await dbGetAll();
-      const next = stored.find((j) => j.status === "pending" || j.status === "uploading");
+      const next = this.pickNextJob(stored);
       if (!next) break;
       await this.processOne(next);
     }
 
     this.running = false;
-    if (!this.cancelled) void this.process();
+    if (!this.cancelled) {
+      this.notifyIdleIfDone();
+      void this.process();
+    }
   }
 
   private async processOne(job: StoredJob) {

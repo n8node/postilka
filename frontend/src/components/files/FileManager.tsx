@@ -161,9 +161,17 @@ export function FileManager() {
           next.delete(file.id);
           return next;
         });
-      }, 600);
+      }, 1100);
     });
   }, [section, folderId, active_workspace?.id]);
+
+  useEffect(() => {
+    if (!uploadQueue) return;
+    const queue = uploadQueue;
+    return queue.onIdle(() => {
+      window.setTimeout(() => queue.dismissCompleted(), 1800);
+    });
+  }, []);
 
   const toggleSelect = (id: string, kind: "file" | "folder") => {
     setSelected((prev) => {
@@ -253,10 +261,14 @@ export function FileManager() {
   };
 
   const handleMoveConfirm = async (target: MoveTarget) => {
+    const sourceWorkspaceId = active_workspace?.id;
+    if (!sourceWorkspaceId) return;
+
     const fileIds = [...selected].filter((id) => selectedKinds.get(id) === "file");
     const folderIds = [...selected].filter((id) => selectedKinds.get(id) === "folder");
     try {
-      if (target.workspaceId === active_workspace?.id) {
+      await setActiveWorkspace(sourceWorkspaceId);
+      if (target.workspaceId === sourceWorkspaceId) {
         const action = moveDialog?.mode ?? "move";
         if (fileIds.length) await bulkFiles(fileIds, action, target.folderId);
         if (folderIds.length) await bulkFolders(folderIds, action, target.folderId);
@@ -529,7 +541,7 @@ export function FileManager() {
                       key={f.id}
                       className={cn(
                         "group flex items-center gap-3 px-3 py-2.5 hover:bg-zinc-50",
-                        appearIds.has(f.id) && "file-appear",
+                        appearIds.has(f.id) && "file-burst-appear",
                       )}
                     >
                       <button
