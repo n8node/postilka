@@ -7,7 +7,9 @@ import {
   Folder,
   FolderInput,
   FolderPlus,
+  Grid3x3,
   ImageIcon,
+  LayoutGrid,
   Pencil,
   RotateCcw,
   Trash2,
@@ -18,9 +20,12 @@ import {
 import { PageHeader } from "@/components/layout/PageHeader";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { FileCirclePreview } from "@/components/files/FileCirclePreview";
+import { FileDetailPanel } from "@/components/files/FileDetailPanel";
 import { MoveTargetDialog, type MoveTarget } from "@/components/files/MoveTargetDialog";
+import { MediaGalleryGrid, type MediaGridMode } from "@/components/files/MediaGalleryGrid";
 import { UploadProgressPanel } from "@/components/files/UploadProgressPanel";
 import { cn, formatBytes } from "@/lib/utils";
+import { formatMediaDuration, getFileDuration } from "@/lib/file-media";
 import { setActiveWorkspace } from "@/lib/api";
 import {
   type FilesSection,
@@ -83,6 +88,14 @@ function formatFileTime(iso: string) {
   return d.toLocaleDateString("ru-RU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
+function formatFileMeta(file: WorkspaceFile) {
+  const parts = [formatBytes(file.size)];
+  const duration = getFileDuration(file);
+  if (duration != null) parts.push(formatMediaDuration(duration));
+  parts.push(formatFileTime(file.created_at));
+  return parts.join(" · ");
+}
+
 export function FileManager() {
   const { active_workspace } = useAuth();
   const canEdit = useMemo(() => {
@@ -102,6 +115,8 @@ export function FileManager() {
   const [uploadJobs, setUploadJobs] = useState<UploadJob[]>([]);
   const [appearIds, setAppearIds] = useState<Set<string>>(new Set());
   const [moveDialog, setMoveDialog] = useState<{ mode: "move" | "copy" } | null>(null);
+  const [previewFileId, setPreviewFileId] = useState<string | null>(null);
+  const [mediaGridMode, setMediaGridMode] = useState<MediaGridMode>("compact");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const refresh = useCallback(async () => {
@@ -124,6 +139,7 @@ export function FileManager() {
       }
       setSelected(new Set());
       setSelectedKinds(new Map());
+      setPreviewFileId(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Ошибка загрузки");
     } finally {
@@ -301,10 +317,69 @@ export function FileManager() {
   const isUploading = uploadJobs.some(
     (j) => j.status === "pending" || j.status === "uploading",
   );
+  const previewFile = previewFileId ? files.find((f) => f.id === previewFileId) ?? null : null;
+  const isGallerySection = section === "photos" || section === "videos";
+
+  const headerActions = (
+    <>
+      {isGallerySection && (
+        <div className="flex rounded-lg border border-border p-0.5">
+          <button
+            type="button"
+            title="Компактная сетка"
+            onClick={() => setMediaGridMode("compact")}
+            className={cn(
+              "rounded-md p-2 transition-colors",
+              mediaGridMode === "compact"
+                ? "bg-accent/10 text-accent"
+                : "text-muted hover:bg-zinc-50",
+            )}
+          >
+            <Grid3x3 className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            title="Крупная сетка"
+            onClick={() => setMediaGridMode("large")}
+            className={cn(
+              "rounded-md p-2 transition-colors",
+              mediaGridMode === "large"
+                ? "bg-accent/10 text-accent"
+                : "text-muted hover:bg-zinc-50",
+            )}
+          >
+            <LayoutGrid className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+      {canEdit && section === "my-files" ? (
+        <button
+          type="button"
+          onClick={() => void handleCreateFolder()}
+          className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm hover:bg-zinc-50"
+        >
+          <FolderPlus className="h-4 w-4" />
+          Новая папка
+        </button>
+      ) : section === "trash" && canEdit ? (
+        <button
+          type="button"
+          onClick={() => {
+            if (window.confirm("Очистить корзину полностью?")) {
+              void emptyTrash().then(refresh);
+            }
+          }}
+          className="rounded-md border border-red-200 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+        >
+          Очистить корзину
+        </button>
+      ) : null}
+    </>
+  );
 
   return (
-    <div className="flex flex-col gap-4 lg:flex-row">
-      <aside className="w-full shrink-0 space-y-4 lg:w-56">
+    <div className="flex min-h-0 gap-3 xl:gap-4">
+      <aside className="w-44 shrink-0 space-y-4 xl:w-48">
         {canEdit && (
           <button
             type="button"
@@ -336,6 +411,7 @@ export function FileManager() {
               onClick={() => {
                 setSection(id);
                 if (id !== "my-files") setFolderId(null);
+                setPreviewFileId(null);
               }}
               className={cn(
                 "flex w-full items-center gap-2 rounded-lg px-2 py-2 text-sm",
@@ -374,7 +450,8 @@ export function FileManager() {
         )}
       </aside>
 
-      <div className="min-w-0 flex-1">
+      <div className="flex min-w-0 flex-1 gap-3 xl:gap-4">
+        <div className="min-w-0 flex-1">
         <PageHeader
           title={
             section === "my-files"
@@ -388,30 +465,7 @@ export function FileManager() {
               ? `Хранение в корзине: ${stats?.trash_retention_days ?? 0} дн.`
               : "Файлы текущего пространства"
           }
-          actions={
-            canEdit && section === "my-files" ? (
-              <button
-                type="button"
-                onClick={() => void handleCreateFolder()}
-                className="inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm hover:bg-zinc-50"
-              >
-                <FolderPlus className="h-4 w-4" />
-                Новая папка
-              </button>
-            ) : section === "trash" && canEdit ? (
-              <button
-                type="button"
-                onClick={() => {
-                  if (window.confirm("Очистить корзину полностью?")) {
-                    void emptyTrash().then(refresh);
-                  }
-                }}
-                className="rounded-md border border-red-200 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
-              >
-                Очистить корзину
-              </button>
-            ) : undefined
-          }
+          actions={headerActions}
         />
 
         {section === "my-files" && folderId && (
@@ -535,6 +589,17 @@ export function FileManager() {
                 {label && (
                   <h3 className="mb-2 text-sm font-medium capitalize text-muted">{label}</h3>
                 )}
+
+                {isGallerySection ? (
+                  <MediaGalleryGrid
+                    files={groupFiles}
+                    mode={mediaGridMode}
+                    selected={selected}
+                    onOpen={(f) => setPreviewFileId(f.id)}
+                    onToggleSelect={(id) => toggleSelect(id, "file")}
+                    appearIds={appearIds}
+                  />
+                ) : (
                 <div className="divide-y divide-border overflow-hidden rounded-xl border border-border bg-surface">
                   {groupFiles.map((f) => (
                     <div
@@ -542,6 +607,7 @@ export function FileManager() {
                       className={cn(
                         "group flex items-center gap-3 px-3 py-2.5 hover:bg-zinc-50",
                         appearIds.has(f.id) && "file-burst-appear",
+                        previewFileId === f.id && section === "my-files" && "bg-accent/5",
                       )}
                     >
                       <button
@@ -559,17 +625,21 @@ export function FileManager() {
                           <span className="h-2 w-2 rounded-full bg-white" />
                         )}
                       </button>
-                      <FileCirclePreview
-                        fileId={f.id}
-                        name={f.name}
-                        mimeType={f.mime_type}
-                      />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium">{f.name}</p>
-                        <p className="text-xs text-muted">
-                          {formatBytes(f.size)} · {formatFileTime(f.created_at)}
-                        </p>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => section === "my-files" && setPreviewFileId(f.id)}
+                        className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                      >
+                        <FileCirclePreview
+                          fileId={f.id}
+                          name={f.name}
+                          mimeType={f.mime_type}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium">{f.name}</p>
+                          <p className="text-xs text-muted">{formatFileMeta(f)}</p>
+                        </div>
+                      </button>
                       <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
                         {section !== "trash" && (
                           <button
@@ -637,9 +707,30 @@ export function FileManager() {
                     </div>
                   ))}
                 </div>
+                )}
               </section>
             ))}
           </div>
+        )}
+        </div>
+
+        {previewFile && (section === "my-files" || isGallerySection) && (
+          <FileDetailPanel
+            file={previewFile}
+            canEdit={canEdit}
+            onClose={() => setPreviewFileId(null)}
+            onDownload={() =>
+              void downloadFile(previewFile.id).then(({ url }) => window.open(url, "_blank"))
+            }
+            onRename={() => void handleRename("file", previewFile.id, previewFile.name)}
+            onCopy={() => void copyFile(previewFile.id, folderId).then(refresh)}
+            onDelete={() =>
+              void deleteFile(previewFile.id).then(() => {
+                setPreviewFileId(null);
+                void refresh();
+              })
+            }
+          />
         )}
       </div>
 

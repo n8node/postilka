@@ -1,5 +1,6 @@
 import { apiFetch } from "@/lib/api";
 import type { WorkspaceFile } from "@/lib/files-api";
+import { probeMediaDuration } from "@/lib/file-media";
 
 export type UploadJobStatus =
   | "pending"
@@ -27,6 +28,7 @@ type StoredJob = UploadJob & {
   uploadUrl?: string;
   uploadHeaders?: Record<string, string>;
   blob?: Blob;
+  mediaDurationSeconds?: number;
 };
 
 const DB_NAME = "postilka-upload-queue";
@@ -292,6 +294,13 @@ class UploadQueueManager {
 
     try {
       if (!sessionToken || !uploadUrl) {
+        let mediaDurationSeconds = job.mediaDurationSeconds;
+        if (mediaDurationSeconds == null && job.blob) {
+          mediaDurationSeconds = await probeMediaDuration(job.blob, job.mimeType);
+          if (mediaDurationSeconds != null) {
+            await this.updateJob(job.id, { mediaDurationSeconds });
+          }
+        }
         const init = await apiFetch<{
           upload_url: string;
           upload_headers: Record<string, string>;
@@ -303,6 +312,7 @@ class UploadQueueManager {
             size: job.size,
             mime_type: job.mimeType,
             folder_id: job.folderId,
+            media_duration_seconds: mediaDurationSeconds ?? undefined,
           }),
         });
         sessionToken = init.upload_session_token;
