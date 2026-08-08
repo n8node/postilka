@@ -1446,12 +1446,19 @@ export function verifyChannel(id: string) {
   return apiFetch<ChannelListItem>(`/channels/${id}/verify`, { method: "POST" });
 }
 
-export function sendChannelTestMessage(id: string, text?: string) {
+export type ChannelTestMessagePayload = {
+  text?: string;
+  title?: string;
+  photo_url?: string;
+  content_type?: "brief" | "article";
+};
+
+export function sendChannelTestMessage(id: string, payload?: ChannelTestMessagePayload) {
   return apiFetch<{ success: boolean; message: string; provider_post_id?: string }>(
     `/channels/${id}/test-message`,
     {
       method: "POST",
-      body: JSON.stringify(text ? { text } : {}),
+      body: JSON.stringify(payload ?? {}),
     },
   );
 }

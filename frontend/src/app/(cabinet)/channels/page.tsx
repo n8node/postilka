@@ -92,6 +92,7 @@ export default function ChannelsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [testSuccess, setTestSuccess] = useState<string | null>(null);
+  const [dzenTestType, setDzenTestType] = useState<"brief" | "article">("brief");
   const [editOpen, setEditOpen] = useState(false);
 
   const selected = items.find((c) => c.id === selectedId) ?? null;
@@ -163,7 +164,11 @@ export default function ChannelsPage() {
     setTestSuccess(null);
     setError(null);
     try {
-      const result = await sendChannelTestMessage(selected.id);
+      const payload =
+        selected.provider === "dzen"
+          ? { content_type: dzenTestType }
+          : undefined;
+      const result = await sendChannelTestMessage(selected.id, payload);
       setTestSuccess(result.message);
       await load();
       setSelectedId(selected.id);
@@ -306,6 +311,37 @@ export default function ChannelsPage() {
                 <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
                   {testSuccess}
                 </div>
+              )}
+
+              {selected.provider === "dzen" && (
+                <DetailRow label="Тип тестовой публикации">
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setDzenTestType("brief")}
+                      className={cn(
+                        "rounded-md border px-2.5 py-1 text-xs",
+                        dzenTestType === "brief"
+                          ? "border-accent bg-accent/10 text-accent"
+                          : "border-border hover:bg-zinc-50",
+                      )}
+                    >
+                      Бриф (короткий пост)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDzenTestType("article")}
+                      className={cn(
+                        "rounded-md border px-2.5 py-1 text-xs",
+                        dzenTestType === "article"
+                          ? "border-accent bg-accent/10 text-accent"
+                          : "border-border hover:bg-zinc-50",
+                      )}
+                    >
+                      Статья
+                    </button>
+                  </div>
+                </DetailRow>
               )}
 
               <div className="space-y-2 pt-1">

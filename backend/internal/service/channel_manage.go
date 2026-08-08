@@ -13,31 +13,6 @@ import (
 	"github.com/postilka/postilka/internal/repository"
 )
 
-func resolveChannelPublishToken(
-	ctx context.Context,
-	ch *model.Channel,
-	channels *repository.ChannelRepository,
-	cipher *SecretCipher,
-	social *SocialProviderSettingsService,
-) (string, error) {
-	if ch.Provider == model.ChannelProviderMAX && ch.MaxPostMode == model.MAXPostModePlatform {
-		token, _, err := social.ResolveMAXPlatformBotToken(ctx, cipher)
-		if err != nil {
-			return "", fmt.Errorf("бот Postilka для MAX не настроен — обратитесь в поддержку")
-		}
-		return token, nil
-	}
-
-	enc, err := channels.GetTokenEncrypted(ctx, ch.WorkspaceID, ch.ID)
-	if err != nil {
-		return "", err
-	}
-	if strings.TrimSpace(enc) == "" {
-		return "", fmt.Errorf("токен канала не сохранён — переподключите канал")
-	}
-	return cipher.Decrypt(enc)
-}
-
 func channelPostModeLabel(ch model.Channel) string {
 	if ch.Provider == model.ChannelProviderVK {
 		if ch.VKOAuthMode == model.VKOAuthModePlatform {
@@ -376,17 +351,20 @@ func (s *ChannelService) VerifyAndRefresh(
 
 	if verifyErr != nil {
 		_, _ = s.channels.SaveChannel(ctx, repository.ChannelSaveParams{
-			WorkspaceID:         ws.ID,
-			ChannelID:           channelID,
-			Provider:            ch.Provider,
-			Name:                ch.Name,
-			ChatType:            ch.ChatType,
-			BotUsername:         ch.BotUsername,
-			BotTokenEncrypted:   row.BotTokenEncrypted,
-			MaxPostMode:         ch.MaxPostMode,
-			Status:              model.ChannelStatusNeedsReconnect,
-			Metadata:            meta,
-			MetadataRefreshedAt: ch.MetadataRefreshedAt,
+			WorkspaceID:           ws.ID,
+			ChannelID:             channelID,
+			Provider:              ch.Provider,
+			Name:                  ch.Name,
+			ChatType:              ch.ChatType,
+			BotUsername:           ch.BotUsername,
+			BotTokenEncrypted:     row.BotTokenEncrypted,
+			RefreshTokenEncrypted: row.RefreshTokenEncrypted,
+			TokenExpiresAt:        row.TokenExpiresAt,
+			MaxPostMode:           ch.MaxPostMode,
+			VKOAuthMode:           ch.VKOAuthMode,
+			Status:                model.ChannelStatusNeedsReconnect,
+			Metadata:              meta,
+			MetadataRefreshedAt:   ch.MetadataRefreshedAt,
 		})
 		_ = s.channels.UpdateStatus(ctx, ws.ID, channelID, model.ChannelStatusNeedsReconnect, verifyErr.Error())
 		return nil, verifyErr
@@ -397,17 +375,20 @@ func (s *ChannelService) VerifyAndRefresh(
 	ch.MetadataRefreshedAt = &now
 
 	updated, err := s.channels.SaveChannel(ctx, repository.ChannelSaveParams{
-		WorkspaceID:         ws.ID,
-		ChannelID:           channelID,
-		Provider:            ch.Provider,
-		Name:                ch.Name,
-		ChatType:            ch.ChatType,
-		BotUsername:         ch.BotUsername,
-		BotTokenEncrypted:   row.BotTokenEncrypted,
-		MaxPostMode:         ch.MaxPostMode,
-		Status:              ch.Status,
-		Metadata:            ch.Metadata,
-		MetadataRefreshedAt: ch.MetadataRefreshedAt,
+		WorkspaceID:           ws.ID,
+		ChannelID:             channelID,
+		Provider:              ch.Provider,
+		Name:                  ch.Name,
+		ChatType:              ch.ChatType,
+		BotUsername:           ch.BotUsername,
+		BotTokenEncrypted:     row.BotTokenEncrypted,
+		RefreshTokenEncrypted: row.RefreshTokenEncrypted,
+		TokenExpiresAt:        row.TokenExpiresAt,
+		MaxPostMode:           ch.MaxPostMode,
+		VKOAuthMode:           ch.VKOAuthMode,
+		Status:                ch.Status,
+		Metadata:              meta,
+		MetadataRefreshedAt:   ch.MetadataRefreshedAt,
 	})
 	if err != nil {
 		return nil, err

@@ -14,6 +14,9 @@ const yandexAuthURL = "https://oauth.yandex.ru/authorize"
 const yandexTokenURL = "https://oauth.yandex.ru/token"
 const zenAPIBase = "https://api.zen.yandex.com/v1"
 
+// dzenScope is configured in the Yandex OAuth app; empty means default app scopes.
+const dzenScope = ""
+
 type DzenClient struct {
 	ClientID     string
 	ClientSecret string
@@ -31,9 +34,26 @@ type DzenTokenResponse struct {
 }
 
 type DzenChannel struct {
-	ID    string `json:"id"`
-	Title string `json:"title"`
-	URL   string `json:"url"`
+	ID      string `json:"id"`
+	Title   string `json:"title"`
+	URL     string `json:"url"`
+	IconURL string `json:"icon_url"`
+}
+
+type DzenContentType string
+
+const (
+	DzenContentBrief   DzenContentType = "brief"
+	DzenContentArticle DzenContentType = "article"
+)
+
+type DzenPublicationInput struct {
+	ChannelID   string
+	ContentType DzenContentType
+	Text        string
+	Title       string
+	CoverURL    string
+	ImageURL    string
 }
 
 func (c *DzenClient) AuthorizeURL(state string) string {
@@ -42,16 +62,35 @@ func (c *DzenClient) AuthorizeURL(state string) string {
 	values.Set("client_id", c.ClientID)
 	values.Set("redirect_uri", c.RedirectURI)
 	values.Set("state", state)
+	if dzenScope != "" {
+		values.Set("scope", dzenScope)
+	}
 	return yandexAuthURL + "?" + values.Encode()
 }
 
 func (c *DzenClient) ExchangeCode(ctx context.Context, code string) (*DzenTokenResponse, error) {
-	form := url.Values{}
-	form.Set("grant_type", "authorization_code")
-	form.Set("code", code)
-	form.Set("client_id", c.ClientID)
-	form.Set("client_secret", c.ClientSecret)
+	return c.requestToken(ctx, url.Values{
+		"grant_type":    {"authorization_code"},
+		"code":          {code},
+		"client_id":     {c.ClientID},
+		"client_secret": {c.ClientSecret},
+	})
+}
 
+func (c *DzenClient) RefreshToken(ctx context.Context, refreshToken string) (*DzenTokenResponse, error) {
+	refreshToken = strings.TrimSpace(refreshToken)
+	if refreshToken == "" {
+		return nil, fmt.Errorf("dzen refresh: empty refresh_token")
+	}
+	return c.requestToken(ctx, url.Values{
+		"grant_type":    {"refresh_token"},
+		"refresh_token": {refreshToken},
+		"client_id":     {c.ClientID},
+		"client_secret": {c.ClientSecret},
+	})
+}
+
+func (c *DzenClient) requestToken(ctx context.Context, form url.Values) (*DzenTokenResponse, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, yandexTokenURL, strings.NewReader(form.Encode()))
 	if err != nil {
 		return nil, err
@@ -116,14 +155,69 @@ func (c *DzenClient) ListChannels(ctx context.Context, accessToken string) ([]Dz
 }
 
 func (c *DzenClient) PostBrief(ctx context.Context, accessToken, channelID, text string) (string, error) {
+	return c.Publish(ctx, accessToken, DzenPublicationInput{
+		ChannelID:   channelID,
+		ContentType: DzenContentBrief,
+		Text:        text,
+	})
+}
+
+func (c *DzenClient) PostArticle(ctx context.Context, accessToken string, input DzenPublicationInput) (string, error) {
+	input.ContentType = DzenContentArticle
+	return c.Publish(ctx, accessToken, input)
+}
+
+func (c *DzenClient) Publish(ctx context.Context, accessToken string, input DzenPublicationInput) (string, error) {
+	channelID := strings.TrimSpace(input.ChannelID)
+	if channelID == "" {
+		return "", fmt.Errorf("dzen publish: channel_id required")
+	}
+
+	contentType := input.ContentType
+	if contentType == "" {
+		contentType = DzenContentBrief
+	}
+
+	var content map[string]any
+	switch contentType {
+	case DzenContentArticle:
+		title := strings.TrimSpace(input.Title)
+		text := strings.TrimSpace(input.Text)
+		if title == "" {
+			return "", fmt.Errorf("dzen publish: title required for article")
+		}
+		if text == "" {
+			return "", fmt.Errorf("dzen publish: text required for article")
+		}
+		article := map[string]string{
+			"title": title,
+			"text":  text,
+		}
+		if cover := strings.TrimSpace(input.CoverURL); cover != "" {
+			article["cover_url"] = cover
+		}
+		content = map[string]any{
+			"type":    string(DzenContentArticle),
+			"article": article,
+		}
+	default:
+		text := strings.TrimSpace(input.Text)
+		if text == "" {
+			return "", fmt.Errorf("dzen publish: text required for brief")
+		}
+		brief := map[string]string{"text": text}
+		if imageURL := strings.TrimSpace(input.ImageURL); imageURL != "" {
+			brief["image_url"] = imageURL
+		}
+		content = map[string]any{
+			"type":  string(DzenContentBrief),
+			"brief": brief,
+		}
+	}
+
 	payload, err := json.Marshal(map[string]any{
 		"channel_id": channelID,
-		"content": map[string]any{
-			"type": "brief",
-			"brief": map[string]string{
-				"text": text,
-			},
-		},
+		"content":    content,
 	})
 	if err != nil {
 		return "", err

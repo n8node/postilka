@@ -143,7 +143,9 @@ type ChannelTestMessageResult struct {
 }
 
 type ChannelTestMessageRequest struct {
-	Text     string `json:"text,omitempty"`
-	PhotoURL string `json:"photo_url,omitempty"`
-	VideoURL string `json:"video_url,omitempty"`
+	Text        string `json:"text,omitempty"`
+	Title       string `json:"title,omitempty"`
+	PhotoURL    string `json:"photo_url,omitempty"`
+	VideoURL    string `json:"video_url,omitempty"`
+	ContentType string `json:"content_type,omitempty"` // brief | article (dzen)
 }

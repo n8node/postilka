@@ -209,6 +209,20 @@ func (s *ChannelService) lookupOAuthAvatar(
 				return strings.TrimSpace(ch.Icon), nil
 			}
 		}
+
+	case model.SocialProviderDzen:
+		client := &oauthclient.DzenClient{
+			ClientID: cfg.OAuthClientID, ClientSecret: cfg.OAuthClientSecret,
+		}
+		channels, err := client.ListChannels(ctx, accessToken)
+		if err != nil {
+			return "", err
+		}
+		for _, ch := range channels {
+			if ch.ID == externalID {
+				return strings.TrimSpace(ch.IconURL), nil
+			}
+		}
 	}
 
 	return "", repository.ErrNotFound
@@ -233,6 +247,15 @@ func lookupOAuthAvatarFromTargets(targets []model.DiscoveredChannelTarget, exter
 	for _, t := range targets {
 		if t.ExternalID == externalID {
 			return strings.TrimSpace(t.AvatarURL)
+		}
+	}
+	return ""
+}
+
+func lookupOAuthPublicURLFromTargets(targets []model.DiscoveredChannelTarget, externalID string) string {
+	for _, t := range targets {
+		if t.ExternalID == externalID {
+			return strings.TrimSpace(t.PublicURL)
 		}
 	}
 	return ""

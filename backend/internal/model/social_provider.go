@@ -161,6 +161,7 @@ type DiscoveredChannelTarget struct {
 	Type       string `json:"type"`
 	CanPost    bool   `json:"can_post"`
 	AvatarURL  string `json:"avatar_url,omitempty"`
+	PublicURL  string `json:"public_url,omitempty"`
 }
 
 type ChannelDiscoverResult struct {

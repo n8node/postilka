@@ -63,16 +63,28 @@ func (s *ChannelTestService) SendTestMessage(
 	}
 
 	text := strings.TrimSpace(req.Text)
+	title := strings.TrimSpace(req.Title)
 	photoURL := strings.TrimSpace(req.PhotoURL)
 	videoURL := strings.TrimSpace(req.VideoURL)
+	contentType := strings.TrimSpace(req.ContentType)
 	if photoURL != "" && videoURL != "" {
 		return nil, fmt.Errorf("укажите photo_url или video_url, но не оба сразу")
 	}
-	if text == "" && photoURL == "" && videoURL == "" {
+	if ch.Provider == model.ChannelProviderDzen && videoURL != "" {
+		return nil, fmt.Errorf("Дзен не поддерживает видео — используйте текст, бриф с картинкой или статью")
+	}
+	if ch.Provider == model.ChannelProviderDzen && strings.EqualFold(contentType, "article") {
+		if title == "" {
+			title = "Тестовая статья Postilka"
+		}
+		if text == "" {
+			text = "✅ Тестовая публикация от Postilka. Канал подключён корректно."
+		}
+	} else if text == "" && photoURL == "" && videoURL == "" {
 		text = model.DefaultChannelTestMessage
 	}
 
-	postID, sendErr := s.publish(ctx, ch, token, text, photoURL, videoURL)
+	postID, sendErr := s.publish(ctx, ch, token, req.Text, req.Title, req.PhotoURL, req.VideoURL, req.ContentType)
 	if sendErr != nil {
 		_ = s.channels.UpdateStatus(ctx, ws.ID, channelID, model.ChannelStatusNeedsReconnect, sendErr.Error())
 		return nil, sendErr
@@ -92,8 +104,12 @@ func (s *ChannelTestService) SendTestMessage(
 func (s *ChannelTestService) publish(
 	ctx context.Context,
 	ch *model.Channel,
-	token, text, photoURL, videoURL string,
+	token, text, title, photoURL, videoURL, contentType string,
 ) (string, error) {
+	if ch.Provider == model.ChannelProviderDzen && videoURL != "" {
+		return "", fmt.Errorf("Дзен не поддерживает видео в этой публикации — используйте текст, бриф с картинкой или статью")
+	}
+
 	switch ch.Provider {
 	case model.ChannelProviderTelegram:
 		if err := s.botClient.SendMessage(ctx, token, ch.ChatID, text); err != nil {
@@ -145,8 +161,18 @@ func (s *ChannelTestService) publish(
 		return "", nil
 
 	case model.ChannelProviderDzen:
-		client := &oauthclient.DzenClient{}
-		pubID, err := client.PostBrief(ctx, token, ch.ChatID, text)
+		cfg, err := s.socialSettings.GetEffective(ctx, model.SocialProviderDzen)
+		if err != nil {
+			return "", err
+		}
+		client := &oauthclient.DzenClient{
+			ClientID: cfg.OAuthClientID, ClientSecret: cfg.OAuthClientSecret,
+		}
+		ct := strings.TrimSpace(contentType)
+		if ct == "" {
+			ct = "brief"
+		}
+		pubID, err := publishToDzen(ctx, client, token, ch.ChatID, ct, text, title, photoURL)
 		if err != nil {
 			return "", err
 		}
@@ -166,14 +192,11 @@ func (s *ChannelTestService) resolvePublishToken(ctx context.Context, ch *model.
 		return token, nil
 	}
 
-	enc, err := s.channels.GetTokenEncrypted(ctx, ch.WorkspaceID, ch.ID)
+	row, err := s.channels.GetRowByID(ctx, ch.WorkspaceID, ch.ID)
 	if err != nil {
 		return "", err
 	}
-	if strings.TrimSpace(enc) == "" {
-		return "", fmt.Errorf("токен канала не сохранён — переподключите канал")
-	}
-	return s.cipher.Decrypt(enc)
+	return ensureOAuthAccessToken(ctx, ch, row, s.channels, s.cipher, s.socialSettings)
 }
 
 func (s *ChannelTestService) requireAdmin(ctx context.Context, userID string, r *http.Request) (*model.Workspace, error) {
