@@ -170,12 +170,13 @@ func (h *FileStorageHandler) DownloadFile(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
 		return
 	}
-	url, err := h.files.DownloadURL(r.Context(), userID, r, chi.URLParam(r, "id"))
+	inline := r.URL.Query().Get("disposition") == "inline" || r.URL.Query().Get("inline") == "1"
+	url, expiresIn, err := h.files.DownloadURL(r.Context(), userID, r, chi.URLParam(r, "id"), inline)
 	if err != nil {
 		writeFileStorageError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"url": url})
+	writeJSON(w, http.StatusOK, map[string]any{"url": url, "expires_in": expiresIn})
 }
 
 func (h *FileStorageHandler) CopyFile(w http.ResponseWriter, r *http.Request) {

@@ -131,8 +131,13 @@ export function deleteFile(id: string) {
   });
 }
 
-export function downloadFile(id: string) {
-  return apiFetch<{ url: string }>(`/files/${id}/download`);
+export function downloadFile(id: string, disposition: "inline" | "attachment" = "attachment") {
+  const params = new URLSearchParams();
+  if (disposition === "inline") params.set("disposition", "inline");
+  const q = params.toString();
+  return apiFetch<{ url: string; expires_in?: number }>(
+    `/files/${id}/download${q ? `?${q}` : ""}`,
+  );
 }
 
 export function bulkFiles(ids: string[], action: "delete" | "move" | "copy", folderId?: string | null) {

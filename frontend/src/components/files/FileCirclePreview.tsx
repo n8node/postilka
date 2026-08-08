@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { FileAudio, FileText, FileVideo, ImageIcon, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { downloadFile } from "@/lib/files-api";
+import { getCachedFileMediaUrl } from "@/lib/file-media-cache";
 
 type Props = {
   fileId?: string;
@@ -42,8 +42,8 @@ export function FileCirclePreview({ fileId, name, mimeType, size = "md", classNa
     if (!isImage || !fileId) return;
     let revoked: string | null = null;
     let cancelled = false;
-    void downloadFile(fileId)
-      .then(({ url }) => {
+    void getCachedFileMediaUrl(fileId, "preview")
+      .then((url) => {
         if (cancelled) return;
         revoked = url;
         setPreviewUrl(url);
@@ -70,7 +70,13 @@ export function FileCirclePreview({ fileId, name, mimeType, size = "md", classNa
     >
       {isImage && previewUrl && !failed ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={previewUrl} alt="" className="h-full w-full object-cover" />
+        <img
+          src={previewUrl}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          className="h-full w-full object-cover"
+        />
       ) : (
         <div className="flex h-full w-full items-center justify-center text-muted">
           {isImage && !previewUrl && !failed ? (

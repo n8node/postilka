@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { FileAudio, FileVideo, ImageIcon, Loader2, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { downloadFile } from "@/lib/files-api";
+import { getCachedFileMediaUrl } from "@/lib/file-media-cache";
 import { formatMediaDuration, isAudioMime, isVideoMime } from "@/lib/file-media";
 
 type Props = {
@@ -35,8 +35,8 @@ export function FileThumbnail({
     if (!isImage && !isVideo) return;
     let revoked: string | null = null;
     let cancelled = false;
-    void downloadFile(fileId)
-      .then(({ url: downloadUrl }) => {
+    void getCachedFileMediaUrl(fileId, "preview")
+      .then((downloadUrl) => {
         if (cancelled) return;
         revoked = downloadUrl;
         setUrl(downloadUrl);
@@ -63,7 +63,7 @@ export function FileThumbnail({
     >
       {isImage && url && !failed ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={url} alt="" className="h-full w-full object-cover" />
+        <img src={url} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover" />
       ) : isVideo && url && !failed ? (
         <>
           <video src={url} muted preload="metadata" className="h-full w-full object-cover" />

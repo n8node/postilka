@@ -69,19 +69,41 @@ func (o *ObjectStorage) PresignPut(ctx context.Context, s3Key, contentType strin
 }
 
 func (o *ObjectStorage) PresignGet(ctx context.Context, s3Key string, expires time.Duration, filename string) (string, error) {
+	return o.PresignGetWithOptions(ctx, s3Key, PresignGetOptions{
+		Expires:  expires,
+		Filename: filename,
+	})
+}
+
+type PresignGetOptions struct {
+	Expires      time.Duration
+	Filename     string
+	Inline       bool
+	CacheControl string
+}
+
+func (o *ObjectStorage) PresignGetWithOptions(ctx context.Context, s3Key string, opts PresignGetOptions) (string, error) {
 	client, st, err := o.client(ctx)
 	if err != nil {
 		return "", err
+	}
+	if opts.Expires <= 0 {
+		opts.Expires = 15 * time.Minute
 	}
 	presign := s3.NewPresignClient(client)
 	input := &s3.GetObjectInput{
 		Bucket: aws.String(st.Bucket),
 		Key:    aws.String(s3Key),
 	}
-	if filename != "" {
-		input.ResponseContentDisposition = aws.String(`attachment; filename="` + sanitizeFilename(filename) + `"`)
+	if opts.Inline {
+		input.ResponseContentDisposition = aws.String("inline")
+	} else if opts.Filename != "" {
+		input.ResponseContentDisposition = aws.String(`attachment; filename="` + sanitizeFilename(opts.Filename) + `"`)
 	}
-	out, err := presign.PresignGetObject(ctx, input, s3.WithPresignExpires(expires))
+	if opts.CacheControl != "" {
+		input.ResponseCacheControl = aws.String(opts.CacheControl)
+	}
+	out, err := presign.PresignGetObject(ctx, input, s3.WithPresignExpires(opts.Expires))
 	if err != nil {
 		return "", err
 	}

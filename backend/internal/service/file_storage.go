@@ -422,19 +422,35 @@ func (s *FileStorageService) MoveFolder(ctx context.Context, userID string, r *h
 	return f, err
 }
 
-func (s *FileStorageService) DownloadURL(ctx context.Context, userID string, r *http.Request, fileID string) (string, error) {
+func (s *FileStorageService) DownloadURL(ctx context.Context, userID string, r *http.Request, fileID string, inline bool) (string, int, error) {
 	ws, err := s.resolveWorkspace(ctx, userID, r, model.RoleViewer)
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
 	f, err := s.files.GetByID(ctx, ws.ID, fileID, false)
 	if errors.Is(err, repository.ErrNotFound) {
-		return "", ErrFileNotFound
+		return "", 0, ErrFileNotFound
 	}
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
-	return s.storage.PresignGet(ctx, f.S3Key, 15*time.Minute, f.Name)
+
+	opts := PresignGetOptions{
+		Filename: f.Name,
+		Inline:   inline,
+	}
+	if inline {
+		opts.Expires = time.Hour
+		opts.CacheControl = "private, max-age=86400, stale-while-revalidate=604800"
+	} else {
+		opts.Expires = 15 * time.Minute
+	}
+
+	url, err := s.storage.PresignGetWithOptions(ctx, f.S3Key, opts)
+	if err != nil {
+		return "", 0, err
+	}
+	return url, int(opts.Expires.Seconds()), nil
 }
 
 func (s *FileStorageService) Breadcrumbs(ctx context.Context, userID string, r *http.Request, folderID string) ([]model.FolderBreadcrumb, error) {

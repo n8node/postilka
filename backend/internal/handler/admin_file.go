@@ -72,7 +72,7 @@ func (h *AdminHandler) ListFileFolders(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	folders, err := h.folders.List(r.Context(), workspaceID, nil, true)
+	folders, err := h.folders.ListForAdmin(r.Context(), workspaceID, r.URL.Query().Get("include_deleted") == "true")
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Не удалось загрузить папки")
 		return

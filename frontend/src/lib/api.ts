@@ -823,8 +823,9 @@ export function fetchAdminFiles(query: AdminFilesQuery = {}) {
   return apiFetch<AdminFilesResponse>(`/admin/files${qs ? `?${qs}` : ""}`);
 }
 
-export function fetchAdminFileFolders(workspaceId: string) {
+export function fetchAdminFileFolders(workspaceId: string, includeDeleted = false) {
   const params = new URLSearchParams({ workspace_id: workspaceId });
+  if (includeDeleted) params.set("include_deleted", "true");
   return apiFetch<{ folders: AdminFolderListItem[] }>(
     `/admin/files/folders?${params.toString()}`,
   );

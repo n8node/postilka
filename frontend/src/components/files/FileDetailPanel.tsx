@@ -13,7 +13,8 @@ import {
   X,
 } from "lucide-react";
 import { cn, formatBytes } from "@/lib/utils";
-import { downloadFile, type WorkspaceFile } from "@/lib/files-api";
+import { type WorkspaceFile } from "@/lib/files-api";
+import { getCachedFileMediaUrl } from "@/lib/file-media-cache";
 import {
   formatMediaDuration,
   getFileDuration,
@@ -60,8 +61,8 @@ export function FileDetailPanel({
   useEffect(() => {
     let revoked: string | null = null;
     let cancelled = false;
-    void downloadFile(file.id)
-      .then(({ url: downloadUrl }) => {
+    void getCachedFileMediaUrl(file.id, "preview")
+      .then((downloadUrl) => {
         if (cancelled) return;
         revoked = downloadUrl;
         setUrl(downloadUrl);
@@ -102,7 +103,13 @@ export function FileDetailPanel({
         >
           {isImage && url && !failed ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={url} alt="" className="h-full w-full object-contain" />
+            <img
+              src={url}
+              alt=""
+              loading="lazy"
+              decoding="async"
+              className="h-full w-full object-contain"
+            />
           ) : isVideo && url && !failed ? (
             <video src={url} controls className="h-full w-full bg-black object-contain" />
           ) : isAudio && url && !failed ? (

@@ -28,7 +28,9 @@ type ListFilesAdminFilter struct {
 }
 
 func (r *WorkspaceFileRepository) AdminStats(ctx context.Context, f ListFilesAdminFilter) (*model.AdminFileStats, error) {
-	where, args := buildAdminFilesWhere(f, "f")
+	statsFilter := f
+	statsFilter.DeletedOnly = nil
+	where, args := buildAdminFilesWhere(statsFilter, "f")
 	q := `
 		SELECT
 			COUNT(*) FILTER (WHERE f.deleted_at IS NULL),
@@ -89,9 +91,9 @@ func (r *WorkspaceFileRepository) ListForAdmin(ctx context.Context, f ListFilesA
 		LEFT JOIN workspace_folders fo ON fo.id = f.folder_id
 		LEFT JOIN users u ON u.id = f.uploaded_by_user_id
 		%s
-		ORDER BY f.created_at DESC
+		ORDER BY %s
 		LIMIT $%d OFFSET $%d
-	`, where, limitIdx, offsetIdx)
+	`, where, adminFilesOrderBy(f), limitIdx, offsetIdx)
 
 	rows, err := r.pool.Query(ctx, listQ, args...)
 	if err != nil {
@@ -125,7 +127,9 @@ func buildAdminFilesWhere(f ListFilesAdminFilter, alias string) (string, []any) 
 		args = append(args, ws)
 		where = append(where, fmt.Sprintf("%s.workspace_id = $%d", alias, len(args)))
 	}
-	if f.FolderRoot {
+	if f.DeletedOnly != nil && *f.DeletedOnly {
+		// Trashed files keep original folder_id; folder filters would hide most of trash.
+	} else if f.FolderRoot {
 		where = append(where, fmt.Sprintf("%s.folder_id IS NULL", alias))
 	} else if f.FolderID != nil && *f.FolderID != "" {
 		args = append(args, *f.FolderID)
@@ -174,6 +178,16 @@ func buildAdminFilesWhere(f ListFilesAdminFilter, alias string) (string, []any) 
 		whereSQL = "WHERE " + strings.Join(where, " AND ")
 	}
 	return whereSQL, args
+}
+
+func adminFilesOrderBy(f ListFilesAdminFilter) string {
+	if f.DeletedOnly != nil && *f.DeletedOnly {
+		return "f.deleted_at DESC NULLS LAST, f.created_at DESC"
+	}
+	if f.DeletedOnly == nil {
+		return "COALESCE(f.deleted_at, f.created_at) DESC, f.created_at DESC"
+	}
+	return "f.created_at DESC"
 }
 
 func scanAdminFileRow(row pgx.Row) (*model.AdminFileListItem, error) {

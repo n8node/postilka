@@ -82,6 +82,29 @@ func (r *WorkspaceFolderRepository) List(ctx context.Context, workspaceID string
 	return out, rows.Err()
 }
 
+func (r *WorkspaceFolderRepository) ListForAdmin(ctx context.Context, workspaceID string, includeDeleted bool) ([]model.WorkspaceFolder, error) {
+	q := `SELECT ` + folderColumns + ` FROM workspace_folders WHERE workspace_id = $1`
+	if !includeDeleted {
+		q += ` AND deleted_at IS NULL`
+	}
+	q += ` ORDER BY name ASC`
+
+	rows, err := r.pool.Query(ctx, q, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]model.WorkspaceFolder, 0)
+	for rows.Next() {
+		item, err := scanFolder(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *item)
+	}
+	return out, rows.Err()
+}
+
 func (r *WorkspaceFolderRepository) Create(ctx context.Context, f *model.WorkspaceFolder) (*model.WorkspaceFolder, error) {
 	return scanFolder(r.pool.QueryRow(ctx, `
 		INSERT INTO workspace_folders (workspace_id, parent_id, name)

@@ -7,7 +7,6 @@ import {
   ApiError,
   fetchAdminFileFolders,
   fetchAdminFiles,
-  fetchAdminUsers,
   fetchAdminWorkspaces,
   type AdminFile,
   type AdminFileStats,
@@ -93,17 +92,22 @@ export function AdminFilesPage() {
       setFolderId("");
       return;
     }
-    void fetchAdminFileFolders(workspaceId)
+    if (deletedFilter === "trash") {
+      setFolderId("");
+    }
+    void fetchAdminFileFolders(workspaceId, deletedFilter === "trash")
       .then((r) => setFolders(r.folders))
       .catch(() => setFolders([]));
-  }, [workspaceId]);
+  }, [workspaceId, deletedFilter]);
 
   const query = useMemo((): AdminFilesQuery => {
     const out: AdminFilesQuery = { limit: 100 };
     if (q.trim()) out.q = q.trim();
     if (workspaceId) out.workspace_id = workspaceId;
-    if (folderId === "root") out.folder_id = "root";
-    else if (folderId) out.folder_id = folderId;
+    if (workspaceId && deletedFilter !== "trash") {
+      if (folderId === "root") out.folder_id = "root";
+      else if (folderId) out.folder_id = folderId;
+    }
     if (uploadedBy) out.uploaded_by = uploadedBy;
     if (typeFilter) out.type = typeFilter;
     if (createdFrom) out.created_from = createdFrom;
@@ -244,11 +248,13 @@ export function AdminFilesPage() {
           <select
             value={folderId}
             onChange={(e) => setFolderId(e.target.value)}
-            disabled={!workspaceId}
+            disabled={!workspaceId || deletedFilter === "trash"}
             className="mt-1 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-blue-400 disabled:opacity-50"
           >
-            <option value="">Все папки</option>
-            <option value="root">Корень</option>
+            <option value="">
+              {deletedFilter === "trash" ? "Недоступно для корзины" : "Все папки"}
+            </option>
+            {deletedFilter !== "trash" && <option value="root">Корень</option>}
             {folders.map((fo) => (
               <option key={fo.id} value={fo.id}>
                 {fo.name}
@@ -346,27 +352,39 @@ export function AdminFilesPage() {
                 <th className="px-4 py-3">Папка</th>
                 <th className="px-4 py-3">Загрузил</th>
                 <th className="px-4 py-3">Создан</th>
+                {(deletedFilter === "trash" || deletedFilter === "all") && (
+                  <th className="px-4 py-3">Удалён</th>
+                )}
                 <th className="px-4 py-3">Статус</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-10 text-center text-slate-500">
+                  <td
+                    colSpan={deletedFilter === "trash" || deletedFilter === "all" ? 9 : 8}
+                    className="px-4 py-10 text-center text-slate-500"
+                  >
                     Загрузка…
                   </td>
                 </tr>
               )}
               {!loading && error && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-10 text-center text-rose-600">
+                  <td
+                    colSpan={deletedFilter === "trash" || deletedFilter === "all" ? 9 : 8}
+                    className="px-4 py-10 text-center text-rose-600"
+                  >
                     {error}
                   </td>
                 </tr>
               )}
               {!loading && !error && files.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-10 text-center text-slate-500">
+                  <td
+                    colSpan={deletedFilter === "trash" || deletedFilter === "all" ? 9 : 8}
+                    className="px-4 py-10 text-center text-slate-500"
+                  >
                     Файлы не найдены
                   </td>
                 </tr>
@@ -411,6 +429,11 @@ export function AdminFilesPage() {
                     <td className="whitespace-nowrap px-4 py-3 text-slate-700">
                       {formatDateTime(f.created_at)}
                     </td>
+                    {(deletedFilter === "trash" || deletedFilter === "all") && (
+                      <td className="whitespace-nowrap px-4 py-3 text-slate-700">
+                        {f.deleted_at ? formatDateTime(f.deleted_at) : "—"}
+                      </td>
+                    )}
                     <td className="px-4 py-3">
                       {f.deleted_at ? (
                         <span className="inline-flex rounded-full bg-rose-50 px-2.5 py-0.5 text-xs font-medium text-rose-700 ring-1 ring-rose-600/15 ring-inset">
