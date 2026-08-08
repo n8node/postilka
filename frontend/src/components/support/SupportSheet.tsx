@@ -9,7 +9,12 @@ import {
 } from "lucide-react";
 import type { ChannelProviderInfo } from "@/lib/api";
 
-export type SupportContext = "general" | "telegram_connect" | "max_connect" | "vk_connect";
+export type SupportContext =
+  | "general"
+  | "telegram_connect"
+  | "max_connect"
+  | "vk_connect"
+  | "dzen_connect";
 
 type SupportSheetProps = {
   open: boolean;
@@ -108,6 +113,13 @@ export function SupportSheet({
             <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
               Не получается подключить MAX? Ищите бота только по @username из шага 1, добавьте его
               администратором канала с правом «Публикация» и укажите chat_id из списка каналов бота.
+            </div>
+          )}
+
+          {context === "dzen_connect" && (
+            <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+              Дзен подключается через @zen_sync_bot: сначала Telegram-канал в Postilka, затем код из
+              Студии Дзена и ссылка на канал боту.
             </div>
           )}
 

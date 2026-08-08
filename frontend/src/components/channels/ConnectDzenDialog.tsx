@@ -229,8 +229,8 @@ export function ConnectDzenDialog({ open, onClose, onConnectTelegram }: ConnectD
       <SupportSheet
         open={supportOpen}
         onClose={() => setSupportOpen(false)}
-        context="connect_dzen"
-        providerInfo={
+        context="dzen_connect"
+        info={
           providerInfo && dzenProvider
             ? {
                 ...providerInfo,
