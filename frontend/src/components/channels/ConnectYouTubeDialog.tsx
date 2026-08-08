@@ -3,6 +3,7 @@
 import { Loader2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ContextHelpLinks } from "@/components/support/ContextHelpLinks";
+import { ConnectHelpSteps } from "@/components/channels/ConnectHelpSteps";
 import { SupportSheet } from "@/components/support/SupportSheet";
 import { ChannelAvatar } from "@/components/channels/ChannelAvatar";
 import {
@@ -161,10 +162,6 @@ export function ConnectYouTubeDialog({
           <div className="flex items-center justify-between border-b border-border px-5 py-4">
             <div>
               <h2 className="text-lg font-semibold">Подключить YouTube</h2>
-              <p className="mt-0.5 text-sm text-muted">
-                Укажите ключи своего Google Cloud проекта — квоты YouTube API расходуются с вашего
-                аккаунта. Запросы к Google идут через прокси Postilka.
-              </p>
             </div>
             <button
               type="button"
@@ -198,8 +195,8 @@ export function ConnectYouTubeDialog({
                   {showDetailedHelp ? "Скрыть шаги" : "Показать шаги подключения"}
                 </button>
                 {showDetailedHelp && (
-                  <div className="mt-2 rounded-lg border border-border bg-zinc-50 px-3 py-2 text-sm whitespace-pre-line text-muted">
-                    {ytProvider.connect_help_text}
+                  <div className="mt-3 rounded-lg border border-border bg-zinc-50 px-4 py-3">
+                    <ConnectHelpSteps text={ytProvider.connect_help_text} />
                   </div>
                 )}
               </div>
