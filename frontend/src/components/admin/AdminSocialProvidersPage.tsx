@@ -15,12 +15,11 @@ import {
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-type ProviderKey = "telegram" | "vk" | "ok" | "max" | "rutube" | "dzen";
+type ProviderKey = "telegram" | "vk" | "max" | "rutube" | "dzen";
 
 const PROVIDER_MENU: { key: ProviderKey; label: string; connectFlow: string }[] = [
   { key: "telegram", label: "Telegram", connectFlow: "bot_token" },
   { key: "vk", label: "VK", connectFlow: "user_oauth" },
-  { key: "ok", label: "OK", connectFlow: "oauth" },
   { key: "max", label: "MAX", connectFlow: "bot_token" },
   { key: "rutube", label: "Rutube", connectFlow: "oauth" },
   { key: "dzen", label: "Дзен", connectFlow: "telegram_crosspost" },
@@ -179,7 +178,7 @@ export function AdminSocialProvidersPage() {
         </h1>
         <p className="mt-1 text-sm text-slate-500">
           Включение провайдеров и инструкции для пользователей. VK и MAX — своё приложение или
-          платформа; Telegram — токен бота; OK и Rutube — OAuth; Дзен — кросспостинг через Telegram.
+          платформа; Telegram — токен бота; Rutube — OAuth; Дзен — кросспостинг через Telegram.
         </p>
       </div>
 

@@ -32,14 +32,18 @@ const statusClass: Record<ChannelListItem["status"], string> = {
   disabled: "bg-zinc-100 text-zinc-600 border-zinc-200",
 };
 
-const providerLabel: Record<ChannelProvider, string> = {
+const providerLabel: Partial<Record<ChannelProvider, string>> = {
   telegram: "Telegram",
   vk: "VK",
-  ok: "OK",
   max: "MAX",
   rutube: "Rutube",
   dzen: "Дзен",
 };
+
+function formatProviderLabel(provider: ChannelProvider): string {
+  if (provider === "ok") return "Не поддерживается";
+  return providerLabel[provider] ?? provider;
+}
 
 const chatTypeLabel = (type: string) => {
   switch (type) {
@@ -71,7 +75,7 @@ function StatusBadge({ status }: { status: ChannelListItem["status"] }) {
 function ProviderBadge({ provider }: { provider: ChannelProvider }) {
   return (
     <span className="inline-flex rounded-full border border-border bg-zinc-50 px-2 py-0.5 text-xs font-medium text-zinc-700">
-      {providerLabel[provider]}
+      {formatProviderLabel(provider)}
     </span>
   );
 }
@@ -226,7 +230,7 @@ export default function ChannelsPage() {
                 />
                 <div className="min-w-0">
                   <p className="truncate font-semibold">{displayName}</p>
-                  <p className="text-xs text-muted">{providerLabel[selected.provider]}</p>
+                  <p className="text-xs text-muted">{formatProviderLabel(selected.provider)}</p>
                 </div>
               </div>
 
@@ -389,7 +393,7 @@ export default function ChannelsPage() {
         ) : items.length === 0 ? (
           <EmptyState
             title="Нет каналов"
-            description="Подключите Telegram, VK, OK, MAX, Rutube или Дзен — чтобы публиковать посты."
+            description="Подключите Telegram, VK, MAX, Rutube или Дзен — чтобы публиковать посты."
           />
         ) : (
           <div className="overflow-hidden rounded-xl border border-border bg-surface shadow-sm">

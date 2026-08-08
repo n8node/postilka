@@ -25,7 +25,6 @@ const PROVIDER_OPTIONS = [
   { value: "", label: "— не указан —" },
   { value: "telegram", label: "Telegram" },
   { value: "vk", label: "VK" },
-  { value: "ok", label: "OK" },
   { value: "max", label: "MAX" },
   { value: "rutube", label: "Rutube" },
   { value: "dzen", label: "Дзен" },

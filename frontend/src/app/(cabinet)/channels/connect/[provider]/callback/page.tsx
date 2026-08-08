@@ -6,11 +6,10 @@ import { ConnectOAuthProviderDialog } from "@/components/channels/ConnectOAuthPr
 import { ConnectVKDialog } from "@/components/channels/ConnectVKDialog";
 import type { SocialProviderKey } from "@/lib/api";
 
-const OAUTH_PROVIDERS: SocialProviderKey[] = ["vk", "ok", "rutube", "dzen"];
+const OAUTH_PROVIDERS: SocialProviderKey[] = ["vk", "rutube", "dzen"];
 
 const LABELS: Record<SocialProviderKey, string> = {
   vk: "VK",
-  ok: "OK",
   max: "MAX",
   rutube: "Rutube",
   dzen: "Дзен",

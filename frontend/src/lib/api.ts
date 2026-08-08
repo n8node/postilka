@@ -1217,7 +1217,7 @@ export function updateAdminTelegramProviderSettings(settings: TelegramProviderSe
   });
 }
 
-export type SocialProviderKey = "vk" | "ok" | "max" | "rutube" | "dzen";
+export type SocialProviderKey = "vk" | "max" | "rutube" | "dzen";
 
 export type SocialProviderSettings = {
   enabled: boolean;

@@ -14,7 +14,6 @@ const (
 
 var AllSocialProviders = []SocialProvider{
 	SocialProviderVK,
-	SocialProviderOK,
 	SocialProviderMAX,
 	SocialProviderRutube,
 	SocialProviderDzen,

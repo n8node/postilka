@@ -7,7 +7,6 @@ import {
   type ChannelListItem,
   type ChannelProvider,
   type ChannelProviderInfo,
-  type SocialProviderKey,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { ConnectTelegramDialog } from "./ConnectTelegramDialog";
@@ -16,10 +15,9 @@ import { ConnectVKDialog } from "./ConnectVKDialog";
 import { ConnectMAXDialog } from "./ConnectMAXDialog";
 import { ConnectDzenDialog } from "./ConnectDzenDialog";
 
-const PROVIDER_LABELS: Record<ChannelProvider, string> = {
+const PROVIDER_LABELS: Partial<Record<ChannelProvider, string>> = {
   telegram: "Telegram",
   vk: "VK",
-  ok: "OK",
   max: "MAX",
   rutube: "Rutube",
   dzen: "Дзен",
@@ -134,11 +132,11 @@ export function ConnectChannelMenu({ onConnected }: ConnectChannelMenuProps) {
         />
       )}
 
-      {activeProvider && ["ok", "rutube"].includes(activeProvider) && (
+      {activeProvider === "rutube" && (
         <ConnectOAuthProviderDialog
           open
-          provider={activeProvider as SocialProviderKey}
-          label={PROVIDER_LABELS[activeProvider]}
+          provider="rutube"
+          label={PROVIDER_LABELS.rutube ?? "Rutube"}
           onClose={() => setActiveProvider(null)}
           onConnected={handleConnected}
         />

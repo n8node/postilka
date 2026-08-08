@@ -66,7 +66,7 @@ func (h *SocialProviderSettingsHandler) UpdateAdmin(w http.ResponseWriter, r *ht
 
 func parseSocialProvider(raw string) (model.SocialProvider, error) {
 	switch model.SocialProvider(raw) {
-	case model.SocialProviderVK, model.SocialProviderOK, model.SocialProviderMAX,
+	case model.SocialProviderVK, model.SocialProviderMAX,
 		model.SocialProviderRutube, model.SocialProviderDzen:
 		return model.SocialProvider(raw), nil
 	default:
