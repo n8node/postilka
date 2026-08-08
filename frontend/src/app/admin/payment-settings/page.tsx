@@ -1,5 +1,5 @@
-import { AdminPaymentSettingsPage } from "@/components/admin/AdminPaymentSettingsPage";
+import { redirect } from "next/navigation";
 
-export default function AdminPaymentSettingsRoute() {
-  return <AdminPaymentSettingsPage />;
+export default function AdminPaymentSettingsRedirect() {
+  redirect("/admin/settings?section=payment");
 }

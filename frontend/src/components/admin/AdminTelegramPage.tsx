@@ -68,7 +68,7 @@ function formatDateTime(value?: string) {
   return d.toLocaleString("ru-RU");
 }
 
-export function AdminTelegramPage() {
+export function AdminTelegramPage({ embedded = false }: { embedded?: boolean }) {
   const [settings, setSettings] = useState<TelegramSettings>(DEFAULT_SETTINGS);
   const [tokenInput, setTokenInput] = useState("");
   const [tokenHint, setTokenHint] = useState("");
@@ -265,9 +265,13 @@ export function AdminTelegramPage() {
   }
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
+    <div className={embedded ? "space-y-6" : "mx-auto max-w-4xl space-y-6"}>
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Telegram-уведомления</h1>
+        {embedded ? (
+          <h2 className="text-lg font-semibold text-slate-900">Telegram — уведомления</h2>
+        ) : (
+          <h1 className="text-2xl font-semibold text-slate-900">Telegram-уведомления</h1>
+        )}
         <p className="mt-1 text-sm text-slate-500">
           Уведомления администратору о регистрациях, оплатах и пополнениях кошелька.
         </p>

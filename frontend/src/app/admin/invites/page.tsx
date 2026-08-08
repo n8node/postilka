@@ -1,5 +1,5 @@
-import { AdminInvitesPage } from "@/components/admin/AdminInvitesPage";
+import { redirect } from "next/navigation";
 
-export default function AdminInvitesRoute() {
-  return <AdminInvitesPage />;
+export default function AdminInvitesRedirect() {
+  redirect("/admin/settings?section=invites");
 }

@@ -1,5 +1,5 @@
-import { AdminEmailSettingsPage } from "@/components/admin/AdminEmailSettingsPage";
+import { redirect } from "next/navigation";
 
-export default function AdminEmailSettingsRoute() {
-  return <AdminEmailSettingsPage />;
+export default function AdminEmailSettingsRedirect() {
+  redirect("/admin/settings?section=email-smtp");
 }

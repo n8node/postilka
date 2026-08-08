@@ -46,7 +46,7 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-export function AdminInvitesPage() {
+export function AdminInvitesPage({ embedded = false }: { embedded?: boolean }) {
   const [invites, setInvites] = useState<AdminInvite[]>([]);
   const [relations, setRelations] = useState<InviteRelation[]>([]);
   const [stats, setStats] = useState({
@@ -136,9 +136,11 @@ export function AdminInvitesPage() {
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-            Инвайты
-          </h1>
+          {embedded ? (
+            <h2 className="text-lg font-semibold text-slate-900">Инвайты</h2>
+          ) : (
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Инвайты</h1>
+          )}
           <p className="mt-1 text-sm text-slate-500">
             Выпуск ключей и статистика активаций
           </p>

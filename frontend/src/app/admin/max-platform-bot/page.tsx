@@ -1,5 +1,5 @@
-import { AdminMaxPlatformBotPage } from "@/components/admin/AdminMaxPlatformBotPage";
+import { redirect } from "next/navigation";
 
-export default function Page() {
-  return <AdminMaxPlatformBotPage />;
+export default function AdminMaxPlatformBotRedirect() {
+  redirect("/admin/social-providers?provider=max");
 }

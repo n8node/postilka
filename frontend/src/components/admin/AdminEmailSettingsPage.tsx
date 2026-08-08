@@ -27,7 +27,7 @@ const DEFAULT_SETTINGS: SMTPSettings = {
   username: "",
 };
 
-export function AdminEmailSettingsPage() {
+export function AdminEmailSettingsPage({ embedded = false }: { embedded?: boolean }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -138,9 +138,11 @@ export function AdminEmailSettingsPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-          Email / SMTP
-        </h1>
+        {embedded ? (
+          <h2 className="text-lg font-semibold text-slate-900">Email / SMTP</h2>
+        ) : (
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Email / SMTP</h1>
+        )}
         <p className="mt-1 text-sm text-slate-500">
           Упрощённая настройка внешнего SMTP-сервера (например, Yandex 360)
         </p>

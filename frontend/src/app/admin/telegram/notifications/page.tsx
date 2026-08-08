@@ -1,5 +1,5 @@
-import { AdminTelegramPage } from "@/components/admin/AdminTelegramPage";
+import { redirect } from "next/navigation";
 
-export default function AdminTelegramNotificationsRoute() {
-  return <AdminTelegramPage />;
+export default function AdminTelegramNotificationsRedirect() {
+  redirect("/admin/settings?section=telegram-notifications");
 }

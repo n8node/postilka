@@ -83,7 +83,7 @@ function passwordPlaceholder(set: boolean, hint: string, empty: string) {
   return empty;
 }
 
-export function AdminPaymentSettingsPage() {
+export function AdminPaymentSettingsPage({ embedded = false }: { embedded?: boolean }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -190,9 +190,13 @@ export function AdminPaymentSettingsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className={embedded ? "space-y-6" : "mx-auto max-w-3xl space-y-6"}>
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Платёжный шлюз</h1>
+        {embedded ? (
+          <h2 className="text-lg font-semibold text-slate-900">Платёжный шлюз</h2>
+        ) : (
+          <h1 className="text-2xl font-semibold text-slate-900">Платёжный шлюз</h1>
+        )}
         <p className="mt-1 text-sm text-slate-500">
           Robokassa — основной провайдер оплаты тарифов и пополнения кошелька.
         </p>

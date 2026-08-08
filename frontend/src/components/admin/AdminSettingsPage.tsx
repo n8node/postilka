@@ -10,15 +10,44 @@ import {
   updateAdminUploadFileSettings,
   type UploadFileSettings,
 } from "@/lib/api";
+import { AdminEmailSettingsPage } from "@/components/admin/AdminEmailSettingsPage";
+import { AdminInvitesPage } from "@/components/admin/AdminInvitesPage";
+import { AdminPaymentSettingsPage } from "@/components/admin/AdminPaymentSettingsPage";
+import { AdminTelegramPage } from "@/components/admin/AdminTelegramPage";
 import { cn } from "@/lib/utils";
 
-type SettingsKey = "upload-files";
+type SettingsKey =
+  | "upload-files"
+  | "invites"
+  | "telegram-notifications"
+  | "payment"
+  | "email-smtp";
 
 const SETTINGS_MENU: { key: SettingsKey; label: string; description: string }[] = [
   {
     key: "upload-files",
     label: "Загрузка файлов",
     description: "Форматы и лимиты размера",
+  },
+  {
+    key: "invites",
+    label: "Инвайты",
+    description: "Ключи регистрации",
+  },
+  {
+    key: "telegram-notifications",
+    label: "Telegram — уведомления",
+    description: "Бот и очередь событий",
+  },
+  {
+    key: "payment",
+    label: "Платёжный шлюз",
+    description: "Robokassa и кошелёк",
+  },
+  {
+    key: "email-smtp",
+    label: "Email / SMTP",
+    description: "Исходящая почта",
   },
 ];
 
@@ -136,6 +165,38 @@ function UploadFilesSettingsForm({
   );
 }
 
+function SettingsSectionContent({
+  selected,
+  uploadLoading,
+  uploadForm,
+  onUploadFormChange,
+}: {
+  selected: SettingsKey;
+  uploadLoading: boolean;
+  uploadForm: UploadFileSettings;
+  onUploadFormChange: (next: UploadFileSettings) => void;
+}) {
+  if (selected === "upload-files") {
+    if (uploadLoading) {
+      return <p className="text-sm text-slate-500">Загрузка…</p>;
+    }
+    return <UploadFilesSettingsForm form={uploadForm} onChange={onUploadFormChange} />;
+  }
+  if (selected === "invites") {
+    return <AdminInvitesPage embedded />;
+  }
+  if (selected === "telegram-notifications") {
+    return <AdminTelegramPage embedded />;
+  }
+  if (selected === "payment") {
+    return <AdminPaymentSettingsPage embedded />;
+  }
+  if (selected === "email-smtp") {
+    return <AdminEmailSettingsPage embedded />;
+  }
+  return null;
+}
+
 export function AdminSettingsPage() {
   const searchParams = useSearchParams();
   const initialSection = (searchParams.get("section") as SettingsKey) || "upload-files";
@@ -143,28 +204,30 @@ export function AdminSettingsPage() {
   const [selected, setSelected] = useState<SettingsKey>(
     SETTINGS_MENU.some((m) => m.key === initialSection) ? initialSection : "upload-files",
   );
-  const [loading, setLoading] = useState(true);
+  const [uploadLoading, setUploadLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [form, setForm] = useState<UploadFileSettings>(DEFAULT_SETTINGS);
+  const [uploadForm, setUploadForm] = useState<UploadFileSettings>(DEFAULT_SETTINGS);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const loadUploadSettings = useCallback(async () => {
+    setUploadLoading(true);
     setError(null);
     try {
       const data = await fetchAdminUploadFileSettings();
-      setForm({ ...DEFAULT_SETTINGS, ...data.config });
+      setUploadForm({ ...DEFAULT_SETTINGS, ...data.config });
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Не удалось загрузить настройки");
     } finally {
-      setLoading(false);
+      setUploadLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (selected === "upload-files") {
+      void loadUploadSettings();
+    }
+  }, [selected, loadUploadSettings]);
 
   useEffect(() => {
     const section = searchParams.get("section") as SettingsKey | null;
@@ -173,13 +236,13 @@ export function AdminSettingsPage() {
     }
   }, [searchParams]);
 
-  async function handleSave() {
+  async function handleSaveUploadSettings() {
     setSaving(true);
     setError(null);
     setSuccess(null);
     try {
-      const data = await updateAdminUploadFileSettings(form);
-      setForm({ ...DEFAULT_SETTINGS, ...data.config });
+      const data = await updateAdminUploadFileSettings(uploadForm);
+      setUploadForm({ ...DEFAULT_SETTINGS, ...data.config });
       setSuccess("Настройки загрузки файлов сохранены");
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Не удалось сохранить");
@@ -188,7 +251,7 @@ export function AdminSettingsPage() {
     }
   }
 
-  const menuItem = SETTINGS_MENU.find((m) => m.key === selected)!;
+  const showUploadFooter = selected === "upload-files";
 
   return (
     <div className="space-y-4">
@@ -199,12 +262,12 @@ export function AdminSettingsPage() {
         </p>
       </div>
 
-      {error && (
+      {showUploadFooter && error && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           {error}
         </div>
       )}
-      {success && (
+      {showUploadFooter && success && (
         <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
           {success}
         </div>
@@ -247,32 +310,30 @@ export function AdminSettingsPage() {
 
         <div className="flex min-w-0 flex-1 flex-col">
           <div className="flex-1 overflow-y-auto p-6">
-            {loading ? (
-              <p className="text-sm text-slate-500">Загрузка…</p>
-            ) : selected === "upload-files" ? (
-              <UploadFilesSettingsForm
-                form={form}
-                onChange={(next) => {
-                  setForm(next);
-                  setSuccess(null);
-                }}
-              />
-            ) : (
-              <p className="text-sm text-slate-500">Раздел «{menuItem.label}» скоро.</p>
-            )}
+            <SettingsSectionContent
+              selected={selected}
+              uploadLoading={uploadLoading}
+              uploadForm={uploadForm}
+              onUploadFormChange={(next) => {
+                setUploadForm(next);
+                setSuccess(null);
+              }}
+            />
           </div>
 
-          <div className="flex items-center justify-end gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
-            <button
-              type="button"
-              onClick={() => void handleSave()}
-              disabled={saving || loading}
-              className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-            >
-              <Save className="h-4 w-4" />
-              {saving ? "Сохранение…" : "Сохранить"}
-            </button>
-          </div>
+          {showUploadFooter && (
+            <div className="flex items-center justify-end gap-3 border-t border-slate-200 bg-slate-50 px-6 py-4">
+              <button
+                type="button"
+                onClick={() => void handleSaveUploadSettings()}
+                disabled={saving || uploadLoading}
+                className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                <Save className="h-4 w-4" />
+                {saving ? "Сохранение…" : "Сохранить"}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

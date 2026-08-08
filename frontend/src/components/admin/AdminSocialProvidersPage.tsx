@@ -5,17 +5,21 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   ApiError,
+  fetchAdminMAXPlatformBot,
   fetchAdminSocialProviders,
   fetchAdminTelegramProviderSettings,
   fetchAdminYouTubeProviderSettings,
+  updateAdminMAXPlatformBot,
   updateAdminSocialProvider,
   updateAdminTelegramProviderSettings,
   updateAdminYouTubeProviderSettings,
+  type MAXPlatformBotAdminView,
   type SocialProviderAdminView,
   type SocialProviderSettings,
   type TelegramProviderSettings,
   type YouTubeProviderSettings,
 } from "@/lib/api";
+import { MaxPlatformBotSettingsPanel } from "@/components/admin/AdminMaxPlatformBotPage";
 import { cn } from "@/lib/utils";
 
 type ProviderKey = "telegram" | "vk" | "max" | "rutube" | "dzen" | "youtube";
@@ -91,6 +95,9 @@ export function AdminSocialProvidersPage() {
   const [youtubeProxy, setYoutubeProxy] = useState<YouTubeProviderSettings>(DEFAULT_YOUTUBE_PROXY);
   const [socialProviders, setSocialProviders] = useState<SocialProviderAdminView[]>([]);
   const [socialForm, setSocialForm] = useState<SocialProviderSettings>(DEFAULT_SOCIAL);
+  const [maxBot, setMaxBot] = useState<MAXPlatformBotAdminView | null>(null);
+  const [maxBotEnabled, setMaxBotEnabled] = useState(false);
+  const [maxBotTokenInput, setMaxBotTokenInput] = useState("");
 
   const currentSocial = useMemo(
     () => socialProviders.find((p) => p.provider === selected),
@@ -101,10 +108,11 @@ export function AdminSocialProvidersPage() {
     setLoading(true);
     setError(null);
     try {
-      const [telegramData, socialData, youtubeData] = await Promise.all([
+      const [telegramData, socialData, youtubeData, maxBotData] = await Promise.all([
         fetchAdminTelegramProviderSettings(),
         fetchAdminSocialProviders(),
         fetchAdminYouTubeProviderSettings(),
+        fetchAdminMAXPlatformBot(),
       ]);
       const proxyUrls = telegramData.settings.proxy_urls || [];
       const proxyActive =
@@ -127,6 +135,9 @@ export function AdminSocialProvidersPage() {
         proxy_urls: ytProxyUrls,
         proxy_active_url: ytProxyActive,
       });
+      setMaxBot(maxBotData);
+      setMaxBotEnabled(maxBotData.enabled);
+      setMaxBotTokenInput("");
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Не удалось загрузить настройки");
     } finally {
@@ -173,6 +184,22 @@ export function AdminSocialProvidersPage() {
         const proxyUrls = proxyData.settings.proxy_urls || [];
         setYoutubeProxy({ ...proxyData.settings, proxy_urls: proxyUrls });
         setSuccess("Настройки YouTube сохранены");
+      } else if (selected === "max") {
+        const [updated, botView] = await Promise.all([
+          updateAdminSocialProvider("max", socialForm),
+          updateAdminMAXPlatformBot({
+            enabled: maxBotEnabled,
+            ...(maxBotTokenInput.trim() ? { bot_token: maxBotTokenInput.trim() } : {}),
+          }),
+        ]);
+        setSocialProviders((prev) =>
+          prev.map((p) => (p.provider === updated.provider ? updated : p)),
+        );
+        setSocialForm(updated.settings);
+        setMaxBot(botView);
+        setMaxBotEnabled(botView.enabled);
+        setMaxBotTokenInput("");
+        setSuccess("Настройки MAX сохранены");
       } else {
         const updated = await updateAdminSocialProvider(selected, socialForm);
         setSocialProviders((prev) =>
@@ -313,6 +340,38 @@ export function AdminSocialProvidersPage() {
               onSave={() => void handleSave()}
               saving={saving}
             />
+          ) : selected === "max" ? (
+            <div className="mx-auto max-w-2xl space-y-6">
+              <SocialSettingsForm
+                provider={selected}
+                label={currentSocial?.label ?? menuItem.label}
+                connectFlow={menuItem.connectFlow}
+                settings={socialForm}
+                onPatch={patchSocial}
+                onSave={() => void handleSave()}
+                saving={saving}
+                hideSaveButton
+              />
+              <MaxPlatformBotSettingsPanel
+                embedded
+                data={maxBot}
+                enabled={maxBotEnabled}
+                tokenInput={maxBotTokenInput}
+                onEnabledChange={(v) => {
+                  setMaxBotEnabled(v);
+                  setSuccess(null);
+                }}
+                onTokenInputChange={(v) => {
+                  setMaxBotTokenInput(v);
+                  setSuccess(null);
+                }}
+              />
+              <SaveButton
+                onSave={() => void handleSave()}
+                saving={saving}
+                disabled={maxBotEnabled && !maxBot?.bot_token_set && !maxBotTokenInput.trim()}
+              />
+            </div>
           ) : (
             <SocialSettingsForm
               provider={selected}
@@ -570,6 +629,7 @@ function SocialSettingsForm({
   onPatch,
   onSave,
   saving,
+  hideSaveButton = false,
 }: {
   provider: string;
   label: string;
@@ -578,6 +638,7 @@ function SocialSettingsForm({
   onPatch: (p: Partial<SocialProviderSettings>) => void;
   onSave: () => void;
   saving: boolean;
+  hideSaveButton?: boolean;
 }) {
   const isUserOAuthApp = connectFlow === "user_oauth";
   const isVK = provider === "vk";
@@ -797,7 +858,7 @@ function SocialSettingsForm({
         />
       </Section>
 
-      <SaveButton onSave={onSave} saving={saving} />
+      {!hideSaveButton && <SaveButton onSave={onSave} saving={saving} />}
     </div>
   );
 }
@@ -879,13 +940,21 @@ function HelpSupportFields({
   );
 }
 
-function SaveButton({ onSave, saving }: { onSave: () => void; saving: boolean }) {
+function SaveButton({
+  onSave,
+  saving,
+  disabled = false,
+}: {
+  onSave: () => void;
+  saving: boolean;
+  disabled?: boolean;
+}) {
   return (
     <div className="flex justify-end border-t border-slate-200 pt-4">
       <button
         type="button"
         onClick={onSave}
-        disabled={saving}
+        disabled={saving || disabled}
         className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
       >
         <Save className="h-4 w-4" />
