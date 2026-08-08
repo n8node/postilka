@@ -54,6 +54,9 @@ type youtubeChannelsResponse struct {
 				Medium struct {
 					URL string `json:"url"`
 				} `json:"medium"`
+				High struct {
+					URL string `json:"url"`
+				} `json:"high"`
 			} `json:"thumbnails"`
 		} `json:"snippet"`
 	} `json:"items"`
@@ -133,6 +136,15 @@ func (c *YouTubeClient) requestToken(ctx context.Context, form url.Values) (*You
 	return &out, nil
 }
 
+func youTubeChannelThumbnailURL(high, medium, defaultURL string) string {
+	for _, url := range []string{high, medium, defaultURL} {
+		if u := strings.TrimSpace(url); u != "" {
+			return u
+		}
+	}
+	return ""
+}
+
 func (c *YouTubeClient) ListMyChannels(ctx context.Context, accessToken string) ([]YouTubeChannel, error) {
 	values := url.Values{}
 	values.Set("part", "snippet")
@@ -174,10 +186,11 @@ func (c *YouTubeClient) ListMyChannels(ctx context.Context, accessToken string) 
 		if id == "" {
 			continue
 		}
-		thumb := strings.TrimSpace(item.Snippet.Thumbnails.Medium.URL)
-		if thumb == "" {
-			thumb = strings.TrimSpace(item.Snippet.Thumbnails.Default.URL)
-		}
+		thumb := youTubeChannelThumbnailURL(
+			item.Snippet.Thumbnails.High.URL,
+			item.Snippet.Thumbnails.Medium.URL,
+			item.Snippet.Thumbnails.Default.URL,
+		)
 		out = append(out, YouTubeChannel{
 			ID:           id,
 			Title:        strings.TrimSpace(item.Snippet.Title),
@@ -226,14 +239,14 @@ func (c *YouTubeClient) VerifyChannelAccess(ctx context.Context, accessToken, ch
 		return nil, fmt.Errorf("youtube: канал недоступен или нет прав")
 	}
 	item := parsed.Items[0]
-	thumb := strings.TrimSpace(item.Snippet.Thumbnails.Medium.URL)
-	if thumb == "" {
-		thumb = strings.TrimSpace(item.Snippet.Thumbnails.Default.URL)
-	}
 	return &YouTubeChannel{
 		ID:           item.ID,
 		Title:        strings.TrimSpace(item.Snippet.Title),
-		ThumbnailURL: thumb,
+		ThumbnailURL: youTubeChannelThumbnailURL(
+			item.Snippet.Thumbnails.High.URL,
+			item.Snippet.Thumbnails.Medium.URL,
+			item.Snippet.Thumbnails.Default.URL,
+		),
 		CustomURL:    strings.TrimSpace(item.Snippet.CustomURL),
 	}, nil
 }

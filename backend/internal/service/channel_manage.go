@@ -35,11 +35,29 @@ func channelPostModeLabel(ch model.Channel) string {
 	return "Свой бот"
 }
 
+const youtubeOAuthTestingReconnectAfter = 6 * 24 * time.Hour
+
+func youtubeOAuthReconnectBy(ch model.Channel) *time.Time {
+	if ch.Provider != model.ChannelProviderYouTube {
+		return nil
+	}
+	connectedAt := ch.Metadata.OAuthConnectedAt
+	if connectedAt == nil {
+		connectedAt = &ch.CreatedAt
+	}
+	if connectedAt == nil {
+		return nil
+	}
+	t := connectedAt.Add(youtubeOAuthTestingReconnectAfter)
+	return &t
+}
+
 func buildChannelListItem(ch model.Channel, tokenEnc string, cipher *SecretCipher) model.ChannelListItem {
 	item := model.ChannelListItem{
 		Channel:             ch,
 		PostModeLabel:       channelPostModeLabel(ch),
 		PublishCapabilities: ch.Provider.PublishCapabilities(),
+		OAuthReconnectBy:    youtubeOAuthReconnectBy(ch),
 	}
 	if ch.Provider == model.ChannelProviderMAX && ch.MaxPostMode == model.MAXPostModePlatform {
 		item.BotTokenSet = true

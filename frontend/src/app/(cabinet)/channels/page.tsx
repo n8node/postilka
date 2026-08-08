@@ -302,6 +302,23 @@ export default function ChannelsPage() {
                 </DetailRow>
               )}
 
+              {selected.provider === "youtube" && selected.oauth_reconnect_by && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                  Приложение Google в режиме Testing: переподключите канал до{" "}
+                  <span className="font-medium">
+                    {new Date(selected.oauth_reconnect_by).toLocaleString("ru-RU", {
+                      day: "numeric",
+                      month: "long",
+                      year: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                  . Иначе Google отзовёт доступ к YouTube API — снова нажмите «Подключить YouTube» и
+                  войдите через Google (Client ID и Secret можно не менять).
+                </div>
+              )}
+
               {selected.metadata?.can_post != null && (
                 <DetailRow label="Публикация">
                   <span>{selected.metadata.can_post ? "Разрешена" : "Запрещена"}</span>

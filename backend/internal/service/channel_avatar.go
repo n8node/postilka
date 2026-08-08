@@ -39,7 +39,8 @@ func (s *ChannelService) FetchAvatar(
 
 	if url := strings.TrimSpace(ch.Metadata.AvatarURL); url != "" &&
 		ch.Provider != model.ChannelProviderMAX &&
-		ch.Provider != model.ChannelProviderTelegram {
+		ch.Provider != model.ChannelProviderTelegram &&
+		ch.Provider != model.ChannelProviderYouTube {
 		return fetchRemoteAvatar(ctx, url)
 	}
 
@@ -83,6 +84,17 @@ func (s *ChannelService) FetchAvatar(
 			return nil, "", repository.ErrNotFound
 		}
 		return body, contentType, nil
+
+	case model.ChannelProviderYouTube:
+		if url := strings.TrimSpace(ch.Metadata.AvatarURL); url != "" {
+			if body, ct, err := fetchYouTubeRemoteAvatar(ctx, url); err == nil {
+				return body, ct, nil
+			}
+		}
+		if avatarURL, err := s.lookupOAuthAvatar(ctx, ch.Provider, token, ch.ChatID); err == nil && avatarURL != "" {
+			return fetchYouTubeRemoteAvatar(ctx, avatarURL)
+		}
+		return nil, "", repository.ErrNotFound
 
 	default:
 		if avatarURL, err := s.lookupOAuthAvatar(ctx, ch.Provider, token, ch.ChatID); err == nil && avatarURL != "" {
@@ -151,6 +163,13 @@ func fetchRemoteAvatar(ctx context.Context, rawURL string) ([]byte, string, erro
 		return nil, "", repository.ErrNotFound
 	}
 	return body, contentType, nil
+}
+
+func fetchYouTubeRemoteAvatar(ctx context.Context, rawURL string) ([]byte, string, error) {
+	if defaultYouTubeAPI != nil {
+		return defaultYouTubeAPI.FetchRemote(ctx, rawURL)
+	}
+	return fetchRemoteAvatar(ctx, rawURL)
 }
 
 func (s *ChannelService) lookupOAuthAvatar(
@@ -223,6 +242,14 @@ func (s *ChannelService) lookupOAuthAvatar(
 				return strings.TrimSpace(ch.IconURL), nil
 			}
 		}
+
+	case model.SocialProviderYouTube:
+		client := buildYouTubeOAuthClient(defaultYouTubeAPI, "", "", "")
+		channel, err := client.VerifyChannelAccess(ctx, accessToken, externalID)
+		if err != nil {
+			return "", err
+		}
+		return strings.TrimSpace(channel.ThumbnailURL), nil
 	}
 
 	return "", repository.ErrNotFound

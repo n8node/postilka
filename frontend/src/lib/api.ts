@@ -1315,6 +1315,7 @@ export type ChannelMetadata = {
   provider_title?: string;
   public_url?: string;
   avatar_url?: string;
+  oauth_connected_at?: string;
   can_post?: boolean;
   is_admin?: boolean;
   bot_permissions?: string[];
@@ -1352,6 +1353,7 @@ export type ChannelListItem = Channel & {
   bot_token_set: boolean;
   bot_token_hint?: string;
   post_mode_label?: string;
+  oauth_reconnect_by?: string;
   publish_capabilities?: PublishCapabilities;
 };
 

@@ -45,7 +45,7 @@ export function ChannelAvatar({
     directUrl && isPublicChannelAvatarURL(directUrl, provider) ? directUrl : null;
   const proxyUrl = channelId ? channelProxyAvatarURL(channelId) : null;
   const canProxy = Boolean(
-    channelId && (provider === "telegram" || provider === "max") && proxyUrl,
+    channelId && (provider === "telegram" || provider === "max" || provider === "youtube") && proxyUrl,
   );
 
   const src = useMemo(() => {

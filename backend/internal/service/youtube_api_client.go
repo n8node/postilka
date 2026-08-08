@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/postilka/postilka/internal/repository"
 )
 
 type YouTubeAPIClient struct {
@@ -51,6 +53,33 @@ func (t youtubeProxyTransport) RoundTrip(req *http.Request) (*http.Response, err
 		req.Body = io.NopCloser(bytes.NewReader(body))
 	}
 	return t.client.doRequest(req.Context(), req.Method, req.URL.String(), req.Header.Clone(), body)
+}
+
+func (c *YouTubeAPIClient) FetchRemote(ctx context.Context, rawURL string) ([]byte, string, error) {
+	rawURL = strings.TrimSpace(rawURL)
+	if rawURL == "" {
+		return nil, "", repository.ErrNotFound
+	}
+	resp, err := c.doRequest(ctx, http.MethodGet, rawURL, make(http.Header), nil)
+	if err != nil {
+		return nil, "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return nil, "", fmt.Errorf("avatar fetch: HTTP %d", resp.StatusCode)
+	}
+	contentType := strings.TrimSpace(resp.Header.Get("Content-Type"))
+	if contentType == "" {
+		contentType = "image/jpeg"
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	if err != nil {
+		return nil, "", err
+	}
+	if len(body) == 0 {
+		return nil, "", repository.ErrNotFound
+	}
+	return body, contentType, nil
 }
 
 func (c *YouTubeAPIClient) doRequest(

@@ -58,13 +58,14 @@ const (
 )
 
 type ChannelMetadata struct {
-	ProviderTitle     string   `json:"provider_title,omitempty"`
-	PublicURL         string   `json:"public_url,omitempty"`
-	AvatarURL         string   `json:"avatar_url,omitempty"`
-	CanPost           *bool    `json:"can_post,omitempty"`
-	IsAdmin           *bool    `json:"is_admin,omitempty"`
-	BotPermissions    []string `json:"bot_permissions,omitempty"`
-	ParticipantsCount *int     `json:"participants_count,omitempty"`
+	ProviderTitle     string     `json:"provider_title,omitempty"`
+	PublicURL         string     `json:"public_url,omitempty"`
+	AvatarURL         string     `json:"avatar_url,omitempty"`
+	OAuthConnectedAt  *time.Time `json:"oauth_connected_at,omitempty"`
+	CanPost           *bool      `json:"can_post,omitempty"`
+	IsAdmin           *bool      `json:"is_admin,omitempty"`
+	BotPermissions    []string   `json:"bot_permissions,omitempty"`
+	ParticipantsCount *int       `json:"participants_count,omitempty"`
 }
 
 type Channel struct {
@@ -90,6 +91,7 @@ type ChannelListItem struct {
 	BotTokenSet         bool                 `json:"bot_token_set"`
 	BotTokenHint        string               `json:"bot_token_hint,omitempty"`
 	PostModeLabel       string               `json:"post_mode_label,omitempty"`
+	OAuthReconnectBy    *time.Time           `json:"oauth_reconnect_by,omitempty"`
 	PublishCapabilities PublishCapabilities  `json:"publish_capabilities"`
 }
 

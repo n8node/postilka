@@ -409,6 +409,10 @@ func (s *ChannelConnectService) OAuthConnect(
 		if publicURL := lookupOAuthPublicURLFromTargets(discoveredTargets, externalID); publicURL != "" {
 			meta.PublicURL = publicURL
 		}
+		if session.Provider == model.SocialProviderYouTube {
+			now := time.Now()
+			meta.OAuthConnectedAt = &now
+		}
 		metaRefreshed := oauthConnectMetadataRefreshed(meta)
 		vkOAuthMode := sessionOAuthAppMode(session)
 		oauthTokens := s.oauthCredentialsFromSession(session)
