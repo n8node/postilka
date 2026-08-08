@@ -81,6 +81,11 @@ func (s *StorageSettingsService) Update(ctx context.Context, req model.StorageAd
 		cfg.Region = "ru-central1"
 	}
 
+	// Complete S3 config is enough for media storage; keep the admin toggle in sync.
+	if StorageConfigured(cfg) {
+		cfg.Enabled = true
+	}
+
 	updated, err := s.repo.Update(ctx, cfg)
 	if err != nil {
 		return nil, err
@@ -126,7 +131,16 @@ func (s *StorageSettingsService) TestConnection(ctx context.Context) (*model.Sto
 	return &model.StorageTestResult{
 		OK:      true,
 		Message: fmt.Sprintf("Соединение успешно. Бакет «%s» доступен.", st.Bucket),
-	}, nil
+	}, s.enableIfConfigured(ctx, st)
+}
+
+func (s *StorageSettingsService) enableIfConfigured(ctx context.Context, st model.StorageSettings) error {
+	if !StorageConfigured(st) || st.Enabled {
+		return nil
+	}
+	st.Enabled = true
+	_, err := s.repo.Update(ctx, st)
+	return err
 }
 
 func (s *StorageSettingsService) buildAdminView(rec *model.StorageSettingsRecord) *model.StorageAdminView {

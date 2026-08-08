@@ -25,8 +25,8 @@ func (o *ObjectStorage) client(ctx context.Context) (*s3.Client, model.StorageSe
 	if err != nil {
 		return nil, model.StorageSettings{}, err
 	}
-	if !IsStorageEnabled(st) {
-		return nil, st, ErrStorageDisabled
+	if !StorageConfigured(st) {
+		return nil, st, ErrStorageNotConfigured
 	}
 	c, err := newS3Client(st)
 	if err != nil {
@@ -201,7 +201,10 @@ func sanitizeFilename(name string) string {
 	return name
 }
 
-var ErrStorageDisabled = fmt.Errorf("storage disabled")
+var (
+	ErrStorageNotConfigured = fmt.Errorf("storage not configured")
+	ErrStorageDisabled      = fmt.Errorf("storage disabled") // reserved for explicit admin kill-switch
+)
 
 func fileCategoryFromMime(mimeType, fileName string) string {
 	m := strings.ToLower(mimeType)

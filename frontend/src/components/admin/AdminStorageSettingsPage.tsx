@@ -175,6 +175,9 @@ export function AdminStorageSettingsPage() {
       const result = await testAdminStorageConnection();
       setTestOk(result.ok);
       setTestMessage(result.message);
+      if (result.ok) {
+        setEnabled(true);
+      }
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Не удалось проверить подключение");
     } finally {

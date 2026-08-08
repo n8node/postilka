@@ -447,8 +447,10 @@ func writeFileStorageError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusRequestEntityTooLarge, "Файл слишком большой")
 	case errors.Is(err, service.ErrEmptyFile):
 		writeError(w, http.StatusBadRequest, "Пустые файлы загружать нельзя")
+	case errors.Is(err, service.ErrStorageNotConfigured):
+		writeError(w, http.StatusServiceUnavailable, "Хранилище не настроено: укажите S3 в админке и сохраните настройки")
 	case errors.Is(err, service.ErrStorageDisabled):
-		writeError(w, http.StatusServiceUnavailable, "Хранилище не настроено")
+		writeError(w, http.StatusServiceUnavailable, "Хранилище отключено: включите «Включить хранилище» в настройках S3")
 	default:
 		writeError(w, http.StatusBadRequest, err.Error())
 	}
