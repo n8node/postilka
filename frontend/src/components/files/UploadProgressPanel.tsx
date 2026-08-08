@@ -75,7 +75,13 @@ export function UploadProgressPanel({ jobs, onCancel, onDismiss }: Props) {
             </button>
           )}
           {isAllDone && onDismiss && (
-            <button type="button" onClick={onDismiss} className="rounded-lg p-1.5 hover:bg-zinc-100">
+            <button
+              type="button"
+              onClick={onDismiss}
+              className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-muted hover:bg-zinc-100"
+              title="Закрыть"
+            >
+              {errorCount > 0 ? "Убрать" : null}
               <X className="h-4 w-4" />
             </button>
           )}
@@ -120,6 +126,11 @@ export function UploadProgressPanel({ jobs, onCancel, onDismiss }: Props) {
               )}
             </div>
             <p className="min-w-0 flex-1 truncate text-sm">{file.name}</p>
+            {file.status === "error" && file.error && (
+              <p className="hidden max-w-[40%] truncate text-xs text-amber-700 sm:block" title={file.error}>
+                {file.error}
+              </p>
+            )}
             <span className="shrink-0 text-xs text-muted">
               {file.status === "uploading"
                 ? `${file.progress}%`

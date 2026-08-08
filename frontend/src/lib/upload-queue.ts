@@ -186,10 +186,13 @@ class UploadQueueManager {
     const stored = this.sortStored(await dbGetAll());
     const active: UploadJob[] = [];
     for (const row of stored) {
-      if (row.status === "uploading" || (row.status === "error" && row.blob)) {
+      if (row.status === "uploading") {
         row.status = "pending";
         row.progress = 0;
         row.error = undefined;
+        row.sessionToken = undefined;
+        row.uploadUrl = undefined;
+        row.uploadHeaders = undefined;
         await dbPut(row);
       }
       if (row.status !== "cancelled") {
@@ -229,22 +232,41 @@ class UploadQueueManager {
     this.cancelled = true;
     void (async () => {
       for (const job of this.jobs) {
-        if (job.status === "pending" || job.status === "uploading") {
+        if (
+          job.status === "pending" ||
+          job.status === "uploading" ||
+          job.status === "error"
+        ) {
           await dbDelete(job.id);
         }
       }
-      this.jobs = this.jobs.map((j) =>
-        j.status === "pending" || j.status === "uploading"
-          ? { ...j, status: "cancelled" as const }
-          : j,
+      this.jobs = this.jobs.filter(
+        (j) =>
+          j.status !== "pending" &&
+          j.status !== "uploading" &&
+          j.status !== "error",
       );
       this.emit();
     })();
   }
 
+  /** Remove finished jobs (success, cancelled, failed) from UI and IndexedDB. */
+  dismissFinished() {
+    void (async () => {
+      const removeStatuses: UploadJobStatus[] = ["completed", "cancelled", "error"];
+      for (const job of this.jobs) {
+        if (removeStatuses.includes(job.status)) {
+          await dbDelete(job.id);
+        }
+      }
+      this.jobs = this.jobs.filter((j) => !removeStatuses.includes(j.status));
+      this.emit();
+    })();
+  }
+
+  /** @deprecated use dismissFinished */
   dismissCompleted() {
-    this.jobs = this.jobs.filter((j) => j.status !== "completed" && j.status !== "cancelled");
-    this.emit();
+    this.dismissFinished();
   }
 
   private async updateJob(id: string, patch: Partial<StoredJob>) {

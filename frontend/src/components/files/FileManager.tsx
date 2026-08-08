@@ -482,7 +482,7 @@ export function FileManager() {
           <UploadProgressPanel
             jobs={uploadJobs}
             onCancel={() => uploadQueue?.cancelAll()}
-            onDismiss={() => uploadQueue?.dismissCompleted()}
+            onDismiss={() => uploadQueue?.dismissFinished()}
           />
         )}
 
