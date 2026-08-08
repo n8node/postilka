@@ -1,7 +1,7 @@
 -- +goose Up
 UPDATE social_provider_settings
-SET settings = jsonb_set(
-    settings,
+SET config = jsonb_set(
+    config,
     '{connect_help_text}',
     to_jsonb(
         '1. В Google Cloud Console создайте OAuth Client (Web) и включите YouTube Data API v3.' || E'\n\n' ||
@@ -9,14 +9,15 @@ SET settings = jsonb_set(
         '3. В Postilka укажите Client ID и Client Secret своего проекта Google.' || E'\n\n' ||
         '4. Войдите через Google под аккаунтом владельца YouTube-канала и выберите канал.' || E'\n\n' ||
         '5. Квоты YouTube API расходуются с вашего Google Cloud проекта; запросы к API идут через прокси Postilka.'
-    )
+    ),
+    true
 )
 WHERE provider = 'youtube';
 
 -- +goose Down
 UPDATE social_provider_settings
-SET settings = jsonb_set(
-    settings,
+SET config = jsonb_set(
+    config,
     '{connect_help_text}',
     to_jsonb(
         '1. В Google Cloud Console создайте OAuth Client (Web) и включите YouTube Data API v3.' || E'\n' ||
@@ -24,6 +25,7 @@ SET settings = jsonb_set(
         '3. В Postilka укажите Client ID и Client Secret своего проекта Google.' || E'\n' ||
         '4. Войдите через Google под аккаунтом владельца YouTube-канала и выберите канал.' || E'\n' ||
         '5. Квоты YouTube API расходуются с вашего Google Cloud проекта; запросы к API идут через прокси Postilka.'
-    )
+    ),
+    true
 )
 WHERE provider = 'youtube';
