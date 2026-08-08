@@ -28,6 +28,12 @@ func (p ChannelProvider) PublishCapabilities() PublishCapabilities {
 		}
 	case ChannelProviderDzen:
 		return PublishCapabilities{Text: true, Photo: true, Formats: []string{"brief", "article"}}
+	case ChannelProviderYouTube:
+		return PublishCapabilities{
+			Video:    true,
+			Schedule: true,
+			Formats:  []string{"video"},
+		}
 	default:
 		return PublishCapabilities{}
 	}

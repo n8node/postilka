@@ -238,6 +238,8 @@ func oauthProviderFromChannel(provider model.ChannelProvider) (model.SocialProvi
 		return model.SocialProviderRutube, true
 	case model.ChannelProviderDzen:
 		return model.SocialProviderDzen, true
+	case model.ChannelProviderYouTube:
+		return model.SocialProviderYouTube, true
 	default:
 		return "", false
 	}

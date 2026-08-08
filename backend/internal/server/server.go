@@ -75,10 +75,13 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	telegramSettingsSvc := service.NewTelegramSettingsService(telegramSettingsRepo)
 	telegramProviderSettingsRepo := repository.NewTelegramProviderSettingsRepository(db.Pool)
 	telegramProviderSettingsSvc := service.NewTelegramProviderSettingsService(telegramProviderSettingsRepo)
+	youtubeProviderSettingsRepo := repository.NewYouTubeProviderSettingsRepository(db.Pool)
+	youtubeProviderSettingsSvc := service.NewYouTubeProviderSettingsService(youtubeProviderSettingsRepo)
 	socialProviderSettingsRepo := repository.NewSocialProviderSettingsRepository(db.Pool)
 	socialProviderSettingsSvc := service.NewSocialProviderSettingsService(socialProviderSettingsRepo)
 	channelOAuthSessionRepo := repository.NewChannelOAuthSessionRepository(db.Pool)
 	telegramBotClient := service.NewTelegramBotClient(telegramProviderSettingsSvc, cfg.TelegramLocalProxy)
+	youtubeAPIClient := service.NewYouTubeAPIClient(youtubeProviderSettingsSvc, cfg.YouTubeLocalProxy)
 	encKey := cfg.EncryptionKey
 	if strings.TrimSpace(encKey) == "" {
 		encKey = cfg.JWTSecret
@@ -87,10 +90,10 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	channelSvc := service.NewChannelService(channelRepo, telegramProviderSettingsSvc, socialProviderSettingsSvc, telegramBotClient, wsSvc, quotaSvc, secretCipher)
 	channelConnectSvc := service.NewChannelConnectService(
 		channelRepo, channelOAuthSessionRepo, socialProviderSettingsSvc,
-		telegramProviderSettingsSvc, wsSvc, quotaSvc, secretCipher, cfg,
+		telegramProviderSettingsSvc, youtubeAPIClient, wsSvc, quotaSvc, secretCipher, cfg,
 	)
 	channelTestSvc := service.NewChannelTestService(
-		channelRepo, telegramBotClient, socialProviderSettingsSvc, wsSvc, secretCipher,
+		channelRepo, telegramBotClient, youtubeAPIClient, socialProviderSettingsSvc, wsSvc, secretCipher,
 	)
 	telegramSvc := service.NewTelegramService(telegramSettingsSvc, telegramQueueRepo, cfg.TelegramLocalProxy, logger)
 	telegramSettingsSvc.BindRuntimeStatus(telegramSvc.GetRuntimeStatus)
@@ -122,6 +125,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	paymentSettingsHandler := handler.NewPaymentSettingsHandler(paymentSettingsSvc)
 	telegramHandler := handler.NewTelegramSettingsHandler(telegramSettingsSvc, telegramSvc)
 	telegramProviderHandler := handler.NewTelegramProviderSettingsHandler(telegramProviderSettingsSvc)
+	youtubeProviderHandler := handler.NewYouTubeProviderSettingsHandler(youtubeProviderSettingsSvc)
 	socialProviderHandler := handler.NewSocialProviderSettingsHandler(socialProviderSettingsSvc)
 	maxPlatformBotHandler := handler.NewMAXPlatformBotHandler(socialProviderSettingsSvc, secretCipher)
 	channelHandler := handler.NewChannelHandler(channelSvc, channelConnectSvc, channelTestSvc)
@@ -261,6 +265,8 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Put("/telegram/notifications", telegramHandler.UpdateAdmin)
 				r.Get("/telegram/provider", telegramProviderHandler.GetAdmin)
 				r.Put("/telegram/provider", telegramProviderHandler.UpdateAdmin)
+				r.Get("/youtube/provider", youtubeProviderHandler.GetAdmin)
+				r.Put("/youtube/provider", youtubeProviderHandler.UpdateAdmin)
 				r.Get("/social-providers", socialProviderHandler.ListAdmin)
 				r.Get("/social-providers/{provider}", socialProviderHandler.GetAdmin)
 				r.Put("/social-providers/{provider}", socialProviderHandler.UpdateAdmin)

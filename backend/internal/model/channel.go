@@ -19,6 +19,7 @@ const (
 	ChannelProviderMAX      ChannelProvider = "max"
 	ChannelProviderRutube   ChannelProvider = "rutube"
 	ChannelProviderDzen     ChannelProvider = "dzen"
+	ChannelProviderYouTube  ChannelProvider = "youtube"
 )
 
 func (p ChannelProvider) Label() string {
@@ -35,6 +36,8 @@ func (p ChannelProvider) Label() string {
 		return "Rutube"
 	case ChannelProviderDzen:
 		return "Дзен"
+	case ChannelProviderYouTube:
+		return "YouTube"
 	default:
 		return string(p)
 	}

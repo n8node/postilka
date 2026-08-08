@@ -1217,7 +1217,30 @@ export function updateAdminTelegramProviderSettings(settings: TelegramProviderSe
   });
 }
 
-export type SocialProviderKey = "vk" | "max" | "rutube" | "dzen";
+export type YouTubeProviderSettings = {
+  proxy_enabled: boolean;
+  proxy_active_url: string;
+  proxy_auto_failover: boolean;
+  proxy_urls: string[];
+};
+
+export type YouTubeProviderAdminView = {
+  settings: YouTubeProviderSettings;
+  updated_at?: string;
+};
+
+export function fetchAdminYouTubeProviderSettings() {
+  return apiFetch<YouTubeProviderAdminView>("/admin/youtube/provider");
+}
+
+export function updateAdminYouTubeProviderSettings(settings: YouTubeProviderSettings) {
+  return apiFetch<YouTubeProviderAdminView>("/admin/youtube/provider", {
+    method: "PUT",
+    body: JSON.stringify(settings),
+  });
+}
+
+export type SocialProviderKey = "vk" | "max" | "rutube" | "dzen" | "youtube";
 
 export type SocialProviderSettings = {
   enabled: boolean;
@@ -1285,7 +1308,8 @@ export type ChannelProvider =
   | "ok"
   | "max"
   | "rutube"
-  | "dzen";
+  | "dzen"
+  | "youtube";
 
 export type ChannelMetadata = {
   provider_title?: string;

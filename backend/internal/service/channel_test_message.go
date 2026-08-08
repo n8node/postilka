@@ -16,6 +16,7 @@ import (
 type ChannelTestService struct {
 	channels       *repository.ChannelRepository
 	botClient      *TelegramBotClient
+	youtubeAPI     *YouTubeAPIClient
 	socialSettings *SocialProviderSettingsService
 	wsSvc          *WorkspaceService
 	cipher         *SecretCipher
@@ -25,6 +26,7 @@ type ChannelTestService struct {
 func NewChannelTestService(
 	channels *repository.ChannelRepository,
 	botClient *TelegramBotClient,
+	youtubeAPI *YouTubeAPIClient,
 	socialSettings *SocialProviderSettingsService,
 	wsSvc *WorkspaceService,
 	cipher *SecretCipher,
@@ -32,6 +34,7 @@ func NewChannelTestService(
 	return &ChannelTestService{
 		channels:       channels,
 		botClient:      botClient,
+		youtubeAPI:     youtubeAPI,
 		socialSettings: socialSettings,
 		wsSvc:          wsSvc,
 		cipher:         cipher,
@@ -210,6 +213,24 @@ func (s *ChannelTestService) publish(
 			return "", err
 		}
 		return pubID, nil
+
+	case model.ChannelProviderYouTube:
+		cfg, err := s.socialSettings.GetEffective(ctx, model.SocialProviderYouTube)
+		if err != nil {
+			return "", err
+		}
+		client := &oauthclient.YouTubeClient{
+			ClientID:     cfg.OAuthClientID,
+			ClientSecret: cfg.OAuthClientSecret,
+		}
+		if s.youtubeAPI != nil {
+			client.HTTP = s.youtubeAPI.HTTPClient()
+		}
+		verified, err := client.VerifyChannelAccess(ctx, token, ch.ChatID)
+		if err != nil {
+			return "", err
+		}
+		return verified.ID, nil
 
 	default:
 		return "", fmt.Errorf("провайдер %s не поддерживает тестовую публикацию", ch.Provider)

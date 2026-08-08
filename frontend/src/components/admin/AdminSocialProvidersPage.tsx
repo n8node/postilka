@@ -7,21 +7,25 @@ import {
   ApiError,
   fetchAdminSocialProviders,
   fetchAdminTelegramProviderSettings,
+  fetchAdminYouTubeProviderSettings,
   updateAdminSocialProvider,
   updateAdminTelegramProviderSettings,
+  updateAdminYouTubeProviderSettings,
   type SocialProviderAdminView,
   type SocialProviderSettings,
   type TelegramProviderSettings,
+  type YouTubeProviderSettings,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-type ProviderKey = "telegram" | "vk" | "max" | "rutube" | "dzen";
+type ProviderKey = "telegram" | "vk" | "max" | "rutube" | "dzen" | "youtube";
 
 const PROVIDER_MENU: { key: ProviderKey; label: string; connectFlow: string }[] = [
   { key: "telegram", label: "Telegram", connectFlow: "bot_token" },
   { key: "vk", label: "VK", connectFlow: "user_oauth" },
   { key: "max", label: "MAX", connectFlow: "bot_token" },
   { key: "rutube", label: "Rutube", connectFlow: "oauth" },
+  { key: "youtube", label: "YouTube", connectFlow: "oauth" },
   { key: "dzen", label: "Дзен", connectFlow: "telegram_crosspost" },
 ];
 
@@ -66,6 +70,13 @@ const DEFAULT_SOCIAL: SocialProviderSettings = {
   support_hours_text: "пн–вс 10:00–19:00 (МСК)",
 };
 
+const DEFAULT_YOUTUBE_PROXY: YouTubeProviderSettings = {
+  proxy_enabled: false,
+  proxy_active_url: "",
+  proxy_auto_failover: true,
+  proxy_urls: [],
+};
+
 export function AdminSocialProvidersPage() {
   const searchParams = useSearchParams();
   const initialProvider = (searchParams.get("provider") as ProviderKey) || "telegram";
@@ -77,6 +88,7 @@ export function AdminSocialProvidersPage() {
   const [success, setSuccess] = useState<string | null>(null);
 
   const [telegram, setTelegram] = useState<TelegramProviderSettings>(DEFAULT_TELEGRAM);
+  const [youtubeProxy, setYoutubeProxy] = useState<YouTubeProviderSettings>(DEFAULT_YOUTUBE_PROXY);
   const [socialProviders, setSocialProviders] = useState<SocialProviderAdminView[]>([]);
   const [socialForm, setSocialForm] = useState<SocialProviderSettings>(DEFAULT_SOCIAL);
 
@@ -89,9 +101,10 @@ export function AdminSocialProvidersPage() {
     setLoading(true);
     setError(null);
     try {
-      const [telegramData, socialData] = await Promise.all([
+      const [telegramData, socialData, youtubeData] = await Promise.all([
         fetchAdminTelegramProviderSettings(),
         fetchAdminSocialProviders(),
+        fetchAdminYouTubeProviderSettings(),
       ]);
       const proxyUrls = telegramData.settings.proxy_urls || [];
       const proxyActive =
@@ -104,6 +117,16 @@ export function AdminSocialProvidersPage() {
         proxy_active_url: proxyActive,
       });
       setSocialProviders(socialData.providers);
+      const ytProxyUrls = youtubeData.settings.proxy_urls || [];
+      const ytProxyActive =
+        youtubeData.settings.proxy_active_url && ytProxyUrls.includes(youtubeData.settings.proxy_active_url)
+          ? youtubeData.settings.proxy_active_url
+          : "";
+      setYoutubeProxy({
+        ...youtubeData.settings,
+        proxy_urls: ytProxyUrls,
+        proxy_active_url: ytProxyActive,
+      });
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Не удалось загрузить настройки");
     } finally {
@@ -138,6 +161,18 @@ export function AdminSocialProvidersPage() {
         const proxyUrls = data.settings.proxy_urls || [];
         setTelegram({ ...data.settings, proxy_urls: proxyUrls });
         setSuccess("Настройки Telegram сохранены");
+      } else if (selected === "youtube") {
+        const [updated, proxyData] = await Promise.all([
+          updateAdminSocialProvider("youtube", socialForm),
+          updateAdminYouTubeProviderSettings(youtubeProxy),
+        ]);
+        setSocialProviders((prev) =>
+          prev.map((p) => (p.provider === updated.provider ? updated : p)),
+        );
+        setSocialForm(updated.settings);
+        const proxyUrls = proxyData.settings.proxy_urls || [];
+        setYoutubeProxy({ ...proxyData.settings, proxy_urls: proxyUrls });
+        setSuccess("Настройки YouTube сохранены");
       } else {
         const updated = await updateAdminSocialProvider(selected, socialForm);
         setSocialProviders((prev) =>
@@ -163,11 +198,21 @@ export function AdminSocialProvidersPage() {
     setSuccess(null);
   }
 
+  function patchYoutubeProxy(partial: Partial<YouTubeProviderSettings>) {
+    setYoutubeProxy((prev) => ({ ...prev, ...partial }));
+    setSuccess(null);
+  }
+
   const menuItem = PROVIDER_MENU.find((m) => m.key === selected)!;
   const proxyOptions = telegram.proxy_urls.filter(Boolean);
   const proxySelectValue =
     telegram.proxy_active_url && proxyOptions.includes(telegram.proxy_active_url)
       ? telegram.proxy_active_url
+      : "";
+  const youtubeProxyOptions = youtubeProxy.proxy_urls.filter(Boolean);
+  const youtubeProxySelectValue =
+    youtubeProxy.proxy_active_url && youtubeProxyOptions.includes(youtubeProxy.proxy_active_url)
+      ? youtubeProxy.proxy_active_url
       : "";
 
   return (
@@ -178,7 +223,7 @@ export function AdminSocialProvidersPage() {
         </h1>
         <p className="mt-1 text-sm text-slate-500">
           Включение провайдеров и инструкции для пользователей. VK и MAX — своё приложение или
-          платформа; Telegram — токен бота; Rutube — OAuth; Дзен — кросспостинг через Telegram.
+          платформа; Telegram — токен бота; Rutube и YouTube — OAuth; Дзен — кросспостинг через Telegram.
         </p>
       </div>
 
@@ -254,6 +299,17 @@ export function AdminSocialProvidersPage() {
               proxyOptions={proxyOptions}
               proxySelectValue={proxySelectValue}
               onPatch={patchTelegram}
+              onSave={() => void handleSave()}
+              saving={saving}
+            />
+          ) : selected === "youtube" ? (
+            <YouTubeSettingsForm
+              settings={socialForm}
+              proxy={youtubeProxy}
+              proxyOptions={youtubeProxyOptions}
+              proxySelectValue={youtubeProxySelectValue}
+              onPatch={patchSocial}
+              onPatchProxy={patchYoutubeProxy}
               onSave={() => void handleSave()}
               saving={saving}
             />
@@ -365,6 +421,148 @@ function TelegramSettingsForm({
         supportEmail={settings.support_email}
         supportHours={settings.support_hours_text}
         onPatch={(p) => onPatch(p as Partial<TelegramProviderSettings>)}
+      />
+
+      <Section title="Инструкция для пользователей">
+        <textarea
+          value={settings.connect_help_text}
+          onChange={(e) => onPatch({ connect_help_text: e.target.value })}
+          rows={6}
+          className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+        />
+      </Section>
+
+      <SaveButton onSave={onSave} saving={saving} />
+    </div>
+  );
+}
+
+function YouTubeSettingsForm({
+  settings,
+  proxy,
+  proxyOptions,
+  proxySelectValue,
+  onPatch,
+  onPatchProxy,
+  onSave,
+  saving,
+}: {
+  settings: SocialProviderSettings;
+  proxy: YouTubeProviderSettings;
+  proxyOptions: string[];
+  proxySelectValue: string;
+  onPatch: (p: Partial<SocialProviderSettings>) => void;
+  onPatchProxy: (p: Partial<YouTubeProviderSettings>) => void;
+  onSave: () => void;
+  saving: boolean;
+}) {
+  return (
+    <div className="mx-auto max-w-2xl space-y-5">
+      <div>
+        <h2 className="text-lg font-medium text-slate-900">YouTube</h2>
+        <p className="text-sm text-slate-500">
+          OAuth Google + прокси для YouTube Data API с РФ-сервера.
+        </p>
+      </div>
+
+      <Section title="Провайдер">
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={settings.enabled}
+            onChange={(e) => onPatch({ enabled: e.target.checked })}
+            className="rounded border-slate-300"
+          />
+          Разрешить пользователям подключать YouTube-каналы
+        </label>
+      </Section>
+
+      <Section title="OAuth Google Cloud">
+        <p className="text-xs text-slate-500">
+          В Google Cloud Console включите YouTube Data API v3 и создайте OAuth Client (Web).
+          Redirect URI:
+        </p>
+        <code className="block rounded bg-slate-100 px-2 py-1.5 text-xs">
+          https://postilka.ru/app/api/v1/channels/oauth/youtube/callback
+        </code>
+        <label className="block space-y-1.5">
+          <span className="text-sm font-medium text-slate-700">Client ID</span>
+          <input
+            type="text"
+            value={settings.oauth_client_id}
+            onChange={(e) => onPatch({ oauth_client_id: e.target.value })}
+            className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+          />
+        </label>
+        <label className="block space-y-1.5">
+          <span className="text-sm font-medium text-slate-700">Client Secret</span>
+          <input
+            type="password"
+            value={settings.oauth_client_secret}
+            onChange={(e) => onPatch({ oauth_client_secret: e.target.value })}
+            className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+          />
+        </label>
+      </Section>
+
+      <Section title="Прокси для YouTube / Google APIs">
+        <p className="text-xs text-slate-500">
+          OAuth в браузере идёт напрямую; token exchange и API-запросы backend — через прокси.
+          В prod backend использует <code className="rounded bg-slate-100 px-1">host.docker.internal:8890</code>.
+        </p>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={proxy.proxy_enabled}
+            onChange={(e) => onPatchProxy({ proxy_enabled: e.target.checked })}
+            className="rounded border-slate-300"
+          />
+          Включить прокси
+        </label>
+        <textarea
+          value={proxy.proxy_urls.join("\n")}
+          onChange={(e) => {
+            const proxy_urls = e.target.value.split("\n").map((s) => s.trim()).filter(Boolean);
+            const proxy_active_url =
+              proxy.proxy_active_url && proxy_urls.includes(proxy.proxy_active_url)
+                ? proxy.proxy_active_url
+                : "";
+            onPatchProxy({ proxy_urls, proxy_active_url });
+          }}
+          rows={3}
+          placeholder="http://user:pass@host:3128"
+          className="w-full rounded-md border border-slate-200 px-3 py-2 font-mono text-sm"
+        />
+        {proxyOptions.length > 0 && (
+          <select
+            value={proxySelectValue}
+            onChange={(e) => onPatchProxy({ proxy_active_url: e.target.value })}
+            className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+          >
+            <option value="">Авто: первый в списке</option>
+            {proxyOptions.map((url) => (
+              <option key={url} value={url}>{url}</option>
+            ))}
+          </select>
+        )}
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={proxy.proxy_auto_failover}
+            onChange={(e) => onPatchProxy({ proxy_auto_failover: e.target.checked })}
+            className="rounded border-slate-300"
+          />
+          Автоматический failover прокси
+        </label>
+      </Section>
+
+      <HelpSupportFields
+        connectHelpUrl={settings.connect_help_url}
+        docsUrl={settings.docs_url}
+        supportTelegram={settings.support_telegram_username}
+        supportEmail={settings.support_email}
+        supportHours={settings.support_hours_text}
+        onPatch={(p) => onPatch(p as Partial<SocialProviderSettings>)}
       />
 
       <Section title="Инструкция для пользователей">

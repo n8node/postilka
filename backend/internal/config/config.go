@@ -28,6 +28,8 @@ type Config struct {
 
 	// Optional local hop for Telegram Bot API (Docker: host.docker.internal:8889 → gost → upstream).
 	TelegramLocalProxy string `env:"TELEGRAM_LOCAL_PROXY"`
+	// Optional local hop for YouTube / Google APIs (Docker: host.docker.internal:8890 → gost → upstream).
+	YouTubeLocalProxy string `env:"YOUTUBE_LOCAL_PROXY"`
 }
 
 func Load() (*Config, error) {

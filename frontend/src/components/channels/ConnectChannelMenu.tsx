@@ -21,6 +21,7 @@ const PROVIDER_LABELS: Partial<Record<ChannelProvider, string>> = {
   max: "MAX",
   rutube: "Rutube",
   dzen: "Дзен",
+  youtube: "YouTube",
 };
 
 type ConnectChannelMenuProps = {
@@ -137,6 +138,16 @@ export function ConnectChannelMenu({ onConnected }: ConnectChannelMenuProps) {
           open
           provider="rutube"
           label={PROVIDER_LABELS.rutube ?? "Rutube"}
+          onClose={() => setActiveProvider(null)}
+          onConnected={handleConnected}
+        />
+      )}
+
+      {activeProvider === "youtube" && (
+        <ConnectOAuthProviderDialog
+          open
+          provider="youtube"
+          label={PROVIDER_LABELS.youtube ?? "YouTube"}
           onClose={() => setActiveProvider(null)}
           onConnected={handleConnected}
         />

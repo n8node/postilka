@@ -119,6 +119,19 @@ func ensureOAuthAccessToken(
 		newRefresh = token.RefreshToken
 		expiresIn = token.ExpiresIn
 
+	case model.SocialProviderYouTube:
+		client := &oauthclient.YouTubeClient{
+			ClientID:     cfg.OAuthClientID,
+			ClientSecret: cfg.OAuthClientSecret,
+		}
+		token, err := client.RefreshToken(ctx, refreshPlain)
+		if err != nil {
+			return "", fmt.Errorf("не удалось обновить токен YouTube — переподключите канал: %w", err)
+		}
+		newAccess = token.AccessToken
+		newRefresh = token.RefreshToken
+		expiresIn = token.ExpiresIn
+
 	default:
 		return accessToken, nil
 	}
@@ -147,7 +160,7 @@ func ensureOAuthAccessToken(
 
 func providerUsesOAuthRefresh(provider model.SocialProvider) bool {
 	switch provider {
-	case model.SocialProviderDzen, model.SocialProviderRutube:
+	case model.SocialProviderDzen, model.SocialProviderRutube, model.SocialProviderYouTube:
 		return true
 	default:
 		return false

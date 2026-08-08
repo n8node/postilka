@@ -38,6 +38,7 @@ const providerLabel: Partial<Record<ChannelProvider, string>> = {
   max: "MAX",
   rutube: "Rutube",
   dzen: "Дзен",
+  youtube: "YouTube",
 };
 
 function formatProviderLabel(provider: ChannelProvider): string {

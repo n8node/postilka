@@ -29,6 +29,7 @@ type ChannelConnectService struct {
 	oauthSessions  *repository.ChannelOAuthSessionRepository
 	socialSettings *SocialProviderSettingsService
 	telegram       *TelegramProviderSettingsService
+	youtubeAPI     *YouTubeAPIClient
 	wsSvc          *WorkspaceService
 	quota          *QuotaService
 	cipher         *SecretCipher
@@ -41,6 +42,7 @@ func NewChannelConnectService(
 	oauthSessions *repository.ChannelOAuthSessionRepository,
 	socialSettings *SocialProviderSettingsService,
 	telegram *TelegramProviderSettingsService,
+	youtubeAPI *YouTubeAPIClient,
 	wsSvc *WorkspaceService,
 	quota *QuotaService,
 	cipher *SecretCipher,
@@ -51,6 +53,7 @@ func NewChannelConnectService(
 		oauthSessions:  oauthSessions,
 		socialSettings: socialSettings,
 		telegram:       telegram,
+		youtubeAPI:     youtubeAPI,
 		wsSvc:          wsSvc,
 		quota:          quota,
 		cipher:         cipher,
@@ -146,6 +149,9 @@ func (s *ChannelConnectService) OAuthStart(
 			ClientID: cfg.OAuthClientID, ClientSecret: cfg.OAuthClientSecret, RedirectURI: redirectURI,
 		}
 		authURL = client.AuthorizeURL(state)
+	case model.SocialProviderYouTube:
+		client := s.youtubeOAuthClient(cfg, redirectURI)
+		authURL = client.AuthorizeURL(state)
 	default:
 		return nil, fmt.Errorf("неподдерживаемый провайдер")
 	}
@@ -233,6 +239,18 @@ func (s *ChannelConnectService) OAuthCallback(
 		client := &oauthclient.DzenClient{
 			ClientID: cfg.OAuthClientID, ClientSecret: cfg.OAuthClientSecret, RedirectURI: redirectURI,
 		}
+		token, err := client.ExchangeCode(ctx, code)
+		if err != nil {
+			return nil, err
+		}
+		accessToken = token.AccessToken
+		refreshToken = token.RefreshToken
+		if token.ExpiresIn > 0 {
+			t := time.Now().Add(time.Duration(token.ExpiresIn) * time.Second)
+			expiresAt = &t
+		}
+	case model.SocialProviderYouTube:
+		client := s.youtubeOAuthClient(cfg, redirectURI)
 		token, err := client.ExchangeCode(ctx, code)
 		if err != nil {
 			return nil, err
@@ -875,6 +893,29 @@ func (s *ChannelConnectService) discoverTargets(
 		}
 		return targets, "", nil
 
+	case model.SocialProviderYouTube:
+		client := s.youtubeOAuthClient(cfg, redirectURI)
+		channels, err := client.ListMyChannels(ctx, accessToken)
+		if err != nil {
+			return nil, "", err
+		}
+		targets := make([]model.DiscoveredChannelTarget, 0, len(channels))
+		for _, ch := range channels {
+			targets = append(targets, model.DiscoveredChannelTarget{
+				ExternalID: oauthclient.YouTubeChannelExternalID(ch.ID),
+				Title:      ch.Title,
+				Type:       "channel",
+				CanPost:    true,
+				AvatarURL:  ch.ThumbnailURL,
+				PublicURL:  oauthclient.YouTubeChannelPublicURL(ch),
+			})
+		}
+		hint := ""
+		if len(targets) == 0 {
+			hint = "Не найдено YouTube-каналов на этом Google-аккаунте. Создайте канал в YouTube Studio и повторите."
+		}
+		return targets, hint, nil
+
 	default:
 		return nil, "", fmt.Errorf("неподдерживаемый провайдер")
 	}
@@ -1001,4 +1042,16 @@ func oauthConnectMetadataRefreshed(meta model.ChannelMetadata) *time.Time {
 	}
 	now := time.Now()
 	return &now
+}
+
+func (s *ChannelConnectService) youtubeOAuthClient(cfg model.SocialProviderSettings, redirectURI string) *oauthclient.YouTubeClient {
+	client := &oauthclient.YouTubeClient{
+		ClientID:     cfg.OAuthClientID,
+		ClientSecret: cfg.OAuthClientSecret,
+		RedirectURI:  redirectURI,
+	}
+	if s.youtubeAPI != nil {
+		client.HTTP = s.youtubeAPI.HTTPClient()
+	}
+	return client
 }
