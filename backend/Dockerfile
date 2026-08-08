@@ -2,7 +2,7 @@
 
 ARG ALPINE_MIRROR=https://mirror.yandex.ru/mirrors/alpine
 
-FROM golang:1.23-alpine AS builder
+FROM golang:1.24-alpine AS builder
 ARG ALPINE_MIRROR
 WORKDIR /app
 RUN sed -i "s|https://dl-cdn.alpinelinux.org/alpine|${ALPINE_MIRROR}|g" /etc/apk/repositories \
