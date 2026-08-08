@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { X } from "lucide-react";
 import {
@@ -197,27 +198,28 @@ export function AdminUsersPage() {
                 <th className="px-4 py-3">Таймзона</th>
                 <th className="px-4 py-3">Зарегистрирован</th>
                 <th className="px-4 py-3">Обновлён</th>
+                <th className="px-4 py-3">Файлы</th>
                 <th className="px-4 py-3" />
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading && (
                 <tr>
-                  <td colSpan={12} className="px-4 py-10 text-center text-slate-500">
+                  <td colSpan={13} className="px-4 py-10 text-center text-slate-500">
                     Загрузка…
                   </td>
                 </tr>
               )}
               {!loading && error && (
                 <tr>
-                  <td colSpan={12} className="px-4 py-10 text-center text-rose-600">
+                  <td colSpan={13} className="px-4 py-10 text-center text-rose-600">
                     {error}
                   </td>
                 </tr>
               )}
               {!loading && !error && users.length === 0 && (
                 <tr>
-                  <td colSpan={12} className="px-4 py-10 text-center text-slate-500">
+                  <td colSpan={13} className="px-4 py-10 text-center text-slate-500">
                     Пользователи не найдены
                   </td>
                 </tr>
@@ -279,6 +281,14 @@ export function AdminUsersPage() {
                     </td>
                     <td className="px-4 py-3 text-slate-700">
                       {formatDate(u.updated_at)}
+                    </td>
+                    <td className="px-4 py-3">
+                      <Link
+                        href={`/admin/files?uploaded_by=${u.id}`}
+                        className="text-xs font-medium text-blue-600 hover:underline"
+                      >
+                        Все файлы
+                      </Link>
                     </td>
                     <td className="px-4 py-3">
                       <button

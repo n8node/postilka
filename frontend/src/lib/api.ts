@@ -108,6 +108,57 @@ export type AdminUsersQuery = {
   is_platform_admin?: boolean;
 };
 
+export type AdminFile = {
+  id: string;
+  workspace_id: string;
+  workspace_name: string;
+  folder_id: string | null;
+  folder_name: string | null;
+  uploaded_by_user_id: string | null;
+  uploader_email: string | null;
+  uploader_name: string | null;
+  name: string;
+  mime_type: string;
+  size: number;
+  media_metadata?: { duration_seconds?: number } | null;
+  deleted_at?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AdminFileStats = {
+  total_files: number;
+  total_bytes: number;
+  trash_files: number;
+  trash_bytes: number;
+};
+
+export type AdminFilesQuery = {
+  q?: string;
+  workspace_id?: string;
+  folder_id?: string;
+  uploaded_by?: string;
+  type?: string;
+  created_from?: string;
+  created_to?: string;
+  size_min?: number;
+  size_max?: number;
+  deleted_only?: boolean;
+  limit?: number;
+  offset?: number;
+};
+
+export type AdminFilesResponse = {
+  total: number;
+  files: AdminFile[];
+  stats: AdminFileStats;
+};
+
+export type AdminFolderListItem = {
+  id: string;
+  name: string;
+};
+
 export class ApiError extends Error {
   status: number;
   code?: string;
@@ -749,6 +800,33 @@ export function fetchAdminWorkspaces(query: AdminWorkspacesQuery = {}) {
   const qs = params.toString();
   return apiFetch<AdminWorkspacesResponse>(
     `/admin/workspaces${qs ? `?${qs}` : ""}`,
+  );
+}
+
+export function fetchAdminFiles(query: AdminFilesQuery = {}) {
+  const params = new URLSearchParams();
+  if (query.q?.trim()) params.set("q", query.q.trim());
+  if (query.workspace_id?.trim()) params.set("workspace_id", query.workspace_id.trim());
+  if (query.folder_id?.trim()) params.set("folder_id", query.folder_id.trim());
+  if (query.uploaded_by?.trim()) params.set("uploaded_by", query.uploaded_by.trim());
+  if (query.type?.trim()) params.set("type", query.type.trim());
+  if (query.created_from?.trim()) params.set("created_from", query.created_from.trim());
+  if (query.created_to?.trim()) params.set("created_to", query.created_to.trim());
+  if (typeof query.size_min === "number") params.set("size_min", String(query.size_min));
+  if (typeof query.size_max === "number") params.set("size_max", String(query.size_max));
+  if (typeof query.deleted_only === "boolean") {
+    params.set("deleted_only", String(query.deleted_only));
+  }
+  if (typeof query.limit === "number") params.set("limit", String(query.limit));
+  if (typeof query.offset === "number") params.set("offset", String(query.offset));
+  const qs = params.toString();
+  return apiFetch<AdminFilesResponse>(`/admin/files${qs ? `?${qs}` : ""}`);
+}
+
+export function fetchAdminFileFolders(workspaceId: string) {
+  const params = new URLSearchParams({ workspace_id: workspaceId });
+  return apiFetch<{ folders: AdminFolderListItem[] }>(
+    `/admin/files/folders?${params.toString()}`,
   );
 }
 
