@@ -23,7 +23,7 @@ const PROVIDER_MENU: { key: ProviderKey; label: string; connectFlow: string }[] 
   { key: "ok", label: "OK", connectFlow: "oauth" },
   { key: "max", label: "MAX", connectFlow: "bot_token" },
   { key: "rutube", label: "Rutube", connectFlow: "oauth" },
-  { key: "dzen", label: "Дзен", connectFlow: "oauth" },
+  { key: "dzen", label: "Дзен", connectFlow: "telegram_crosspost" },
 ];
 
 function connectFlowLabel(flow: string): string {
@@ -32,6 +32,8 @@ function connectFlowLabel(flow: string): string {
       return "Своё / платформа";
     case "oauth":
       return "OAuth платформы";
+    case "telegram_crosspost":
+      return "Кросспостинг через Telegram";
     case "bot_token":
       return "Токен бота";
     default:
@@ -177,7 +179,7 @@ export function AdminSocialProvidersPage() {
         </h1>
         <p className="mt-1 text-sm text-slate-500">
           Включение провайдеров и инструкции для пользователей. VK и MAX — своё приложение или
-          платформа; Telegram — токен бота; OK, Rutube и Дзен — OAuth платформы.
+          платформа; Telegram — токен бота; OK и Rutube — OAuth; Дзен — кросспостинг через Telegram.
         </p>
       </div>
 
@@ -409,9 +411,11 @@ function SocialSettingsForm({
             ? "Пользователи подключают сообщества через своё приложение VK или OAuth Postilka."
             : isUserOAuthApp
               ? "Пользователи подключают сообщества через своё приложение VK."
-              : connectFlow === "oauth"
-                ? "OAuth-приложение платформы для подключения каналов пользователями."
-                : "Подключение через токен бота MAX."}
+              : connectFlow === "telegram_crosspost"
+                ? "Пользователи видят инструкцию по кросспостингу через @zen_sync_bot — OAuth Яндекса не нужен."
+                : connectFlow === "oauth"
+                  ? "OAuth-приложение платформы для подключения каналов пользователями."
+                  : "Подключение через токен бота MAX."}
         </p>
       </div>
 
@@ -512,6 +516,32 @@ function SocialSettingsForm({
           <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
             Ключи VK ID в разделе «Авторизация» — только для входа в Postilka, не для публикации в
             сообщества.
+          </p>
+        </Section>
+      ) : connectFlow === "telegram_crosspost" ? (
+        <Section title="Кросспостинг через Telegram">
+          <p className="text-xs text-slate-500">
+            Postilka публикует в Telegram-канал пользователя. Официальный бот{" "}
+            <a
+              href="https://t.me/zen_sync_bot"
+              target="_blank"
+              rel="noreferrer"
+              className="font-medium text-slate-700 underline"
+            >
+              @zen_sync_bot
+            </a>{" "}
+            переносит посты в Дзен. Убедитесь, что провайдер Telegram тоже включён.
+          </p>
+          <p className="text-xs text-slate-500">
+            Подробнее:{" "}
+            <a
+              href="https://dzen.ru/help/ru/channel/cross-platform.html"
+              target="_blank"
+              rel="noreferrer"
+              className="text-slate-700 underline"
+            >
+              официальная справка Дзена
+            </a>
           </p>
         </Section>
       ) : (

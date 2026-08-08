@@ -14,6 +14,7 @@ import { ConnectTelegramDialog } from "./ConnectTelegramDialog";
 import { ConnectOAuthProviderDialog } from "./ConnectOAuthProviderDialog";
 import { ConnectVKDialog } from "./ConnectVKDialog";
 import { ConnectMAXDialog } from "./ConnectMAXDialog";
+import { ConnectDzenDialog } from "./ConnectDzenDialog";
 
 const PROVIDER_LABELS: Record<ChannelProvider, string> = {
   telegram: "Telegram",
@@ -125,7 +126,15 @@ export function ConnectChannelMenu({ onConnected }: ConnectChannelMenuProps) {
         />
       )}
 
-      {activeProvider && ["ok", "rutube", "dzen"].includes(activeProvider) && (
+      {activeProvider === "dzen" && (
+        <ConnectDzenDialog
+          open
+          onClose={() => setActiveProvider(null)}
+          onConnectTelegram={() => setActiveProvider("telegram")}
+        />
+      )}
+
+      {activeProvider && ["ok", "rutube"].includes(activeProvider) && (
         <ConnectOAuthProviderDialog
           open
           provider={activeProvider as SocialProviderKey}

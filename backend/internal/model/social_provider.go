@@ -43,6 +43,8 @@ func (p SocialProvider) ConnectFlow() string {
 		return "user_oauth"
 	case SocialProviderMAX:
 		return "bot_token"
+	case SocialProviderDzen:
+		return "telegram_crosspost"
 	default:
 		return "oauth"
 	}
@@ -135,8 +137,8 @@ func DefaultSocialProviderSettings(provider SocialProvider) SocialProviderSettin
 		def.ConnectHelpURL = "https://postilka.ru/docs/rutube"
 		def.ConnectHelpText = "1. Войдите через Rutube.\n2. Выберите канал для публикации.\n3. Подтвердите права."
 	case SocialProviderDzen:
-		def.ConnectHelpURL = "https://postilka.ru/docs/dzen"
-		def.ConnectHelpText = "1. Войдите через Яндекс.\n2. Выберите канал Дзен.\n3. Подтвердите подключение."
+		def.ConnectHelpURL = "https://dzen.ru/help/ru/channel/cross-platform.html"
+		def.ConnectHelpText = "1. Подключите публичный Telegram-канал в Postilka.\n2. В Студии Дзена: Настройки → Кросспостинг → Telegram → получите код доступа.\n3. В Telegram откройте @zen_sync_bot, отправьте код и ссылку на канал.\n4. Добавьте @zen_sync_bot администратором Telegram-канала.\n5. Планируйте посты в Postilka — они попадут в Telegram, бот перенесёт их в Дзен."
 	}
 	return def
 }
