@@ -1,18 +1,23 @@
 const GOOGLE_CLOUD_CONSOLE_URL = "https://console.cloud.google.com/";
 
+export function GoogleCloudConsoleLink({ className }: { className?: string }) {
+  return (
+    <a
+      href={GOOGLE_CLOUD_CONSOLE_URL}
+      target="_blank"
+      rel="noopener noreferrer"
+      className={className ?? "text-accent hover:underline"}
+    >
+      Google Cloud Console
+    </a>
+  );
+}
+
 function renderStepText(text: string) {
   const parts = text.split(/(Google Cloud Console)/g);
   return parts.map((part, index) =>
     part === "Google Cloud Console" ? (
-      <a
-        key={index}
-        href={GOOGLE_CLOUD_CONSOLE_URL}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="text-accent hover:underline"
-      >
-        Google Cloud Console
-      </a>
+      <GoogleCloudConsoleLink key={index} />
     ) : (
       part
     ),

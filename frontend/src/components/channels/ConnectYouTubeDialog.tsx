@@ -19,9 +19,6 @@ import {
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-const YOUTUBE_REDIRECT_URI =
-  "https://postilka.ru/app/api/v1/channels/oauth/youtube/callback";
-
 type ConnectYouTubeDialogProps = {
   open: boolean;
   onClose: () => void;
@@ -37,7 +34,7 @@ export function ConnectYouTubeDialog({
 }: ConnectYouTubeDialogProps) {
   const [providerInfo, setProviderInfo] = useState<ChannelProviderInfo | null>(null);
   const [supportOpen, setSupportOpen] = useState(false);
-  const [showDetailedHelp, setShowDetailedHelp] = useState(false);
+  const [showDetailedHelp, setShowDetailedHelp] = useState(true);
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
   const [step, setStep] = useState<"start" | "pick" | "connecting">("start");
@@ -210,11 +207,6 @@ export function ConnectYouTubeDialog({
 
             {step === "start" && (
               <>
-                <p className="text-sm text-muted">
-                  В Google Cloud Console включите YouTube Data API v3 и создайте OAuth Client (Web).
-                  Redirect URI:{" "}
-                  <code className="rounded bg-zinc-100 px-1 text-xs">{YOUTUBE_REDIRECT_URI}</code>
-                </p>
                 <label className="block space-y-1">
                   <span className="text-sm font-medium">OAuth Client ID</span>
                   <input
