@@ -29,7 +29,7 @@ const DEFAULT_PRICING: YandexModelPricing = {
   currency: "RUB",
 };
 
-export function AdminYandexGptPage() {
+export function AdminYandexGptPage({ embedded = false }: { embedded?: boolean }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -141,9 +141,13 @@ export function AdminYandexGptPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className={embedded ? "space-y-6" : "mx-auto max-w-3xl space-y-6"}>
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Yandex GPT — текст</h1>
+        {embedded ? (
+          <h2 className="text-lg font-semibold text-slate-900">Yandex GPT — текст</h2>
+        ) : (
+          <h1 className="text-2xl font-semibold text-slate-900">Yandex GPT — текст</h1>
+        )}
         <p className="mt-1 text-sm text-slate-500">
           Провайдер для генерации и рерайта текста. Стоимость — в ₽ за 1000 токенов input/output.
         </p>

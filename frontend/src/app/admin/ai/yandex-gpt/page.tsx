@@ -1,5 +1,5 @@
-import { AdminYandexGptPage } from "@/components/admin/AdminYandexGptPage";
+import { redirect } from "next/navigation";
 
-export default function AdminYandexGptRoute() {
-  return <AdminYandexGptPage />;
+export default function AdminYandexGptRedirect() {
+  redirect("/admin/settings?section=ai-yandex-gpt");
 }

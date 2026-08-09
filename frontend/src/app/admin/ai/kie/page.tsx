@@ -1,5 +1,5 @@
-import { AdminKiePage } from "@/components/admin/AdminKiePage";
+import { redirect } from "next/navigation";
 
-export default function AdminKieRoute() {
-  return <AdminKiePage />;
+export default function AdminKieRedirect() {
+  redirect("/admin/settings?section=ai-kie");
 }

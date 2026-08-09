@@ -12,8 +12,10 @@ import {
 } from "@/lib/api";
 import { AdminEmailSettingsPage } from "@/components/admin/AdminEmailSettingsPage";
 import { AdminInvitesPage } from "@/components/admin/AdminInvitesPage";
+import { AdminKiePage } from "@/components/admin/AdminKiePage";
 import { AdminPaymentSettingsPage } from "@/components/admin/AdminPaymentSettingsPage";
 import { AdminTelegramPage } from "@/components/admin/AdminTelegramPage";
+import { AdminYandexGptPage } from "@/components/admin/AdminYandexGptPage";
 import { cn } from "@/lib/utils";
 
 type SettingsKey =
@@ -21,7 +23,9 @@ type SettingsKey =
   | "invites"
   | "telegram-notifications"
   | "payment"
-  | "email-smtp";
+  | "email-smtp"
+  | "ai-yandex-gpt"
+  | "ai-kie";
 
 const SETTINGS_MENU: { key: SettingsKey; label: string; description: string }[] = [
   {
@@ -48,6 +52,16 @@ const SETTINGS_MENU: { key: SettingsKey; label: string; description: string }[] 
     key: "email-smtp",
     label: "Email / SMTP",
     description: "Исходящая почта",
+  },
+  {
+    key: "ai-yandex-gpt",
+    label: "AI — Yandex GPT",
+    description: "Текст, модели и цены",
+  },
+  {
+    key: "ai-kie",
+    label: "AI — KIE.ai",
+    description: "Изображения и фильтры",
   },
 ];
 
@@ -193,6 +207,12 @@ function SettingsSectionContent({
   }
   if (selected === "email-smtp") {
     return <AdminEmailSettingsPage embedded />;
+  }
+  if (selected === "ai-yandex-gpt") {
+    return <AdminYandexGptPage embedded />;
+  }
+  if (selected === "ai-kie") {
+    return <AdminKiePage embedded />;
   }
   return null;
 }
