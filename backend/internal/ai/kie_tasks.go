@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"strings"
 	"time"
@@ -270,6 +271,55 @@ func (c *KieClient) UploadFileFromURL(ctx context.Context, sourceURL, fileName s
 	httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
 	httpReq.Header.Set("Content-Type", "application/json")
 
+	return c.doKieFileUpload(httpReq)
+}
+
+func (c *KieClient) UploadFileStream(ctx context.Context, data []byte, contentType, fileName string) (string, error) {
+	if c.apiKey == "" {
+		return "", fmt.Errorf("kie api key not configured")
+	}
+	if len(data) == 0 {
+		return "", fmt.Errorf("file is empty")
+	}
+	fileName = strings.TrimSpace(fileName)
+	if fileName == "" {
+		fileName = "source.jpg"
+	}
+	if contentType = strings.TrimSpace(contentType); contentType == "" {
+		contentType = "application/octet-stream"
+	}
+
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	part, err := w.CreateFormFile("file", fileName)
+	if err != nil {
+		return "", err
+	}
+	if _, err := part.Write(data); err != nil {
+		return "", err
+	}
+	_ = w.WriteField("uploadPath", "postilka/generation")
+	_ = w.WriteField("fileName", fileName)
+	if err := w.Close(); err != nil {
+		return "", err
+	}
+
+	httpReq, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		KieFileUploadBaseURL+"/api/file-stream-upload",
+		&buf,
+	)
+	if err != nil {
+		return "", err
+	}
+	httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
+	httpReq.Header.Set("Content-Type", w.FormDataContentType())
+
+	return c.doKieFileUpload(httpReq)
+}
+
+func (c *KieClient) doKieFileUpload(httpReq *http.Request) (string, error) {
 	res, err := c.taskHTTPClient().Do(httpReq)
 	if err != nil {
 		return "", err

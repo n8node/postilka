@@ -225,7 +225,22 @@ export async function uploadGenerationMedia(file: File): Promise<GenerationUploa
         : `HTTP ${res.status}`;
     throw new ApiError(res.status, msg);
   }
-  return data as GenerationUploadResult;
+
+  const payload = data as {
+    upload?: GenerationUploadResult;
+    id?: string;
+    content_type?: string;
+  };
+  const upload = payload.upload ?? payload;
+  if (!upload?.id) {
+    throw new ApiError(res.status, "Некорректный ответ сервера при загрузке фото");
+  }
+  return {
+    id: upload.id,
+    url: upload.url ?? "",
+    thumb_url: upload.thumb_url,
+    content_type: upload.content_type ?? file.type,
+  };
 }
 
 /** Downloads a generated image (auth via cookie) for attaching to sources. */

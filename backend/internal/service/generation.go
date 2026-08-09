@@ -111,6 +111,23 @@ func (s *GenerationService) StartGenerate(ctx context.Context, userID string, r 
 		return StartGenerateResult{}, errors.New("prompt too long")
 	}
 
+	switch mode {
+	case generationModeFilter, "image-to-image":
+		if strings.TrimSpace(in.SourceUploadID) == "" {
+			return StartGenerateResult{}, ErrGenerationSourceRequired
+		}
+	case "combine":
+		valid := 0
+		for _, id := range in.CombineUploadIDs {
+			if strings.TrimSpace(id) != "" {
+				valid++
+			}
+		}
+		if valid < 2 {
+			return StartGenerateResult{}, ErrGenerationCombineMin
+		}
+	}
+
 	settings, err := s.kieConfig.GetSettings(ctx)
 	if err != nil {
 		return StartGenerateResult{}, err
@@ -543,11 +560,22 @@ func (s *GenerationService) kieImageURLs(
 		if err != nil {
 			return nil, ErrGenerationUploadNotFound
 		}
-		presigned, err := s.objectStore.PresignGet(ctx, upload.S3Key, 30*time.Minute, "")
+		body, contentType, err := s.objectStore.GetObject(ctx, upload.S3Key)
+		if err != nil {
+			return nil, fmt.Errorf("source photo read: %w", err)
+		}
+		data, err := io.ReadAll(io.LimitReader(body, 15<<20+1))
+		_ = body.Close()
 		if err != nil {
 			return nil, err
 		}
-		kieURL, err := client.UploadFileFromURL(ctx, presigned, path.Base(upload.S3Key))
+		if len(data) == 0 || len(data) > 15<<20 {
+			return nil, ErrGenerationUploadInvalid
+		}
+		if ct := strings.TrimSpace(upload.ContentType); ct != "" {
+			contentType = ct
+		}
+		kieURL, err := client.UploadFileStream(ctx, data, contentType, path.Base(upload.S3Key))
 		if err != nil {
 			return nil, fmt.Errorf("kie image upload: %w", err)
 		}
