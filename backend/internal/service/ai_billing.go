@@ -119,12 +119,19 @@ func (s *AIBillingService) debit(ctx context.Context, workspaceID, userID, gener
 
 	var walletCents int64
 	if walletCredits > 0 {
-		kopecks, err := s.kopecksPerCredit(ctx)
+		settings, err := s.kie.Get(ctx)
 		if err != nil {
 			return aiDebitResult{}, err
 		}
+		kopecks := settings.KopecksPerMediaCredit
+		if kopecks <= 0 {
+			kopecks = 5000
+		}
 		walletCents = int64(walletCredits) * int64(kopecks)
-		desc := fmt.Sprintf("AI-генерация (%d кред.)", walletCredits)
+		desc := fmt.Sprintf("AI-генерация (%d кред. × %d ₽)", walletCredits, kopecks/100)
+		if kopecks%100 != 0 {
+			desc = fmt.Sprintf("AI-генерация (%d кред. × %.2f ₽)", walletCredits, float64(kopecks)/100)
+		}
 		if err := s.wallet.Debit(ctx, userID, walletCents, "ai_media_overage", "ai_generation", generationID, desc); err != nil {
 			return aiDebitResult{}, err
 		}

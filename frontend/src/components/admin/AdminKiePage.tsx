@@ -22,6 +22,7 @@ const DEFAULT_SETTINGS: KieAdminSettings = {
   token_cost_image_to_image: 15,
   token_cost_combine: 18,
   token_cost_filter: 8,
+  kopecks_per_media_credit: 5000,
 };
 
 function sortModels(models: KieModel[]) {
@@ -81,6 +82,7 @@ export function AdminKiePage({ embedded = false }: { embedded?: boolean }) {
   const [creditsRemaining, setCreditsRemaining] = useState<number | null>(null);
   const [availableModels, setAvailableModels] = useState<KieModel[]>([]);
   const [form, setForm] = useState<KieAdminSettings>(DEFAULT_SETTINGS);
+  const [mediaCreditPriceRub, setMediaCreditPriceRub] = useState(50);
   const [newApiKey, setNewApiKey] = useState("");
 
   const generationModels = useMemo(
@@ -105,6 +107,9 @@ export function AdminKiePage({ embedded = false }: { embedded?: boolean }) {
     try {
       const { settings } = await fetchAdminKieSettings();
       setForm(settings);
+      setMediaCreditPriceRub(
+        Math.max(0, (settings.kopecks_per_media_credit ?? 5000) / 100),
+      );
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Не удалось загрузить настройки");
     } finally {
@@ -136,12 +141,19 @@ export function AdminKiePage({ embedded = false }: { embedded?: boolean }) {
         token_cost_image_to_image: form.token_cost_image_to_image,
         token_cost_combine: form.token_cost_combine,
         token_cost_filter: form.token_cost_filter,
+        kopecks_per_media_credit: Math.max(
+          1,
+          Math.round(Math.max(0, mediaCreditPriceRub) * 100),
+        ),
       };
       if (newApiKey.trim()) {
         body.api_key = newApiKey.trim();
       }
       const { settings } = await updateAdminKieSettings(body);
       setForm(settings);
+      setMediaCreditPriceRub(
+        Math.max(0, (settings.kopecks_per_media_credit ?? 5000) / 100),
+      );
       setNewApiKey("");
       setSuccess("Настройки KIE.ai сохранены");
     } catch (err) {
@@ -313,18 +325,19 @@ export function AdminKiePage({ embedded = false }: { embedded?: boolean }) {
 
       <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
         <div>
-          <h2 className="text-base font-semibold text-slate-900">Списание AI-токенов</h2>
+          <h2 className="text-base font-semibold text-slate-900">Кредиты за операцию</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Сумма списывается с месячного баланса пользователя по тарифу
+            Сколько кредитов списывается за одну генерацию в каждом режиме. Сначала
+            расходуется included-квота тарифа, остаток — с кошелька пользователя.
           </p>
         </div>
 
         {(
           [
-            ["token_cost_text_to_image", "Текст → фото", "Токенов за генерацию в режиме «Текст → фото»"],
-            ["token_cost_image_to_image", "Фото → фото", "Токенов за генерацию в режиме «Фото → фото»"],
-            ["token_cost_combine", "Комбинация фото", "Токенов за генерацию в режиме «Комбинация»"],
-            ["token_cost_filter", "Раздел «Фильтры»", "Токенов за одну операцию в разделе AI-фильтров"],
+            ["token_cost_text_to_image", "Текст → фото", "Кредитов за генерацию"],
+            ["token_cost_image_to_image", "Фото → фото", "Кредитов за генерацию"],
+            ["token_cost_combine", "Комбинация фото", "Кредитов за генерацию"],
+            ["token_cost_filter", "Раздел «Фильтры»", "Кредитов за операцию"],
           ] as const
         ).map(([key, label, hint]) => (
           <div key={key}>
@@ -339,8 +352,44 @@ export function AdminKiePage({ embedded = false }: { embedded?: boolean }) {
               className="max-w-[140px] rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
             />
             <p className="mt-1 text-xs text-slate-500">{hint}</p>
+            {mediaCreditPriceRub > 0 && form[key] > 0 ? (
+              <p className="mt-0.5 text-xs text-slate-600">
+                С кошелька при overage: {(form[key] * mediaCreditPriceRub).toLocaleString("ru-RU")} ₽
+                {" "}(= {form[key]} × {mediaCreditPriceRub} ₽)
+              </p>
+            ) : null}
           </div>
         ))}
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
+        <div>
+          <h2 className="text-base font-semibold text-slate-900">Стоимость кредита для кошелька</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Цена одного кредита в рублях. Списание с кошелька ={" "}
+            <span className="font-medium text-slate-700">кредиты режима × эта стоимость</span>.
+            Included-квота тарифа по-прежнему расходуется первой.
+          </p>
+        </div>
+
+        <div>
+          <label className="mb-1.5 block text-sm font-medium">1 кредит, ₽</label>
+          <input
+            type="number"
+            min={1}
+            step={1}
+            value={mediaCreditPriceRub}
+            onChange={(e) => {
+              setMediaCreditPriceRub(Math.max(0, parseInt(e.target.value, 10) || 0));
+              setSuccess(null);
+            }}
+            className="max-w-[140px] rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+          />
+          <p className="mt-1 text-xs text-slate-500">
+            Пример: text→photo {form.token_cost_text_to_image} кред. × {mediaCreditPriceRub} ₽ ={" "}
+            {(form.token_cost_text_to_image * mediaCreditPriceRub).toLocaleString("ru-RU")} ₽ с кошелька
+          </p>
+        </div>
       </section>
 
       <button

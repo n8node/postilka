@@ -18,6 +18,10 @@ export type GenerationPricing = {
   text_to_image: number;
   image_to_image: number;
   combine: number;
+  media_credit_price_rub: number;
+  text_to_image_wallet_rub: number;
+  image_to_image_wallet_rub: number;
+  combine_wallet_rub: number;
   credits_remaining?: number | null;
   unlimited?: boolean;
 };
@@ -57,6 +61,20 @@ export function generationCostForMode(
   }
 }
 
+export function generationWalletRubForMode(
+  pricing: GenerationPricing,
+  mode: GenerationModeId,
+): number {
+  switch (mode) {
+    case "image-to-image":
+      return pricing.image_to_image_wallet_rub;
+    case "combine":
+      return pricing.combine_wallet_rub;
+    default:
+      return pricing.text_to_image_wallet_rub;
+  }
+}
+
 export function mediaCreditsFromOverview(overview: BillingOverview): number | null {
   const quota = overview.plan?.ai_media_credits_quota;
   if (quota == null) return null;
@@ -74,6 +92,10 @@ export async function fetchGenerationPricing() {
           text_to_image: 1,
           image_to_image: 1,
           combine: 1,
+          media_credit_price_rub: 50,
+          text_to_image_wallet_rub: 50,
+          image_to_image_wallet_rub: 50,
+          combine_wallet_rub: 50,
           credits_remaining: mediaCreditsFromOverview(overview),
         },
       };

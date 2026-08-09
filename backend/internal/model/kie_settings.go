@@ -88,3 +88,18 @@ func positiveOrOne(n int) int {
 	}
 	return 1
 }
+
+// WalletCostCents returns ruble charge for creditCount units at configured price.
+func (s KieSettings) WalletCostCents(creditCount int) int64 {
+	if creditCount <= 0 || s.KopecksPerMediaCredit <= 0 {
+		return 0
+	}
+	return int64(creditCount) * int64(s.KopecksPerMediaCredit)
+}
+
+func (s KieSettings) MediaCreditPriceRub() float64 {
+	if s.KopecksPerMediaCredit <= 0 {
+		return 50
+	}
+	return float64(s.KopecksPerMediaCredit) / 100.0
+}

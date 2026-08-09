@@ -3,6 +3,7 @@
 import { Clock, Coins, Zap } from "lucide-react";
 import {
   generationCostForMode,
+  generationWalletRubForMode,
   type GenerationPricing,
 } from "@/lib/generation-api";
 import {
@@ -47,6 +48,8 @@ export function GenerationSidebarStats({
 }: GenerationSidebarStatsProps) {
   const modeCost =
     pricing !== null ? generationCostForMode(pricing, mode) : null;
+  const modeWalletRub =
+    pricing !== null ? generationWalletRubForMode(pricing, mode) : null;
   const elapsedMs = generating ? clientElapsedMs(generationStartedAt) : 0;
   const showLastRun = !generating && lastRun !== null;
 
@@ -72,6 +75,11 @@ export function GenerationSidebarStats({
           </span>
           <span className="font-medium text-blue-900">
             {modeCost !== null ? formatMediaCreditCost(modeCost) : "—"}
+            {modeWalletRub != null && modeWalletRub > 0 ? (
+              <span className="ml-1 font-normal text-accent">
+                ({modeWalletRub.toLocaleString("ru-RU")} ₽ с кошелька)
+              </span>
+            ) : null}
           </span>
           <span className="col-span-2 text-[10px] leading-snug text-zinc-400">
             Режим «{generationModeLabels[mode]}»

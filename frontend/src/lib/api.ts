@@ -1880,6 +1880,7 @@ export type KieAdminSettings = {
   token_cost_image_to_image: number;
   token_cost_combine: number;
   token_cost_filter: number;
+  kopecks_per_media_credit: number;
   updated_at?: string;
 };
 
