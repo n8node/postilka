@@ -27,6 +27,7 @@ type AIGenerationJob struct {
 	SourceUploadID     string
 	CombineUploadIDs   []string
 	CreditCost         int
+	QuotaCreditsUsed   int
 	WalletCentsCharged int
 	DurationMs         int
 	GenerationID       *string

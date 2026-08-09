@@ -76,7 +76,7 @@ func main() {
 	genUploadRepo := repository.NewGenerationSourceUploadRepository(db.Pool)
 	aiBillingSvc := service.NewAIBillingService(quotaSvc, usageRepo, walletRepo, kieSettingsRepo)
 	generationSvc := service.NewGenerationService(
-		kieConfigSvc, genRepo, genJobRepo, genUploadRepo, aiBillingSvc, objectStorage, wsSvc, yandexGptConfigSvc, quotaSvc,
+		kieConfigSvc, genRepo, genJobRepo, genUploadRepo, aiBillingSvc, objectStorage, fileStorageSvc, wsSvc, yandexGptConfigSvc, quotaSvc,
 	)
 	generationSvc.StartGenerationWorker(ctx)
 

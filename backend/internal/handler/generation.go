@@ -139,6 +139,22 @@ func (h *GenerationHandler) History(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
+func (h *GenerationHandler) UsageHistory(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
+		return
+	}
+
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	items, err := h.generation.ListUsageHistory(r.Context(), userID, r, limit)
+	if err != nil {
+		h.mapError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
 func (h *GenerationHandler) UploadSource(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {

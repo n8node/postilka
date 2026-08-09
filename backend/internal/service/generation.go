@@ -36,6 +36,7 @@ type GenerationService struct {
 	uploadRepo  *repository.GenerationSourceUploadRepository
 	aiBilling   *AIBillingService
 	objectStore *ObjectStorage
+	fileStorage *FileStorageService
 	wsSvc       *WorkspaceService
 	yandexGPT   *YandexGptConfigService
 	quota       *QuotaService
@@ -48,6 +49,7 @@ func NewGenerationService(
 	uploadRepo *repository.GenerationSourceUploadRepository,
 	aiBilling *AIBillingService,
 	objectStore *ObjectStorage,
+	fileStorage *FileStorageService,
 	wsSvc *WorkspaceService,
 	yandexGPT *YandexGptConfigService,
 	quota *QuotaService,
@@ -59,6 +61,7 @@ func NewGenerationService(
 		uploadRepo:  uploadRepo,
 		aiBilling:   aiBilling,
 		objectStore: objectStore,
+		fileStorage: fileStorage,
 		wsSvc:       wsSvc,
 		yandexGPT:   yandexGPT,
 		quota:       quota,
@@ -246,6 +249,14 @@ func (s *GenerationService) ListHistory(ctx context.Context, userID string, r *h
 		out = append(out, item.ToViewWithUsage(false))
 	}
 	return out, nil
+}
+
+func (s *GenerationService) ListUsageHistory(ctx context.Context, userID string, r *http.Request, limit int) ([]model.AIUsageHistoryItem, error) {
+	ws, err := s.resolveWorkspace(ctx, userID, r)
+	if err != nil {
+		return nil, err
+	}
+	return s.jobRepo.ListUsageHistory(ctx, ws.ID, limit)
 }
 
 type DeleteGenerationsResult struct {

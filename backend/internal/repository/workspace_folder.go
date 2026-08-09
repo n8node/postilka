@@ -21,20 +21,21 @@ func NewWorkspaceFolderRepository(pool *pgxpool.Pool) *WorkspaceFolderRepository
 }
 
 const folderColumns = `
-	id, workspace_id, parent_id, name, deleted_at, trash_batch_id, created_at, updated_at
+	id, workspace_id, parent_id, name, kind, deleted_at, trash_batch_id, created_at, updated_at
 `
 
 func scanFolder(row pgx.Row) (*model.WorkspaceFolder, error) {
 	var f model.WorkspaceFolder
-	var parentID, trashBatch *string
+	var parentID, kind, trashBatch *string
 	var deletedAt *time.Time
 	err := row.Scan(
-		&f.ID, &f.WorkspaceID, &parentID, &f.Name, &deletedAt, &trashBatch, &f.CreatedAt, &f.UpdatedAt,
+		&f.ID, &f.WorkspaceID, &parentID, &f.Name, &kind, &deletedAt, &trashBatch, &f.CreatedAt, &f.UpdatedAt,
 	)
 	if err != nil {
 		return nil, err
 	}
 	f.ParentID = parentID
+	f.Kind = kind
 	f.DeletedAt = deletedAt
 	f.TrashBatchID = trashBatch
 	return &f, nil
@@ -107,9 +108,22 @@ func (r *WorkspaceFolderRepository) ListForAdmin(ctx context.Context, workspaceI
 
 func (r *WorkspaceFolderRepository) Create(ctx context.Context, f *model.WorkspaceFolder) (*model.WorkspaceFolder, error) {
 	return scanFolder(r.pool.QueryRow(ctx, `
-		INSERT INTO workspace_folders (workspace_id, parent_id, name)
-		VALUES ($1, $2, $3)
-		RETURNING `+folderColumns, f.WorkspaceID, f.ParentID, f.Name))
+		INSERT INTO workspace_folders (workspace_id, parent_id, name, kind)
+		VALUES ($1, $2, $3, $4)
+		RETURNING `+folderColumns, f.WorkspaceID, f.ParentID, f.Name, f.Kind))
+}
+
+func (r *WorkspaceFolderRepository) GetByKind(ctx context.Context, workspaceID, kind string) (*model.WorkspaceFolder, error) {
+	f, err := scanFolder(r.pool.QueryRow(ctx, `
+		SELECT `+folderColumns+`
+		FROM workspace_folders
+		WHERE workspace_id = $1 AND kind = $2 AND deleted_at IS NULL AND parent_id IS NULL
+		LIMIT 1
+	`, workspaceID, kind))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	return f, err
 }
 
 func (r *WorkspaceFolderRepository) UpdateName(ctx context.Context, workspaceID, folderID, name string) (*model.WorkspaceFolder, error) {

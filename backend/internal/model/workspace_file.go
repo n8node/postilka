@@ -26,6 +26,7 @@ type WorkspaceFolder struct {
 	WorkspaceID  string     `json:"workspace_id"`
 	ParentID     *string    `json:"parent_id"`
 	Name         string     `json:"name"`
+	Kind         *string    `json:"kind,omitempty"`
 	DeletedAt    *time.Time `json:"deleted_at,omitempty"`
 	TrashBatchID *string    `json:"trash_batch_id,omitempty"`
 	CreatedAt    time.Time  `json:"created_at"`

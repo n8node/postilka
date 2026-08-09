@@ -18,6 +18,7 @@ export type WorkspaceFolder = {
   workspace_id: string;
   parent_id: string | null;
   name: string;
+  kind?: string | null;
   files_count?: number;
   deleted_at?: string | null;
   created_at: string;

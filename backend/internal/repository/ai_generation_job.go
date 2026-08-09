@@ -53,7 +53,7 @@ func (r *AIGenerationJobRepository) scanJob(row pgx.Row) (model.AIGenerationJob,
 	err := row.Scan(
 		&job.ID, &job.UserID, &job.WorkspaceID, &job.KieTaskID, &job.Status, &job.KieState, &job.Progress, &job.FailMessage,
 		&job.Mode, &job.Prompt, &job.Model, &job.AspectRatio, &job.SourceUploadID, &combineRaw,
-		&job.CreditCost, &job.WalletCentsCharged, &job.DurationMs, &genID, &job.PollAfter, &job.LastPolledAt, &job.CreatedAt, &job.UpdatedAt,
+		&job.CreditCost, &job.QuotaCreditsUsed, &job.WalletCentsCharged, &job.DurationMs, &genID, &job.PollAfter, &job.LastPolledAt, &job.CreatedAt, &job.UpdatedAt,
 	)
 	if err != nil {
 		return model.AIGenerationJob{}, err
@@ -67,7 +67,7 @@ func (r *AIGenerationJobRepository) GetByID(ctx context.Context, id, userID stri
 	job, err := r.scanJob(r.pool.QueryRow(ctx, `
 		SELECT id, user_id, workspace_id, kie_task_id, status, kie_state, progress, fail_message,
 			mode, prompt, model, aspect_ratio, source_upload_id, combine_upload_ids,
-			credit_cost, wallet_cents_charged, duration_ms, generation_id, poll_after, last_polled_at, created_at, updated_at
+			credit_cost, quota_credits_used, wallet_cents_charged, duration_ms, generation_id, poll_after, last_polled_at, created_at, updated_at
 		FROM ai_generation_jobs
 		WHERE id = $1 AND user_id = $2
 	`, id, userID))
@@ -84,7 +84,7 @@ func (r *AIGenerationJobRepository) GetByIDInternal(ctx context.Context, id stri
 	job, err := r.scanJob(r.pool.QueryRow(ctx, `
 		SELECT id, user_id, workspace_id, kie_task_id, status, kie_state, progress, fail_message,
 			mode, prompt, model, aspect_ratio, source_upload_id, combine_upload_ids,
-			credit_cost, wallet_cents_charged, duration_ms, generation_id, poll_after, last_polled_at, created_at, updated_at
+			credit_cost, quota_credits_used, wallet_cents_charged, duration_ms, generation_id, poll_after, last_polled_at, created_at, updated_at
 		FROM ai_generation_jobs
 		WHERE id = $1
 	`, id))
@@ -130,14 +130,14 @@ func (r *AIGenerationJobRepository) MarkSucceeded(
 	ctx context.Context,
 	id string,
 	generationID string,
-	walletCentsCharged int,
+	walletCentsCharged, quotaCreditsUsed int,
 ) error {
 	_, err := r.pool.Exec(ctx, `
 		UPDATE ai_generation_jobs
 		SET status = $2, kie_state = 'success', progress = 100, generation_id = $3,
-		    wallet_cents_charged = $4, poll_after = now(), updated_at = now()
+		    wallet_cents_charged = $4, quota_credits_used = $5, poll_after = now(), updated_at = now()
 		WHERE id = $1
-	`, id, model.GenJobStatusSucceeded, generationID, walletCentsCharged)
+	`, id, model.GenJobStatusSucceeded, generationID, walletCentsCharged, quotaCreditsUsed)
 	return err
 }
 
@@ -184,4 +184,53 @@ func (r *AIGenerationJobRepository) ListDueForPoll(ctx context.Context, limit in
 		ids = append(ids, id)
 	}
 	return ids, rows.Err()
+}
+
+func (r *AIGenerationJobRepository) ListUsageHistory(ctx context.Context, workspaceID string, limit int) ([]model.AIUsageHistoryItem, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 50
+	}
+	rows, err := r.pool.Query(ctx, `
+		SELECT
+			j.id, j.created_at, j.mode, j.prompt, j.credit_cost, j.quota_credits_used, j.wallet_cents_charged,
+			g.id, g.result_content_type, f.id, fo.id
+		FROM ai_generation_jobs j
+		LEFT JOIN ai_generations g ON g.id = j.generation_id
+		LEFT JOIN workspace_files f ON f.id = g.workspace_file_id AND f.deleted_at IS NULL
+		LEFT JOIN workspace_folders fo ON fo.workspace_id = j.workspace_id
+			AND fo.kind = 'ai_content' AND fo.deleted_at IS NULL AND fo.parent_id IS NULL
+		WHERE j.workspace_id = $1 AND j.status = 'succeeded'
+		ORDER BY j.created_at DESC
+		LIMIT $2
+	`, workspaceID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]model.AIUsageHistoryItem, 0, limit)
+	for rows.Next() {
+		var item model.AIUsageHistoryItem
+		var createdAt time.Time
+		var genID, mimeType, fileID, folderID *string
+		if err := rows.Scan(
+			&item.ID, &createdAt, &item.Mode, &item.Prompt, &item.CreditCost,
+			&item.QuotaCreditsUsed, &item.WalletCentsCharged,
+			&genID, &mimeType, &fileID, &folderID,
+		); err != nil {
+			return nil, err
+		}
+		item.CreatedAt = createdAt.UTC().Format(time.RFC3339)
+		item.GenerationID = genID
+		item.WorkspaceFileID = fileID
+		item.AIContentFolderID = folderID
+		if mimeType != nil {
+			item.MimeType = *mimeType
+		}
+		if genID != nil && *genID != "" {
+			item.PreviewURL = model.AIGenerationMediaPath(*genID)
+		}
+		out = append(out, item)
+	}
+	return out, rows.Err()
 }

@@ -35,6 +35,11 @@ type aiDebitResult struct {
 	WalletCentsCharged int64
 }
 
+type AIDebitOutcome struct {
+	WalletCentsCharged int
+	QuotaCreditsUsed   int
+}
+
 func (s *AIBillingService) kopecksPerCredit(ctx context.Context) (int, error) {
 	settings, err := s.kie.Get(ctx)
 	if err != nil {
@@ -79,15 +84,18 @@ func (s *AIBillingService) PrefailCheck(ctx context.Context, workspaceID, userID
 	return ErrInsufficientAICredits
 }
 
-func (s *AIBillingService) DebitAfterSuccess(ctx context.Context, workspaceID, userID, generationID string, creditCost int) (int, error) {
+func (s *AIBillingService) DebitAfterSuccess(ctx context.Context, workspaceID, userID, generationID string, creditCost int) (AIDebitOutcome, error) {
 	if creditCost <= 0 {
-		return 0, nil
+		return AIDebitOutcome{}, nil
 	}
 	result, err := s.debit(ctx, workspaceID, userID, generationID, creditCost)
 	if err != nil {
-		return 0, err
+		return AIDebitOutcome{}, err
 	}
-	return int(result.WalletCentsCharged), nil
+	return AIDebitOutcome{
+		WalletCentsCharged: int(result.WalletCentsCharged),
+		QuotaCreditsUsed:   result.QuotaUsed,
+	}, nil
 }
 
 func (s *AIBillingService) debit(ctx context.Context, workspaceID, userID, generationID string, creditCost int) (aiDebitResult, error) {

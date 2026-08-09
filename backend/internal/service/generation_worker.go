@@ -248,10 +248,19 @@ func (s *GenerationService) finalizeJob(ctx context.Context, jobID string) error
 		return err
 	}
 
-	walletCents, err := s.aiBilling.DebitAfterSuccess(ctx, job.WorkspaceID, job.UserID, record.ID, job.CreditCost)
+	if s.fileStorage != nil {
+		wf, regErr := s.fileStorage.RegisterAIGenerationFile(ctx, job.WorkspaceID, job.UserID, record, int64(len(data)))
+		if regErr != nil {
+			slog.Warn("register ai generation file", "generation_id", record.ID, "err", regErr)
+		} else if wf != nil {
+			_ = s.genRepo.SetWorkspaceFileID(ctx, record.ID, wf.ID)
+		}
+	}
+
+	debit, err := s.aiBilling.DebitAfterSuccess(ctx, job.WorkspaceID, job.UserID, record.ID, job.CreditCost)
 	if err != nil {
 		return err
 	}
 
-	return s.jobRepo.MarkSucceeded(ctx, job.ID, record.ID, walletCents)
+	return s.jobRepo.MarkSucceeded(ctx, job.ID, record.ID, debit.WalletCentsCharged, debit.QuotaCreditsUsed)
 }

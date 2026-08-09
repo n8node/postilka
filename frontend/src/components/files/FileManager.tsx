@@ -98,7 +98,13 @@ function formatFileMeta(file: WorkspaceFile) {
   return parts.join(" · ");
 }
 
-export function FileManager() {
+export function FileManager({
+  initialFolderId = null,
+  initialFileId = null,
+}: {
+  initialFolderId?: string | null;
+  initialFileId?: string | null;
+}) {
   const { active_workspace } = useAuth();
   const canEdit = useMemo(() => {
     const role = active_workspace?.role ?? "owner";
@@ -149,6 +155,16 @@ export function FileManager() {
       setLoading(false);
     }
   }, [section, folderId, active_workspace?.id]);
+
+  useEffect(() => {
+    if (initialFolderId) {
+      setSection("my-files");
+      setFolderId(initialFolderId);
+    }
+    if (initialFileId) {
+      setPreviewFileId(initialFileId);
+    }
+  }, [initialFolderId, initialFileId]);
 
   useEffect(() => {
     void refresh();
@@ -592,17 +608,36 @@ export function FileManager() {
                         onClick={() => setFolderId(fo.id)}
                         className="flex min-w-0 flex-1 items-center gap-3 text-left"
                       >
-                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-border bg-amber-50">
-                          <Folder className="h-5 w-5 text-amber-500" />
+                        <div
+                          className={cn(
+                            "flex h-11 w-11 shrink-0 items-center justify-center rounded-full border",
+                            fo.kind === "ai_content"
+                              ? "border-emerald-200 bg-emerald-50"
+                              : "border-border bg-amber-50",
+                          )}
+                        >
+                          <Folder
+                            className={cn(
+                              "h-5 w-5",
+                              fo.kind === "ai_content" ? "text-emerald-600" : "text-amber-500",
+                            )}
+                          />
                         </div>
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-medium">{fo.name}</p>
+                          <p
+                            className={cn(
+                              "truncate text-sm font-medium",
+                              fo.kind === "ai_content" && "text-emerald-900",
+                            )}
+                          >
+                            {fo.name}
+                          </p>
                           <p className="text-xs text-muted">
                             Папка · Файлов: {fo.files_count ?? 0} · {formatFileTime(fo.created_at)}
                           </p>
                         </div>
                       </button>
-                      {canEdit && (
+                      {canEdit && fo.kind !== "ai_content" && (
                         <button
                           type="button"
                           title="Переименовать"

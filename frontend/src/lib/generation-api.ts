@@ -104,6 +104,26 @@ export async function fetchGenerationPricing() {
   }
 }
 
+export async function fetchGenerationUsageHistory(limit = 50) {
+  const qs = limit > 0 ? `?limit=${limit}` : "";
+  return apiFetch<{ items: AIUsageHistoryItem[] }>(`/generation/usage-history${qs}`);
+}
+
+export type AIUsageHistoryItem = {
+  id: string;
+  created_at: string;
+  mode: string;
+  prompt: string;
+  credit_cost: number;
+  quota_credits_used: number;
+  wallet_cents_charged: number;
+  generation_id?: string | null;
+  workspace_file_id?: string | null;
+  ai_content_folder_id?: string | null;
+  preview_url?: string;
+  mime_type?: string;
+};
+
 export type GenerateImageBody = {
   mode: GenerationModeId;
   prompt: string;

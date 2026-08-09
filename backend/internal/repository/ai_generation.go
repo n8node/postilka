@@ -119,3 +119,10 @@ func (r *AIGenerationRepository) DeleteByIDs(ctx context.Context, workspaceID st
 	`, workspaceID, ids)
 	return err
 }
+
+func (r *AIGenerationRepository) SetWorkspaceFileID(ctx context.Context, id, fileID string) error {
+	_, err := r.pool.Exec(ctx, `
+		UPDATE ai_generations SET workspace_file_id = $2 WHERE id = $1
+	`, id, fileID)
+	return err
+}

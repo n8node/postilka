@@ -12,6 +12,7 @@ type AIGeneration struct {
 	AspectRatio       string
 	ResultS3Key       string
 	ResultContentType string
+	WorkspaceFileID   *string
 	CreatedAt         time.Time
 }
 
@@ -46,6 +47,21 @@ func (g AIGeneration) ToViewWithUsage(usedInPost bool) AIGenerationView {
 
 func AIGenerationMediaPath(id string) string {
 	return "/api/v1/media/ai-generations/" + id
+}
+
+type AIUsageHistoryItem struct {
+	ID                 string  `json:"id"`
+	CreatedAt          string  `json:"created_at"`
+	Mode               string  `json:"mode"`
+	Prompt             string  `json:"prompt"`
+	CreditCost         int     `json:"credit_cost"`
+	QuotaCreditsUsed   int     `json:"quota_credits_used"`
+	WalletCentsCharged int     `json:"wallet_cents_charged"`
+	GenerationID       *string `json:"generation_id,omitempty"`
+	WorkspaceFileID    *string `json:"workspace_file_id,omitempty"`
+	AIContentFolderID  *string `json:"ai_content_folder_id,omitempty"`
+	PreviewURL         string  `json:"preview_url,omitempty"`
+	MimeType           string  `json:"mime_type,omitempty"`
 }
 
 type GenerationSourceUpload struct {

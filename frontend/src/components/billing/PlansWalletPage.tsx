@@ -18,6 +18,8 @@ import {
   type Plan,
   type SubscribePreview,
 } from "@/lib/api";
+import { fetchGenerationUsageHistory, type AIUsageHistoryItem } from "@/lib/generation-api";
+import { AIUsageHistoryList } from "@/components/billing/AIUsageHistoryList";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { cn } from "@/lib/utils";
 
@@ -51,6 +53,7 @@ export function PlansWalletPage() {
   const [overview, setOverview] = useState<BillingOverview | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [history, setHistory] = useState<PaymentHistoryItem[]>([]);
+  const [aiUsage, setAiUsage] = useState<AIUsageHistoryItem[]>([]);
   const [period, setPeriod] = useState<BillingPeriod>("monthly");
   const [topupRub, setTopupRub] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
@@ -60,14 +63,16 @@ export function PlansWalletPage() {
     setLoading(true);
     setError(null);
     try {
-      const [ov, pl, hist] = await Promise.all([
+      const [ov, pl, hist, usage] = await Promise.all([
         fetchBillingOverview(),
         fetchBillingPlans(),
         fetchBillingPaymentHistory(),
+        fetchGenerationUsageHistory(50),
       ]);
       setOverview(ov);
       setPlans(pl.plans.filter((p) => p.is_active && !p.is_free));
       setHistory(hist.items);
+      setAiUsage(usage.items ?? []);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Не удалось загрузить данные");
     } finally {
@@ -398,6 +403,15 @@ export function PlansWalletPage() {
           </ul>
         </section>
       )}
+
+      <section className="mt-8 rounded-xl border border-border bg-surface p-6 shadow-sm">
+        <h2 className="font-semibold">История списаний AI</h2>
+        <p className="mt-1 text-sm text-muted">
+          Кредиты за успешные генерации. Сначала расходуется квота тарифа, остаток — с кошелька.
+          Файлы сохраняются в папку «AI контент».
+        </p>
+        <AIUsageHistoryList items={aiUsage} />
+      </section>
     </div>
   );
 }

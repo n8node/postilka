@@ -160,7 +160,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	genUploadRepo := repository.NewGenerationSourceUploadRepository(db.Pool)
 	aiBillingSvc := service.NewAIBillingService(quotaSvc, usageRepo, walletRepo, kieSettingsRepo)
 	generationSvc := service.NewGenerationService(
-		kieConfigSvc, genRepo, genJobRepo, genUploadRepo, aiBillingSvc, objectStorage, wsSvc, yandexGptConfigSvc, quotaSvc,
+		kieConfigSvc, genRepo, genJobRepo, genUploadRepo, aiBillingSvc, objectStorage, fileStorageSvc, wsSvc, yandexGptConfigSvc, quotaSvc,
 	)
 	generationHandler := handler.NewGenerationHandler(generationSvc)
 
@@ -297,6 +297,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Post("/generation/generate", generationHandler.Generate)
 			r.Get("/generation/jobs/{id}", generationHandler.GetJob)
 			r.Get("/generation/history", generationHandler.History)
+			r.Get("/generation/usage-history", generationHandler.UsageHistory)
 			r.Post("/generation/history/delete", generationHandler.DeleteHistory)
 			r.Get("/generation/pricing", generationHandler.Pricing)
 			r.Post("/generation/upload", generationHandler.UploadSource)
