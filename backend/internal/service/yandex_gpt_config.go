@@ -317,3 +317,15 @@ func ModelForTask(cfg model.YandexGptStoredConfig, task string) string {
 	}
 	return cfg.ModelDefault
 }
+
+func (s *YandexGptConfigService) Client(ctx context.Context) (*ai.YandexGPTClient, model.YandexGptStoredConfig, error) {
+	rec, err := s.GetStored(ctx)
+	if err != nil {
+		return nil, model.YandexGptStoredConfig{}, err
+	}
+	apiKey, folderID, baseURL, err := s.resolveCredentials(rec.Config, "", "")
+	if err != nil {
+		return nil, model.YandexGptStoredConfig{}, err
+	}
+	return ai.NewYandexGPTClient(baseURL, apiKey, folderID), rec.Config, nil
+}

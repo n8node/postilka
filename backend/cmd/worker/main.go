@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -58,6 +59,26 @@ func main() {
 	fileStorageSvc := service.NewFileStorageService(
 		fileStorageRepo, folderStorageRepo, wsRepo, planRepo, wsSvc, objectStorage, uploadSessions, uploadFileSettingsSvc,
 	)
+
+	kieSettingsRepo := repository.NewKieSettingsRepository(db.Pool)
+	encKey := cfg.EncryptionKey
+	if strings.TrimSpace(encKey) == "" {
+		encKey = cfg.JWTSecret
+	}
+	secretCipher, _ := service.NewSecretCipher(encKey)
+	kieConfigSvc := service.NewKieConfigService(kieSettingsRepo, cfg, secretCipher)
+	yandexGptConfigRepo := repository.NewYandexGptConfigRepository(db.Pool)
+	yandexGptConfigSvc := service.NewYandexGptConfigService(yandexGptConfigRepo, cfg, secretCipher)
+	usageRepo := repository.NewUsageRepository(db.Pool)
+	quotaSvc := service.NewQuotaService(planRepo, wsRepo, subscriptionRepo, usageRepo, channelRepo)
+	genRepo := repository.NewAIGenerationRepository(db.Pool)
+	genJobRepo := repository.NewAIGenerationJobRepository(db.Pool)
+	genUploadRepo := repository.NewGenerationSourceUploadRepository(db.Pool)
+	aiBillingSvc := service.NewAIBillingService(quotaSvc, usageRepo, walletRepo, kieSettingsRepo)
+	generationSvc := service.NewGenerationService(
+		kieConfigSvc, genRepo, genJobRepo, genUploadRepo, aiBillingSvc, objectStorage, wsSvc, yandexGptConfigSvc, quotaSvc,
+	)
+	generationSvc.StartGenerationWorker(ctx)
 
 	logger.Info("worker started", "publish_concurrency", cfg.WorkerPublishConcurrency, "version", config.Version)
 

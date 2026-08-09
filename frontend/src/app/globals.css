@@ -2,6 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --accent: #2563eb;
+  --accent-border: rgba(37, 99, 235, 0.35);
+  --accent-bg: rgba(37, 99, 235, 0.08);
+  --radius-lg: 0.75rem;
+}
+
 body {
   @apply bg-bg text-text antialiased;
 }
@@ -82,4 +89,186 @@ body {
   );
   animation: file-burst-sweep 0.85s ease-out;
   pointer-events: none;
+}
+
+/* AI generation: animated border around placeholder icon */
+.generation-shimmer-wrap {
+  position: relative;
+  display: inline-flex;
+  padding: 2px;
+  border-radius: 12px;
+}
+
+.generation-shimmer-wrap--active::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: conic-gradient(
+    from var(--generation-shimmer-angle, 0deg),
+    var(--accent),
+    #5b8def,
+    #a855f7,
+    var(--accent)
+  );
+  animation: generation-shimmer-spin 2.4s linear infinite;
+  z-index: 0;
+}
+
+.generation-shimmer-wrap--active::after {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  border-radius: 10px;
+  background: #f5f5f5;
+  z-index: 0;
+}
+
+.generation-shimmer-inner {
+  position: relative;
+  z-index: 1;
+}
+
+@property --generation-shimmer-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes generation-shimmer-spin {
+  to {
+    --generation-shimmer-angle: 360deg;
+  }
+}
+
+.generation-progress-bar {
+  background: linear-gradient(
+    90deg,
+    var(--accent) 0%,
+    #5b8def 50%,
+    var(--accent) 100%
+  );
+  background-size: 200% 100%;
+  animation: generation-progress-shine 2s ease-in-out infinite;
+}
+
+@keyframes generation-progress-shine {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
+  }
+}
+
+.generation-phrase-line {
+  display: block;
+  transition:
+    opacity 0.32s ease,
+    transform 0.32s ease;
+  will-change: opacity, transform;
+}
+
+.generation-phrase-line--visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.generation-phrase-line--hidden {
+  opacity: 0;
+  transform: translateY(5px);
+}
+
+@keyframes generation-slot-shake {
+  0%,
+  100% {
+    transform: translate(0, 0) rotate(0deg);
+  }
+  25% {
+    transform: translate(-1.5px, 0) rotate(-0.6deg);
+  }
+  75% {
+    transform: translate(1.5px, 0) rotate(0.6deg);
+  }
+}
+
+.generation-slot-shake {
+  animation: generation-slot-shake 0.38s ease-in-out infinite;
+}
+
+.generation-drop-target-active {
+  border-radius: var(--radius-lg);
+  box-shadow: 0 0 0 2px var(--accent-border);
+  outline: 2px dashed var(--accent);
+  outline-offset: 3px;
+}
+
+.generation-history-wrap {
+  container-type: inline-size;
+  container-name: generation-history;
+  width: 100%;
+  min-width: 0;
+}
+
+.generation-history-grid {
+  --history-gap: 0.5rem;
+  --history-label: 1.375rem;
+  --history-pad: 0.5rem;
+  --history-thumb: 4rem;
+  --history-row: calc(
+    var(--history-thumb) + var(--history-label) + var(--history-pad) * 2
+  );
+  box-sizing: border-box;
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  gap: var(--history-gap);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-height: calc(4 * var(--history-row) + 3 * var(--history-gap));
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  padding-right: 2px;
+}
+
+.generation-history-grid > button {
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+}
+
+@container generation-history (min-width: 360px) {
+  .generation-history-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@container generation-history (min-width: 480px) {
+  .generation-history-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@container generation-history (min-width: 560px) {
+  .generation-history-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+@container generation-history (min-width: 640px) {
+  .generation-history-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+
+@container generation-history (min-width: 720px) {
+  .generation-history-grid {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+}
+
+.generation-history-item--posted {
+  opacity: 1;
 }

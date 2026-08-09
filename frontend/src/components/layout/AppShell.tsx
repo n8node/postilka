@@ -25,6 +25,8 @@ import { useAuth } from "@/context/AuthContext";
 import { WorkspaceSwitcher } from "@/components/layout/WorkspaceSwitcher";
 import { EmailVerificationBanner } from "@/components/layout/EmailVerificationBanner";
 import { WalletBalanceBadge } from "@/components/billing/WalletBalanceBadge";
+import { GenerationCompleteToast } from "@/components/generation/GenerationCompleteToast";
+import { GenerationJobSync } from "@/components/generation/GenerationJobSync";
 import { cn } from "@/lib/utils";
 
 type NavItem = {
@@ -79,6 +81,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-bg text-text">
+      <GenerationJobSync />
+      <GenerationCompleteToast />
       <aside
         className={cn(
           "sticky top-0 flex h-screen shrink-0 flex-col border-r border-border bg-surface transition-[width] duration-200",

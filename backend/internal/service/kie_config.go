@@ -85,6 +85,12 @@ func (s *KieConfigService) Update(ctx context.Context, in model.KieUpdateRequest
 		}
 		current.TokenCostFilter = *in.TokenCostFilter
 	}
+	if in.KopecksPerMediaCredit != nil {
+		if *in.KopecksPerMediaCredit <= 0 || *in.KopecksPerMediaCredit > 10_000_000 {
+			return model.KieSettingsDTO{}, errors.New("invalid kopecks per media credit")
+		}
+		current.KopecksPerMediaCredit = *in.KopecksPerMediaCredit
+	}
 
 	if in.ModelTextToImage != nil {
 		current.ModelTextToImage = ai.NormalizeKieModelID(*in.ModelTextToImage)
@@ -193,6 +199,24 @@ func (s *KieConfigService) resolveCredentials(ctx context.Context, overrideBaseU
 	return baseURL, apiKey, nil
 }
 
+func (s *KieConfigService) ResolveCredentials(ctx context.Context) (baseURL, apiKey string, err error) {
+	return s.resolveCredentials(ctx, "", "")
+}
+
+func (s *KieConfigService) GetSettings(ctx context.Context) (model.KieSettings, error) {
+	settings, err := s.repo.Get(ctx)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return model.KieSettings{APIBaseURL: ai.DefaultKieBaseURL, KopecksPerMediaCredit: 5000}, nil
+		}
+		return model.KieSettings{}, err
+	}
+	if settings.KopecksPerMediaCredit <= 0 {
+		settings.KopecksPerMediaCredit = 5000
+	}
+	return settings, nil
+}
+
 func toKieSettingsDTO(s model.KieSettings) model.KieSettingsDTO {
 	dto := model.KieSettingsDTO{
 		APIBaseURL:            s.APIBaseURL,
@@ -205,9 +229,17 @@ func toKieSettingsDTO(s model.KieSettings) model.KieSettingsDTO {
 		TokenCostImageToImage: s.TokenCostImageToImage,
 		TokenCostCombine:      s.TokenCostCombine,
 		TokenCostFilter:       s.TokenCostFilter,
+		KopecksPerMediaCredit: positiveKopecksPerCredit(s.KopecksPerMediaCredit),
 	}
 	if !s.UpdatedAt.IsZero() {
 		dto.UpdatedAt = s.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z")
 	}
 	return dto
+}
+
+func positiveKopecksPerCredit(n int) int {
+	if n > 0 {
+		return n
+	}
+	return 5000
 }

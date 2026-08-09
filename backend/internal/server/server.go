@@ -152,8 +152,18 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	fileStorageSvc := service.NewFileStorageService(
 		fileStorageRepo, folderStorageRepo, wsRepo, planRepo, wsSvc, objectStorage, uploadSessions, uploadFileSettingsSvc,
 	)
-	billingHandler := handler.NewBillingHandler(billingSvc, checkoutSvc, wsSvc)
 	fileStorageHandler := handler.NewFileStorageHandler(fileStorageSvc)
+
+	genRepo := repository.NewAIGenerationRepository(db.Pool)
+	genJobRepo := repository.NewAIGenerationJobRepository(db.Pool)
+	genUploadRepo := repository.NewGenerationSourceUploadRepository(db.Pool)
+	aiBillingSvc := service.NewAIBillingService(quotaSvc, usageRepo, walletRepo, kieSettingsRepo)
+	generationSvc := service.NewGenerationService(
+		kieConfigSvc, genRepo, genJobRepo, genUploadRepo, aiBillingSvc, objectStorage, wsSvc, yandexGptConfigSvc, quotaSvc,
+	)
+	generationHandler := handler.NewGenerationHandler(generationSvc)
+
+	billingHandler := handler.NewBillingHandler(billingSvc, checkoutSvc, wsSvc)
 
 	r.Get("/health", health.ServeHTTP)
 
@@ -279,6 +289,18 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Post("/trash/restore", fileStorageHandler.RestoreTrash)
 			r.Post("/trash/empty", fileStorageHandler.EmptyTrash)
 			r.Delete("/trash/{id}", fileStorageHandler.PermanentDeleteTrashItem)
+		})
+
+		r.Group(func(r chi.Router) {
+			r.Use(authMW.Required)
+			r.Post("/generation/generate", generationHandler.Generate)
+			r.Get("/generation/jobs/{id}", generationHandler.GetJob)
+			r.Get("/generation/history", generationHandler.History)
+			r.Post("/generation/history/delete", generationHandler.DeleteHistory)
+			r.Get("/generation/pricing", generationHandler.Pricing)
+			r.Post("/generation/upload", generationHandler.UploadSource)
+			r.Post("/generation/improve-prompt", generationHandler.ImprovePrompt)
+			r.Get("/media/ai-generations/{id}", generationHandler.ResultMedia)
 		})
 
 		r.Route("/admin", func(r chi.Router) {

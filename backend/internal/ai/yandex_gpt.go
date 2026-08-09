@@ -1,6 +1,7 @@
 package ai
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -184,4 +185,93 @@ func YandexModelURI(folderID, modelID string) string {
 		return modelID
 	}
 	return "gpt://" + folderID + "/" + strings.TrimPrefix(modelID, "/")
+}
+
+type ChatMessage struct {
+	Role    string `json:"role"`
+	Content any    `json:"content"`
+}
+
+type ChatCompletionResult struct {
+	Content          string
+	PromptTokens     int
+	CompletionTokens int
+	TotalTokens      int
+	Model            string
+}
+
+func (c *YandexGPTClient) Chat(ctx context.Context, model string, messages []ChatMessage) (ChatCompletionResult, error) {
+	if c.apiKey == "" {
+		return ChatCompletionResult{}, fmt.Errorf("api key not configured")
+	}
+	if c.folderID == "" {
+		return ChatCompletionResult{}, fmt.Errorf("folder id not configured")
+	}
+	model = YandexModelURI(c.folderID, model)
+	if len(messages) == 0 {
+		return ChatCompletionResult{}, fmt.Errorf("messages required")
+	}
+
+	body := map[string]any{
+		"model":    model,
+		"messages": messages,
+	}
+	raw, err := json.Marshal(body)
+	if err != nil {
+		return ChatCompletionResult{}, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL+"/chat/completions", bytes.NewReader(raw))
+	if err != nil {
+		return ChatCompletionResult{}, err
+	}
+	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	req.Header.Set("x-folder-id", c.folderID)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("x-data-logging-enabled", "false")
+
+	res, err := c.client.Do(req)
+	if err != nil {
+		return ChatCompletionResult{}, err
+	}
+	defer res.Body.Close()
+
+	respRaw, err := io.ReadAll(res.Body)
+	if err != nil {
+		return ChatCompletionResult{}, err
+	}
+	if res.StatusCode >= 400 {
+		return ChatCompletionResult{}, fmt.Errorf("yandex gpt chat failed: %s", strings.TrimSpace(string(respRaw)))
+	}
+
+	var parsed struct {
+		Model   string `json:"model"`
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+		Usage struct {
+			PromptTokens     int `json:"prompt_tokens"`
+			CompletionTokens int `json:"completion_tokens"`
+			TotalTokens      int `json:"total_tokens"`
+		} `json:"usage"`
+	}
+	if err := json.Unmarshal(respRaw, &parsed); err != nil {
+		return ChatCompletionResult{}, err
+	}
+	if len(parsed.Choices) == 0 {
+		return ChatCompletionResult{}, fmt.Errorf("empty chat response")
+	}
+	content := strings.TrimSpace(parsed.Choices[0].Message.Content)
+	if content == "" {
+		return ChatCompletionResult{}, fmt.Errorf("empty chat content")
+	}
+	return ChatCompletionResult{
+		Content:          content,
+		PromptTokens:     parsed.Usage.PromptTokens,
+		CompletionTokens: parsed.Usage.CompletionTokens,
+		TotalTokens:      parsed.Usage.TotalTokens,
+		Model:            parsed.Model,
+	}, nil
 }

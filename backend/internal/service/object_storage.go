@@ -1,6 +1,7 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"net/url"
@@ -159,6 +160,23 @@ func (o *ObjectStorage) DeleteObject(ctx context.Context, s3Key string) error {
 	_, err = client.DeleteObject(ctx, &s3.DeleteObjectInput{
 		Bucket: aws.String(st.Bucket),
 		Key:    aws.String(s3Key),
+	})
+	return err
+}
+
+func (o *ObjectStorage) PutObject(ctx context.Context, s3Key, contentType string, data []byte) error {
+	client, st, err := o.client(ctx)
+	if err != nil {
+		return err
+	}
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	_, err = client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket:      aws.String(st.Bucket),
+		Key:         aws.String(s3Key),
+		Body:        bytes.NewReader(data),
+		ContentType: aws.String(contentType),
 	})
 	return err
 }

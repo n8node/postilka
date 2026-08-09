@@ -108,6 +108,26 @@ func (s *QuotaService) RecordPost(ctx context.Context, workspaceID string) error
 	return s.usage.Record(ctx, workspaceID, "posts", 1, periodStart)
 }
 
+func (s *QuotaService) CheckAIMediaCredits(ctx context.Context, workspaceID, userID string, creditCost int) error {
+	// Delegated to AIBillingService.PrefailCheck at call sites; kept for quota layer extension.
+	plan, assignedAt, err := s.getWorkspacePlan(ctx, workspaceID)
+	if err != nil {
+		return err
+	}
+	if plan.AIMediaCreditsQuota == nil {
+		return nil
+	}
+	usage, err := s.GetUsage(ctx, workspaceID, assignedAt)
+	if err != nil {
+		return err
+	}
+	if usage.AIMediaCreditsUsed+creditCost <= *plan.AIMediaCreditsQuota {
+		return nil
+	}
+	_ = userID
+	return ErrQuotaExceeded
+}
+
 func (s *QuotaService) getWorkspacePlan(ctx context.Context, workspaceID string) (*model.Plan, time.Time, error) {
 	planID, assignedAt, err := s.workspaces.GetPlanMeta(ctx, workspaceID)
 	if err != nil {
