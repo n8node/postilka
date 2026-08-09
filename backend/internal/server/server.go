@@ -98,7 +98,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 		telegramProviderSettingsSvc, youtubeAPIClient, wsSvc, quotaSvc, secretCipher, cfg,
 	)
 	channelTestSvc := service.NewChannelTestService(
-		channelRepo, telegramBotClient, youtubeAPIClient, socialProviderSettingsSvc, wsSvc, secretCipher,
+		channelRepo, userRepo, telegramBotClient, youtubeAPIClient, socialProviderSettingsSvc, wsSvc, secretCipher,
 	)
 	telegramSvc := service.NewTelegramService(telegramSettingsSvc, telegramQueueRepo, cfg.TelegramLocalProxy, logger)
 	telegramSettingsSvc.BindRuntimeStatus(telegramSvc.GetRuntimeStatus)
@@ -181,6 +181,8 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 		r.With(authMW.Required).Get("/user/login-identities", oauthHandler.ListIdentities)
 		r.With(authMW.Required).Delete("/user/login-identities/{provider}", oauthHandler.Unlink)
 		r.With(authMW.Required).Patch("/user/email", userHandler.ChangeEmail)
+		r.With(authMW.Required).Patch("/user/timezone", userHandler.ChangeTimezone)
+		r.Get("/user/timezones", userHandler.ListTimezones)
 
 		r.Get("/public/invites", inviteHandler.PublicSystemInvites)
 		r.Get("/public/billing/plans", billingHandler.PublicListPlans)

@@ -11,10 +11,12 @@ import (
 	"github.com/postilka/postilka/internal/model"
 	oauthclient "github.com/postilka/postilka/internal/oauth"
 	"github.com/postilka/postilka/internal/repository"
+	tzpkg "github.com/postilka/postilka/internal/timezone"
 )
 
 type ChannelTestService struct {
 	channels       *repository.ChannelRepository
+	users          *repository.UserRepository
 	botClient      *TelegramBotClient
 	youtubeAPI     *YouTubeAPIClient
 	socialSettings *SocialProviderSettingsService
@@ -25,6 +27,7 @@ type ChannelTestService struct {
 
 func NewChannelTestService(
 	channels *repository.ChannelRepository,
+	users *repository.UserRepository,
 	botClient *TelegramBotClient,
 	youtubeAPI *YouTubeAPIClient,
 	socialSettings *SocialProviderSettingsService,
@@ -33,6 +36,7 @@ func NewChannelTestService(
 ) *ChannelTestService {
 	return &ChannelTestService{
 		channels:       channels,
+		users:          users,
 		botClient:      botClient,
 		youtubeAPI:     youtubeAPI,
 		socialSettings: socialSettings,
@@ -107,11 +111,17 @@ func (s *ChannelTestService) SendTestMessage(
 
 	var publishAt *time.Time
 	if ch.Provider == model.ChannelProviderRutube && strings.TrimSpace(req.PublishAt) != "" {
-		t, err := time.Parse(time.RFC3339, strings.TrimSpace(req.PublishAt))
-		if err != nil {
-			return nil, fmt.Errorf("publish_at: укажите дату в формате RFC3339")
+		userTZ := tzpkg.Default
+		if s.users != nil {
+			if user, err := s.users.GetByID(ctx, userID); err == nil {
+				userTZ = tzpkg.Normalize(user.Timezone)
+			}
 		}
-		publishAt = &t
+		t, err := tzpkg.ParsePublishAt(req.PublishAt, userTZ)
+		if err != nil {
+			return nil, err
+		}
+		publishAt = t
 	}
 
 	postID, sendErr := s.publish(ctx, ch, token, text, title, photoURL, videoURL, contentType, publishAt)

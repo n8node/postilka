@@ -98,6 +98,16 @@ func (r *UserRepository) UpdateEmail(ctx context.Context, userID, email string) 
 	return scanUser(r.pool.QueryRow(ctx, q, userID, email))
 }
 
+func (r *UserRepository) UpdateTimezone(ctx context.Context, userID, timezone string) (*model.User, error) {
+	const q = `
+		UPDATE users
+		SET timezone = $2, updated_at = NOW()
+		WHERE id = $1
+		RETURNING id, email, name, locale, timezone, is_blocked, is_platform_admin, email_verified_at, created_at
+	`
+	return scanUser(r.pool.QueryRow(ctx, q, userID, timezone))
+}
+
 func (r *UserRepository) UpdatePasswordHash(ctx context.Context, userID, passwordHash string) error {
 	tag, err := r.pool.Exec(ctx, `
 		UPDATE users

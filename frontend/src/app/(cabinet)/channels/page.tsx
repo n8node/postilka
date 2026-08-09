@@ -19,6 +19,12 @@ import {
   type ChannelProvider,
 } from "@/lib/api";
 import { channelDisplayName } from "@/lib/channelPresentation";
+import {
+  normalizeTimezone,
+  publishAtPayload,
+  timezoneLabel,
+} from "@/lib/russia-timezones";
+import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
 
 const statusLabel: Record<ChannelListItem["status"], string> = {
@@ -102,6 +108,8 @@ function formatYouTubeReconnectDate(iso: string) {
 }
 
 export default function ChannelsPage() {
+  const { user } = useAuth();
+  const userTimezone = normalizeTimezone(user.timezone);
   const [items, setItems] = useState<ChannelListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -229,7 +237,7 @@ export default function ChannelsPage() {
             title: rutubeVideoTitle.trim() || undefined,
             photo_url: rutubeThumbURL.trim() || undefined,
             publish_at: rutubePublishAt.trim()
-              ? new Date(rutubePublishAt).toISOString()
+              ? publishAtPayload(rutubePublishAt.trim(), userTimezone)
               : undefined,
           };
         }
@@ -511,6 +519,10 @@ export default function ChannelsPage() {
                           onChange={(e) => setRutubePublishAt(e.target.value)}
                           className="w-full rounded-md border border-border bg-white px-2.5 py-1.5 text-sm"
                         />
+                        <p className="text-xs text-muted">
+                          Время указывается в вашей таймзоне:{" "}
+                          {timezoneLabel(userTimezone)}. Изменить — в Настройках.
+                        </p>
                       </label>
                       <p className="text-xs text-muted">
                         Rutube скачивает видео по ссылке. Обработка и конвертация могут занять несколько

@@ -14,6 +14,7 @@ import (
 	"github.com/postilka/postilka/internal/model"
 	pwdpolicy "github.com/postilka/postilka/internal/password"
 	"github.com/postilka/postilka/internal/repository"
+	tzpkg "github.com/postilka/postilka/internal/timezone"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -425,6 +426,26 @@ func (s *AuthService) ChangeEmail(ctx context.Context, userID, newEmail, passwor
 		s.verification.SendRegistrationConfirmationBestEffort(ctx, userID, updated.Email, updated.Name)
 	}
 	return updated, nil
+}
+
+func (s *AuthService) UpdateTimezone(ctx context.Context, userID, timezone string) (*model.User, error) {
+	timezone = strings.TrimSpace(timezone)
+	if err := tzpkg.Validate(timezone); err != nil {
+		return nil, ErrInvalidInput
+	}
+
+	current, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if current.IsBlocked {
+		return nil, ErrUserBlocked
+	}
+	if current.Timezone == timezone {
+		return current, nil
+	}
+
+	return s.users.UpdateTimezone(ctx, userID, timezone)
 }
 
 func (s *AuthService) ResetPassword(ctx context.Context, token, password string) (*AuthResult, error) {

@@ -5,6 +5,7 @@ import { UserInvitesBlock } from "@/components/settings/UserInvitesBlock";
 import { LoginIdentitiesBlock } from "@/components/settings/LoginIdentitiesBlock";
 import { ChangeEmailForm } from "@/components/settings/ChangeEmailForm";
 import { WorkspaceSettingsBlock } from "@/components/settings/WorkspaceSettingsBlock";
+import { TimezoneSettingsBlock } from "@/components/settings/TimezoneSettingsBlock";
 import { useAuth } from "@/context/AuthContext";
 
 export default function SettingsPage() {
@@ -52,20 +53,7 @@ export default function SettingsPage() {
 
         <LoginIdentitiesBlock />
 
-        <section className="rounded-xl border border-border bg-surface p-5 shadow-sm">
-          <h2 className="text-sm font-semibold">Таймзона</h2>
-          <p className="mt-2 text-sm text-muted">
-            Выбор таймзоны для расписания — заглушка. Сейчас используется TZ workspace на
-            бэкенде.
-          </p>
-          <select
-            disabled
-            className="mt-3 w-full rounded-md border border-border bg-bg px-3 py-2 text-sm opacity-60"
-            defaultValue="Europe/Moscow"
-          >
-            <option value="Europe/Moscow">Europe/Moscow</option>
-          </select>
-        </section>
+        <TimezoneSettingsBlock />
       </div>
     </div>
   );

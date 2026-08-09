@@ -272,6 +272,22 @@ export function changeEmail(email: string, password: string) {
   });
 }
 
+export type TimezoneOption = {
+  id: string;
+  label: string;
+};
+
+export function fetchTimezones() {
+  return apiFetch<{ timezones: TimezoneOption[] }>("/user/timezones");
+}
+
+export function changeTimezone(timezone: string) {
+  return apiFetch<{ user: User; message: string }>("/user/timezone", {
+    method: "PATCH",
+    body: JSON.stringify({ timezone }),
+  });
+}
+
 export type WorkspaceInvite = {
   id: string;
   workspace_id: string;
