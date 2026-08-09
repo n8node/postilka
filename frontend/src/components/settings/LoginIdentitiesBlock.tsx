@@ -175,8 +175,7 @@ export function LoginIdentitiesBlock() {
     <section className="rounded-xl border border-border bg-surface p-5 shadow-sm">
       <h2 className="text-sm font-semibold">Вход через соцсети</h2>
       <p className="mt-1 text-sm text-muted">
-        Привяжите аккаунты для быстрого входа без пароля. Доступно всем
-        пользователям, включая администраторов.
+        Привяжите аккаунты для быстрого входа без пароля.
       </p>
 
       {statusMessage && (
