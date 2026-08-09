@@ -163,6 +163,75 @@ export type AdminFilesResponse = {
   stats: AdminFileStats;
 };
 
+export type AdminFileAIGeneration = {
+  generation_id: string;
+  job_id: string;
+  mode: string;
+  prompt: string;
+  model: string;
+  aspect_ratio: string;
+  credit_cost: number;
+  quota_credits_used: number;
+  wallet_cents_charged: number;
+  duration_ms: number;
+  created_at: string;
+};
+
+export type AdminFileDetail = AdminFile & {
+  s3_key: string;
+  ai?: AdminFileAIGeneration | null;
+};
+
+export function fetchAdminFile(fileId: string) {
+  return apiFetch<{ file: AdminFileDetail }>(
+    `/admin/files/${encodeURIComponent(fileId)}`,
+  );
+}
+
+export type AdminAnalyticsOverview = {
+  users_total: number;
+  users_new_in_period: number;
+  workspaces_total: number;
+  channels_total: number;
+  channels_active: number;
+  files_total: number;
+  storage_bytes: number;
+  trash_bytes: number;
+  ai_generations_total: number;
+  ai_generations_succeeded: number;
+  ai_generations_failed: number;
+  ai_credits_spent: number;
+  ai_wallet_cents_spent: number;
+  topups_cents: number;
+  checkouts_cents: number;
+  daily_registrations: { date: string; count: number }[];
+  daily_ai_generations: {
+    date: string;
+    total: number;
+    succeeded: number;
+    failed: number;
+    credits: number;
+    quota_credits: number;
+    wallet_cents: number;
+  }[];
+  daily_topups: { date: string; amount_cents: number; count: number }[];
+  daily_checkouts: { date: string; amount_cents: number; count: number }[];
+  daily_new_files: { date: string; count: number }[];
+  ai_by_mode: { label: string; count: number }[];
+  channels_by_provider: { label: string; count: number }[];
+  files_by_type: { label: string; bytes: number; count: number }[];
+};
+
+export function fetchAdminAnalytics(query?: { from?: string; to?: string }) {
+  const params = new URLSearchParams();
+  if (query?.from) params.set("from", query.from);
+  if (query?.to) params.set("to", query.to);
+  const qs = params.toString();
+  return apiFetch<{ from: string; to: string; overview: AdminAnalyticsOverview }>(
+    `/admin/analytics${qs ? `?${qs}` : ""}`,
+  );
+}
+
 export type AdminFolderListItem = {
   id: string;
   name: string;

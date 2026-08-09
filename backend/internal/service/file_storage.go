@@ -438,6 +438,18 @@ func (s *FileStorageService) MoveFolder(ctx context.Context, userID string, r *h
 	return f, err
 }
 
+func (s *FileStorageService) GetFile(ctx context.Context, userID string, r *http.Request, fileID string) (*model.WorkspaceFile, error) {
+	ws, err := s.resolveWorkspace(ctx, userID, r, model.RoleViewer)
+	if err != nil {
+		return nil, err
+	}
+	f, err := s.files.GetByID(ctx, ws.ID, fileID, false)
+	if errors.Is(err, repository.ErrNotFound) {
+		return nil, ErrFileNotFound
+	}
+	return f, err
+}
+
 func (s *FileStorageService) DownloadURL(ctx context.Context, userID string, r *http.Request, fileID string, inline bool) (string, int, error) {
 	ws, err := s.resolveWorkspace(ctx, userID, r, model.RoleViewer)
 	if err != nil {

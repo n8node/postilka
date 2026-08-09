@@ -45,6 +45,7 @@ import {
   getStorageStats,
   listFiles,
   listFolders,
+  getFile,
   listTrash,
   permanentDeleteTrash,
   renameFile,
@@ -106,13 +107,14 @@ export function FileManager({
   initialFileId?: string | null;
 }) {
   const { active_workspace } = useAuth();
+  const deepLinkFileIdRef = useRef(initialFileId);
   const canEdit = useMemo(() => {
     const role = active_workspace?.role ?? "owner";
     return role === "owner" || role === "admin" || role === "editor";
   }, [active_workspace?.role]);
 
   const [section, setSection] = useState<FilesSection>("my-files");
-  const [folderId, setFolderId] = useState<string | null>(null);
+  const [folderId, setFolderId] = useState<string | null>(initialFolderId ?? null);
   const [folderTrail, setFolderTrail] = useState<FolderBreadcrumb[]>([]);
   const [files, setFiles] = useState<WorkspaceFile[]>([]);
   const [folders, setFolders] = useState<WorkspaceFolder[]>([]);
@@ -124,7 +126,8 @@ export function FileManager({
   const [uploadJobs, setUploadJobs] = useState<UploadJob[]>([]);
   const [appearIds, setAppearIds] = useState<Set<string>>(new Set());
   const [moveDialog, setMoveDialog] = useState<{ mode: "move" | "copy" } | null>(null);
-  const [previewFileId, setPreviewFileId] = useState<string | null>(null);
+  const [previewFileId, setPreviewFileId] = useState<string | null>(initialFileId ?? null);
+  const [deepLinkFile, setDeepLinkFile] = useState<WorkspaceFile | null>(null);
   const [mediaGridMode, setMediaGridMode] = useState<MediaGridMode>("compact");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -148,7 +151,11 @@ export function FileManager({
       }
       setSelected(new Set());
       setSelectedKinds(new Map());
-      setPreviewFileId(null);
+      const keepPreview = Boolean(deepLinkFileIdRef.current);
+      if (!keepPreview) {
+        setPreviewFileId(null);
+        setDeepLinkFile(null);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Ошибка загрузки");
     } finally {
@@ -157,6 +164,7 @@ export function FileManager({
   }, [section, folderId, active_workspace?.id]);
 
   useEffect(() => {
+    deepLinkFileIdRef.current = initialFileId;
     if (initialFolderId) {
       setSection("my-files");
       setFolderId(initialFolderId);
@@ -165,6 +173,29 @@ export function FileManager({
       setPreviewFileId(initialFileId);
     }
   }, [initialFolderId, initialFileId]);
+
+  useEffect(() => {
+    const targetId = previewFileId ?? deepLinkFileIdRef.current;
+    if (!targetId) {
+      setDeepLinkFile(null);
+      return;
+    }
+    if (files.some((f) => f.id === targetId)) {
+      setDeepLinkFile(null);
+      return;
+    }
+    let cancelled = false;
+    void getFile(targetId)
+      .then((file) => {
+        if (!cancelled) setDeepLinkFile(file);
+      })
+      .catch(() => {
+        if (!cancelled) setDeepLinkFile(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [previewFileId, files]);
 
   useEffect(() => {
     void refresh();
@@ -369,7 +400,9 @@ export function FileManager({
   const isUploading = workspaceUploadJobs.some(
     (j) => j.status === "pending" || j.status === "uploading",
   );
-  const previewFile = previewFileId ? files.find((f) => f.id === previewFileId) ?? null : null;
+  const previewFile = previewFileId
+    ? files.find((f) => f.id === previewFileId) ?? deepLinkFile
+    : null;
   const isGallerySection = section === "photos" || section === "videos";
 
   const myFilesTitle = useMemo(() => {

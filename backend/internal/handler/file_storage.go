@@ -112,7 +112,17 @@ func (h *FileStorageHandler) ListFiles(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *FileStorageHandler) GetFile(w http.ResponseWriter, r *http.Request) {
-	writeError(w, http.StatusNotFound, "Не найдено")
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
+		return
+	}
+	f, err := h.files.GetFile(r.Context(), userID, r, chi.URLParam(r, "id"))
+	if err != nil {
+		writeFileStorageError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, f)
 }
 
 func (h *FileStorageHandler) PatchFile(w http.ResponseWriter, r *http.Request) {

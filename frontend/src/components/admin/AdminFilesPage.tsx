@@ -5,16 +5,20 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   ApiError,
+  fetchAdminFile,
   fetchAdminFileFolders,
   fetchAdminFiles,
   fetchAdminWorkspaces,
   type AdminFile,
+  type AdminFileDetail,
   type AdminFileStats,
   type AdminFilesQuery,
   type AdminFolderListItem,
   type AdminWorkspaceListItem,
 } from "@/lib/api";
+import { AdminFileDetailPanel } from "@/components/admin/AdminFileDetailPanel";
 import { formatBytes } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 
 const typeLabels: Record<string, string> = {
   image: "Изображения",
@@ -75,6 +79,9 @@ export function AdminFilesPage() {
   const [workspaces, setWorkspaces] = useState<AdminWorkspaceListItem[]>([]);
   const [folders, setFolders] = useState<AdminFolderListItem[]>([]);
   const [uploaderLabel, setUploaderLabel] = useState<string | null>(null);
+  const [selectedFileId, setSelectedFileId] = useState<string | null>(null);
+  const [fileDetail, setFileDetail] = useState<AdminFileDetail | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   useEffect(() => {
     void fetchAdminWorkspaces({ limit: 200 })
@@ -164,6 +171,28 @@ export function AdminFilesPage() {
     return () => window.clearTimeout(t);
   }, [load]);
 
+  useEffect(() => {
+    if (!selectedFileId) {
+      setFileDetail(null);
+      return;
+    }
+    let cancelled = false;
+    setDetailLoading(true);
+    void fetchAdminFile(selectedFileId)
+      .then((res) => {
+        if (!cancelled) setFileDetail(res.file);
+      })
+      .catch(() => {
+        if (!cancelled) setFileDetail(null);
+      })
+      .finally(() => {
+        if (!cancelled) setDetailLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedFileId]);
+
   function clearUploaderFilter() {
     setUploadedBy("");
     setUploaderLabel(null);
@@ -173,7 +202,8 @@ export function AdminFilesPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="flex min-h-[calc(100vh-7rem)] flex-col gap-4 lg:flex-row lg:items-stretch">
+      <div className="min-w-0 flex-1 space-y-4">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Файлы</h1>
@@ -392,7 +422,14 @@ export function AdminFilesPage() {
               {!loading &&
                 !error &&
                 files.map((f) => (
-                  <tr key={f.id} className="hover:bg-slate-50/80">
+                  <tr
+                    key={f.id}
+                    className={cn(
+                      "cursor-pointer hover:bg-slate-50/80",
+                      selectedFileId === f.id && "bg-blue-50/80",
+                    )}
+                    onClick={() => setSelectedFileId(f.id)}
+                  >
                     <td className="px-4 py-3">
                       <p className="max-w-[220px] truncate font-medium text-slate-900">{f.name}</p>
                       <p className="font-mono text-[10px] text-slate-400">{f.id}</p>
@@ -417,6 +454,7 @@ export function AdminFilesPage() {
                           <Link
                             href={`/admin/files?uploaded_by=${f.uploaded_by_user_id}`}
                             className="font-medium text-blue-600 hover:underline"
+                            onClick={(e) => e.stopPropagation()}
                           >
                             {f.uploader_name || f.uploader_email || "—"}
                           </Link>
@@ -451,6 +489,15 @@ export function AdminFilesPage() {
           </table>
         </div>
       </div>
+      </div>
+      <AdminFileDetailPanel
+        file={fileDetail}
+        loading={detailLoading}
+        onClose={() => {
+          setSelectedFileId(null);
+          setFileDetail(null);
+        }}
+      />
     </div>
   );
 }

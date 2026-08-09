@@ -64,6 +64,10 @@ export function getStorageStats() {
   return apiFetch<StorageStats>("/storage");
 }
 
+export function getFile(fileId: string) {
+  return apiFetch<WorkspaceFile>(`/files/${encodeURIComponent(fileId)}`);
+}
+
 export function listFiles(section: FilesSection, folderId?: string | null) {
   const params = new URLSearchParams({ section });
   if (folderId) params.set("folder_id", folderId);

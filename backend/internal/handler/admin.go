@@ -23,6 +23,7 @@ type AdminHandler struct {
 	workspaces   *service.AdminWorkspaceService
 	files        *repository.WorkspaceFileRepository
 	folders      *repository.WorkspaceFolderRepository
+	analytics    *repository.AdminAnalyticsRepository
 }
 
 func NewAdminHandler(
@@ -34,10 +35,11 @@ func NewAdminHandler(
 	workspaces *service.AdminWorkspaceService,
 	files *repository.WorkspaceFileRepository,
 	folders *repository.WorkspaceFolderRepository,
+	analytics *repository.AdminAnalyticsRepository,
 ) *AdminHandler {
 	return &AdminHandler{
 		users: users, adminUsers: adminUsers, adminWallet: adminWallet, plans: plans, oauth: oauth, workspaces: workspaces,
-		files: files, folders: folders,
+		files: files, folders: folders, analytics: analytics,
 	}
 }
 

@@ -1,11 +1,13 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/postilka/postilka/internal/model"
 	"github.com/postilka/postilka/internal/repository"
 )
@@ -84,6 +86,24 @@ func (h *AdminHandler) ListFileFolders(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"folders": items})
+}
+
+func (h *AdminHandler) GetFile(w http.ResponseWriter, r *http.Request) {
+	fileID := strings.TrimSpace(chi.URLParam(r, "fileID"))
+	if fileID == "" {
+		writeError(w, http.StatusBadRequest, "Укажите id файла")
+		return
+	}
+	detail, err := h.files.GetForAdmin(r.Context(), fileID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "Файл не найден")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "Не удалось загрузить файл")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"file": detail})
 }
 
 func parseOptionalDate(raw string) (*time.Time, bool) {

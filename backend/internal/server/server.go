@@ -125,7 +125,8 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	wsHandler := handler.NewWorkspaceHandler(wsSvc, cfg)
 	fileStorageRepo := repository.NewWorkspaceFileRepository(db.Pool)
 	folderStorageRepo := repository.NewWorkspaceFolderRepository(db.Pool)
-	adminHandler := handler.NewAdminHandler(userRepo, adminUserSvc, adminWalletSvc, planSvc, oauthSvc, adminWorkspaceSvc, fileStorageRepo, folderStorageRepo)
+	adminAnalyticsRepo := repository.NewAdminAnalyticsRepository(db.Pool)
+	adminHandler := handler.NewAdminHandler(userRepo, adminUserSvc, adminWalletSvc, planSvc, oauthSvc, adminWorkspaceSvc, fileStorageRepo, folderStorageRepo, adminAnalyticsRepo)
 	inviteHandler := handler.NewInviteHandler(inviteSvc, oauthSvc)
 	adminInviteHandler := handler.NewAdminInviteHandler(inviteSvc, userRepo, oauthSvc)
 	smtpHandler := handler.NewSMTPSettingsHandler(smtpSettingsSvc, emailSvc)
@@ -272,6 +273,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Get("/files", fileStorageHandler.ListFiles)
 			r.Post("/files/bulk", fileStorageHandler.BulkFiles)
 			r.Route("/files/{id}", func(r chi.Router) {
+				r.Get("/", fileStorageHandler.GetFile)
 				r.Patch("/", fileStorageHandler.PatchFile)
 				r.Delete("/", fileStorageHandler.DeleteFile)
 				r.Get("/download", fileStorageHandler.DownloadFile)
@@ -384,6 +386,8 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 
 				r.Get("/files", adminHandler.ListFiles)
 				r.Get("/files/folders", adminHandler.ListFileFolders)
+				r.Get("/files/{fileID}", adminHandler.GetFile)
+				r.Get("/analytics", adminHandler.Analytics)
 			})
 		})
 	})

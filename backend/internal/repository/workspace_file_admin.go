@@ -215,3 +215,96 @@ func scanAdminFileRow(row pgx.Row) (*model.AdminFileListItem, error) {
 	}
 	return &item, nil
 }
+
+func (r *WorkspaceFileRepository) GetForAdmin(ctx context.Context, fileID string) (*model.AdminFileDetail, error) {
+	var detail model.AdminFileDetail
+	var folderID, folderName, uploadedBy, uploaderEmail, uploaderName *string
+	var mediaMeta []byte
+	var deletedAt *time.Time
+	var aiGenID, aiJobID, aiMode, aiPrompt, aiModel, aiAspect *string
+	var aiCreditCost, aiQuotaUsed, aiWalletCents, aiDuration *int
+	var aiCreatedAt *time.Time
+
+	err := r.pool.QueryRow(ctx, `
+		SELECT
+			f.id, f.workspace_id, w.name,
+			f.folder_id, fo.name,
+			f.uploaded_by_user_id, u.email, u.name,
+			f.name, f.mime_type, f.size, f.s3_key, f.media_metadata,
+			f.deleted_at, f.created_at, f.updated_at,
+			g.id, j.id, j.mode, j.prompt, j.model, j.aspect_ratio,
+			j.credit_cost, j.quota_credits_used, j.wallet_cents_charged, j.duration_ms, j.created_at
+		FROM workspace_files f
+		JOIN workspaces w ON w.id = f.workspace_id
+		LEFT JOIN workspace_folders fo ON fo.id = f.folder_id
+		LEFT JOIN users u ON u.id = f.uploaded_by_user_id
+		LEFT JOIN ai_generations g ON g.workspace_file_id = f.id
+		LEFT JOIN LATERAL (
+			SELECT j.id, j.mode, j.prompt, j.model, j.aspect_ratio,
+				j.credit_cost, j.quota_credits_used, j.wallet_cents_charged, j.duration_ms, j.created_at
+			FROM ai_generation_jobs j
+			WHERE j.generation_id = g.id AND j.status = 'succeeded'
+			ORDER BY j.created_at DESC
+			LIMIT 1
+		) j ON true
+		WHERE f.id = $1
+	`, fileID).Scan(
+		&detail.ID, &detail.WorkspaceID, &detail.WorkspaceName,
+		&folderID, &folderName,
+		&uploadedBy, &uploaderEmail, &uploaderName,
+		&detail.Name, &detail.MimeType, &detail.Size, &detail.S3Key, &mediaMeta,
+		&deletedAt, &detail.CreatedAt, &detail.UpdatedAt,
+		&aiGenID, &aiJobID, &aiMode, &aiPrompt, &aiModel, &aiAspect,
+		&aiCreditCost, &aiQuotaUsed, &aiWalletCents, &aiDuration, &aiCreatedAt,
+	)
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, ErrNotFound
+		}
+		return nil, err
+	}
+	detail.FolderID = folderID
+	detail.FolderName = folderName
+	detail.UploadedByUserID = uploadedBy
+	detail.UploaderEmail = uploaderEmail
+	detail.UploaderName = uploaderName
+	detail.DeletedAt = deletedAt
+	if len(mediaMeta) > 0 {
+		detail.MediaMetadata = json.RawMessage(mediaMeta)
+	}
+	if aiGenID != nil && *aiGenID != "" && aiJobID != nil && *aiJobID != "" {
+		ai := model.AdminFileAIGeneration{
+			GenerationID: *aiGenID,
+			JobID:        *aiJobID,
+		}
+		if aiMode != nil {
+			ai.Mode = *aiMode
+		}
+		if aiPrompt != nil {
+			ai.Prompt = *aiPrompt
+		}
+		if aiModel != nil {
+			ai.Model = *aiModel
+		}
+		if aiAspect != nil {
+			ai.AspectRatio = *aiAspect
+		}
+		if aiCreditCost != nil {
+			ai.CreditCost = *aiCreditCost
+		}
+		if aiQuotaUsed != nil {
+			ai.QuotaCreditsUsed = *aiQuotaUsed
+		}
+		if aiWalletCents != nil {
+			ai.WalletCentsCharged = *aiWalletCents
+		}
+		if aiDuration != nil {
+			ai.DurationMs = *aiDuration
+		}
+		if aiCreatedAt != nil {
+			ai.CreatedAt = aiCreatedAt.UTC().Format(time.RFC3339)
+		}
+		detail.AI = &ai
+	}
+	return &detail, nil
+}
