@@ -23,3 +23,11 @@ type WorkspaceInvite struct {
 	ExpiresAt   time.Time             `json:"expires_at"`
 	CreatedAt   time.Time             `json:"created_at"`
 }
+
+// WorkspaceInvitePreview is public invite metadata for accept flow routing.
+type WorkspaceInvitePreview struct {
+	WorkspaceName string `json:"workspace_name"`
+	Email         string `json:"email"`
+	Role          string `json:"role"`
+	UserExists    bool   `json:"user_exists"`
+}

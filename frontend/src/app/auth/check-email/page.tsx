@@ -2,12 +2,14 @@ import Link from "next/link";
 import { CheckEmailResend } from "@/components/auth/CheckEmailResend";
 
 type PageProps = {
-  searchParams: Promise<{ email?: string }>;
+  searchParams: Promise<{ email?: string; next?: string; workspace_invite?: string }>;
 };
 
 export default async function CheckEmailPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const email = params.email?.trim() ?? "";
+  const nextPath = params.next?.trim() ?? "";
+  const isWorkspaceInvite = params.workspace_invite === "1";
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-16">
@@ -45,13 +47,22 @@ export default async function CheckEmailPage({ searchParams }: PageProps) {
             После подтверждения вы сможете войти в Postilka и пользоваться
             сервисом.
           </p>
+          {isWorkspaceInvite && (
+            <p>
+              Затем мы вернём вас к принятию приглашения в воркфлоу.
+            </p>
+          )}
         </div>
 
         <CheckEmailResend email={email} />
 
         <div className="mt-4">
           <Link
-            href="/auth/login"
+            href={
+              nextPath
+                ? `/auth/login?email=${encodeURIComponent(email)}&next=${encodeURIComponent(nextPath)}`
+                : "/auth/login"
+            }
             className="block text-center text-sm text-accent hover:underline"
           >
             Перейти ко входу

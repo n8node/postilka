@@ -138,7 +138,7 @@ func (s *WorkspaceInviteService) Accept(ctx context.Context, userID, rawToken st
 	return ws, nil
 }
 
-func (s *WorkspaceInviteService) Preview(ctx context.Context, rawToken string) (map[string]string, error) {
+func (s *WorkspaceInviteService) Preview(ctx context.Context, rawToken string) (*model.WorkspaceInvitePreview, error) {
 	rawToken = strings.TrimSpace(rawToken)
 	if rawToken == "" {
 		return nil, ErrWorkspaceInviteInvalid
@@ -152,11 +152,37 @@ func (s *WorkspaceInviteService) Preview(ctx context.Context, rawToken string) (
 	if err != nil {
 		return nil, err
 	}
-	return map[string]string{
-		"workspace_name": ws.Name,
-		"email":          inv.Email,
-		"role":           string(inv.Role),
+
+	userExists := false
+	if _, _, err := s.users.GetByEmail(ctx, inv.Email); err == nil {
+		userExists = true
+	} else if !errors.Is(err, repository.ErrNotFound) {
+		return nil, err
+	}
+
+	return &model.WorkspaceInvitePreview{
+		WorkspaceName: ws.Name,
+		Email:         inv.Email,
+		Role:          string(inv.Role),
+		UserExists:    userExists,
 	}, nil
+}
+
+// ValidateTokenForEmail checks that the invite token is valid and matches the email.
+func (s *WorkspaceInviteService) ValidateTokenForEmail(ctx context.Context, rawToken, email string) error {
+	rawToken = strings.TrimSpace(rawToken)
+	if rawToken == "" {
+		return ErrWorkspaceInviteInvalid
+	}
+	tokenHash := hexEncodeTokenHash(hashVerificationToken(rawToken))
+	inv, err := s.invites.FindValidByTokenHash(ctx, tokenHash)
+	if err != nil {
+		return ErrWorkspaceInviteInvalid
+	}
+	if normalizeEmail(inv.Email) != normalizeEmail(email) {
+		return ErrWorkspaceInviteEmail
+	}
+	return nil
 }
 
 func hexEncodeTokenHash(hash []byte) string {

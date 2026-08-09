@@ -16,6 +16,9 @@ type Plan struct {
 	MaxChannels           *int      `json:"max_channels"`
 	MaxPostsPerPeriod     *int      `json:"max_posts_per_period"`
 	MaxSeats              *int      `json:"max_seats"`
+	MaxWorkflows          *int      `json:"max_workflows"`
+	MaxWorkflowInvites    *int      `json:"max_workflow_invites"`
+	PushOnReady           bool      `json:"push_on_ready"`
 	StorageBytes          *int64    `json:"storage_bytes"`
 	MaxFileSizeBytes      *int64    `json:"max_file_size_bytes"`
 	TrashRetentionDays    int       `json:"trash_retention_days"`

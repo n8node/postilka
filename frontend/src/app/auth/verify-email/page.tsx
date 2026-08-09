@@ -4,11 +4,16 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { ApiError, verifyEmail } from "@/lib/api";
+import {
+  clearPendingWorkspaceInvite,
+  getPendingWorkspaceInvite,
+} from "@/lib/workspace-invite-cookie";
 
 function VerifyEmailContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token")?.trim() ?? "";
+  const nextPath = searchParams.get("next")?.trim() ?? "";
   const [status, setStatus] = useState<"loading" | "success" | "error">(
     token ? "loading" : "error",
   );
@@ -27,8 +32,19 @@ function VerifyEmailContent() {
       .then(() => {
         if (cancelled) return;
         setStatus("success");
-        setMessage("Email подтверждён. Переходим в приложение…");
-        router.replace("/dashboard");
+        setMessage("Email подтверждён. Переходим…");
+
+        const pendingInvite = getPendingWorkspaceInvite();
+        if (pendingInvite) {
+          clearPendingWorkspaceInvite();
+          router.replace(
+            `/auth/accept-invite?token=${encodeURIComponent(pendingInvite)}`,
+          );
+          router.refresh();
+          return;
+        }
+
+        router.replace(nextPath || "/dashboard");
         router.refresh();
       })
       .catch((err) => {
@@ -44,7 +60,7 @@ function VerifyEmailContent() {
     return () => {
       cancelled = true;
     };
-  }, [token, router]);
+  }, [token, nextPath, router]);
 
   return (
     <div className="rounded-xl border border-white/60 bg-surface/90 p-6 shadow-sm backdrop-blur-sm">

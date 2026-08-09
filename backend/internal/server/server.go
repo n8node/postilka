@@ -106,14 +106,14 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	telegramHealthMonitor := service.NewTelegramHealthMonitor(telegramSvc, emailSvc, userRepo, cfg, logger)
 	telegramHealthMonitor.Start()
 
-	authSvc := service.NewAuthService(userRepo, wsRepo, planRepo, inviteSvc, db.Pool, authMW, emailVerificationSvc, passwordResetSvc, telegramSvc)
+	wsInviteRepo := repository.NewWorkspaceInviteRepository(db.Pool)
+	wsInviteSvc := service.NewWorkspaceInviteService(wsInviteRepo, wsRepo, userRepo, wsSvc, txEmailSvc, cfg, logger)
+
+	authSvc := service.NewAuthService(userRepo, wsRepo, planRepo, inviteSvc, wsInviteSvc, db.Pool, authMW, emailVerificationSvc, passwordResetSvc, telegramSvc)
 	emailVerificationSvc.BindTelegram(telegramSvc)
 
 	checkoutSvc := service.NewCheckoutService(planCheckoutRepo, walletRepo, planRepo, wsRepo, userRepo, paymentSettingsSvc, subscriptionSvc, wsSvc, txEmailSvc, telegramSvc, cfg)
 	billingSvc := service.NewBillingService(planRepo, wsRepo, walletRepo, planCheckoutRepo, paymentSettingsSvc, quotaSvc, subscriptionSvc, wsSvc)
-
-	wsInviteRepo := repository.NewWorkspaceInviteRepository(db.Pool)
-	wsInviteSvc := service.NewWorkspaceInviteService(wsInviteRepo, wsRepo, userRepo, wsSvc, txEmailSvc, cfg, logger)
 
 	health := handler.NewHealthHandler(cfg, db)
 	status := handler.NewStatusHandler(cfg)

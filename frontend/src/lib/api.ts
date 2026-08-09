@@ -67,6 +67,9 @@ export type Plan = {
   max_channels: number | null;
   max_posts_per_period: number | null;
   max_seats: number | null;
+  max_workflows: number | null;
+  max_workflow_invites: number | null;
+  push_on_ready: boolean;
   storage_bytes: number | null;
   max_file_size_bytes: number | null;
   trash_retention_days: number;
@@ -90,6 +93,9 @@ export type PlanInput = {
   max_channels?: number | null;
   max_posts_per_period?: number | null;
   max_seats?: number | null;
+  max_workflows?: number | null;
+  max_workflow_invites?: number | null;
+  push_on_ready?: boolean;
   storage_bytes?: number | null;
   max_file_size_bytes?: number | null;
   trash_retention_days?: number;
@@ -222,6 +228,7 @@ export function register(
   password: string,
   name?: string,
   inviteCode?: string,
+  workspaceInviteToken?: string,
 ) {
   return apiFetch<RegisterResponse>("/auth/register", {
     method: "POST",
@@ -230,6 +237,7 @@ export function register(
       password,
       name,
       invite_code: inviteCode,
+      workspace_invite_token: workspaceInviteToken,
     }),
   });
 }
@@ -327,9 +335,12 @@ export function acceptWorkspaceInvite(token: string) {
 }
 
 export function previewWorkspaceInvite(token: string) {
-  return apiFetch<{ workspace_name: string; email: string; role: string }>(
-    `/public/workspace-invites/preview?token=${encodeURIComponent(token)}`,
-  );
+  return apiFetch<{
+    workspace_name: string;
+    email: string;
+    role: string;
+    user_exists: boolean;
+  }>(`/public/workspace-invites/preview?token=${encodeURIComponent(token)}`);
 }
 
 export function resetPassword(token: string, password: string) {

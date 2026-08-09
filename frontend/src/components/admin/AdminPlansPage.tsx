@@ -39,6 +39,9 @@ function emptyForm(): PlanInput {
     max_channels: 3,
     max_posts_per_period: 100,
     max_seats: 3,
+    max_workflows: 1,
+    max_workflow_invites: 3,
+    push_on_ready: false,
     storage_bytes: 5 * 1024 * 1024 * 1024,
     max_file_size_bytes: 100 * 1024 * 1024,
     trash_retention_days: 7,
@@ -62,6 +65,9 @@ function planToForm(p: Plan): PlanInput {
     max_channels: p.max_channels,
     max_posts_per_period: p.max_posts_per_period,
     max_seats: p.max_seats,
+    max_workflows: p.max_workflows,
+    max_workflow_invites: p.max_workflow_invites,
+    push_on_ready: p.push_on_ready,
     storage_bytes: p.storage_bytes,
     max_file_size_bytes: p.max_file_size_bytes,
     trash_retention_days: p.trash_retention_days,
@@ -153,7 +159,8 @@ export function AdminPlansPage() {
                 <th className="px-4 py-3">Цена / мес</th>
                 <th className="px-4 py-3">Каналы</th>
                 <th className="px-4 py-3">Посты</th>
-                <th className="px-4 py-3">Seats</th>
+                <th className="px-4 py-3">Участники</th>
+                <th className="px-4 py-3">Воркфлоу</th>
                 <th className="px-4 py-3">Статус</th>
                 <th className="px-4 py-3" />
               </tr>
@@ -161,21 +168,21 @@ export function AdminPlansPage() {
             <tbody className="divide-y divide-slate-100">
               {loading && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-10 text-center text-slate-500">
+                  <td colSpan={9} className="px-4 py-10 text-center text-slate-500">
                     Загрузка…
                   </td>
                 </tr>
               )}
               {!loading && error && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-10 text-center text-rose-600">
+                  <td colSpan={9} className="px-4 py-10 text-center text-rose-600">
                     {error}
                   </td>
                 </tr>
               )}
               {!loading && !error && plans.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="px-4 py-10 text-center text-slate-500">
+                  <td colSpan={9} className="px-4 py-10 text-center text-slate-500">
                     Тарифов нет
                   </td>
                 </tr>
@@ -197,6 +204,7 @@ export function AdminPlansPage() {
                     <td className="px-4 py-3">{formatQuota(p.max_channels)}</td>
                     <td className="px-4 py-3">{formatQuota(p.max_posts_per_period)}</td>
                     <td className="px-4 py-3">{formatQuota(p.max_seats)}</td>
+                    <td className="px-4 py-3">{formatQuota(p.max_workflows)}</td>
                     <td className="px-4 py-3">
                       <span
                         className={cn(
@@ -387,11 +395,31 @@ function PlanFormModal({
             />
           </label>
           <label className="text-xs font-medium text-slate-500">
-            Seats
+            Участники (пусто = ∞)
             <input
               value={form.max_seats ?? ""}
               onChange={(e) =>
                 setField("max_seats", parseOptionalInt(e.target.value))
+              }
+              className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="text-xs font-medium text-slate-500">
+            Воркфлоу (пусто = ∞)
+            <input
+              value={form.max_workflows ?? ""}
+              onChange={(e) =>
+                setField("max_workflows", parseOptionalInt(e.target.value))
+              }
+              className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="text-xs font-medium text-slate-500">
+            Приглашения в воркфлоу (пусто = ∞)
+            <input
+              value={form.max_workflow_invites ?? ""}
+              onChange={(e) =>
+                setField("max_workflow_invites", parseOptionalInt(e.target.value))
               }
               className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
             />
@@ -432,7 +460,7 @@ function PlanFormModal({
             />
           </label>
           <label className="text-xs font-medium text-slate-500">
-            AI text tokens
+            AI-токены в тарифе
             <input
               value={form.ai_text_tokens_quota ?? ""}
               onChange={(e) =>
@@ -442,7 +470,7 @@ function PlanFormModal({
             />
           </label>
           <label className="text-xs font-medium text-slate-500">
-            AI media credits
+            Медиа-кредиты
             <input
               value={form.ai_media_credits_quota ?? ""}
               onChange={(e) =>
@@ -453,6 +481,14 @@ function PlanFormModal({
               }
               className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
             />
+          </label>
+          <label className="flex items-center gap-2 text-sm text-slate-700">
+            <input
+              type="checkbox"
+              checked={!!form.push_on_ready}
+              onChange={(e) => setField("push_on_ready", e.target.checked)}
+            />
+            Пуш по готовности
           </label>
           <label className="flex items-center gap-2 text-sm text-slate-700">
             <input

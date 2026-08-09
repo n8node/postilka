@@ -36,6 +36,7 @@ type AuthService struct {
 	workspaces    *repository.WorkspaceRepository
 	plans         *repository.PlanRepository
 	invites       *InviteService
+	wsInvites     *WorkspaceInviteService
 	pool          pgxPoolBeginner
 	auth          *middleware.Auth
 	verification  *EmailVerificationService
@@ -48,6 +49,7 @@ func NewAuthService(
 	workspaces *repository.WorkspaceRepository,
 	plans *repository.PlanRepository,
 	invites *InviteService,
+	wsInvites *WorkspaceInviteService,
 	pool pgxPoolBeginner,
 	auth *middleware.Auth,
 	verification *EmailVerificationService,
@@ -56,7 +58,7 @@ func NewAuthService(
 ) *AuthService {
 	return &AuthService{
 		users: users, workspaces: workspaces, plans: plans,
-		invites: invites, pool: pool, auth: auth,
+		invites: invites, wsInvites: wsInvites, pool: pool, auth: auth,
 		verification: verification, passwordReset: passwordReset,
 		telegram: telegram,
 	}
@@ -75,7 +77,7 @@ type RegisterResult struct {
 	Message                   string
 }
 
-func (s *AuthService) Register(ctx context.Context, email, password, name, inviteCode string) (*RegisterResult, error) {
+func (s *AuthService) Register(ctx context.Context, email, password, name, inviteCode, workspaceInviteToken string) (*RegisterResult, error) {
 	email = normalizeEmail(email)
 	if err := validateCredentials(email, password); err != nil {
 		return nil, err
@@ -89,7 +91,16 @@ func (s *AuthService) Register(ctx context.Context, email, password, name, invit
 			return nil, err
 		}
 	}
-	if inviteEnabled && strings.TrimSpace(inviteCode) == "" {
+
+	workspaceInviteBypass := false
+	if inviteEnabled && strings.TrimSpace(inviteCode) == "" && s.wsInvites != nil && strings.TrimSpace(workspaceInviteToken) != "" {
+		if err := s.wsInvites.ValidateTokenForEmail(ctx, workspaceInviteToken, email); err == nil {
+			workspaceInviteBypass = true
+		} else if !errors.Is(err, ErrWorkspaceInviteInvalid) && !errors.Is(err, ErrWorkspaceInviteEmail) {
+			return nil, err
+		}
+	}
+	if inviteEnabled && strings.TrimSpace(inviteCode) == "" && !workspaceInviteBypass {
 		return nil, ErrInviteRequired
 	}
 

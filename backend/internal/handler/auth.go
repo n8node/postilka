@@ -28,10 +28,11 @@ func NewAuthHandler(
 }
 
 type credentialsRequest struct {
-	Email      string `json:"email"`
-	Password   string `json:"password"`
-	Name       string `json:"name"`
-	InviteCode string `json:"invite_code"`
+	Email                string `json:"email"`
+	Password             string `json:"password"`
+	Name                 string `json:"name"`
+	InviteCode           string `json:"invite_code"`
+	WorkspaceInviteToken string `json:"workspace_invite_token"`
 }
 
 type meResponse struct {
@@ -60,7 +61,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.auth.Register(r.Context(), req.Email, req.Password, req.Name, req.InviteCode)
+	result, err := h.auth.Register(r.Context(), req.Email, req.Password, req.Name, req.InviteCode, req.WorkspaceInviteToken)
 	if err != nil {
 		h.writeAuthError(w, err)
 		return

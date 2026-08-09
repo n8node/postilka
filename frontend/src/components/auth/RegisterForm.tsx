@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import {
   ApiError,
@@ -34,7 +34,13 @@ function publicInviteKeysUrl() {
 
 export function RegisterForm() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const searchParams = useSearchParams();
+  const workspaceInviteToken =
+    searchParams.get("workspace_invite_token")?.trim() ?? "";
+  const nextPath = searchParams.get("next")?.trim() ?? "";
+  const isWorkspaceInviteRegistration = workspaceInviteToken.length > 0;
+
+  const [email, setEmail] = useState(searchParams.get("email")?.trim() ?? "");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [policyAccepted, setPolicyAccepted] = useState(false);
@@ -59,7 +65,8 @@ export function RegisterForm() {
   const passwordsMatch =
     confirmPassword.length > 0 && password === confirmPassword;
 
-  const inviteStepDone = !inviteEnabled || inviteVerifiedCode.length > 0;
+  const inviteStepDone =
+    isWorkspaceInviteRegistration || !inviteEnabled || inviteVerifiedCode.length > 0;
   const canSubmit = inviteStepDone && passwordOk && passwordsMatch && policyAccepted;
 
   async function handleVerifyInvite(e: React.FormEvent) {
@@ -87,7 +94,7 @@ export function RegisterForm() {
     e.preventDefault();
     setError("");
 
-    if (inviteEnabled && !inviteVerifiedCode) {
+    if (inviteEnabled && !inviteVerifiedCode && !isWorkspaceInviteRegistration) {
       setError("Сначала активируйте регистрацию по инвайт-ключу");
       return;
     }
@@ -112,9 +119,18 @@ export function RegisterForm() {
         email,
         password,
         undefined,
-        inviteEnabled ? inviteVerifiedCode : undefined,
+        inviteEnabled && !isWorkspaceInviteRegistration
+          ? inviteVerifiedCode
+          : undefined,
+        isWorkspaceInviteRegistration ? workspaceInviteToken : undefined,
       );
       const params = new URLSearchParams({ email });
+      if (nextPath) {
+        params.set("next", nextPath);
+      }
+      if (isWorkspaceInviteRegistration) {
+        params.set("workspace_invite", "1");
+      }
       router.push(`/auth/check-email?${params.toString()}`);
       router.refresh();
     } catch (err) {
@@ -132,7 +148,7 @@ export function RegisterForm() {
     );
   }
 
-  if (inviteEnabled && !inviteVerifiedCode) {
+  if (inviteEnabled && !inviteVerifiedCode && !isWorkspaceInviteRegistration) {
     return (
       <form onSubmit={handleVerifyInvite} className="space-y-4">
         {error && (
@@ -203,6 +219,13 @@ export function RegisterForm() {
         </div>
       )}
 
+      {isWorkspaceInviteRegistration && (
+        <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+          Регистрация по приглашению в воркфлоу. Email должен совпадать с
+          приглашением.
+        </div>
+      )}
+
       {inviteEnabled && inviteVerifiedCode && (
         <div className="flex items-center justify-between rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
           <span>
@@ -231,9 +254,10 @@ export function RegisterForm() {
           type="email"
           autoComplete="email"
           required
+          readOnly={isWorkspaceInviteRegistration}
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
+          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 read-only:bg-slate-50 read-only:text-muted"
         />
       </div>
 
@@ -294,7 +318,14 @@ export function RegisterForm() {
 
       <p className="text-center text-sm text-muted">
         Уже есть аккаунт?{" "}
-        <Link href="/auth/login" className="text-accent hover:underline">
+        <Link
+          href={
+            nextPath
+              ? `/auth/login?email=${encodeURIComponent(email)}&next=${encodeURIComponent(nextPath)}`
+              : "/auth/login"
+          }
+          className="text-accent hover:underline"
+        >
           Войти
         </Link>
       </p>

@@ -87,7 +87,7 @@ func (s *TransactionalEmailService) SendWorkspaceInviteBestEffort(
 		return
 	}
 	body := WorkspaceInviteEmailBody(inviterName, workspaceName, inviteURL, roleLabel(role))
-	if err := s.email.Send(ctx, toEmail, "Postilka — приглашение в workspace", body); err != nil && s.log != nil {
+	if err := s.email.Send(ctx, toEmail, "Postilka — приглашение в воркфлоу", body); err != nil && s.log != nil {
 		s.log.Warn("workspace invite email failed", "email", toEmail, "error", err)
 	}
 }
@@ -182,7 +182,7 @@ func WorkspaceInviteEmailBody(inviterName, workspaceName, inviteURL string, role
 		inviter = "Коллега"
 	}
 	ws := html.EscapeString(strings.TrimSpace(workspaceName))
-	content := emailParagraphRow(fmt.Sprintf("<strong>%s</strong> приглашает вас в workspace <strong>%s</strong> с ролью <strong>%s</strong>.",
+	content := emailParagraphRow(fmt.Sprintf("<strong>%s</strong> приглашает вас в воркфлоу <strong>%s</strong> с ролью <strong>%s</strong>.",
 		inviter, ws, html.EscapeString(roleLabel))) +
 		emailLinkBoxRow(inviteURL) +
 		emailNoteRow("Ссылка действительна 7 дней. Если вы не ожидали приглашение — проигнорируйте письмо.")

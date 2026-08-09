@@ -11,7 +11,7 @@ export function LoginForm() {
   const searchParams = useSearchParams();
   const nextPath = searchParams.get("next") || "/dashboard";
   const oauthError = searchParams.get("oauth_error");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(searchParams.get("email")?.trim() ?? "");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);

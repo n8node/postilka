@@ -34,6 +34,15 @@ function formatQuota(v: number | null | undefined) {
   return String(v);
 }
 
+function formatStorageGb(bytes: number | null | undefined) {
+  if (bytes == null) return "∞";
+  return String(Math.round(bytes / (1024 * 1024 * 1024)));
+}
+
+function formatYesNo(value: boolean) {
+  return value ? "Да" : "Нет";
+}
+
 export function PlansWalletPage() {
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
@@ -203,14 +212,19 @@ export function PlansWalletPage() {
                 {formatQuota(currentPlan.max_posts_per_period)}
               </li>
               <li>
-                Included AI-токены — {overview?.usage.ai_text_tokens_used ?? 0} /{" "}
+                AI-токены в тарифе — {overview?.usage.ai_text_tokens_used ?? 0} /{" "}
                 {formatQuota(currentPlan.ai_text_tokens_quota)}
               </li>
               <li>
-                Media-кредиты — {overview?.usage.ai_media_credits_used ?? 0} /{" "}
+                Медиа-кредиты — {overview?.usage.ai_media_credits_used ?? 0} /{" "}
                 {formatQuota(currentPlan.ai_media_credits_quota)}
               </li>
-              <li>Storage — {formatQuota(currentPlan.storage_bytes ? Math.round(currentPlan.storage_bytes / (1024 * 1024 * 1024)) : null)} ГБ</li>
+              <li>Хранилище — {formatStorageGb(currentPlan.storage_bytes)} ГБ</li>
+              <li>Воркфлоу — {formatQuota(currentPlan.max_workflows)}</li>
+              <li>
+                Приглашения в воркфлоу — {formatQuota(currentPlan.max_workflow_invites)}
+              </li>
+              <li>Пуш по готовности — {formatYesNo(currentPlan.push_on_ready)}</li>
             </ul>
           )}
           {overview?.subscription && !currentPlan?.is_free && (
@@ -340,9 +354,16 @@ export function PlansWalletPage() {
                     </p>
                   )}
                   <ul className="mt-4 space-y-1 text-sm text-muted">
-                    <li>Каналы: {formatQuota(plan.max_channels)}</li>
-                    <li>Посты: {formatQuota(plan.max_posts_per_period)}</li>
-                    <li>AI-токены: {formatQuota(plan.ai_text_tokens_quota)}</li>
+                    <li>Каналы — {formatQuota(plan.max_channels)}</li>
+                    <li>Посты / период — {formatQuota(plan.max_posts_per_period)}</li>
+                    <li>AI-токены в тарифе — {formatQuota(plan.ai_text_tokens_quota)}</li>
+                    <li>Медиа-кредиты — {formatQuota(plan.ai_media_credits_quota)}</li>
+                    <li>Хранилище — {formatStorageGb(plan.storage_bytes)} ГБ</li>
+                    <li>Воркфлоу — {formatQuota(plan.max_workflows)}</li>
+                    <li>
+                      Приглашения в воркфлоу — {formatQuota(plan.max_workflow_invites)}
+                    </li>
+                    <li>Пуш по готовности — {formatYesNo(plan.push_on_ready)}</li>
                   </ul>
                   <button
                     type="button"

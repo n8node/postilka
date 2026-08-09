@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { RegisterForm } from "@/components/auth/RegisterForm";
 
 export default function RegisterPage() {
@@ -13,7 +14,9 @@ export default function RegisterPage() {
         </p>
       </div>
       <div className="rounded-xl border border-white/60 bg-surface/90 p-6 shadow-sm backdrop-blur-sm">
-        <RegisterForm />
+        <Suspense fallback={<p className="text-sm text-muted">Загрузка…</p>}>
+          <RegisterForm />
+        </Suspense>
       </div>
     </main>
   );

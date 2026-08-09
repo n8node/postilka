@@ -49,6 +49,9 @@ type PlanInput struct {
 	MaxChannels          *int
 	MaxPostsPerPeriod    *int
 	MaxSeats             *int
+	MaxWorkflows         *int
+	MaxWorkflowInvites   *int
+	PushOnReady          bool
 	StorageBytes         *int64
 	MaxFileSizeBytes     *int64
 	TrashRetentionDays   int
@@ -87,6 +90,9 @@ func (s *PlanService) Create(ctx context.Context, in PlanInput) (*model.Plan, er
 		MaxChannels:          in.MaxChannels,
 		MaxPostsPerPeriod:    in.MaxPostsPerPeriod,
 		MaxSeats:             in.MaxSeats,
+		MaxWorkflows:         in.MaxWorkflows,
+		MaxWorkflowInvites:   in.MaxWorkflowInvites,
+		PushOnReady:          in.PushOnReady,
 		StorageBytes:         in.StorageBytes,
 		MaxFileSizeBytes:     in.MaxFileSizeBytes,
 		TrashRetentionDays:   in.TrashRetentionDays,
@@ -136,6 +142,9 @@ func (s *PlanService) Update(ctx context.Context, id string, in PlanInput) (*mod
 		MaxChannels:          in.MaxChannels,
 		MaxPostsPerPeriod:    in.MaxPostsPerPeriod,
 		MaxSeats:             in.MaxSeats,
+		MaxWorkflows:         in.MaxWorkflows,
+		MaxWorkflowInvites:   in.MaxWorkflowInvites,
+		PushOnReady:          in.PushOnReady,
 		StorageBytes:         in.StorageBytes,
 		MaxFileSizeBytes:     in.MaxFileSizeBytes,
 		TrashRetentionDays:   in.TrashRetentionDays,
