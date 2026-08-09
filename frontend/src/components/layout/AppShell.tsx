@@ -57,7 +57,8 @@ function isActive(pathname: string, href: string) {
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
+  const { user, workspace, active_workspace } = useAuth();
+  const workspaceId = active_workspace?.id ?? workspace?.id ?? "none";
   const pathname = usePathname();
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
@@ -216,6 +217,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <EmailVerificationBanner />
         <main className="min-w-0 flex-1 overflow-x-hidden">
           <div
+            key={workspaceId}
             className={cn(
               "mx-auto px-4 py-6 sm:px-6 lg:px-8",
               isActive(pathname, "/files") ? "max-w-none" : "max-w-7xl",

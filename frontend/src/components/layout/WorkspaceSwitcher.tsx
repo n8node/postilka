@@ -24,7 +24,8 @@ type WorkspaceSwitcherProps = {
 };
 
 export function WorkspaceSwitcher({ collapsed = false }: WorkspaceSwitcherProps) {
-  const { workspace, workspaces, refreshAuth } = useAuth();
+  const { workspace, active_workspace, workspaces, refreshAuth } = useAuth();
+  const currentWorkspace = active_workspace ?? workspace;
   const router = useRouter();
   const rootRef = useRef<HTMLDivElement>(null);
 
@@ -49,7 +50,7 @@ export function WorkspaceSwitcher({ collapsed = false }: WorkspaceSwitcherProps)
   }, [open]);
 
   async function handleSwitch(ws: Workspace) {
-    if (ws.id === workspace?.id || busyId) return;
+    if (ws.id === currentWorkspace?.id || busyId) return;
     setBusyId(ws.id);
     setError(null);
     try {
@@ -85,8 +86,8 @@ export function WorkspaceSwitcher({ collapsed = false }: WorkspaceSwitcherProps)
     }
   }
 
-  const activeName = workspace?.name ?? "Workspace";
-  const activeRole = workspace?.role ? roleLabels[workspace.role] ?? workspace.role : null;
+  const activeName = currentWorkspace?.name ?? "Workspace";
+  const activeRole = currentWorkspace?.role ? roleLabels[currentWorkspace.role] ?? currentWorkspace.role : null;
 
   return (
     <div ref={rootRef} className={cn("relative", collapsed ? "px-1" : "px-2")}>
@@ -152,7 +153,7 @@ export function WorkspaceSwitcher({ collapsed = false }: WorkspaceSwitcherProps)
 
           <ul className="max-h-52 overflow-y-auto py-1" role="listbox">
             {workspaces.map((ws) => {
-              const isActive = ws.id === workspace?.id;
+              const isActive = ws.id === currentWorkspace?.id;
               const isBusy = busyId === ws.id;
               return (
                 <li key={ws.id}>

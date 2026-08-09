@@ -148,11 +148,19 @@ export function FileManager() {
     } finally {
       setLoading(false);
     }
-  }, [section, folderId]);
+  }, [section, folderId, active_workspace?.id]);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  useEffect(() => {
+    setFolderId(null);
+    setFolderTrail([]);
+    setSelected(new Set());
+    setSelectedKinds(new Map());
+    setPreviewFileId(null);
+  }, [active_workspace?.id]);
 
   useEffect(() => {
     if (section !== "my-files" || !folderId) {
@@ -335,7 +343,14 @@ export function FileManager() {
   };
 
   const grouped = section !== "trash" && section !== "my-files" ? groupByDate(files) : null;
-  const isUploading = uploadJobs.some(
+  const workspaceUploadJobs = useMemo(
+    () =>
+      active_workspace?.id
+        ? uploadJobs.filter((j) => j.workspaceId === active_workspace.id)
+        : uploadJobs,
+    [uploadJobs, active_workspace?.id],
+  );
+  const isUploading = workspaceUploadJobs.some(
     (j) => j.status === "pending" || j.status === "uploading",
   );
   const previewFile = previewFileId ? files.find((f) => f.id === previewFileId) ?? null : null;
@@ -519,9 +534,9 @@ export function FileManager() {
           </button>
         )}
 
-        {uploadJobs.length > 0 && (
+        {workspaceUploadJobs.length > 0 && (
           <UploadProgressPanel
-            jobs={uploadJobs}
+            jobs={workspaceUploadJobs}
             onCancel={() => uploadQueue?.cancelAll()}
             onDismiss={() => uploadQueue?.dismissFinished()}
           />
