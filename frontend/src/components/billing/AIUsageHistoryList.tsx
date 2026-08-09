@@ -54,7 +54,7 @@ export function AIUsageHistoryList({ items }: AIUsageHistoryListProps) {
   return (
     <ul className="mt-4 divide-y divide-border">
       {items.map((item) => {
-        const isVideo = item.mime_type.startsWith("video/");
+        const isVideo = (item.mime_type ?? "").startsWith("video/");
         const walletRub = formatRub(item.wallet_cents_charged);
         return (
           <li key={item.id} className="flex gap-4 py-4 first:pt-0">
