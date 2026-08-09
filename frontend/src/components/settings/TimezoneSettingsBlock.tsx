@@ -15,7 +15,7 @@ import {
   timezoneLabel,
 } from "@/lib/russia-timezones";
 
-export function TimezoneSettingsBlock() {
+export function TimezoneSettingsBlock({ embedded = false }: { embedded?: boolean }) {
   const { user, refreshAuth } = useAuth();
   const [options, setOptions] = useState<TimezoneOption[]>(RUSSIA_TIMEZONES);
   const [timezone, setTimezone] = useState(
@@ -61,6 +61,60 @@ export function TimezoneSettingsBlock() {
     }
   }
 
+  const form = (
+    <form onSubmit={(e) => void handleSubmit(e)} className={embedded ? "space-y-3" : "mt-4 space-y-3"}>
+      {error && (
+        <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+          {error}
+        </div>
+      )}
+      {success && (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+          {success}
+        </div>
+      )}
+
+      <select
+        value={timezone}
+        onChange={(e) => setTimezone(e.target.value)}
+        className="w-full max-w-lg rounded-md border border-border bg-bg px-3 py-2 text-sm"
+      >
+        {options.map((item) => (
+          <option key={item.id} value={item.id}>
+            {item.label}
+          </option>
+        ))}
+      </select>
+
+      <button
+        type="submit"
+        disabled={
+          loading || timezone === normalizeTimezone(user.timezone)
+        }
+        className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+      >
+        {loading ? "Сохранение…" : "Сохранить таймзону"}
+      </button>
+    </form>
+  );
+
+  if (embedded) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h2 className="text-lg font-semibold text-text">Таймзона</h2>
+          <p className="mt-1 text-sm text-muted">
+            Используется для отложенной публикации и расписания постов. Сейчас:{" "}
+            <span className="font-medium text-text">
+              {timezoneLabel(normalizeTimezone(user.timezone))}
+            </span>
+          </p>
+        </div>
+        {form}
+      </div>
+    );
+  }
+
   return (
     <section className="rounded-xl border border-border bg-surface p-5 shadow-sm">
       <h2 className="text-sm font-semibold">Таймзона</h2>
@@ -70,41 +124,7 @@ export function TimezoneSettingsBlock() {
           {timezoneLabel(normalizeTimezone(user.timezone))}
         </span>
       </p>
-
-      <form onSubmit={(e) => void handleSubmit(e)} className="mt-4 space-y-3">
-        {error && (
-          <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
-            {error}
-          </div>
-        )}
-        {success && (
-          <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
-            {success}
-          </div>
-        )}
-
-        <select
-          value={timezone}
-          onChange={(e) => setTimezone(e.target.value)}
-          className="w-full rounded-md border border-border bg-bg px-3 py-2 text-sm"
-        >
-          {options.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.label}
-            </option>
-          ))}
-        </select>
-
-        <button
-          type="submit"
-          disabled={
-            loading || timezone === normalizeTimezone(user.timezone)
-          }
-          className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
-        >
-          {loading ? "Сохранение…" : "Сохранить таймзону"}
-        </button>
-      </form>
+      {form}
     </section>
   );
 }

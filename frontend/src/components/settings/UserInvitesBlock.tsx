@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Copy } from "lucide-react";
 import { ApiError, fetchUserInvites, type UserInvite } from "@/lib/api";
 
-export function UserInvitesBlock() {
+export function UserInvitesBlock({ embedded = false }: { embedded?: boolean }) {
   const [loading, setLoading] = useState(true);
   const [enabled, setEnabled] = useState(false);
   const [invites, setInvites] = useState<UserInvite[]>([]);
@@ -23,6 +23,9 @@ export function UserInvitesBlock() {
   }, []);
 
   if (loading) {
+    if (embedded) {
+      return <p className="text-sm text-muted">Загрузка…</p>;
+    }
     return (
       <section className="rounded-xl border border-border bg-surface p-5 shadow-sm">
         <h2 className="text-sm font-semibold">Мои инвайты</h2>
@@ -43,24 +46,32 @@ export function UserInvitesBlock() {
     }
   }
 
-  return (
-    <section className="rounded-xl border border-border bg-surface p-5 shadow-sm">
-      <h2 className="text-sm font-semibold">Мои инвайты</h2>
-      <p className="mt-1 text-sm text-muted">
-        Делитесь ключами для регистрации новых пользователей. После регистрации
-        каждый пользователь получает 3 инвайта.
-      </p>
+  const body = (
+    <>
+      {!embedded && (
+        <>
+          <h2 className="text-sm font-semibold">Мои инвайты</h2>
+          <p className="mt-1 text-sm text-muted">
+            Делитесь ключами для регистрации новых пользователей. После регистрации
+            каждый пользователь получает 3 инвайта.
+          </p>
+        </>
+      )}
 
       {error && (
-        <p className="mt-3 text-sm text-red-600">{error}</p>
+        <p className={embedded ? "text-sm text-red-600" : "mt-3 text-sm text-red-600"}>
+          {error}
+        </p>
       )}
 
       {!error && invites.length === 0 && (
-        <p className="mt-3 text-sm text-muted">У вас пока нет инвайтов.</p>
+        <p className={embedded ? "text-sm text-muted" : "mt-3 text-sm text-muted"}>
+          У вас пока нет инвайтов.
+        </p>
       )}
 
       {!error && invites.length > 0 && (
-        <ul className="mt-4 space-y-2">
+        <ul className={embedded ? "space-y-2" : "mt-4 space-y-2"}>
           {invites.map((invite) => (
             <li
               key={invite.id}
@@ -83,6 +94,16 @@ export function UserInvitesBlock() {
           ))}
         </ul>
       )}
+    </>
+  );
+
+  if (embedded) {
+    return <div>{body}</div>;
+  }
+
+  return (
+    <section className="rounded-xl border border-border bg-surface p-5 shadow-sm">
+      {body}
     </section>
   );
 }

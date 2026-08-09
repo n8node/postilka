@@ -220,7 +220,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             key={workspaceId}
             className={cn(
               "mx-auto px-4 py-6 sm:px-6 lg:px-8",
-              isActive(pathname, "/files") ? "max-w-none" : "max-w-7xl",
+              isActive(pathname, "/files") || isActive(pathname, "/settings")
+                ? "max-w-none"
+                : "max-w-7xl",
             )}
           >
             {children}

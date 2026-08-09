@@ -5,7 +5,7 @@ import { ApiError, changeEmail } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { PasswordField } from "@/components/auth/PasswordField";
 
-export function ChangeEmailForm() {
+export function ChangeEmailForm({ embedded = false }: { embedded?: boolean }) {
   const { user, refreshAuth } = useAuth();
   const [email, setEmail] = useState(user.email);
   const [password, setPassword] = useState("");
@@ -31,7 +31,7 @@ export function ChangeEmailForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+    <form onSubmit={handleSubmit} className={embedded ? "space-y-4" : "mt-4 space-y-4"}>
       {error && (
         <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
           {error}

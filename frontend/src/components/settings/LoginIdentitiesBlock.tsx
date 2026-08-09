@@ -112,7 +112,7 @@ function oauthStatusMessage(
   }
 }
 
-export function LoginIdentitiesBlock() {
+export function LoginIdentitiesBlock({ embedded = false }: { embedded?: boolean }) {
   const searchParams = useSearchParams();
   const oauthError = searchParams.get("oauth_error");
   const oauthLinked = searchParams.get("oauth_linked");
@@ -160,7 +160,7 @@ export function LoginIdentitiesBlock() {
   }
 
   async function handleLink(provider: "vk" | "max") {
-    window.location.href = linkStartURL(provider, "/settings");
+    window.location.href = linkStartURL(provider, "/settings?section=login");
   }
 
   function isProviderEnabled(provider: "vk" | "max") {
@@ -171,16 +171,29 @@ export function LoginIdentitiesBlock() {
     return identities.find((item) => item.provider === provider);
   }
 
-  return (
-    <section className="rounded-xl border border-border bg-surface p-5 shadow-sm">
-      <h2 className="text-sm font-semibold">Вход через соцсети</h2>
-      <p className="mt-1 text-sm text-muted">
-        Привяжите аккаунты для быстрого входа без пароля.
-      </p>
+  const content = (
+    <>
+      {!embedded && (
+        <>
+          <h2 className="text-sm font-semibold">Вход через соцсети</h2>
+          <p className="mt-1 text-sm text-muted">
+            Привяжите аккаунты для быстрого входа без пароля.
+          </p>
+        </>
+      )}
+
+      {embedded && (
+        <div>
+          <h2 className="text-lg font-semibold text-text">Вход через соцсети</h2>
+          <p className="mt-1 text-sm text-muted">
+            Привяжите аккаунты для быстрого входа без пароля.
+          </p>
+        </div>
+      )}
 
       {statusMessage && (
         <p
-          className={`mt-3 text-sm ${
+          className={`${embedded ? "mt-4" : "mt-3"} text-sm ${
             statusMessage.type === "success" ? "text-green-700" : "text-red-600"
           }`}
         >
@@ -188,12 +201,14 @@ export function LoginIdentitiesBlock() {
         </p>
       )}
 
-      {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+      {error && (
+        <p className={`${embedded ? "mt-4" : "mt-3"} text-sm text-red-600`}>{error}</p>
+      )}
 
       {loading ? (
-        <p className="mt-4 text-sm text-muted">Загрузка…</p>
+        <p className={`${embedded ? "mt-4" : "mt-4"} text-sm text-muted`}>Загрузка…</p>
       ) : (
-        <ul className="mt-4 space-y-3">
+        <ul className={`${embedded ? "mt-4" : "mt-4"} space-y-3`}>
           {providers.map((provider) => {
             const linked = identityFor(provider.id);
             const enabled = isProviderEnabled(provider.id);
@@ -250,6 +265,16 @@ export function LoginIdentitiesBlock() {
           разделе «Вход и регистрация» и указать ключи провайдеров.
         </p>
       )}
+    </>
+  );
+
+  if (embedded) {
+    return <div className="space-y-0">{content}</div>;
+  }
+
+  return (
+    <section className="rounded-xl border border-border bg-surface p-5 shadow-sm">
+      {content}
     </section>
   );
 }

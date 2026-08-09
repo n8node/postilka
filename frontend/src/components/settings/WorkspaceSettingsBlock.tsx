@@ -19,7 +19,7 @@ const roleLabels: Record<string, string> = {
   viewer: "Наблюдатель",
 };
 
-export function WorkspaceSettingsBlock() {
+export function WorkspaceSettingsBlock({ embedded = false }: { embedded?: boolean }) {
   const { workspace, active_workspace, workspaces, refreshAuth } = useAuth();
   const currentWorkspace = active_workspace ?? workspace;
   const router = useRouter();
@@ -106,14 +106,8 @@ export function WorkspaceSettingsBlock() {
     return null;
   }
 
-  return (
-    <section className="rounded-xl border border-border bg-surface p-5 shadow-sm">
-      <h2 className="text-sm font-semibold">Workspace</h2>
-      <p className="mt-1 text-sm text-muted">
-        Переименование, удаление и приглашение участников по email.
-      </p>
-
-      <div className="mt-4 space-y-4">
+  const inner = (
+    <div className={embedded ? "space-y-4" : "mt-4 space-y-4"}>
         {workspaces.length > 1 && (
           <div>
             <label htmlFor="workspace-select" className="text-sm text-muted">
@@ -231,6 +225,19 @@ export function WorkspaceSettingsBlock() {
           </>
         )}
       </div>
+  );
+
+  if (embedded) {
+    return inner;
+  }
+
+  return (
+    <section className="rounded-xl border border-border bg-surface p-5 shadow-sm">
+      <h2 className="text-sm font-semibold">Workspace</h2>
+      <p className="mt-1 text-sm text-muted">
+        Переименование, удаление и приглашение участников по email.
+      </p>
+      {inner}
     </section>
   );
 }
