@@ -1790,3 +1790,106 @@ export function connectMAXChannels(payload: {
     },
   );
 }
+
+export type YandexModelPricing = {
+  input_per_1k: number;
+  output_per_1k: number;
+  currency?: string;
+};
+
+export type YandexGptAdminView = {
+  api_base_url: string;
+  api_key_set: boolean;
+  api_key_hint?: string;
+  folder_id: string;
+  folder_hint?: string;
+  model_default: string;
+  models: string[];
+  model_pricing: Record<string, YandexModelPricing>;
+  task_models: Record<string, string>;
+  updated_at: string;
+};
+
+export type YandexGptAdminUpdateRequest = {
+  api_base_url: string;
+  api_key?: string;
+  folder_id: string;
+  model_default: string;
+  model_pricing?: Record<string, YandexModelPricing>;
+};
+
+export type YandexGptTestResult = {
+  ok: boolean;
+  message: string;
+  models?: string[];
+};
+
+export function fetchAdminYandexGptSettings() {
+  return apiFetch<YandexGptAdminView>("/admin/config/yandex-gpt");
+}
+
+export function updateAdminYandexGptSettings(payload: YandexGptAdminUpdateRequest) {
+  return apiFetch<YandexGptAdminView>("/admin/config/yandex-gpt", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function testAdminYandexGptConnection(payload?: {
+  api_key?: string;
+  folder_id?: string;
+}) {
+  return apiFetch<YandexGptTestResult>("/admin/config/yandex-gpt/test", {
+    method: "POST",
+    body: JSON.stringify(payload ?? {}),
+  });
+}
+
+export type KieModel = {
+  id: string;
+  name: string;
+  category: string;
+};
+
+export type KieAdminSettings = {
+  api_base_url: string;
+  api_key_set: boolean;
+  model_text_to_image: string;
+  model_image_to_image: string;
+  model_combine: string;
+  model_filter: string;
+  token_cost_text_to_image: number;
+  token_cost_image_to_image: number;
+  token_cost_combine: number;
+  token_cost_filter: number;
+  updated_at?: string;
+};
+
+export type KieTestResult = {
+  ok: boolean;
+  message?: string;
+  models?: KieModel[];
+  credits_remaining?: number;
+};
+
+export function fetchAdminKieSettings() {
+  return apiFetch<{ settings: KieAdminSettings }>("/admin/config/kie");
+}
+
+export function updateAdminKieSettings(payload: Record<string, unknown>) {
+  return apiFetch<{ settings: KieAdminSettings }>("/admin/config/kie", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function testAdminKieConnection(payload?: {
+  api_base_url?: string;
+  api_key?: string;
+}) {
+  return apiFetch<KieTestResult>("/admin/config/kie/test", {
+    method: "POST",
+    body: JSON.stringify(payload ?? {}),
+  });
+}
+

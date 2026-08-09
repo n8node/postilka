@@ -38,6 +38,8 @@ const nav: NavSection[] = [
       { href: "/admin/auth-settings", label: "Вход и регистрация" },
       { href: "/admin/email-templates", label: "Шаблоны писем" },
       { href: "/admin/storage-settings", label: "S3 — хранилище" },
+      { href: "/admin/ai/yandex-gpt", label: "AI — Yandex GPT" },
+      { href: "/admin/ai/kie", label: "AI — KIE.ai" },
       { href: "/admin/social-providers", label: "Соцсети — каналы" },
       { href: "/admin/public-pages", label: "Публичные страницы" },
     ],
@@ -55,6 +57,8 @@ function breadcrumbLabel(pathname: string) {
   if (pathname.startsWith("/admin/max-platform-bot")) return "Соцсети — каналы";
   if (pathname.startsWith("/admin/telegram/notifications")) return "Настройки";
   if (pathname.startsWith("/admin/storage-settings")) return "S3 — хранилище";
+  if (pathname.startsWith("/admin/ai/yandex-gpt")) return "AI — Yandex GPT";
+  if (pathname.startsWith("/admin/ai/kie")) return "AI — KIE.ai";
   if (pathname.startsWith("/admin/social-providers")) return "Соцсети — каналы";
   if (pathname.startsWith("/admin/telegram/provider")) return "Соцсети — каналы";
   if (pathname.startsWith("/admin/public-pages")) return "Публичные страницы";

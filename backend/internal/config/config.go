@@ -30,6 +30,11 @@ type Config struct {
 	TelegramLocalProxy string `env:"TELEGRAM_LOCAL_PROXY"`
 	// Optional local hop for YouTube / Google APIs (Docker: host.docker.internal:8890 → gost → upstream).
 	YouTubeLocalProxy string `env:"YOUTUBE_LOCAL_PROXY"`
+
+	YandexGPTAPIKey   string `env:"YANDEX_GPT_API_KEY"`
+	YandexGPTFolderID string `env:"YANDEX_GPT_FOLDER_ID"`
+	YandexGPTBaseURL  string `env:"YANDEX_GPT_BASE_URL" envDefault:"https://llm.api.cloud.yandex.net/v1"`
+	KIEAPIKey         string `env:"KIE_API_KEY"`
 }
 
 func Load() (*Config, error) {
