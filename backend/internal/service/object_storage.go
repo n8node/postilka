@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net/url"
 	"strings"
 	"time"
@@ -114,6 +115,25 @@ func (o *ObjectStorage) PresignGetWithOptions(ctx context.Context, s3Key string,
 type HeadObjectResult struct {
 	Size        int64
 	ContentType string
+}
+
+func (o *ObjectStorage) GetObject(ctx context.Context, s3Key string) (io.ReadCloser, string, error) {
+	client, st, err := o.client(ctx)
+	if err != nil {
+		return nil, "", err
+	}
+	out, err := client.GetObject(ctx, &s3.GetObjectInput{
+		Bucket: aws.String(st.Bucket),
+		Key:    aws.String(s3Key),
+	})
+	if err != nil {
+		return nil, "", err
+	}
+	contentType := "application/octet-stream"
+	if out.ContentType != nil && strings.TrimSpace(*out.ContentType) != "" {
+		contentType = *out.ContentType
+	}
+	return out.Body, contentType, nil
 }
 
 func (o *ObjectStorage) HeadObject(ctx context.Context, s3Key string) (*HeadObjectResult, error) {

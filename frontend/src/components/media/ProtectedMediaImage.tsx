@@ -13,9 +13,7 @@ type ProtectedMediaImageProps = {
 };
 
 /**
- * Auth-gated media is served via same-origin API URLs that redirect to S3.
- * Use <img src> (not fetch+blob): cookies apply on the API hop; img loads
- * cross-origin after redirect without CORS credential restrictions.
+ * Auth-gated media is streamed from same-origin API (backend proxies S3).
  */
 export function ProtectedMediaImage({
   url,

@@ -347,6 +347,22 @@ func (s *GenerationService) UploadSource(ctx context.Context, userID string, r *
 }
 
 func (s *GenerationService) ResultMediaURL(ctx context.Context, id, userID string) (string, error) {
+	key, err := s.resultS3Key(ctx, id, userID)
+	if err != nil {
+		return "", err
+	}
+	return s.objectStore.PresignGet(ctx, key, 15*time.Minute, "")
+}
+
+func (s *GenerationService) ResultMediaObject(ctx context.Context, id, userID string) (io.ReadCloser, string, error) {
+	key, err := s.resultS3Key(ctx, id, userID)
+	if err != nil {
+		return nil, "", err
+	}
+	return s.objectStore.GetObject(ctx, key)
+}
+
+func (s *GenerationService) resultS3Key(ctx context.Context, id, userID string) (string, error) {
 	gen, err := s.genRepo.GetByID(ctx, id, userID)
 	if err != nil {
 		return "", err
@@ -355,7 +371,7 @@ func (s *GenerationService) ResultMediaURL(ctx context.Context, id, userID strin
 	if key == "" {
 		return "", repository.ErrNotFound
 	}
-	return s.objectStore.PresignGet(ctx, key, 15*time.Minute, "")
+	return key, nil
 }
 
 func (s *GenerationService) submitPendingJob(ctx context.Context, jobID string, createGate *kieCreateGate) error {

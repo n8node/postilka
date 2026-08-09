@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -199,12 +200,20 @@ func (h *GenerationHandler) ResultMedia(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	url, err := h.generation.ResultMediaURL(r.Context(), chi.URLParam(r, "id"), userID)
+	body, contentType, err := h.generation.ResultMediaObject(r.Context(), chi.URLParam(r, "id"), userID)
 	if err != nil {
 		h.mapError(w, err)
 		return
 	}
-	http.Redirect(w, r, url, http.StatusTemporaryRedirect)
+	defer body.Close()
+
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Cache-Control", "private, max-age=300")
+	w.WriteHeader(http.StatusOK)
+	_, _ = io.Copy(w, body)
 }
 
 func (h *GenerationHandler) mapError(w http.ResponseWriter, err error) {
