@@ -24,6 +24,10 @@ import {
   type UserInviteRelations,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import {
+  AdminGrantWalletModal,
+  formatAdminWalletRub,
+} from "@/components/admin/AdminGrantWalletModal";
 
 const workspaceRoleLabels: Record<string, string> = {
   owner: "Владелец",
@@ -95,6 +99,20 @@ export function AdminUsersPage() {
   );
   const [roleFilter, setRoleFilter] = useState<"all" | "admin" | "user">("all");
   const [selected, setSelected] = useState<AdminUser | null>(null);
+  const [grantUser, setGrantUser] = useState<AdminUser | null>(null);
+
+  function handleWalletGranted(userId: string, walletBalanceCents: number) {
+    setUsers((prev) =>
+      prev.map((u) =>
+        u.id === userId ? { ...u, wallet_balance_cents: walletBalanceCents } : u,
+      ),
+    );
+    setSelected((prev) =>
+      prev?.id === userId
+        ? { ...prev, wallet_balance_cents: walletBalanceCents }
+        : prev,
+    );
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -192,6 +210,7 @@ export function AdminUsersPage() {
                 <th className="px-4 py-3">Статус аккаунта</th>
                 <th className="px-4 py-3">Роль</th>
                 <th className="px-4 py-3">Тариф</th>
+                <th className="px-4 py-3">Кошелёк</th>
                 <th className="px-4 py-3">Workspace</th>
                 <th className="px-4 py-3">Роль WS</th>
                 <th className="px-4 py-3">Язык</th>
@@ -205,21 +224,21 @@ export function AdminUsersPage() {
             <tbody className="divide-y divide-slate-100">
               {loading && (
                 <tr>
-                  <td colSpan={13} className="px-4 py-10 text-center text-slate-500">
+                  <td colSpan={14} className="px-4 py-10 text-center text-slate-500">
                     Загрузка…
                   </td>
                 </tr>
               )}
               {!loading && error && (
                 <tr>
-                  <td colSpan={13} className="px-4 py-10 text-center text-rose-600">
+                  <td colSpan={14} className="px-4 py-10 text-center text-rose-600">
                     {error}
                   </td>
                 </tr>
               )}
               {!loading && !error && users.length === 0 && (
                 <tr>
-                  <td colSpan={13} className="px-4 py-10 text-center text-slate-500">
+                  <td colSpan={14} className="px-4 py-10 text-center text-slate-500">
                     Пользователи не найдены
                   </td>
                 </tr>
@@ -265,6 +284,9 @@ export function AdminUsersPage() {
                         <span className="text-slate-400">—</span>
                       )}
                     </td>
+                    <td className="px-4 py-3 font-medium text-slate-800">
+                      {formatAdminWalletRub(u.wallet_balance_cents ?? 0)}
+                    </td>
                     <td className="px-4 py-3 text-slate-800">
                       {u.workspace?.name ?? "—"}
                     </td>
@@ -291,13 +313,22 @@ export function AdminUsersPage() {
                       </Link>
                     </td>
                     <td className="px-4 py-3">
-                      <button
-                        type="button"
-                        onClick={() => setSelected(u)}
-                        className="rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                      >
-                        Открыть
-                      </button>
+                      <div className="flex flex-wrap gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setGrantUser(u)}
+                          className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                        >
+                          Начислить
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setSelected(u)}
+                          className="rounded-md border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                        >
+                          Открыть
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -310,6 +341,7 @@ export function AdminUsersPage() {
         <UserDrawer
           user={selected}
           onClose={() => setSelected(null)}
+          onGrant={() => setGrantUser(selected)}
           onPlanChanged={(updated) => {
             setUsers((prev) =>
               prev.map((u) => (u.id === updated.id ? updated : u)),
@@ -328,6 +360,15 @@ export function AdminUsersPage() {
           }}
         />
       )}
+
+      {grantUser && (
+        <AdminGrantWalletModal
+          user={grantUser}
+          open
+          onClose={() => setGrantUser(null)}
+          onGranted={handleWalletGranted}
+        />
+      )}
     </div>
   );
 }
@@ -335,12 +376,14 @@ export function AdminUsersPage() {
 function UserDrawer({
   user,
   onClose,
+  onGrant,
   onPlanChanged,
   onUserChanged,
   onUserDeleted,
 }: {
   user: AdminUser;
   onClose: () => void;
+  onGrant: () => void;
   onPlanChanged: (user: AdminUser) => void;
   onUserChanged: (user: AdminUser) => void;
   onUserDeleted: (userId: string) => void;
@@ -550,6 +593,24 @@ function UserDrawer({
               <p className="mt-0.5 font-medium">{user.timezone}</p>
             </div>
           </div>
+
+          <section className="rounded-xl border border-slate-200 p-4">
+            <h3 className="text-sm font-semibold text-slate-900">Кошелёк</h3>
+            <p className="mt-1 text-xs text-slate-500">
+              Баланс для overage AI после исчерпания квоты тарифа. Можно
+              начислить себе или любому пользователю.
+            </p>
+            <p className="mt-3 text-2xl font-semibold text-slate-900">
+              {formatAdminWalletRub(user.wallet_balance_cents ?? 0)}
+            </p>
+            <button
+              type="button"
+              onClick={onGrant}
+              className="mt-3 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50"
+            >
+              Начислить на кошелёк
+            </button>
+          </section>
 
           <section className="rounded-xl border border-slate-200 p-4">
             <h3 className="text-sm font-semibold text-slate-900">

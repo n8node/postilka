@@ -15,18 +15,20 @@ import (
 )
 
 type AdminHandler struct {
-	users      *repository.UserRepository
-	adminUsers *service.AdminUserService
-	plans      *service.PlanService
-	oauth      *service.OAuthLoginService
-	workspaces *service.AdminWorkspaceService
-	files      *repository.WorkspaceFileRepository
-	folders    *repository.WorkspaceFolderRepository
+	users        *repository.UserRepository
+	adminUsers   *service.AdminUserService
+	adminWallet  *service.AdminWalletService
+	plans        *service.PlanService
+	oauth        *service.OAuthLoginService
+	workspaces   *service.AdminWorkspaceService
+	files        *repository.WorkspaceFileRepository
+	folders      *repository.WorkspaceFolderRepository
 }
 
 func NewAdminHandler(
 	users *repository.UserRepository,
 	adminUsers *service.AdminUserService,
+	adminWallet *service.AdminWalletService,
 	plans *service.PlanService,
 	oauth *service.OAuthLoginService,
 	workspaces *service.AdminWorkspaceService,
@@ -34,7 +36,7 @@ func NewAdminHandler(
 	folders *repository.WorkspaceFolderRepository,
 ) *AdminHandler {
 	return &AdminHandler{
-		users: users, adminUsers: adminUsers, plans: plans, oauth: oauth, workspaces: workspaces,
+		users: users, adminUsers: adminUsers, adminWallet: adminWallet, plans: plans, oauth: oauth, workspaces: workspaces,
 		files: files, folders: folders,
 	}
 }
@@ -294,6 +296,44 @@ func (h *AdminHandler) DeleteUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+type grantWalletBody struct {
+	AmountCents int64  `json:"amount_cents"`
+	Note        string `json:"note"`
+}
+
+func (h *AdminHandler) GrantUserWalletCredit(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Не авторизован")
+		return
+	}
+
+	targetID := chi.URLParam(r, "userID")
+	var body grantWalletBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeError(w, http.StatusBadRequest, "Некорректное тело запроса")
+		return
+	}
+
+	newBalance, err := h.adminWallet.GrantCredit(r.Context(), actorID, targetID, body.AmountCents, body.Note)
+	if errors.Is(err, repository.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "Пользователь не найден")
+		return
+	}
+	if errors.Is(err, service.ErrInvalidWalletAmount) {
+		writeError(w, http.StatusBadRequest, "Укажите сумму от 1 до 100 000 ₽")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось начислить на кошелёк")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"wallet_balance_cents": newBalance,
+	})
 }
 
 func (h *AdminHandler) writeUserManageError(w http.ResponseWriter, err error) {

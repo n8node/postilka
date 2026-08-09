@@ -48,6 +48,7 @@ export type AdminUser = {
   timezone: string;
   is_blocked: boolean;
   is_platform_admin: boolean;
+  wallet_balance_cents: number;
   created_at: string;
   updated_at: string;
   workspace: AdminUserWorkspace | null;
@@ -753,6 +754,23 @@ export function deleteAdminUser(userId: string) {
   return apiFetch<{ status: string }>(`/admin/users/${userId}`, {
     method: "DELETE",
   });
+}
+
+export function grantAdminUserWalletCredit(
+  userId: string,
+  amountCents: number,
+  note?: string,
+) {
+  return apiFetch<{ wallet_balance_cents: number }>(
+    `/admin/users/${userId}/wallet/credit`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        amount_cents: amountCents,
+        note: note?.trim() ?? "",
+      }),
+    },
+  );
 }
 
 export type AdminUserWorkspaceItem = {

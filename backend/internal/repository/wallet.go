@@ -130,6 +130,43 @@ func (r *WalletRepository) MarkTopupPaid(ctx context.Context, id string) (*model
 	return topup, nil
 }
 
+func (r *WalletRepository) Credit(ctx context.Context, userID string, amountCents int64, entryType, refType, refID, description string) (int64, error) {
+	if amountCents <= 0 {
+		return 0, fmt.Errorf("credit amount must be positive")
+	}
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback(ctx)
+
+	const creditQ = `
+		UPDATE users
+		SET wallet_balance_cents = wallet_balance_cents + $2, updated_at = NOW()
+		WHERE id = $1
+		RETURNING wallet_balance_cents
+	`
+	var newBalance int64
+	if err := tx.QueryRow(ctx, creditQ, userID, amountCents).Scan(&newBalance); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, ErrNotFound
+		}
+		return 0, err
+	}
+
+	if _, err := tx.Exec(ctx, `
+		INSERT INTO wallet_ledger (user_id, amount_cents, entry_type, reference_type, reference_id, description)
+		VALUES ($1, $2, $3, NULLIF($4, ''), NULLIF($5, '')::uuid, $6)
+	`, userID, amountCents, entryType, refType, refID, description); err != nil {
+		return 0, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return 0, err
+	}
+	return newBalance, nil
+}
+
 func (r *WalletRepository) Debit(ctx context.Context, userID string, amountCents int64, entryType, refType, refID, description string) error {
 	if amountCents <= 0 {
 		return fmt.Errorf("debit amount must be positive")
