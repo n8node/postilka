@@ -47,6 +47,8 @@ export type GenerationUploadResult = {
   content_type: string;
 };
 
+type RawGenerationUpload = Partial<GenerationUploadResult> & { id?: string };
+
 export function generationCostForMode(
   pricing: GenerationPricing,
   mode: GenerationModeId,
@@ -226,20 +228,16 @@ export async function uploadGenerationMedia(file: File): Promise<GenerationUploa
     throw new ApiError(res.status, msg);
   }
 
-  const payload = data as {
-    upload?: GenerationUploadResult;
-    id?: string;
-    content_type?: string;
-  };
-  const upload = payload.upload ?? payload;
-  if (!upload?.id) {
+  const payload = data as { upload?: RawGenerationUpload } & RawGenerationUpload;
+  const raw = payload.upload ?? payload;
+  if (!raw.id) {
     throw new ApiError(res.status, "Некорректный ответ сервера при загрузке фото");
   }
   return {
-    id: upload.id,
-    url: upload.url ?? "",
-    thumb_url: upload.thumb_url,
-    content_type: upload.content_type ?? file.type,
+    id: raw.id,
+    url: raw.url ?? "",
+    thumb_url: raw.thumb_url,
+    content_type: raw.content_type ?? file.type,
   };
 }
 
