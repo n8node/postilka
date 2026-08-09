@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export type Crumb = {
   label: string;
@@ -12,11 +13,13 @@ export function PageHeader({
   crumbs,
   actions,
   description,
+  className,
 }: {
   title: string;
   crumbs?: Crumb[];
   description?: string;
   actions?: React.ReactNode;
+  className?: string;
 }) {
   const trail =
     crumbs && crumbs.length > 0
@@ -24,7 +27,7 @@ export function PageHeader({
       : [{ label: "Главная", href: "/dashboard" }, { label: title }];
 
   return (
-    <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+    <div className={cn("mb-6 flex flex-wrap items-start justify-between gap-4", className)}>
       <div className="min-w-0 space-y-1">
         <nav className="flex flex-wrap items-center gap-1 text-sm text-muted">
           {trail.map((crumb, i) => {

@@ -62,7 +62,7 @@ export function TimezoneSettingsBlock({ embedded = false }: { embedded?: boolean
   }
 
   const form = (
-    <form onSubmit={(e) => void handleSubmit(e)} className={embedded ? "space-y-3" : "mt-4 space-y-3"}>
+    <form onSubmit={(e) => void handleSubmit(e)} className={embedded ? "space-y-4" : "mt-4 space-y-4"}>
       {error && (
         <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
           {error}
@@ -74,10 +74,11 @@ export function TimezoneSettingsBlock({ embedded = false }: { embedded?: boolean
         </div>
       )}
 
+      <div className="flex max-w-xl flex-col gap-3 sm:flex-row sm:items-center">
       <select
         value={timezone}
         onChange={(e) => setTimezone(e.target.value)}
-        className="w-full max-w-lg rounded-md border border-border bg-bg px-3 py-2 text-sm"
+        className="min-w-0 flex-1 rounded-md border border-border bg-bg px-3 py-2 text-sm"
       >
         {options.map((item) => (
           <option key={item.id} value={item.id}>
@@ -91,10 +92,11 @@ export function TimezoneSettingsBlock({ embedded = false }: { embedded?: boolean
         disabled={
           loading || timezone === normalizeTimezone(user.timezone)
         }
-        className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+        className="shrink-0 rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
       >
-        {loading ? "Сохранение…" : "Сохранить таймзону"}
+        {loading ? "Сохранение…" : "Сохранить"}
       </button>
+      </div>
     </form>
   );
 

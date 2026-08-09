@@ -90,7 +90,7 @@ export function WorkspaceSwitcher({ collapsed = false }: WorkspaceSwitcherProps)
   const activeRole = currentWorkspace?.role ? roleLabels[currentWorkspace.role] ?? currentWorkspace.role : null;
 
   return (
-    <div ref={rootRef} className={cn("relative", collapsed ? "px-1" : "px-2")}>
+    <div ref={rootRef} className={cn("relative", collapsed ? "px-1" : "px-0")}>
       <button
         type="button"
         onClick={() => {

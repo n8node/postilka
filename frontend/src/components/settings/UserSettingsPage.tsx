@@ -166,10 +166,11 @@ export function UserSettingsPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <PageHeader
         title="Настройки"
         description="Профиль, workspace, вход и параметры публикаций."
+        className="mb-4"
       />
 
       <div className="flex min-h-[620px] overflow-hidden rounded-xl border border-border bg-surface shadow-sm">

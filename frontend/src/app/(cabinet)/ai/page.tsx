@@ -6,7 +6,7 @@ export default function AiPage() {
   return (
     <div>
       <PageHeader
-        title="AI"
+        title="Ai контент"
         description="Yandex GPT для текста и KIE для медиа. Списание: квота тарифа → кошелёк."
         actions={<StubBadge label="Волна 7" />}
       />

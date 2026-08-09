@@ -39,7 +39,7 @@ const mainNav: NavItem[] = [
   { href: "/posts", label: "Посты", icon: PenSquare },
   { href: "/calendar", label: "Календарь", icon: CalendarDays },
   { href: "/files", label: "Файлы", icon: ImageIcon },
-  { href: "/ai", label: "AI", icon: Sparkles },
+  { href: "/ai", label: "Ai контент", icon: Sparkles },
   { href: "/plans", label: "Тариф и кошелёк", icon: Wallet },
   { href: "/team", label: "Команда", icon: Users },
   { href: "/analytics", label: "Аналитика", icon: BarChart3 },
@@ -110,12 +110,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </button>
         </div>
 
-        <div className="border-b border-border py-2">
+        <div
+          className={cn(
+            "space-y-2 border-b border-border",
+            collapsed ? "px-2 py-2" : "px-3 py-3",
+          )}
+        >
           <WorkspaceSwitcher collapsed={collapsed} />
           <WalletBalanceBadge collapsed={collapsed} />
         </div>
 
-        <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-2 py-3">
+        <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-2 pb-3 pt-2">
           {mainNav.map((item) => {
             const Icon = item.icon;
             const active = isActive(pathname, item.href);
