@@ -1,11 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import {
-  isLocalMediaUrl,
-  mediaUrl,
-  requiresProtectedMedia,
-} from "@/lib/media-display";
+import { isLocalMediaUrl, mediaUrl } from "@/lib/media-display";
 
 type ProtectedMediaImageProps = {
   url: string;
@@ -17,6 +12,11 @@ type ProtectedMediaImageProps = {
   draggable?: boolean;
 };
 
+/**
+ * Auth-gated media is served via same-origin API URLs that redirect to S3.
+ * Use <img src> (not fetch+blob): cookies apply on the API hop; img loads
+ * cross-origin after redirect without CORS credential restrictions.
+ */
 export function ProtectedMediaImage({
   url,
   alt = "",
@@ -26,74 +26,9 @@ export function ProtectedMediaImage({
   decoding,
   draggable,
 }: ProtectedMediaImageProps) {
-  const [src, setSrc] = useState("");
-
-  useEffect(() => {
-    if (!url) {
-      setSrc("");
-      return;
-    }
-
-    if (isLocalMediaUrl(url) || !requiresProtectedMedia(url)) {
-      setSrc(mediaUrl(url));
-      return;
-    }
-
-    let cancelled = false;
-    let objectUrl: string | null = null;
-    const controller = new AbortController();
-
-    void fetch(mediaUrl(url), {
-      credentials: "include",
-      signal: controller.signal,
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error("media fetch failed");
-        return res.blob();
-      })
-      .then((blob) => {
-        if (cancelled) return;
-        objectUrl = URL.createObjectURL(blob);
-        setSrc(objectUrl);
-      })
-      .catch(() => {
-        if (!cancelled) setSrc("");
-      });
-
-    return () => {
-      cancelled = true;
-      controller.abort();
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
-    };
-  }, [url]);
-
   if (!url) return null;
 
-  if (isLocalMediaUrl(url) || !requiresProtectedMedia(url)) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={mediaUrl(url)}
-        alt={alt}
-        className={className}
-        style={style}
-        loading={loading}
-        decoding={decoding}
-        draggable={draggable}
-      />
-    );
-  }
-
-  if (!src) {
-    return (
-      <span
-        className={className}
-        style={style}
-        role="img"
-        aria-label={alt}
-      />
-    );
-  }
+  const src = isLocalMediaUrl(url) ? url : mediaUrl(url);
 
   return (
     // eslint-disable-next-line @next/next/no-img-element

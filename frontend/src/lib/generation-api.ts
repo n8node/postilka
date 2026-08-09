@@ -188,12 +188,34 @@ export async function uploadGenerationMedia(file: File): Promise<GenerationUploa
 
 /** Downloads a generated image (auth via cookie) for attaching to sources. */
 export async function fetchGenerationImageBlob(generationId: string): Promise<Blob> {
-  const res = await fetch(mediaUrl(`/media/ai-generations/${encodeURIComponent(generationId)}`), {
+  const apiUrl = mediaUrl(
+    `/media/ai-generations/${encodeURIComponent(generationId)}`,
+  );
+
+  const authRes = await fetch(apiUrl, {
     credentials: "include",
-    redirect: "follow",
+    redirect: "manual",
   });
-  if (!res.ok) {
-    throw new ApiError(res.status, "Не удалось загрузить сгенерированное фото");
+
+  if (authRes.status === 401 || authRes.status === 403) {
+    throw new ApiError(authRes.status, "Требуется авторизация");
   }
-  return res.blob();
+
+  if (authRes.status >= 300 && authRes.status < 400) {
+    const location = authRes.headers.get("Location");
+    if (!location) {
+      throw new ApiError(authRes.status, "Не удалось загрузить сгенерированное фото");
+    }
+    const s3Res = await fetch(location, { credentials: "omit" });
+    if (!s3Res.ok) {
+      throw new ApiError(s3Res.status, "Не удалось загрузить сгенерированное фото");
+    }
+    return s3Res.blob();
+  }
+
+  if (!authRes.ok) {
+    throw new ApiError(authRes.status, "Не удалось загрузить сгенерированное фото");
+  }
+
+  return authRes.blob();
 }
