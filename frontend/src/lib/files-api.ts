@@ -23,6 +23,11 @@ export type WorkspaceFolder = {
   created_at: string;
 };
 
+export type FolderBreadcrumb = {
+  id: string | null;
+  name: string;
+};
+
 export type StorageStats = {
   used_bytes: number;
   quota_bytes: number | null;
@@ -69,6 +74,10 @@ export function listFolders(parentId?: string | null) {
   if (parentId) params.set("parent_id", parentId);
   const q = params.toString();
   return apiFetch<{ folders: WorkspaceFolder[] }>(`/folders${q ? `?${q}` : ""}`);
+}
+
+export function fetchFolderBreadcrumbs(folderId: string) {
+  return apiFetch<{ breadcrumbs: FolderBreadcrumb[] }>(`/folders/${folderId}/breadcrumbs`);
 }
 
 export function listAllFolders() {

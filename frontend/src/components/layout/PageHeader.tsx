@@ -4,6 +4,7 @@ import { ChevronRight } from "lucide-react";
 export type Crumb = {
   label: string;
   href?: string;
+  onClick?: () => void;
 };
 
 export function PageHeader({
@@ -35,6 +36,14 @@ export function PageHeader({
                   <Link href={crumb.href} className="hover:text-text">
                     {crumb.label}
                   </Link>
+                ) : crumb.onClick && !last ? (
+                  <button
+                    type="button"
+                    onClick={crumb.onClick}
+                    className="hover:text-text"
+                  >
+                    {crumb.label}
+                  </button>
                 ) : (
                   <span className={last ? "text-text" : undefined}>{crumb.label}</span>
                 )}

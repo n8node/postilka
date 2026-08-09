@@ -17,7 +17,7 @@ import {
   Video,
   Clock,
 } from "lucide-react";
-import { PageHeader } from "@/components/layout/PageHeader";
+import { PageHeader, type Crumb } from "@/components/layout/PageHeader";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { FileCirclePreview } from "@/components/files/FileCirclePreview";
 import { FileDetailPanel } from "@/components/files/FileDetailPanel";
@@ -29,6 +29,7 @@ import { formatMediaDuration, getFileDuration } from "@/lib/file-media";
 import { setActiveWorkspace } from "@/lib/api";
 import {
   type FilesSection,
+  type FolderBreadcrumb,
   type StorageStats,
   type WorkspaceFile,
   type WorkspaceFolder,
@@ -40,6 +41,7 @@ import {
   deleteFolder,
   downloadFile,
   emptyTrash,
+  fetchFolderBreadcrumbs,
   getStorageStats,
   listFiles,
   listFolders,
@@ -105,6 +107,7 @@ export function FileManager() {
 
   const [section, setSection] = useState<FilesSection>("my-files");
   const [folderId, setFolderId] = useState<string | null>(null);
+  const [folderTrail, setFolderTrail] = useState<FolderBreadcrumb[]>([]);
   const [files, setFiles] = useState<WorkspaceFile[]>([]);
   const [folders, setFolders] = useState<WorkspaceFolder[]>([]);
   const [stats, setStats] = useState<StorageStats | null>(null);
@@ -152,6 +155,24 @@ export function FileManager() {
   }, [refresh]);
 
   useEffect(() => {
+    if (section !== "my-files" || !folderId) {
+      setFolderTrail([]);
+      return;
+    }
+    let cancelled = false;
+    void fetchFolderBreadcrumbs(folderId)
+      .then((data) => {
+        if (!cancelled) setFolderTrail(data.breadcrumbs);
+      })
+      .catch(() => {
+        if (!cancelled) setFolderTrail([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [section, folderId]);
+
+  useEffect(() => {
     if (!uploadQueue) return;
     void uploadQueue.hydrate();
     return uploadQueue.subscribe(setUploadJobs);
@@ -185,7 +206,7 @@ export function FileManager() {
     if (!uploadQueue) return;
     const queue = uploadQueue;
     return queue.onIdle(() => {
-      window.setTimeout(() => queue.dismissCompleted(), 1800);
+      window.setTimeout(() => queue.dismissFinished(), 1800);
     });
   }, []);
 
@@ -319,6 +340,27 @@ export function FileManager() {
   );
   const previewFile = previewFileId ? files.find((f) => f.id === previewFileId) ?? null : null;
   const isGallerySection = section === "photos" || section === "videos";
+
+  const myFilesTitle = useMemo(() => {
+    if (!folderId) return "Мои файлы";
+    return folderTrail[folderTrail.length - 1]?.name ?? "…";
+  }, [folderId, folderTrail]);
+
+  const pageCrumbs = useMemo((): Crumb[] | undefined => {
+    if (section !== "my-files") return undefined;
+    const trail: Crumb[] = [{ label: "Главная", href: "/dashboard" }];
+    if (!folderId) {
+      trail.push({ label: "Мои файлы" });
+      return trail;
+    }
+    for (const crumb of folderTrail) {
+      trail.push({
+        label: crumb.name,
+        onClick: crumb.id ? () => setFolderId(crumb.id) : () => setFolderId(null),
+      });
+    }
+    return trail;
+  }, [section, folderId, folderTrail]);
 
   const headerActions = (
     <>
@@ -455,11 +497,10 @@ export function FileManager() {
         <PageHeader
           title={
             section === "my-files"
-              ? folderId
-                ? "Папка"
-                : "Мои файлы"
+              ? myFilesTitle
               : SECTIONS.find((s) => s.id === section)?.label ?? "Файлы"
           }
+          crumbs={pageCrumbs}
           description={
             section === "trash"
               ? `Хранение в корзине: ${stats?.trash_retention_days ?? 0} дн.`
