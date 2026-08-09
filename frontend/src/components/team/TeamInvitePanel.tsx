@@ -15,8 +15,15 @@ const roles = [
   { value: "viewer", label: "Наблюдатель" },
 ];
 
-export function TeamInvitePanel() {
-  const { workspace } = useAuth();
+type Props = {
+  workspaceId?: string;
+};
+
+export function TeamInvitePanel({ workspaceId: workspaceIdProp }: Props = {}) {
+  const { workspace, workspaces } = useAuth();
+  const workspaceId = workspaceIdProp ?? workspace?.id;
+  const managedWorkspace =
+    workspaces.find((w) => w.id === workspaceId) ?? workspace;
   const [invites, setInvites] = useState<WorkspaceInvite[]>([]);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("editor");
@@ -25,17 +32,17 @@ export function TeamInvitePanel() {
   const [success, setSuccess] = useState("");
 
   const canInvite =
-    workspace?.role === "owner" || workspace?.role === "admin";
+    managedWorkspace?.role === "owner" || managedWorkspace?.role === "admin";
 
   const loadInvites = useCallback(async () => {
-    if (!workspace?.id || !canInvite) return;
+    if (!workspaceId || !canInvite) return;
     try {
-      const data = await fetchWorkspaceInvites(workspace.id);
+      const data = await fetchWorkspaceInvites(workspaceId);
       setInvites(data.invites);
     } catch {
       setInvites([]);
     }
-  }, [workspace?.id, canInvite]);
+  }, [workspaceId, canInvite]);
 
   useEffect(() => {
     void loadInvites();
@@ -43,12 +50,12 @@ export function TeamInvitePanel() {
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!workspace?.id) return;
+    if (!workspaceId) return;
     setLoading(true);
     setError("");
     setSuccess("");
     try {
-      await createWorkspaceInvite(email, role, workspace.id);
+      await createWorkspaceInvite(email, role, workspaceId);
       setEmail("");
       setSuccess("Приглашение отправлено на email");
       await loadInvites();

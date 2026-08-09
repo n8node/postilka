@@ -14,11 +14,12 @@ import (
 )
 
 var (
-	ErrForbidden             = errors.New("forbidden")
-	ErrWorkspaceNotFound     = errors.New("workspace not found")
-	ErrNotWorkspaceMember    = errors.New("not a workspace member")
-	ErrInvalidWorkspaceName  = errors.New("invalid workspace name")
-	ErrWorkspaceLimitReached = errors.New("workspace limit reached")
+	ErrForbidden                 = errors.New("forbidden")
+	ErrWorkspaceNotFound         = errors.New("workspace not found")
+	ErrNotWorkspaceMember        = errors.New("not a workspace member")
+	ErrInvalidWorkspaceName      = errors.New("invalid workspace name")
+	ErrWorkspaceLimitReached     = errors.New("workspace limit reached")
+	ErrCannotDeleteLastWorkspace = errors.New("cannot delete last workspace")
 )
 
 const MaxOwnedWorkspacesPerUser = 20
@@ -155,6 +156,71 @@ func (s *WorkspaceService) uniqueSlug(ctx context.Context, base string) (string,
 		}
 	}
 	return "", fmt.Errorf("generate unique slug")
+}
+
+func (s *WorkspaceService) uniqueSlugForUpdate(ctx context.Context, base, workspaceID string) (string, error) {
+	slug := base
+	for i := 0; i < 100; i++ {
+		if i > 0 {
+			slug = fmt.Sprintf("%s-%d", base, i)
+		}
+		exists, err := s.workspaces.SlugExistsExcept(ctx, slug, workspaceID)
+		if err != nil {
+			return "", err
+		}
+		if !exists {
+			return slug, nil
+		}
+	}
+	return "", fmt.Errorf("generate unique slug")
+}
+
+// Update renames a workspace (admin+).
+func (s *WorkspaceService) Update(ctx context.Context, userID, workspaceID, name string) (*model.Workspace, error) {
+	name = strings.TrimSpace(name)
+	if name == "" || len(name) > 255 {
+		return nil, ErrInvalidWorkspaceName
+	}
+
+	if _, err := s.RequireMembership(ctx, userID, workspaceID, model.RoleAdmin); err != nil {
+		return nil, err
+	}
+
+	slug, err := s.uniqueSlugForUpdate(ctx, slugFromWorkspaceName(name), workspaceID)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.workspaces.UpdateNameAndSlug(ctx, workspaceID, name, slug); err != nil {
+		return nil, err
+	}
+
+	return s.workspaces.GetMembership(ctx, workspaceID, userID)
+}
+
+// Delete removes a workspace owned by the caller. Cannot delete the user's last workspace.
+func (s *WorkspaceService) Delete(ctx context.Context, userID, workspaceID string) ([]model.Workspace, error) {
+	ws, err := s.RequireMembership(ctx, userID, workspaceID, model.RoleOwner)
+	if err != nil {
+		return nil, err
+	}
+	if ws.OwnerID != userID {
+		return nil, ErrForbidden
+	}
+
+	count, err := s.workspaces.CountMembershipsForUser(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if count <= 1 {
+		return nil, ErrCannotDeleteLastWorkspace
+	}
+
+	if err := s.workspaces.DeleteByID(ctx, workspaceID); err != nil {
+		return nil, err
+	}
+
+	return s.workspaces.ListForUser(ctx, userID)
 }
 
 func SetActiveWorkspaceCookie(w http.ResponseWriter, workspaceID string, secure bool) {

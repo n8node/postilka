@@ -600,6 +600,22 @@ export function createWorkspace(name: string) {
   });
 }
 
+export function updateWorkspace(workspaceId: string, name: string) {
+  return apiFetch<{ workspace: Workspace }>(`/workspaces/${workspaceId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ name }),
+  });
+}
+
+export function deleteWorkspace(workspaceId: string) {
+  return apiFetch<{
+    workspaces: Workspace[];
+    active_workspace: Workspace | null;
+  }>(`/workspaces/${workspaceId}`, {
+    method: "DELETE",
+  });
+}
+
 export function fetchAdminUsers(query: AdminUsersQuery = {}) {
   const params = new URLSearchParams();
   if (query.q?.trim()) params.set("q", query.q.trim());

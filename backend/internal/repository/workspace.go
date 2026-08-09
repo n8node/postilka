@@ -185,6 +185,36 @@ func (r *WorkspaceRepository) SlugExists(ctx context.Context, slug string) (bool
 	return exists, err
 }
 
+func (r *WorkspaceRepository) SlugExistsExcept(ctx context.Context, slug, exceptWorkspaceID string) (bool, error) {
+	var exists bool
+	err := r.pool.QueryRow(ctx, `
+		SELECT EXISTS(SELECT 1 FROM workspaces WHERE slug = $1 AND id <> $2::uuid)
+	`, slug, exceptWorkspaceID).Scan(&exists)
+	return exists, err
+}
+
+func (r *WorkspaceRepository) UpdateNameAndSlug(ctx context.Context, workspaceID, name, slug string) error {
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE workspaces SET name = $2, slug = $3, updated_at = NOW()
+		WHERE id = $1::uuid
+	`, workspaceID, name, slug)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (r *WorkspaceRepository) CountMembershipsForUser(ctx context.Context, userID string) (int, error) {
+	var count int
+	err := r.pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM workspace_members WHERE user_id = $1::uuid
+	`, userID).Scan(&count)
+	return count, err
+}
+
 func (r *WorkspaceRepository) CountOwnedByUser(ctx context.Context, userID string) (int, error) {
 	var count int
 	err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM workspaces WHERE owner_id = $1::uuid`, userID).Scan(&count)

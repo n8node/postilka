@@ -216,6 +216,8 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Get("/workspaces/invites", wsInviteHandler.List)
 			r.Post("/workspaces/invites", wsInviteHandler.Create)
 			r.Post("/workspaces/invites/accept", wsInviteHandler.Accept)
+			r.Patch("/workspaces/{workspaceID}", wsHandler.Update)
+			r.Delete("/workspaces/{workspaceID}", wsHandler.Delete)
 		})
 
 		r.Group(func(r chi.Router) {

@@ -4,10 +4,11 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { UserInvitesBlock } from "@/components/settings/UserInvitesBlock";
 import { LoginIdentitiesBlock } from "@/components/settings/LoginIdentitiesBlock";
 import { ChangeEmailForm } from "@/components/settings/ChangeEmailForm";
+import { WorkspaceSettingsBlock } from "@/components/settings/WorkspaceSettingsBlock";
 import { useAuth } from "@/context/AuthContext";
 
 export default function SettingsPage() {
-  const { user, workspace } = useAuth();
+  const { user } = useAuth();
   const emailVerified = Boolean(user.email_verified_at);
 
   return (
@@ -34,17 +35,10 @@ export default function SettingsPage() {
                 )}
               </dd>
             </div>
-            <div>
-              <dt className="text-muted">Workspace</dt>
-              <dd className="font-medium">
-                {workspace?.name ?? "—"}
-                {workspace?.slug ? (
-                  <span className="text-muted"> ({workspace.slug})</span>
-                ) : null}
-              </dd>
-            </div>
           </dl>
         </section>
+
+        <WorkspaceSettingsBlock />
 
         <section className="rounded-xl border border-border bg-surface p-5 shadow-sm">
           <h2 className="text-sm font-semibold">Смена email</h2>
