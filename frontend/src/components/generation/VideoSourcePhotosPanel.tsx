@@ -577,7 +577,7 @@ export function VideoSourcePhotosPanel({
 
   const sourceModalSubtitle = (target: SourceModalTarget): string | undefined => {
     if (target.kind === "ref-video") {
-      return "MP4, MOV · 2–15 сек · до 50 МБ";
+      return "MP4, MOV · до 50 МБ · длительность проверится при выборе";
     }
     if (target.kind === "ref-image" || target.kind === "first" || target.kind === "last") {
       return "JPG, PNG, WEBP";

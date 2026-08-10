@@ -39,16 +39,16 @@ function matchesKind(file: WorkspaceFile, kind: VideoMediaKind): boolean {
 }
 
 function passesReferenceVideoFilter(file: WorkspaceFile): boolean {
-  const duration = file.media_metadata?.duration_seconds;
-  if (
-    duration == null ||
-    duration < REFERENCE_VIDEO_MIN_SECONDS ||
-    duration > REFERENCE_VIDEO_MAX_SECONDS
-  ) {
-    return false;
-  }
   if (file.size > REFERENCE_VIDEO_MAX_BYTES) return false;
-  return true;
+  const duration = file.media_metadata?.duration_seconds;
+  if (duration == null || !Number.isFinite(duration)) {
+    // Duration is validated on select (backend probes via ffprobe if metadata missing).
+    return true;
+  }
+  return (
+    duration >= REFERENCE_VIDEO_MIN_SECONDS &&
+    duration <= REFERENCE_VIDEO_MAX_SECONDS
+  );
 }
 
 function tabsForKind(kind: VideoMediaKind): { id: PickerTab; label: string }[] {
@@ -193,7 +193,7 @@ export function WorkspaceMediaPickerModal({
         : "Выберите аудио с диска";
 
   const subtitle = referenceVideoFilter
-    ? "MP4, MOV · 2–15 сек · до 50 МБ"
+    ? "MP4, MOV · до 50 МБ · длительность проверится при выборе"
     : "Файлы workspace с превью";
 
   const panel = (
@@ -308,7 +308,7 @@ export function WorkspaceMediaPickerModal({
         {!loading && !error && files.length === 0 ? (
           <p className="py-10 text-center text-[13px] text-muted">
             {referenceVideoFilter
-              ? "Нет видео 2–15 сек до 50 МБ"
+              ? "Нет видео MP4/MOV до 50 МБ"
               : "Подходящих файлов пока нет"}
           </p>
         ) : null}

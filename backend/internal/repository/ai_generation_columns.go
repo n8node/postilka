@@ -44,9 +44,9 @@ func (r *AIGenerationRepository) generationSelectColumns(ctx context.Context) st
 		cols += `, 0 AS video_duration_seconds`
 	}
 	if r.columns.previewS3Key {
-		cols += `, preview_s3_key`
+		cols += `, COALESCE(preview_s3_key, '') AS preview_s3_key`
 	} else {
-		cols += `, NULL::text AS preview_s3_key`
+		cols += `, '' AS preview_s3_key`
 	}
 	cols += `, created_at`
 	return cols
