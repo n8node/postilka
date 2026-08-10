@@ -6,7 +6,7 @@ alwaysApply: true
 # Ядро Postilka
 
 - **Postilka** — собственный продукт автопостинга и SMM-планирования для РФ; домен **`postilka.ru`**. Greenfield, без форков чужих SaaS.
-- **Публичный сайт:** WordPress на корне; **приложение** — **`/app`** (см. `17-wordpress-nginx-routing.mdc`).
+- **Публичный сайт:** WordPress на корне; **приложение** — **`/app`** (см. `17-wordpress-nginx-routing.mdc`). Весь продукт на **одном** домене `postilka.ru`; поддомены не используются.
 - **Стек — как Erman AI** (reference-проект в workspace):
   - **Backend:** Go 1.23+, chi, pgx, goose migrations
   - **Frontend:** Next.js 15+ (App Router), TypeScript strict, Tailwind, shadcn/ui

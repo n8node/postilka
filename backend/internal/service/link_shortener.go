@@ -26,7 +26,7 @@ type LinkShortenerService struct {
 func NewLinkShortenerService(repo *repository.LinkCodeRepository, baseURL string) *LinkShortenerService {
 	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
 	if baseURL == "" {
-		baseURL = "https://go.postilka.ru"
+		baseURL = "https://postilka.ru/go"
 	}
 	return &LinkShortenerService{repo: repo, baseURL: baseURL}
 }

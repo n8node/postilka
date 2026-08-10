@@ -31,7 +31,7 @@ alwaysApply: true
 - **Async/schedule:** worker process + PostgreSQL (`due_at`) + **NATS JetStream** в prod (паттерн Erman AI). **Не Temporal.**
 - **Cache prod:** DragonflyDB. **Не Redis** как отдельный frozen choice — Dragonfly совместим, dev может быть упрощён.
 - OAuth/API — подключение каналов по умолчанию.
-- Subpath `/app` only; без поддомена app.
+- **Один домен** `postilka.ru`: WordPress на `/`, приложение на `/app`; отдельные поддомены для продукта не используются.
 
 ## Отложено
 

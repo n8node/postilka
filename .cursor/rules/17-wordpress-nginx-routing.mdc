@@ -8,7 +8,7 @@ alwaysApply: false
 
 ## Заморожено
 
-- `postilka.ru` — один домен, без `app.postilka.ru`.
+- **Один домен** `postilka.ru`; маршрутизация только path-based. Поддомены для приложения, API, редиректов и прочих фич продукта не используются.
 - WordPress — `/`, marketing, legal, `/wp-*`.
 - Postilka — **`/app`** (Next.js `basePath: '/app'` from day one).
 - API — **`/app/api/v1`** (nginx → Go backend :8080), как Erman но с prefix `/app` вместо root `/api/v1`.
@@ -20,6 +20,7 @@ postilka.ru/                    → WordPress
 postilka.ru/app                 → Next.js frontend
 postilka.ru/app/api/v1/...      → Go backend
 postilka.ru/app/_next/...       → frontend static
+postilka.ru/go/{code}           → Go backend (короткие ссылки, click tracking)
 ```
 
 ## Nginx (Erman `app-locations.conf` adapted)

@@ -2055,7 +2055,7 @@ export function PostComposer() {
                   </label>
                   <p className="mt-2 text-[11px] text-muted">
                     UTM и сокращение сохраняются отдельно для каждого выбранного канала. При
-                    публикации ссылки заменяются на go.postilka.ru с учётом UTM и переходов.
+                    публикации URL заменяются на короткие отслеживаемые ссылки с учётом UTM.
                   </p>
                   {noLinkPreviewDelivery.length > 0 && (
                     <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800">
