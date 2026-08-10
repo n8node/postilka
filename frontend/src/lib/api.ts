@@ -2007,8 +2007,10 @@ export type KieVideoAdminSettings = {
   default_duration_text_to_video: number;
   default_duration_image_to_video: number;
   default_duration_reference_to_video: number;
-  kopecks_per_video_second: number;
-  kopecks_per_reference_video_second: number;
+  token_cost_text_to_video: number;
+  token_cost_image_to_video: number;
+  token_cost_reference_to_video: number;
+  kopecks_per_media_credit: number;
   updated_at?: string;
 };
 

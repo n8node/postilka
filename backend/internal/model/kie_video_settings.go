@@ -16,17 +16,19 @@ const (
 var KieVideoAspectRatios = []string{"9:16", "21:9", "16:9", "4:3", "1:1", "3:4"}
 
 type KieVideoSettings struct {
-	APIBaseURL                       string
-	APIKey                           string
-	ModelTextToVideo                 string
-	ModelImageToVideo                string
-	ModelReferenceToVideo            string
-	DefaultDurationTextToVideo       int
-	DefaultDurationImageToVideo      int
-	DefaultDurationReferenceToVideo  int
-	KopecksPerVideoSecond            int
-	KopecksPerReferenceVideoSecond   int
-	UpdatedAt                        time.Time
+	APIBaseURL                      string
+	APIKey                          string
+	ModelTextToVideo                string
+	ModelImageToVideo               string
+	ModelReferenceToVideo           string
+	DefaultDurationTextToVideo      int
+	DefaultDurationImageToVideo     int
+	DefaultDurationReferenceToVideo int
+	TokenCostTextToVideo            int
+	TokenCostImageToVideo           int
+	TokenCostReferenceToVideo       int
+	KopecksPerMediaCredit           int
+	UpdatedAt                       time.Time
 }
 
 type KieVideoSettingsDTO struct {
@@ -38,8 +40,10 @@ type KieVideoSettingsDTO struct {
 	DefaultDurationTextToVideo      int    `json:"default_duration_text_to_video"`
 	DefaultDurationImageToVideo     int    `json:"default_duration_image_to_video"`
 	DefaultDurationReferenceToVideo int    `json:"default_duration_reference_to_video"`
-	KopecksPerVideoSecond           int    `json:"kopecks_per_video_second"`
-	KopecksPerReferenceVideoSecond  int    `json:"kopecks_per_reference_video_second"`
+	TokenCostTextToVideo            int    `json:"token_cost_text_to_video"`
+	TokenCostImageToVideo           int    `json:"token_cost_image_to_video"`
+	TokenCostReferenceToVideo       int    `json:"token_cost_reference_to_video"`
+	KopecksPerMediaCredit           int    `json:"kopecks_per_media_credit"`
 	UpdatedAt                       string `json:"updated_at,omitempty"`
 }
 
@@ -52,8 +56,10 @@ type KieVideoUpdateRequest struct {
 	DefaultDurationTextToVideo      *int    `json:"default_duration_text_to_video"`
 	DefaultDurationImageToVideo     *int    `json:"default_duration_image_to_video"`
 	DefaultDurationReferenceToVideo *int    `json:"default_duration_reference_to_video"`
-	KopecksPerVideoSecond           *int    `json:"kopecks_per_video_second"`
-	KopecksPerReferenceVideoSecond  *int    `json:"kopecks_per_reference_video_second"`
+	TokenCostTextToVideo            *int    `json:"token_cost_text_to_video"`
+	TokenCostImageToVideo           *int    `json:"token_cost_image_to_video"`
+	TokenCostReferenceToVideo       *int    `json:"token_cost_reference_to_video"`
+	KopecksPerMediaCredit           *int    `json:"kopecks_per_media_credit"`
 }
 
 type KieVideoTestRequest struct {
@@ -90,18 +96,29 @@ func (s KieVideoSettings) ModelForMode(mode string) string {
 	}
 }
 
-func (s KieVideoSettings) KopecksPerSecondForMode(mode string) int {
-	if strings.EqualFold(strings.TrimSpace(mode), KieVideoModeReferenceToVideo) {
-		return positiveOrOne(s.KopecksPerReferenceVideoSecond)
+func (s KieVideoSettings) TokenCostForVideoMode(mode string) int {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case KieVideoModeImageToVideo:
+		return positiveOrOne(s.TokenCostImageToVideo)
+	case KieVideoModeReferenceToVideo:
+		return positiveOrOne(s.TokenCostReferenceToVideo)
+	default:
+		return positiveOrOne(s.TokenCostTextToVideo)
 	}
-	return positiveOrOne(s.KopecksPerVideoSecond)
 }
 
-func (s KieVideoSettings) CostCentsForDuration(mode string, durationSec int) int64 {
-	if durationSec <= 0 {
+func (s KieVideoSettings) WalletCostCents(creditCount int) int64 {
+	if creditCount <= 0 || s.KopecksPerMediaCredit <= 0 {
 		return 0
 	}
-	return int64(durationSec) * int64(s.KopecksPerSecondForMode(mode))
+	return int64(creditCount) * int64(s.KopecksPerMediaCredit)
+}
+
+func (s KieVideoSettings) MediaCreditPriceRub() float64 {
+	if s.KopecksPerMediaCredit <= 0 {
+		return 50
+	}
+	return float64(s.KopecksPerMediaCredit) / 100.0
 }
 
 func clampVideoDuration(n int) int {

@@ -26,8 +26,10 @@ const DEFAULT_SETTINGS: KieVideoAdminSettings = {
   default_duration_text_to_video: 5,
   default_duration_image_to_video: 5,
   default_duration_reference_to_video: 5,
-  kopecks_per_video_second: 500,
-  kopecks_per_reference_video_second: 800,
+  token_cost_text_to_video: 50,
+  token_cost_image_to_video: 50,
+  token_cost_reference_to_video: 75,
+  kopecks_per_media_credit: 5000,
 };
 
 const VIDEO_MODES = [
@@ -198,6 +200,7 @@ export function AdminKieVideoPage({ embedded = false }: { embedded?: boolean }) 
   const [creditsRemaining, setCreditsRemaining] = useState<number | null>(null);
   const [availableModels, setAvailableModels] = useState<KieVideoModel[]>([]);
   const [form, setForm] = useState<KieVideoAdminSettings>(DEFAULT_SETTINGS);
+  const [mediaCreditPriceRub, setMediaCreditPriceRub] = useState(50);
   const [newApiKey, setNewApiKey] = useState("");
   const [examples, setExamples] = useState<KieVideoExample[]>([]);
   const [exampleMode, setExampleMode] = useState<VideoMode>("text-to-video");
@@ -242,6 +245,9 @@ export function AdminKieVideoPage({ embedded = false }: { embedded?: boolean }) 
         loadExamples(),
       ]);
       setForm(settings);
+      setMediaCreditPriceRub(
+        Math.max(0, (settings.kopecks_per_media_credit ?? 5000) / 100),
+      );
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Не удалось загрузить настройки");
     } finally {
@@ -303,14 +309,22 @@ export function AdminKieVideoPage({ embedded = false }: { embedded?: boolean }) 
         default_duration_text_to_video: form.default_duration_text_to_video,
         default_duration_image_to_video: form.default_duration_image_to_video,
         default_duration_reference_to_video: form.default_duration_reference_to_video,
-        kopecks_per_video_second: form.kopecks_per_video_second,
-        kopecks_per_reference_video_second: form.kopecks_per_reference_video_second,
+        token_cost_text_to_video: form.token_cost_text_to_video,
+        token_cost_image_to_video: form.token_cost_image_to_video,
+        token_cost_reference_to_video: form.token_cost_reference_to_video,
+        kopecks_per_media_credit: Math.max(
+          1,
+          Math.round(Math.max(0, mediaCreditPriceRub) * 100),
+        ),
       };
       if (newApiKey.trim()) {
         body.api_key = newApiKey.trim();
       }
       const { settings } = await updateAdminKieVideoSettings(body);
       setForm(settings);
+      setMediaCreditPriceRub(
+        Math.max(0, (settings.kopecks_per_media_credit ?? 5000) / 100),
+      );
       setNewApiKey("");
       setSuccess("Настройки KIE Video сохранены");
     } catch (err) {
@@ -376,9 +390,6 @@ export function AdminKieVideoPage({ embedded = false }: { embedded?: boolean }) 
       setError(err instanceof ApiError ? err.message : "Не удалось удалить пример");
     }
   }
-
-  const videoSecondRub = form.kopecks_per_video_second / 100;
-  const referenceSecondRub = form.kopecks_per_reference_video_second / 100;
 
   if (loading) {
     return <p className="text-sm text-slate-500">Загрузка…</p>;
@@ -531,48 +542,68 @@ export function AdminKieVideoPage({ embedded = false }: { embedded?: boolean }) 
 
       <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
         <div>
-          <h2 className="text-base font-semibold text-slate-900">Стоимость видео</h2>
+          <h2 className="text-base font-semibold text-slate-900">Кредиты за операцию</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Списание = длительность (сек) × стоимость секунды. Для референс-режима — отдельная цена.
+            Сколько кредитов списывается за одну успешную генерацию в каждом режиме. Сначала
+            расходуется included-квота тарифа, остаток — с кошелька пользователя.
+          </p>
+        </div>
+
+        {(
+          [
+            ["token_cost_text_to_video", "Текст → видео", "Кредитов за генерацию"],
+            ["token_cost_image_to_video", "Фото → видео", "Кредитов за генерацию"],
+            ["token_cost_reference_to_video", "Референс → видео", "Кредитов за генерацию"],
+          ] as const
+        ).map(([key, label, hint]) => (
+          <div key={key}>
+            <label className="mb-1.5 block text-sm font-medium">{label}</label>
+            <input
+              type="number"
+              min={0}
+              value={form[key]}
+              onChange={(e) =>
+                patch(key, Math.max(0, parseInt(e.target.value, 10) || 0))
+              }
+              className="max-w-[140px] rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+            />
+            <p className="mt-1 text-xs text-slate-500">{hint}</p>
+            {mediaCreditPriceRub > 0 && form[key] > 0 ? (
+              <p className="mt-0.5 text-xs text-slate-600">
+                С кошелька при overage: {(form[key] * mediaCreditPriceRub).toLocaleString("ru-RU")} ₽
+                {" "}(= {form[key]} × {mediaCreditPriceRub} ₽)
+              </p>
+            ) : null}
+          </div>
+        ))}
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
+        <div>
+          <h2 className="text-base font-semibold text-slate-900">Стоимость кредита для кошелька</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Цена одного кредита в рублях. Списание с кошелька ={" "}
+            <span className="font-medium text-slate-700">кредиты режима × эта стоимость</span>.
+            Included-квота тарифа по-прежнему расходуется первой.
           </p>
         </div>
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium">1 секунда видео, коп.</label>
+          <label className="mb-1.5 block text-sm font-medium">1 кредит, ₽</label>
           <input
             type="number"
             min={1}
-            value={form.kopecks_per_video_second}
-            onChange={(e) =>
-              patch("kopecks_per_video_second", Math.max(1, parseInt(e.target.value, 10) || 1))
-            }
+            step={1}
+            value={mediaCreditPriceRub}
+            onChange={(e) => {
+              setMediaCreditPriceRub(Math.max(0, parseInt(e.target.value, 10) || 0));
+              setSuccess(null);
+            }}
             className="max-w-[140px] rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
           />
           <p className="mt-1 text-xs text-slate-500">
-            = {videoSecondRub.toLocaleString("ru-RU")} ₽/сек · 10 сек ={" "}
-            {(videoSecondRub * 10).toLocaleString("ru-RU")} ₽
-          </p>
-        </div>
-
-        <div>
-          <label className="mb-1.5 block text-sm font-medium">
-            1 секунда (референс → видео), коп.
-          </label>
-          <input
-            type="number"
-            min={1}
-            value={form.kopecks_per_reference_video_second}
-            onChange={(e) =>
-              patch(
-                "kopecks_per_reference_video_second",
-                Math.max(1, parseInt(e.target.value, 10) || 1),
-              )
-            }
-            className="max-w-[140px] rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-          />
-          <p className="mt-1 text-xs text-slate-500">
-            = {referenceSecondRub.toLocaleString("ru-RU")} ₽/сек · 10 сек ={" "}
-            {(referenceSecondRub * 10).toLocaleString("ru-RU")} ₽
+            Пример: text→video {form.token_cost_text_to_video} кред. × {mediaCreditPriceRub} ₽ ={" "}
+            {(form.token_cost_text_to_video * mediaCreditPriceRub).toLocaleString("ru-RU")} ₽ с кошелька
           </p>
         </div>
       </section>

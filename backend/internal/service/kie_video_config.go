@@ -70,17 +70,29 @@ func (s *KieVideoConfigService) Update(ctx context.Context, in model.KieVideoUpd
 	if in.DefaultDurationReferenceToVideo != nil {
 		current.DefaultDurationReferenceToVideo = modelClampDuration(*in.DefaultDurationReferenceToVideo)
 	}
-	if in.KopecksPerVideoSecond != nil {
-		if *in.KopecksPerVideoSecond <= 0 || *in.KopecksPerVideoSecond > 10_000_000 {
-			return model.KieVideoSettingsDTO{}, errors.New("invalid kopecks per video second")
+	if in.TokenCostTextToVideo != nil {
+		if *in.TokenCostTextToVideo < 0 || *in.TokenCostTextToVideo > 1_000_000 {
+			return model.KieVideoSettingsDTO{}, errors.New("invalid token cost for text-to-video")
 		}
-		current.KopecksPerVideoSecond = *in.KopecksPerVideoSecond
+		current.TokenCostTextToVideo = *in.TokenCostTextToVideo
 	}
-	if in.KopecksPerReferenceVideoSecond != nil {
-		if *in.KopecksPerReferenceVideoSecond <= 0 || *in.KopecksPerReferenceVideoSecond > 10_000_000 {
-			return model.KieVideoSettingsDTO{}, errors.New("invalid kopecks per reference video second")
+	if in.TokenCostImageToVideo != nil {
+		if *in.TokenCostImageToVideo < 0 || *in.TokenCostImageToVideo > 1_000_000 {
+			return model.KieVideoSettingsDTO{}, errors.New("invalid token cost for image-to-video")
 		}
-		current.KopecksPerReferenceVideoSecond = *in.KopecksPerReferenceVideoSecond
+		current.TokenCostImageToVideo = *in.TokenCostImageToVideo
+	}
+	if in.TokenCostReferenceToVideo != nil {
+		if *in.TokenCostReferenceToVideo < 0 || *in.TokenCostReferenceToVideo > 1_000_000 {
+			return model.KieVideoSettingsDTO{}, errors.New("invalid token cost for reference-to-video")
+		}
+		current.TokenCostReferenceToVideo = *in.TokenCostReferenceToVideo
+	}
+	if in.KopecksPerMediaCredit != nil {
+		if *in.KopecksPerMediaCredit <= 0 || *in.KopecksPerMediaCredit > 10_000_000 {
+			return model.KieVideoSettingsDTO{}, errors.New("invalid kopecks per media credit")
+		}
+		current.KopecksPerMediaCredit = *in.KopecksPerMediaCredit
 	}
 
 	if in.ModelTextToVideo != nil {
@@ -201,8 +213,10 @@ func defaultKieVideoSettings() model.KieVideoSettings {
 		DefaultDurationTextToVideo:      5,
 		DefaultDurationImageToVideo:     5,
 		DefaultDurationReferenceToVideo: 5,
-		KopecksPerVideoSecond:           500,
-		KopecksPerReferenceVideoSecond:  800,
+		TokenCostTextToVideo:            50,
+		TokenCostImageToVideo:           50,
+		TokenCostReferenceToVideo:       75,
+		KopecksPerMediaCredit:           5000,
 	}
 }
 
@@ -216,8 +230,10 @@ func toKieVideoSettingsDTO(s model.KieVideoSettings) model.KieVideoSettingsDTO {
 		DefaultDurationTextToVideo:      modelClampDuration(s.DefaultDurationTextToVideo),
 		DefaultDurationImageToVideo:     modelClampDuration(s.DefaultDurationImageToVideo),
 		DefaultDurationReferenceToVideo: modelClampDuration(s.DefaultDurationReferenceToVideo),
-		KopecksPerVideoSecond:           positiveKopecksOr(s.KopecksPerVideoSecond, 500),
-		KopecksPerReferenceVideoSecond:  positiveKopecksOr(s.KopecksPerReferenceVideoSecond, 800),
+		TokenCostTextToVideo:            s.TokenCostTextToVideo,
+		TokenCostImageToVideo:           s.TokenCostImageToVideo,
+		TokenCostReferenceToVideo:       s.TokenCostReferenceToVideo,
+		KopecksPerMediaCredit:           positiveKopecksOr(s.KopecksPerMediaCredit, 5000),
 	}
 	if !s.UpdatedAt.IsZero() {
 		dto.UpdatedAt = s.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z")
