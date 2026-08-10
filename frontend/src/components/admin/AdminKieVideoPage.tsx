@@ -77,6 +77,7 @@ function ModelSelect({
       </option>
       {options.map((model) => (
         <option key={model.id} value={model.id}>
+          {model.category ? `[${model.category}] ` : ""}
           {model.name} ({model.id})
         </option>
       ))}
@@ -205,18 +206,18 @@ export function AdminKieVideoPage({ embedded = false }: { embedded?: boolean }) 
   const [exampleDuration, setExampleDuration] = useState(5);
   const [exampleImages, setExampleImages] = useState<File[]>([]);
 
-  const textModels = useMemo(
-    () => availableModels.filter((m) => m.category === "text-to-video"),
+  const allVideoModels = useMemo(
+    () => sortModels(availableModels),
     [availableModels],
   );
-  const imageModels = useMemo(
-    () => availableModels.filter((m) => m.category === "image-to-video"),
-    [availableModels],
-  );
-  const referenceModels = useMemo(
-    () => availableModels.filter((m) => m.category === "reference-to-video"),
-    [availableModels],
-  );
+
+  const modelCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const m of availableModels) {
+      counts[m.category] = (counts[m.category] ?? 0) + 1;
+    }
+    return counts;
+  }, [availableModels]);
 
   const readyCount = useMemo(
     () => examples.filter((e) => e.status === "ready").length,
@@ -455,7 +456,19 @@ export function AdminKieVideoPage({ embedded = false }: { embedded?: boolean }) 
               {creditsRemaining !== null
                 ? ` · кредитов KIE: ${Number.isInteger(creditsRemaining) ? creditsRemaining : creditsRemaining.toFixed(1)}`
                 : ""}
-              {availableModels.length > 0 ? ` · моделей: ${availableModels.length}` : ""}
+              {availableModels.length > 0 ? (
+                <>
+                  {" "}
+                  · моделей: {availableModels.length}
+                  {Object.keys(modelCounts).length > 0
+                    ? ` (${Object.entries(modelCounts)
+                        .map(([cat, n]) => `${n} ${cat}`)
+                        .join(", ")})`
+                    : ""}
+                </>
+              ) : (
+                ""
+              )}
             </span>
           )}
         </div>
@@ -466,7 +479,7 @@ export function AdminKieVideoPage({ embedded = false }: { embedded?: boolean }) 
         <div>
           <h2 className="text-base font-semibold text-slate-900">Модели KIE Market</h2>
           <p className="mt-1 text-sm text-slate-500">
-            После успешного теста выберите модели для каждого режима
+            После успешного теста выберите модели для каждого режима. В списке — все модели KIE Market Video ({allVideoModels.length || "—"}).
           </p>
         </div>
 
@@ -475,7 +488,7 @@ export function AdminKieVideoPage({ embedded = false }: { embedded?: boolean }) 
           <ModelSelect
             value={form.model_text_to_video}
             onChange={(v) => patch("model_text_to_video", v)}
-            models={textModels}
+            models={allVideoModels}
             emptyLabel="Выберите модель"
           />
           <DurationSlider
@@ -490,7 +503,7 @@ export function AdminKieVideoPage({ embedded = false }: { embedded?: boolean }) 
           <ModelSelect
             value={form.model_image_to_video}
             onChange={(v) => patch("model_image_to_video", v)}
-            models={imageModels}
+            models={allVideoModels}
             emptyLabel="Выберите модель"
           />
           <DurationSlider
@@ -505,7 +518,7 @@ export function AdminKieVideoPage({ embedded = false }: { embedded?: boolean }) 
           <ModelSelect
             value={form.model_reference_to_video}
             onChange={(v) => patch("model_reference_to_video", v)}
-            models={referenceModels}
+            models={allVideoModels}
             emptyLabel="Выберите модель"
           />
           <DurationSlider

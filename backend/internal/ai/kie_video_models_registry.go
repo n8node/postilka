@@ -12,17 +12,6 @@ func KieVideoMarketModels() []KieModelInfo {
 	return append([]KieModelInfo(nil), kieVideoMarketCatalog...)
 }
 
-var kieVideoMarketCatalog = []KieModelInfo{
-	{ID: "kling/v3-turbo-text-to-video", Name: "Kling V3 Turbo — Text to Video", Category: "text-to-video"},
-	{ID: "kling-2.6/text-to-video", Name: "Kling 2.6 — Text to Video", Category: "text-to-video"},
-	{ID: "kling/v3-turbo-image-to-video", Name: "Kling V3 Turbo — Image to Video", Category: "image-to-video"},
-	{ID: "kling-2.6/image-to-video", Name: "Kling 2.6 — Image to Video", Category: "image-to-video"},
-	{ID: "wan/2-7-image-to-video", Name: "Wan 2.7 — Image to Video", Category: "image-to-video"},
-	{ID: "happyhorse/reference-to-video", Name: "HappyHorse — Reference to Video", Category: "reference-to-video"},
-	{ID: "happyhorse-1-1/reference-to-video", Name: "HappyHorse 1.1 — Reference to Video", Category: "reference-to-video"},
-	{ID: "wan/2-7-r2v", Name: "Wan 2.7 — Reference to Video", Category: "reference-to-video"},
-}
-
 var kieVideoModelAliases = map[string]string{
 	"kling/v3-turbo-text2video": "kling/v3-turbo-text-to-video",
 	"kling/v3-turbo-image2video": "kling/v3-turbo-image-to-video",
