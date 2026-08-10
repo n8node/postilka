@@ -16,50 +16,50 @@ const (
 var KieVideoAspectRatios = []string{"9:16", "21:9", "16:9", "4:3", "1:1", "3:4"}
 
 type KieVideoSettings struct {
-	APIBaseURL                      string
-	APIKey                          string
-	ModelTextToVideo                string
-	ModelImageToVideo               string
-	ModelReferenceToVideo           string
-	DefaultDurationTextToVideo      int
-	DefaultDurationImageToVideo     int
-	DefaultDurationReferenceToVideo int
-	TokenCostTextToVideo            int
-	TokenCostImageToVideo           int
-	TokenCostReferenceToVideo       int
-	KopecksPerMediaCredit           int
-	UpdatedAt                       time.Time
+	APIBaseURL                       string
+	APIKey                           string
+	ModelTextToVideo                 string
+	ModelImageToVideo                string
+	ModelReferenceToVideo            string
+	DefaultDurationTextToVideo       int
+	DefaultDurationImageToVideo      int
+	DefaultDurationReferenceToVideo  int
+	CreditsPerSecondTextToVideo      int
+	CreditsPerSecondImageToVideo     int
+	CreditsPerSecondReferenceToVideo int
+	KopecksPerMediaCredit            int
+	UpdatedAt                        time.Time
 }
 
 type KieVideoSettingsDTO struct {
-	APIBaseURL                      string `json:"api_base_url"`
-	APIKeySet                       bool   `json:"api_key_set"`
-	ModelTextToVideo                string `json:"model_text_to_video"`
-	ModelImageToVideo               string `json:"model_image_to_video"`
-	ModelReferenceToVideo           string `json:"model_reference_to_video"`
-	DefaultDurationTextToVideo      int    `json:"default_duration_text_to_video"`
-	DefaultDurationImageToVideo     int    `json:"default_duration_image_to_video"`
-	DefaultDurationReferenceToVideo int    `json:"default_duration_reference_to_video"`
-	TokenCostTextToVideo            int    `json:"token_cost_text_to_video"`
-	TokenCostImageToVideo           int    `json:"token_cost_image_to_video"`
-	TokenCostReferenceToVideo       int    `json:"token_cost_reference_to_video"`
-	KopecksPerMediaCredit           int    `json:"kopecks_per_media_credit"`
-	UpdatedAt                       string `json:"updated_at,omitempty"`
+	APIBaseURL                       string `json:"api_base_url"`
+	APIKeySet                        bool   `json:"api_key_set"`
+	ModelTextToVideo                 string `json:"model_text_to_video"`
+	ModelImageToVideo                string `json:"model_image_to_video"`
+	ModelReferenceToVideo            string `json:"model_reference_to_video"`
+	DefaultDurationTextToVideo       int    `json:"default_duration_text_to_video"`
+	DefaultDurationImageToVideo      int    `json:"default_duration_image_to_video"`
+	DefaultDurationReferenceToVideo  int    `json:"default_duration_reference_to_video"`
+	CreditsPerSecondTextToVideo      int    `json:"credits_per_second_text_to_video"`
+	CreditsPerSecondImageToVideo     int    `json:"credits_per_second_image_to_video"`
+	CreditsPerSecondReferenceToVideo int    `json:"credits_per_second_reference_to_video"`
+	MediaCreditPriceRub              int    `json:"media_credit_price_rub"`
+	UpdatedAt                        string `json:"updated_at,omitempty"`
 }
 
 type KieVideoUpdateRequest struct {
-	APIBaseURL                      *string `json:"api_base_url"`
-	APIKey                          *string `json:"api_key"`
-	ModelTextToVideo                *string `json:"model_text_to_video"`
-	ModelImageToVideo               *string `json:"model_image_to_video"`
-	ModelReferenceToVideo           *string `json:"model_reference_to_video"`
-	DefaultDurationTextToVideo      *int    `json:"default_duration_text_to_video"`
-	DefaultDurationImageToVideo     *int    `json:"default_duration_image_to_video"`
-	DefaultDurationReferenceToVideo *int    `json:"default_duration_reference_to_video"`
-	TokenCostTextToVideo            *int    `json:"token_cost_text_to_video"`
-	TokenCostImageToVideo           *int    `json:"token_cost_image_to_video"`
-	TokenCostReferenceToVideo       *int    `json:"token_cost_reference_to_video"`
-	KopecksPerMediaCredit           *int    `json:"kopecks_per_media_credit"`
+	APIBaseURL                       *string `json:"api_base_url"`
+	APIKey                           *string `json:"api_key"`
+	ModelTextToVideo                 *string `json:"model_text_to_video"`
+	ModelImageToVideo                *string `json:"model_image_to_video"`
+	ModelReferenceToVideo            *string `json:"model_reference_to_video"`
+	DefaultDurationTextToVideo       *int    `json:"default_duration_text_to_video"`
+	DefaultDurationImageToVideo      *int    `json:"default_duration_image_to_video"`
+	DefaultDurationReferenceToVideo  *int    `json:"default_duration_reference_to_video"`
+	CreditsPerSecondTextToVideo      *int    `json:"credits_per_second_text_to_video"`
+	CreditsPerSecondImageToVideo     *int    `json:"credits_per_second_image_to_video"`
+	CreditsPerSecondReferenceToVideo *int    `json:"credits_per_second_reference_to_video"`
+	MediaCreditPriceRub              *int    `json:"media_credit_price_rub"`
 }
 
 type KieVideoTestRequest struct {
@@ -96,15 +96,25 @@ func (s KieVideoSettings) ModelForMode(mode string) string {
 	}
 }
 
-func (s KieVideoSettings) TokenCostForVideoMode(mode string) int {
+func (s KieVideoSettings) CreditsPerSecondForMode(mode string) int {
 	switch strings.ToLower(strings.TrimSpace(mode)) {
 	case KieVideoModeImageToVideo:
-		return positiveOrOne(s.TokenCostImageToVideo)
+		return nonNegative(s.CreditsPerSecondImageToVideo)
 	case KieVideoModeReferenceToVideo:
-		return positiveOrOne(s.TokenCostReferenceToVideo)
+		return nonNegative(s.CreditsPerSecondReferenceToVideo)
 	default:
-		return positiveOrOne(s.TokenCostTextToVideo)
+		return nonNegative(s.CreditsPerSecondTextToVideo)
 	}
+}
+
+// CreditCostForVideo returns total credits: durationSeconds × creditsPerSecond(mode).
+func (s KieVideoSettings) CreditCostForVideo(mode string, durationSeconds int) int {
+	durationSeconds = clampVideoDuration(durationSeconds)
+	rate := s.CreditsPerSecondForMode(mode)
+	if rate <= 0 || durationSeconds <= 0 {
+		return 0
+	}
+	return durationSeconds * rate
 }
 
 func (s KieVideoSettings) WalletCostCents(creditCount int) int64 {
@@ -114,11 +124,33 @@ func (s KieVideoSettings) WalletCostCents(creditCount int) int64 {
 	return int64(creditCount) * int64(s.KopecksPerMediaCredit)
 }
 
-func (s KieVideoSettings) MediaCreditPriceRub() float64 {
+func (s KieVideoSettings) WalletCostRub(creditCount int) int {
+	return int(s.WalletCostCents(creditCount) / 100)
+}
+
+func (s KieVideoSettings) MediaCreditPriceRub() int {
 	if s.KopecksPerMediaCredit <= 0 {
 		return 50
 	}
-	return float64(s.KopecksPerMediaCredit) / 100.0
+	rub := s.KopecksPerMediaCredit / 100
+	if rub <= 0 {
+		return 1
+	}
+	return rub
+}
+
+func (s *KieVideoSettings) SetMediaCreditPriceRub(rub int) {
+	if rub <= 0 {
+		rub = 1
+	}
+	s.KopecksPerMediaCredit = rub * 100
+}
+
+func nonNegative(n int) int {
+	if n < 0 {
+		return 0
+	}
+	return n
 }
 
 func clampVideoDuration(n int) int {

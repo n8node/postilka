@@ -70,29 +70,29 @@ func (s *KieVideoConfigService) Update(ctx context.Context, in model.KieVideoUpd
 	if in.DefaultDurationReferenceToVideo != nil {
 		current.DefaultDurationReferenceToVideo = modelClampDuration(*in.DefaultDurationReferenceToVideo)
 	}
-	if in.TokenCostTextToVideo != nil {
-		if *in.TokenCostTextToVideo < 0 || *in.TokenCostTextToVideo > 1_000_000 {
-			return model.KieVideoSettingsDTO{}, errors.New("invalid token cost for text-to-video")
+	if in.CreditsPerSecondTextToVideo != nil {
+		if *in.CreditsPerSecondTextToVideo < 0 || *in.CreditsPerSecondTextToVideo > 1_000_000 {
+			return model.KieVideoSettingsDTO{}, errors.New("invalid credits per second for text-to-video")
 		}
-		current.TokenCostTextToVideo = *in.TokenCostTextToVideo
+		current.CreditsPerSecondTextToVideo = *in.CreditsPerSecondTextToVideo
 	}
-	if in.TokenCostImageToVideo != nil {
-		if *in.TokenCostImageToVideo < 0 || *in.TokenCostImageToVideo > 1_000_000 {
-			return model.KieVideoSettingsDTO{}, errors.New("invalid token cost for image-to-video")
+	if in.CreditsPerSecondImageToVideo != nil {
+		if *in.CreditsPerSecondImageToVideo < 0 || *in.CreditsPerSecondImageToVideo > 1_000_000 {
+			return model.KieVideoSettingsDTO{}, errors.New("invalid credits per second for image-to-video")
 		}
-		current.TokenCostImageToVideo = *in.TokenCostImageToVideo
+		current.CreditsPerSecondImageToVideo = *in.CreditsPerSecondImageToVideo
 	}
-	if in.TokenCostReferenceToVideo != nil {
-		if *in.TokenCostReferenceToVideo < 0 || *in.TokenCostReferenceToVideo > 1_000_000 {
-			return model.KieVideoSettingsDTO{}, errors.New("invalid token cost for reference-to-video")
+	if in.CreditsPerSecondReferenceToVideo != nil {
+		if *in.CreditsPerSecondReferenceToVideo < 0 || *in.CreditsPerSecondReferenceToVideo > 1_000_000 {
+			return model.KieVideoSettingsDTO{}, errors.New("invalid credits per second for reference-to-video")
 		}
-		current.TokenCostReferenceToVideo = *in.TokenCostReferenceToVideo
+		current.CreditsPerSecondReferenceToVideo = *in.CreditsPerSecondReferenceToVideo
 	}
-	if in.KopecksPerMediaCredit != nil {
-		if *in.KopecksPerMediaCredit <= 0 || *in.KopecksPerMediaCredit > 10_000_000 {
-			return model.KieVideoSettingsDTO{}, errors.New("invalid kopecks per media credit")
+	if in.MediaCreditPriceRub != nil {
+		if *in.MediaCreditPriceRub <= 0 || *in.MediaCreditPriceRub > 100_000 {
+			return model.KieVideoSettingsDTO{}, errors.New("invalid media credit price rub")
 		}
-		current.KopecksPerMediaCredit = *in.KopecksPerMediaCredit
+		current.SetMediaCreditPriceRub(*in.MediaCreditPriceRub)
 	}
 
 	if in.ModelTextToVideo != nil {
@@ -213,10 +213,10 @@ func defaultKieVideoSettings() model.KieVideoSettings {
 		DefaultDurationTextToVideo:      5,
 		DefaultDurationImageToVideo:     5,
 		DefaultDurationReferenceToVideo: 5,
-		TokenCostTextToVideo:            50,
-		TokenCostImageToVideo:           50,
-		TokenCostReferenceToVideo:       75,
-		KopecksPerMediaCredit:           5000,
+		CreditsPerSecondTextToVideo:      5,
+		CreditsPerSecondImageToVideo:     5,
+		CreditsPerSecondReferenceToVideo: 8,
+		KopecksPerMediaCredit:            5000,
 	}
 }
 
@@ -230,10 +230,10 @@ func toKieVideoSettingsDTO(s model.KieVideoSettings) model.KieVideoSettingsDTO {
 		DefaultDurationTextToVideo:      modelClampDuration(s.DefaultDurationTextToVideo),
 		DefaultDurationImageToVideo:     modelClampDuration(s.DefaultDurationImageToVideo),
 		DefaultDurationReferenceToVideo: modelClampDuration(s.DefaultDurationReferenceToVideo),
-		TokenCostTextToVideo:            s.TokenCostTextToVideo,
-		TokenCostImageToVideo:           s.TokenCostImageToVideo,
-		TokenCostReferenceToVideo:       s.TokenCostReferenceToVideo,
-		KopecksPerMediaCredit:           positiveKopecksOr(s.KopecksPerMediaCredit, 5000),
+		CreditsPerSecondTextToVideo:      s.CreditsPerSecondTextToVideo,
+		CreditsPerSecondImageToVideo:     s.CreditsPerSecondImageToVideo,
+		CreditsPerSecondReferenceToVideo: s.CreditsPerSecondReferenceToVideo,
+		MediaCreditPriceRub:              s.MediaCreditPriceRub(),
 	}
 	if !s.UpdatedAt.IsZero() {
 		dto.UpdatedAt = s.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z")

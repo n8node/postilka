@@ -26,14 +26,14 @@ func (r *KieVideoSettingsRepository) Get(ctx context.Context) (model.KieVideoSet
 		       model_reference_to_video,
 		       default_duration_text_to_video, default_duration_image_to_video,
 		       default_duration_reference_to_video,
-		       token_cost_text_to_video, token_cost_image_to_video, token_cost_reference_to_video,
-		       kopecks_per_media_credit, updated_at
+		       credits_per_second_text_to_video, credits_per_second_image_to_video,
+		       credits_per_second_reference_to_video, kopecks_per_media_credit, updated_at
 		FROM kie_video_settings
 		WHERE id = 1
 	`).Scan(
 		&s.APIBaseURL, &enc, &s.ModelTextToVideo, &s.ModelImageToVideo, &s.ModelReferenceToVideo,
 		&s.DefaultDurationTextToVideo, &s.DefaultDurationImageToVideo, &s.DefaultDurationReferenceToVideo,
-		&s.TokenCostTextToVideo, &s.TokenCostImageToVideo, &s.TokenCostReferenceToVideo,
+		&s.CreditsPerSecondTextToVideo, &s.CreditsPerSecondImageToVideo, &s.CreditsPerSecondReferenceToVideo,
 		&s.KopecksPerMediaCredit, &s.UpdatedAt,
 	)
 	if err != nil {
@@ -53,8 +53,8 @@ func (r *KieVideoSettingsRepository) Upsert(ctx context.Context, s model.KieVide
 			model_reference_to_video,
 			default_duration_text_to_video, default_duration_image_to_video,
 			default_duration_reference_to_video,
-			token_cost_text_to_video, token_cost_image_to_video, token_cost_reference_to_video,
-			kopecks_per_media_credit, updated_at
+			credits_per_second_text_to_video, credits_per_second_image_to_video,
+			credits_per_second_reference_to_video, kopecks_per_media_credit, updated_at
 		) VALUES (
 			1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now()
 		)
@@ -67,14 +67,14 @@ func (r *KieVideoSettingsRepository) Upsert(ctx context.Context, s model.KieVide
 			default_duration_text_to_video = EXCLUDED.default_duration_text_to_video,
 			default_duration_image_to_video = EXCLUDED.default_duration_image_to_video,
 			default_duration_reference_to_video = EXCLUDED.default_duration_reference_to_video,
-			token_cost_text_to_video = EXCLUDED.token_cost_text_to_video,
-			token_cost_image_to_video = EXCLUDED.token_cost_image_to_video,
-			token_cost_reference_to_video = EXCLUDED.token_cost_reference_to_video,
+			credits_per_second_text_to_video = EXCLUDED.credits_per_second_text_to_video,
+			credits_per_second_image_to_video = EXCLUDED.credits_per_second_image_to_video,
+			credits_per_second_reference_to_video = EXCLUDED.credits_per_second_reference_to_video,
 			kopecks_per_media_credit = EXCLUDED.kopecks_per_media_credit,
 			updated_at = now()
 	`, s.APIBaseURL, apiKeyEncrypted, s.ModelTextToVideo, s.ModelImageToVideo, s.ModelReferenceToVideo,
 		s.DefaultDurationTextToVideo, s.DefaultDurationImageToVideo, s.DefaultDurationReferenceToVideo,
-		s.TokenCostTextToVideo, s.TokenCostImageToVideo, s.TokenCostReferenceToVideo,
+		s.CreditsPerSecondTextToVideo, s.CreditsPerSecondImageToVideo, s.CreditsPerSecondReferenceToVideo,
 		positiveOrDefault(s.KopecksPerMediaCredit, 5000))
 	return err
 }
