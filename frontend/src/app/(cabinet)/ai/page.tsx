@@ -1,14 +1,17 @@
+import { Suspense } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { GenerationPageContent } from "@/components/generation/GenerationPageContent";
+import { AiContentHub } from "@/components/generation/AiContentHub";
 
 export default function AiPage() {
   return (
     <div>
       <PageHeader
         title="AI контент"
-        description="KIE для медиа: текст → фото, фото → фото и комбинации. Списание: квота тарифа → кошелёк."
+        description="Генерация фото и видео через KIE. Списание: квота тарифа → кошелёк."
       />
-      <GenerationPageContent />
+      <Suspense fallback={null}>
+        <AiContentHub />
+      </Suspense>
     </div>
   );
 }

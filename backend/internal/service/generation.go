@@ -30,8 +30,9 @@ var (
 const generationModeFilter = "filter"
 
 type GenerationService struct {
-	kieConfig   *KieConfigService
-	genRepo     *repository.AIGenerationRepository
+	kieConfig      *KieConfigService
+	kieVideoConfig *KieVideoConfigService
+	genRepo        *repository.AIGenerationRepository
 	jobRepo     *repository.AIGenerationJobRepository
 	uploadRepo  *repository.GenerationSourceUploadRepository
 	aiBilling   *AIBillingService
@@ -44,6 +45,7 @@ type GenerationService struct {
 
 func NewGenerationService(
 	kieConfig *KieConfigService,
+	kieVideoConfig *KieVideoConfigService,
 	genRepo *repository.AIGenerationRepository,
 	jobRepo *repository.AIGenerationJobRepository,
 	uploadRepo *repository.GenerationSourceUploadRepository,
@@ -55,8 +57,9 @@ func NewGenerationService(
 	quota *QuotaService,
 ) *GenerationService {
 	return &GenerationService{
-		kieConfig:   kieConfig,
-		genRepo:     genRepo,
+		kieConfig:      kieConfig,
+		kieVideoConfig: kieVideoConfig,
+		genRepo:        genRepo,
 		jobRepo:     jobRepo,
 		uploadRepo:  uploadRepo,
 		aiBilling:   aiBilling,
@@ -195,15 +198,16 @@ func jobToView(job model.AIGenerationJob, gen *model.AIGenerationView) model.AIG
 		failMsg = UserGenerationFailMessage(failMsg)
 	}
 	view := model.AIGenerationJobView{
-		ID:          job.ID,
-		Status:      job.Status,
-		KieState:    job.KieState,
-		Progress:    job.Progress,
-		Mode:        job.Mode,
-		CreditCost:  job.CreditCost,
-		TokenCost:   job.CreditCost,
-		FailMessage: failMsg,
-		Generation:  gen,
+		ID:                   job.ID,
+		Status:               job.Status,
+		KieState:             job.KieState,
+		Progress:             job.Progress,
+		Mode:                 job.Mode,
+		CreditCost:           job.CreditCost,
+		TokenCost:            job.CreditCost,
+		FailMessage:          failMsg,
+		Generation:           gen,
+		VideoDurationSeconds: job.VideoDurationSeconds,
 	}
 	switch job.Status {
 	case model.GenJobStatusSucceeded, model.GenJobStatusFailed:

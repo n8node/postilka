@@ -1,6 +1,9 @@
 package model
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 type AIGeneration struct {
 	ID                string
@@ -11,9 +14,10 @@ type AIGeneration struct {
 	Model             string
 	AspectRatio       string
 	ResultS3Key       string
-	ResultContentType string
-	WorkspaceFileID   *string
-	CreatedAt         time.Time
+	ResultContentType    string
+	VideoDurationSeconds int
+	WorkspaceFileID      *string
+	CreatedAt            time.Time
 }
 
 type AIGenerationView struct {
@@ -22,9 +26,12 @@ type AIGenerationView struct {
 	Prompt      string `json:"prompt"`
 	Model       string `json:"model"`
 	AspectRatio string `json:"aspect_ratio,omitempty"`
-	ImageURL    string `json:"image_url"`
-	CreatedAt   string `json:"created_at"`
-	UsedInPost  bool   `json:"used_in_post"`
+	ImageURL             string `json:"image_url"`
+	VideoURL             string `json:"video_url,omitempty"`
+	VideoDurationSeconds int    `json:"video_duration_seconds,omitempty"`
+	CreatedAt            string `json:"created_at"`
+	UsedInPost           bool   `json:"used_in_post"`
+	MediaType            string `json:"media_type,omitempty"`
 }
 
 type AIGenerationWithUsage struct {
@@ -32,17 +39,35 @@ type AIGenerationWithUsage struct {
 	UsedInPost bool
 }
 
-func (g AIGeneration) ToViewWithUsage(usedInPost bool) AIGenerationView {
-	return AIGenerationView{
-		ID:          g.ID,
-		Mode:        g.Mode,
-		Prompt:      g.Prompt,
-		Model:       g.Model,
-		AspectRatio: g.AspectRatio,
-		ImageURL:    AIGenerationMediaPath(g.ID),
-		CreatedAt:   g.CreatedAt.UTC().Format(time.RFC3339),
-		UsedInPost:  usedInPost,
+func IsVideoGenerationMode(mode string) bool {
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case KieVideoModeTextToVideo, KieVideoModeImageToVideo, KieVideoModeReferenceToVideo:
+		return true
+	default:
+		return false
 	}
+}
+
+func (g AIGeneration) ToViewWithUsage(usedInPost bool) AIGenerationView {
+	mediaPath := AIGenerationMediaPath(g.ID)
+	view := AIGenerationView{
+		ID:                   g.ID,
+		Mode:                 g.Mode,
+		Prompt:               g.Prompt,
+		Model:                g.Model,
+		AspectRatio:          g.AspectRatio,
+		ImageURL:             mediaPath,
+		VideoDurationSeconds: g.VideoDurationSeconds,
+		CreatedAt:            g.CreatedAt.UTC().Format(time.RFC3339),
+		UsedInPost:           usedInPost,
+	}
+	if IsVideoGenerationMode(g.Mode) || strings.HasPrefix(g.ResultContentType, "video/") {
+		view.MediaType = "video"
+		view.VideoURL = mediaPath
+	} else {
+		view.MediaType = "image"
+	}
+	return view
 }
 
 func AIGenerationMediaPath(id string) string {

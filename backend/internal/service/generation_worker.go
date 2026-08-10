@@ -88,7 +88,13 @@ func (s *GenerationService) pollDueJobs(ctx context.Context, pollGate *kiePollGa
 			continue
 		}
 		if job.Status == model.GenJobStatusPreparing && strings.TrimSpace(job.KieTaskID) == "" {
-			if err := s.submitPendingJob(ctx, id, createGate); err != nil {
+			var err error
+			if model.IsVideoGenerationMode(job.Mode) {
+				err = s.submitPendingVideoJob(ctx, id, createGate)
+			} else {
+				err = s.submitPendingJob(ctx, id, createGate)
+			}
+			if err != nil {
 				slog.Warn("submit generation job", "job_id", id, "err", err)
 			}
 			continue
@@ -115,7 +121,7 @@ func (s *GenerationService) pollDueJobs(ctx context.Context, pollGate *kiePollGa
 			continue
 		}
 
-		got429, terminal, err := s.pollKieJob(ctx, job)
+		got429, terminal, err := s.pollGenerationJob(ctx, job)
 		if err != nil {
 			slog.Warn("poll kie job", "job_id", id, "err", err)
 			if got429 {
@@ -132,7 +138,7 @@ func (s *GenerationService) pollDueJobs(ctx context.Context, pollGate *kiePollGa
 		case finalSem <- struct{}{}:
 			go func(jobID string) {
 				defer func() { <-finalSem }()
-				if err := s.finalizeJob(context.Background(), jobID); err != nil {
+				if err := s.finalizeGenerationJob(context.Background(), jobID); err != nil {
 					slog.Error("finalize generation job", "job_id", jobID, "err", err)
 				}
 			}(id)
@@ -141,6 +147,24 @@ func (s *GenerationService) pollDueJobs(ctx context.Context, pollGate *kiePollGa
 				time.Now().Add(2*time.Second))
 		}
 	}
+}
+
+func (s *GenerationService) pollGenerationJob(ctx context.Context, job model.AIGenerationJob) (got429 bool, terminal bool, err error) {
+	if model.IsVideoGenerationMode(job.Mode) {
+		return s.pollKieVideoJob(ctx, job)
+	}
+	return s.pollKieJob(ctx, job)
+}
+
+func (s *GenerationService) finalizeGenerationJob(ctx context.Context, jobID string) error {
+	job, err := s.jobRepo.GetByIDInternal(ctx, jobID)
+	if err != nil {
+		return err
+	}
+	if model.IsVideoGenerationMode(job.Mode) {
+		return s.finalizeVideoJob(ctx, jobID)
+	}
+	return s.finalizeJob(ctx, jobID)
 }
 
 func (s *GenerationService) pollKieJob(ctx context.Context, job model.AIGenerationJob) (got429 bool, terminal bool, err error) {

@@ -24,9 +24,11 @@ type AIGenerationJob struct {
 	Prompt             string
 	Model              string
 	AspectRatio        string
-	SourceUploadID     string
-	CombineUploadIDs   []string
-	CreditCost         int
+	SourceUploadID       string
+	CombineUploadIDs     []string
+	ReferenceUploadIDs   []string
+	VideoDurationSeconds int
+	CreditCost           int
 	QuotaCreditsUsed   int
 	WalletCentsCharged int
 	DurationMs         int
@@ -48,7 +50,23 @@ type AIGenerationJobView struct {
 	ElapsedMs   int               `json:"elapsed_ms,omitempty"`
 	DurationMs  int               `json:"duration_ms,omitempty"`
 	FailMessage string            `json:"fail_message,omitempty"`
-	Generation  *AIGenerationView `json:"generation,omitempty"`
+	Generation           *AIGenerationView `json:"generation,omitempty"`
+	VideoDurationSeconds int               `json:"video_duration_seconds,omitempty"`
+}
+
+type VideoGenerationPricingView struct {
+	TextToVideo              int     `json:"text_to_video"`
+	ImageToVideo             int     `json:"image_to_video"`
+	ReferenceToVideo         int     `json:"reference_to_video"`
+	CreditsPerSecondText     int     `json:"credits_per_second_text_to_video"`
+	CreditsPerSecondImage    int     `json:"credits_per_second_image_to_video"`
+	CreditsPerSecondReference int    `json:"credits_per_second_reference_to_video"`
+	DefaultDurationText      int     `json:"default_duration_text_to_video"`
+	DefaultDurationImage     int     `json:"default_duration_image_to_video"`
+	DefaultDurationReference int     `json:"default_duration_reference_to_video"`
+	MediaCreditPriceRub      float64 `json:"media_credit_price_rub"`
+	CreditsRemaining         *int    `json:"credits_remaining,omitempty"`
+	Unlimited                bool    `json:"unlimited,omitempty"`
 }
 
 type GenerationPricingView struct {

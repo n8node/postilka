@@ -9,6 +9,8 @@ export type GenerationItem = {
   model: string;
   aspect_ratio?: string;
   image_url: string;
+  video_url?: string;
+  media_type?: string;
   thumb_url?: string;
   created_at: string;
   used_in_post?: boolean;
@@ -143,7 +145,7 @@ export function composePostText(payload: { task: string; text: string; tone?: st
 
 export function improveGenerationPrompt(payload: {
   prompt: string;
-  mode: GenerationModeId;
+  mode: GenerationModeId | string;
 }) {
   return apiFetch<{ prompt: string }>("/generation/improve-prompt", {
     method: "POST",

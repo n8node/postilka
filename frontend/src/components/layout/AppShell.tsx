@@ -27,6 +27,7 @@ import { EmailVerificationBanner } from "@/components/layout/EmailVerificationBa
 import { WalletBalanceBadge } from "@/components/billing/WalletBalanceBadge";
 import { GenerationCompleteToast } from "@/components/generation/GenerationCompleteToast";
 import { GenerationJobSync } from "@/components/generation/GenerationJobSync";
+import { VideoGenerationJobSync } from "@/components/generation/VideoGenerationJobSync";
 import { cn } from "@/lib/utils";
 
 type NavItem = {
@@ -82,6 +83,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen bg-bg text-text">
       <GenerationJobSync />
+      <VideoGenerationJobSync />
       <GenerationCompleteToast />
       <aside
         className={cn(

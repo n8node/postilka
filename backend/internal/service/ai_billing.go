@@ -55,6 +55,14 @@ func (s *AIBillingService) kopecksPerCredit(ctx context.Context) (int, error) {
 }
 
 func (s *AIBillingService) PrefailCheck(ctx context.Context, workspaceID, userID string, creditCost int) error {
+	kopecks, err := s.kopecksPerCredit(ctx)
+	if err != nil {
+		return err
+	}
+	return s.PrefailCheckWithKopecks(ctx, workspaceID, userID, creditCost, kopecks)
+}
+
+func (s *AIBillingService) PrefailCheckWithKopecks(ctx context.Context, workspaceID, userID string, creditCost, kopecksPerCredit int) error {
 	if creditCost <= 0 {
 		return nil
 	}
@@ -69,11 +77,10 @@ func (s *AIBillingService) PrefailCheck(ctx context.Context, workspaceID, userID
 		return nil
 	}
 	overage := creditCost - remaining
-	kopecks, err := s.kopecksPerCredit(ctx)
-	if err != nil {
-		return err
+	if kopecksPerCredit <= 0 {
+		kopecksPerCredit = 5000
 	}
-	centsNeeded := int64(overage) * int64(kopecks)
+	centsNeeded := int64(overage) * int64(kopecksPerCredit)
 	balance, err := s.wallet.GetBalance(ctx, userID)
 	if err != nil {
 		return err
@@ -85,10 +92,18 @@ func (s *AIBillingService) PrefailCheck(ctx context.Context, workspaceID, userID
 }
 
 func (s *AIBillingService) DebitAfterSuccess(ctx context.Context, workspaceID, userID, generationID string, creditCost int) (AIDebitOutcome, error) {
+	kopecks, err := s.kopecksPerCredit(ctx)
+	if err != nil {
+		return AIDebitOutcome{}, err
+	}
+	return s.DebitAfterSuccessWithKopecks(ctx, workspaceID, userID, generationID, creditCost, kopecks)
+}
+
+func (s *AIBillingService) DebitAfterSuccessWithKopecks(ctx context.Context, workspaceID, userID, generationID string, creditCost, kopecksPerCredit int) (AIDebitOutcome, error) {
 	if creditCost <= 0 {
 		return AIDebitOutcome{}, nil
 	}
-	result, err := s.debit(ctx, workspaceID, userID, generationID, creditCost)
+	result, err := s.debitWithKopecks(ctx, workspaceID, userID, generationID, creditCost, kopecksPerCredit)
 	if err != nil {
 		return AIDebitOutcome{}, err
 	}
@@ -99,6 +114,14 @@ func (s *AIBillingService) DebitAfterSuccess(ctx context.Context, workspaceID, u
 }
 
 func (s *AIBillingService) debit(ctx context.Context, workspaceID, userID, generationID string, creditCost int) (aiDebitResult, error) {
+	kopecks, err := s.kopecksPerCredit(ctx)
+	if err != nil {
+		return aiDebitResult{}, err
+	}
+	return s.debitWithKopecks(ctx, workspaceID, userID, generationID, creditCost, kopecks)
+}
+
+func (s *AIBillingService) debitWithKopecks(ctx context.Context, workspaceID, userID, generationID string, creditCost, kopecksPerCredit int) (aiDebitResult, error) {
 	remaining, unlimited, err := s.quotaRemaining(ctx, workspaceID)
 	if err != nil {
 		return aiDebitResult{}, err
@@ -127,13 +150,16 @@ func (s *AIBillingService) debit(ctx context.Context, workspaceID, userID, gener
 
 	var walletCents int64
 	if walletCredits > 0 {
-		settings, err := s.kie.Get(ctx)
-		if err != nil {
-			return aiDebitResult{}, err
-		}
-		kopecks := settings.KopecksPerMediaCredit
+		kopecks := kopecksPerCredit
 		if kopecks <= 0 {
-			kopecks = 5000
+			settings, err := s.kie.Get(ctx)
+			if err != nil {
+				return aiDebitResult{}, err
+			}
+			kopecks = settings.KopecksPerMediaCredit
+			if kopecks <= 0 {
+				kopecks = 5000
+			}
 		}
 		walletCents = int64(walletCredits) * int64(kopecks)
 		desc := fmt.Sprintf("AI-генерация (%d кред. × %d ₽)", walletCredits, kopecks/100)

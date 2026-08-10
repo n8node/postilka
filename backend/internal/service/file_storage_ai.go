@@ -103,6 +103,12 @@ func aiGenerationModeLabel(mode string) string {
 		return "Фото → фото"
 	case "combine":
 		return "Комбинация"
+	case model.KieVideoModeTextToVideo:
+		return "Текст → видео"
+	case model.KieVideoModeImageToVideo:
+		return "Фото → видео"
+	case model.KieVideoModeReferenceToVideo:
+		return "Референс → видео"
 	default:
 		return "Текст → фото"
 	}

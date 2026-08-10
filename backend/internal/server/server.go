@@ -178,9 +178,10 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	genUploadRepo := repository.NewGenerationSourceUploadRepository(db.Pool)
 	aiBillingSvc := service.NewAIBillingService(quotaSvc, usageRepo, walletRepo, kieSettingsRepo)
 	generationSvc := service.NewGenerationService(
-		kieConfigSvc, genRepo, genJobRepo, genUploadRepo, aiBillingSvc, objectStorage, fileStorageSvc, wsSvc, yandexGptConfigSvc, quotaSvc,
+		kieConfigSvc, kieVideoConfigSvc, genRepo, genJobRepo, genUploadRepo, aiBillingSvc, objectStorage, fileStorageSvc, wsSvc, yandexGptConfigSvc, quotaSvc,
 	)
 	generationHandler := handler.NewGenerationHandler(generationSvc)
+	videoGenerationHandler := handler.NewVideoGenerationHandler(generationSvc)
 
 	billingHandler := handler.NewBillingHandler(billingSvc, checkoutSvc, wsSvc)
 
@@ -339,6 +340,11 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Post("/generation/history/delete", generationHandler.DeleteHistory)
 			r.Get("/generation/pricing", generationHandler.Pricing)
 			r.Get("/generation/video-examples", kieVideoConfigHandler.ListExamplesPublic)
+			r.Post("/generation/video/generate", videoGenerationHandler.Generate)
+			r.Get("/generation/video/jobs/{id}", videoGenerationHandler.GetJob)
+			r.Get("/generation/video/pricing", videoGenerationHandler.Pricing)
+			r.Get("/generation/video/history", videoGenerationHandler.History)
+			r.Post("/generation/video/history/delete", videoGenerationHandler.DeleteHistory)
 			r.Post("/generation/upload", generationHandler.UploadSource)
 			r.Post("/generation/improve-prompt", generationHandler.ImprovePrompt)
 			r.Post("/generation/compose-text", generationHandler.ComposePostText)
