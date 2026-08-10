@@ -101,6 +101,13 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	channelTestSvc := service.NewChannelTestService(
 		channelRepo, userRepo, telegramBotClient, youtubeAPIClient, socialProviderSettingsSvc, wsSvc, secretCipher,
 	)
+	fileStorageRepo := repository.NewWorkspaceFileRepository(db.Pool)
+	objectStorage := service.NewObjectStorage(storageSettingsSvc)
+	postRepo := repository.NewPostRepository(db.Pool)
+	publicationSvc := service.NewPublicationService(
+		postRepo, channelRepo, fileStorageRepo, objectStorage, channelTestSvc, telegramBotClient,
+	)
+	postSvc := service.NewPostService(postRepo, channelRepo, wsSvc, publicationSvc)
 	telegramSvc := service.NewTelegramService(telegramSettingsSvc, telegramQueueRepo, cfg.TelegramLocalProxy, logger)
 	telegramSettingsSvc.BindRuntimeStatus(telegramSvc.GetRuntimeStatus)
 	telegramSvc.Start()
@@ -123,7 +130,6 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	wsInviteHandler := handler.NewWorkspaceInviteHandler(wsInviteSvc, wsSvc)
 	oauthHandler := handler.NewOAuthLoginHandler(oauthSvc, wsSvc, authMW, cfg, logger)
 	wsHandler := handler.NewWorkspaceHandler(wsSvc, cfg)
-	fileStorageRepo := repository.NewWorkspaceFileRepository(db.Pool)
 	folderStorageRepo := repository.NewWorkspaceFolderRepository(db.Pool)
 	adminAnalyticsRepo := repository.NewAdminAnalyticsRepository(db.Pool)
 	adminHandler := handler.NewAdminHandler(userRepo, adminUserSvc, adminWalletSvc, planSvc, oauthSvc, adminWorkspaceSvc, fileStorageRepo, folderStorageRepo, adminAnalyticsRepo)
@@ -147,9 +153,9 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	kieConfigHandler := handler.NewKieConfigHandler(kieConfigSvc)
 	channelHandler := handler.NewChannelHandler(channelSvc, channelConnectSvc, channelTestSvc)
 	channelConnectHandler := handler.NewChannelConnectHandler(channelConnectSvc, cfg)
+	postHandler := handler.NewPostHandler(postSvc)
 	publicPageHandler := handler.NewPublicPageHandler(publicPageSvc)
 	paymentWebhookHandler := handler.NewPaymentWebhookHandler(paymentSettingsSvc, checkoutSvc, logger)
-	objectStorage := service.NewObjectStorage(storageSettingsSvc)
 	uploadSessions := service.NewUploadSessionService(cfg.JWTSecret)
 	fileStorageSvc := service.NewFileStorageService(
 		fileStorageRepo, folderStorageRepo, wsRepo, planRepo, wsSvc, objectStorage, uploadSessions, uploadFileSettingsSvc,
@@ -263,6 +269,19 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 		})
 
 		r.Get("/channels/oauth/{provider}/callback", channelConnectHandler.OAuthCallback)
+
+		r.Group(func(r chi.Router) {
+			r.Use(authMW.Required)
+			r.Get("/posts", postHandler.List)
+			r.Post("/posts", postHandler.Create)
+			r.Get("/posts/{id}", postHandler.Get)
+			r.Put("/posts/{id}", postHandler.Update)
+			r.Patch("/posts/{id}", postHandler.Update)
+			r.Delete("/posts/{id}", postHandler.Delete)
+			r.Post("/posts/{id}/schedule", postHandler.Schedule)
+			r.Post("/posts/{id}/publish", postHandler.Publish)
+			r.Post("/posts/{id}/cancel", postHandler.Cancel)
+		})
 
 		r.Group(func(r chi.Router) {
 			r.Use(authMW.Required)

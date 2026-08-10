@@ -13,6 +13,50 @@ body {
   @apply bg-bg text-text antialiased;
 }
 
+.post-composer-layout {
+  display: grid;
+  grid-template-columns: minmax(560px, 1fr) 12px var(--preview-width, 380px);
+  align-items: start;
+}
+
+.post-composer-resizer {
+  align-self: stretch;
+  display: flex;
+  min-height: 100%;
+  cursor: col-resize;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 12rem;
+  color: #a1a1aa;
+  touch-action: none;
+}
+
+.post-composer-resizer:hover,
+.post-composer-resizer:focus-visible {
+  color: var(--accent);
+  outline: none;
+}
+
+.post-composer-preview {
+  position: sticky;
+  top: 1rem;
+}
+
+@media (max-width: 1279px) {
+  .post-composer-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+  }
+
+  .post-composer-resizer {
+    display: none;
+  }
+
+  .post-composer-preview {
+    position: static;
+  }
+}
+
 @keyframes file-appear {
   from {
     opacity: 0;

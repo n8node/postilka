@@ -66,6 +66,23 @@ func main() {
 		encKey = cfg.JWTSecret
 	}
 	secretCipher, _ := service.NewSecretCipher(encKey)
+	userRepo := repository.NewUserRepository(db.Pool)
+	telegramProviderSettingsRepo := repository.NewTelegramProviderSettingsRepository(db.Pool)
+	telegramProviderSettingsSvc := service.NewTelegramProviderSettingsService(telegramProviderSettingsRepo)
+	socialProviderSettingsRepo := repository.NewSocialProviderSettingsRepository(db.Pool)
+	socialProviderSettingsSvc := service.NewSocialProviderSettingsService(socialProviderSettingsRepo)
+	youtubeProviderSettingsRepo := repository.NewYouTubeProviderSettingsRepository(db.Pool)
+	youtubeProviderSettingsSvc := service.NewYouTubeProviderSettingsService(youtubeProviderSettingsRepo)
+	telegramBotClient := service.NewTelegramBotClient(telegramProviderSettingsSvc, cfg.TelegramLocalProxy)
+	youtubeAPIClient := service.NewYouTubeAPIClient(youtubeProviderSettingsSvc, cfg.YouTubeLocalProxy)
+	service.SetYouTubeAPIClient(youtubeAPIClient)
+	channelTestSvc := service.NewChannelTestService(
+		channelRepo, userRepo, telegramBotClient, youtubeAPIClient, socialProviderSettingsSvc, wsSvc, secretCipher,
+	)
+	postRepo := repository.NewPostRepository(db.Pool)
+	publicationSvc := service.NewPublicationService(
+		postRepo, channelRepo, fileStorageRepo, objectStorage, channelTestSvc, telegramBotClient,
+	)
 	kieConfigSvc := service.NewKieConfigService(kieSettingsRepo, cfg, secretCipher)
 	yandexGptConfigRepo := repository.NewYandexGptConfigRepository(db.Pool)
 	yandexGptConfigSvc := service.NewYandexGptConfigService(yandexGptConfigRepo, cfg, secretCipher)
@@ -100,6 +117,11 @@ func main() {
 			}
 			if err := youtubeReconnectNotifier.Process(ctx); err != nil {
 				logger.Warn("youtube reconnect notify tick failed", "error", err)
+			}
+			if n, err := publicationSvc.ProcessDue(ctx, cfg.WorkerPublishConcurrency); err != nil {
+				logger.Warn("post publication tick failed", "error", err, "claimed", n)
+			} else if n > 0 {
+				logger.Info("processed due posts", "count", n)
 			}
 			if n, err := fileStorageSvc.PurgeExpiredTrash(ctx); err != nil {
 				logger.Warn("purge trash tick failed", "error", err)

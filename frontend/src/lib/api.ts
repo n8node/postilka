@@ -1634,6 +1634,23 @@ export type PublishCapabilities = {
   feed?: boolean;
   schedule?: boolean;
   formats?: string[];
+  rich_text?: boolean;
+  entities?: boolean;
+  telegram_rich_messages?: boolean;
+  inline_buttons?: boolean;
+  styled_buttons?: boolean;
+  custom_emoji?: boolean;
+  first_comment?: boolean;
+  location?: boolean;
+  link_preview?: boolean;
+  media_album?: boolean;
+  max_media?: number;
+  max_text_length?: number;
+  max_buttons?: number;
+  composer_media: boolean;
+  composer_first_comment: boolean;
+  composer_location: boolean;
+  composer_link_preview: boolean;
 };
 
 export type ChannelListItem = Channel & {

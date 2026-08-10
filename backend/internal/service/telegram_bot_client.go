@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/postilka/postilka/internal/model"
 )
@@ -127,11 +128,300 @@ func (c *TelegramBotClient) doRequest(
 }
 
 func (c *TelegramBotClient) SendMessage(ctx context.Context, token, chatID, text string) error {
-	_, err := c.api(ctx, token, "sendMessage", map[string]any{
-		"chat_id": telegramChatIDParam(chatID),
-		"text":    text,
-	})
+	_, err := c.SendFormattedMessage(ctx, token, chatID, TelegramMessageInput{Text: text})
 	return sanitizeTelegramError(err)
+}
+
+type TelegramMessageInput struct {
+	Text               string
+	ParseMode          string
+	Entities           []model.TelegramMessageEntity
+	Buttons            [][]model.TelegramInlineButton
+	LinkPreviewEnabled *bool
+}
+
+const (
+	TelegramMediaPhoto = "photo"
+	TelegramMediaVideo = "video"
+)
+
+type TelegramMediaInput struct {
+	Type string
+	URL  string
+}
+
+type telegramSentMessage struct {
+	MessageID int64 `json:"message_id"`
+}
+
+type telegramCopyTextButton struct {
+	Text string `json:"text"`
+}
+
+type telegramWebAppInfo struct {
+	URL string `json:"url"`
+}
+
+type telegramInlineKeyboardButton struct {
+	Text              string                    `json:"text"`
+	Style             model.TelegramButtonStyle `json:"style,omitempty"`
+	IconCustomEmojiID string                    `json:"icon_custom_emoji_id,omitempty"`
+	URL               string                    `json:"url,omitempty"`
+	CallbackData      string                    `json:"callback_data,omitempty"`
+	CopyText          *telegramCopyTextButton   `json:"copy_text,omitempty"`
+	WebApp            *telegramWebAppInfo       `json:"web_app,omitempty"`
+}
+
+type telegramInlineKeyboardMarkup struct {
+	InlineKeyboard [][]telegramInlineKeyboardButton `json:"inline_keyboard"`
+}
+
+func telegramReplyMarkup(rows [][]model.TelegramInlineButton) *telegramInlineKeyboardMarkup {
+	if len(rows) == 0 {
+		return nil
+	}
+	out := &telegramInlineKeyboardMarkup{InlineKeyboard: make([][]telegramInlineKeyboardButton, 0, len(rows))}
+	for _, row := range rows {
+		buttons := make([]telegramInlineKeyboardButton, 0, len(row))
+		for _, button := range row {
+			item := telegramInlineKeyboardButton{
+				Text: button.Text, IconCustomEmojiID: button.IconCustomEmojiID,
+				URL: button.URL, CallbackData: button.CallbackData,
+			}
+			if button.Style == model.TelegramButtonPrimary ||
+				button.Style == model.TelegramButtonSuccess ||
+				button.Style == model.TelegramButtonDanger {
+				item.Style = button.Style
+			}
+			if button.CopyText != "" {
+				item.CopyText = &telegramCopyTextButton{Text: button.CopyText}
+			}
+			if button.WebAppURL != "" {
+				item.WebApp = &telegramWebAppInfo{URL: button.WebAppURL}
+			}
+			buttons = append(buttons, item)
+		}
+		out.InlineKeyboard = append(out.InlineKeyboard, buttons)
+	}
+	return out
+}
+
+func telegramMessageID(raw json.RawMessage) (string, error) {
+	var sent telegramSentMessage
+	if err := json.Unmarshal(raw, &sent); err != nil {
+		return "", errors.New("telegram api: invalid message result")
+	}
+	if sent.MessageID == 0 {
+		return "", nil
+	}
+	return strconv.FormatInt(sent.MessageID, 10), nil
+}
+
+func (c *TelegramBotClient) SendFormattedMessage(
+	ctx context.Context,
+	token, chatID string,
+	input TelegramMessageInput,
+) (string, error) {
+	if utf8.RuneCountInString(input.Text) > 4096 {
+		return "", fmt.Errorf("%w: текст Telegram не должен превышать 4096 символов", ErrInvalidPost)
+	}
+	if err := ValidatePostContent(model.PostContent{
+		Format: "message", Text: input.Text, ParseMode: input.ParseMode,
+		Entities: input.Entities, Buttons: input.Buttons,
+	}, model.PostSettings{}); err != nil {
+		return "", err
+	}
+	payload := map[string]any{
+		"chat_id": telegramChatIDParam(chatID),
+		"text":    input.Text,
+	}
+	if input.ParseMode != "" {
+		payload["parse_mode"] = input.ParseMode
+	}
+	if len(input.Entities) > 0 {
+		payload["entities"] = input.Entities
+	}
+	if input.LinkPreviewEnabled != nil {
+		payload["link_preview_options"] = map[string]bool{"is_disabled": !*input.LinkPreviewEnabled}
+	}
+	if markup := telegramReplyMarkup(input.Buttons); markup != nil {
+		payload["reply_markup"] = markup
+	}
+	raw, err := c.api(ctx, token, "sendMessage", payload)
+	if err != nil {
+		return "", sanitizeTelegramError(err)
+	}
+	return telegramMessageID(raw)
+}
+
+func validateTelegramMedia(media []TelegramMediaInput) error {
+	if len(media) == 0 || len(media) > 10 {
+		return fmt.Errorf("%w: Telegram принимает от 1 до 10 медиафайлов", ErrInvalidPost)
+	}
+	for _, item := range media {
+		if item.Type != TelegramMediaPhoto && item.Type != TelegramMediaVideo {
+			return fmt.Errorf("%w: неподдерживаемый тип медиа Telegram", ErrInvalidPost)
+		}
+		if validateHTTPURL(item.URL) != nil {
+			return fmt.Errorf("%w: некорректная ссылка на медиа Telegram", ErrInvalidPost)
+		}
+	}
+	return nil
+}
+
+func telegramMediaGroupPayload(media []TelegramMediaInput) []map[string]string {
+	items := make([]map[string]string, 0, len(media))
+	for _, item := range media {
+		items = append(items, map[string]string{"type": item.Type, "media": item.URL})
+	}
+	return items
+}
+
+func (c *TelegramBotClient) SendMedia(
+	ctx context.Context,
+	token, chatID string,
+	media []TelegramMediaInput,
+) (string, error) {
+	if err := validateTelegramMedia(media); err != nil {
+		return "", err
+	}
+	if len(media) == 1 {
+		method, field := "sendPhoto", "photo"
+		if media[0].Type == TelegramMediaVideo {
+			method, field = "sendVideo", "video"
+		}
+		raw, err := c.api(ctx, token, method, map[string]any{
+			"chat_id": telegramChatIDParam(chatID),
+			field:     media[0].URL,
+		})
+		if err != nil {
+			return "", sanitizeTelegramError(err)
+		}
+		return telegramMessageID(raw)
+	}
+	raw, err := c.api(ctx, token, "sendMediaGroup", map[string]any{
+		"chat_id": telegramChatIDParam(chatID),
+		"media":   telegramMediaGroupPayload(media),
+	})
+	if err != nil {
+		return "", sanitizeTelegramError(err)
+	}
+	var sent []telegramSentMessage
+	if err := json.Unmarshal(raw, &sent); err != nil {
+		return "", errors.New("telegram api: invalid media group result")
+	}
+	if len(sent) == 0 || sent[0].MessageID == 0 {
+		return "", nil
+	}
+	return strconv.FormatInt(sent[0].MessageID, 10), nil
+}
+
+func (c *TelegramBotClient) SendRichMessage(
+	ctx context.Context,
+	token, chatID string,
+	message model.TelegramRichMessage,
+) (string, error) {
+	if err := ValidateTelegramRichMessage(message); err != nil {
+		return "", err
+	}
+	blocks, err := telegramRichAPIBlocks(message)
+	if err != nil {
+		return "", err
+	}
+	payload := map[string]any{
+		"chat_id": telegramChatIDParam(chatID),
+		"rich_message": map[string]any{"blocks": blocks},
+	}
+	if markup := telegramReplyMarkup(message.Buttons); markup != nil {
+		payload["reply_markup"] = markup
+	}
+	raw, err := c.api(ctx, token, "sendRichMessage", payload)
+	if err != nil {
+		return "", sanitizeTelegramError(err)
+	}
+	return telegramMessageID(raw)
+}
+
+func telegramRichAPIBlocks(message model.TelegramRichMessage) ([]any, error) {
+	blocks := make([]model.TelegramRichBlock, 0, len(message.Blocks)+1)
+	if title := strings.TrimSpace(message.Title); title != "" {
+		blocks = append(blocks, model.TelegramRichBlock{Type: "heading", Text: title, Size: 1})
+	}
+	blocks = append(blocks, message.Blocks...)
+	return convertTelegramRichBlocks(blocks)
+}
+
+func convertTelegramRichBlocks(blocks []model.TelegramRichBlock) ([]any, error) {
+	out := make([]any, 0, len(blocks))
+	for _, block := range blocks {
+		var item map[string]any
+		switch block.Type {
+		case "paragraph", "footer":
+			item = map[string]any{"type": block.Type, "text": block.Text}
+		case "heading":
+			item = map[string]any{"type": "heading", "text": block.Text, "size": block.Size}
+		case "code":
+			item = map[string]any{"type": "pre", "text": block.Text}
+			if block.Language != "" {
+				item["language"] = block.Language
+			}
+		case "quote":
+			item = map[string]any{
+				"type": "blockquote",
+				"blocks": []any{map[string]any{"type": "paragraph", "text": block.Text}},
+			}
+			if block.Credit != "" {
+				item["credit"] = block.Credit
+			}
+		case "divider":
+			item = map[string]any{"type": "divider"}
+		case "list":
+			items := make([]any, 0, len(block.Items))
+			for _, listItem := range block.Items {
+				nested, err := convertTelegramRichBlocks(listItem.Blocks)
+				if err != nil {
+					return nil, err
+				}
+				items = append(items, map[string]any{"blocks": nested})
+			}
+			item = map[string]any{"type": "list", "items": items}
+		case "pullquote":
+			item = map[string]any{"type": "pullquote", "text": block.Text}
+			if block.Credit != "" {
+				item["credit"] = block.Credit
+			}
+		case "details":
+			nested, err := convertTelegramRichBlocks(block.Blocks)
+			if err != nil {
+				return nil, err
+			}
+			item = map[string]any{
+				"type": "details", "summary": block.Summary,
+				"blocks": nested, "is_open": block.IsOpen,
+			}
+		case "table":
+			rows := make([]any, 0, len(block.Rows))
+			for _, row := range block.Rows {
+				cells := make([]any, 0, len(row))
+				for _, cell := range row {
+					cells = append(cells, map[string]any{
+						"text": cell.Text, "align": "left", "valign": "top",
+					})
+				}
+				rows = append(rows, cells)
+			}
+			item = map[string]any{
+				"type": "table", "cells": rows,
+				"is_bordered": block.Bordered, "is_striped": block.Striped,
+			}
+		case "mathematical_expression":
+			item = map[string]any{"type": "mathematical_expression", "expression": block.Expression}
+		default:
+			return nil, fmt.Errorf("%w: неподдерживаемый тип блока rich_message", ErrInvalidPost)
+		}
+		out = append(out, item)
+	}
+	return out, nil
 }
 
 func (c *TelegramBotClient) GetMe(ctx context.Context, token string) (*telegramUser, error) {
