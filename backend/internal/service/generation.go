@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -418,6 +419,15 @@ func (s *GenerationService) UploadVideoGenerationSource(ctx context.Context, use
 	if maxSize <= 0 || int64(len(data)) > maxSize {
 		return model.GenerationSourceUploadView{}, ErrGenerationUploadInvalid
 	}
+	if strings.HasPrefix(contentType, "video/") {
+		dur, err := probeVideoDurationSeconds(data)
+		if err != nil {
+			return model.GenerationSourceUploadView{}, ErrGenerationUploadInvalid
+		}
+		if err := validateReferenceVideoDuration(dur); err != nil {
+			return model.GenerationSourceUploadView{}, err
+		}
+	}
 
 	ext := path.Ext(header.Filename)
 	if ext == "" {
@@ -487,6 +497,15 @@ func (s *GenerationService) UploadGenerationSourceFromWorkspaceFile(
 	if wf.Size <= 0 || wf.Size > maxSize {
 		return model.GenerationSourceUploadView{}, ErrGenerationUploadInvalid
 	}
+	if forVideo && strings.HasPrefix(contentType, "video/") {
+		dur, err := s.referenceVideoDurationForWorkspaceFile(ctx, wf)
+		if err != nil {
+			return model.GenerationSourceUploadView{}, err
+		}
+		if err := validateReferenceVideoDuration(dur); err != nil {
+			return model.GenerationSourceUploadView{}, err
+		}
+	}
 
 	ext := path.Ext(wf.Name)
 	if ext == "" {
@@ -519,6 +538,64 @@ func (s *GenerationService) UploadGenerationSourceFromWorkspaceFile(
 		return model.GenerationSourceUploadView{}, err
 	}
 	return upload.ToView(), nil
+}
+
+func (s *GenerationService) referenceVideoDurationForWorkspaceFile(ctx context.Context, wf *model.WorkspaceFile) (float64, error) {
+	if wf == nil {
+		return 0, ErrGenerationUploadInvalid
+	}
+	if len(wf.MediaMetadata) > 0 {
+		var meta struct {
+			DurationSeconds float64 `json:"duration_seconds"`
+		}
+		if err := json.Unmarshal(wf.MediaMetadata, &meta); err == nil && meta.DurationSeconds > 0 {
+			return meta.DurationSeconds, nil
+		}
+	}
+	body, _, err := s.objectStore.GetObject(ctx, wf.S3Key)
+	if err != nil {
+		return 0, err
+	}
+	defer body.Close()
+	const readLimit = (50 << 20) + 1
+	data, err := io.ReadAll(io.LimitReader(body, readLimit))
+	if err != nil {
+		return 0, err
+	}
+	return probeVideoDurationSeconds(data)
+}
+
+func (s *GenerationService) validateReferenceVideoUploadIDs(ctx context.Context, userID, workspaceID string, uploadIDs []string) error {
+	for _, rawID := range uploadIDs {
+		id := strings.TrimSpace(rawID)
+		if id == "" {
+			continue
+		}
+		upload, err := s.uploadRepo.GetByID(ctx, id, userID, workspaceID)
+		if err != nil {
+			return ErrGenerationUploadNotFound
+		}
+		if !strings.HasPrefix(strings.ToLower(upload.ContentType), "video/") {
+			continue
+		}
+		body, _, err := s.objectStore.GetObject(ctx, upload.S3Key)
+		if err != nil {
+			return fmt.Errorf("source media read: %w", err)
+		}
+		data, readErr := io.ReadAll(io.LimitReader(body, (50<<20)+1))
+		_ = body.Close()
+		if readErr != nil {
+			return readErr
+		}
+		dur, err := probeVideoDurationSeconds(data)
+		if err != nil {
+			return ErrGenerationUploadInvalid
+		}
+		if err := validateReferenceVideoDuration(dur); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func kieUploadMaxBytes(contentType string) int64 {

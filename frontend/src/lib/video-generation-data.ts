@@ -36,8 +36,10 @@ export const VIDEO_DURATION_MIN = 4;
 export const VIDEO_DURATION_MAX = 15;
 
 export const REFERENCE_IMAGE_MAX = 9;
-export const REFERENCE_VIDEO_MAX = 3;
+export const REFERENCE_VIDEO_MIN_SECONDS = 2;
+export const REFERENCE_VIDEO_MAX_SECONDS = 15;
 export const REFERENCE_AUDIO_MAX = 3;
+export const REFERENCE_VIDEO_MAX = 3;
 
 export const videoGenerationModes: {
   id: VideoGenerationModeId;

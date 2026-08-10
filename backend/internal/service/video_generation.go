@@ -91,6 +91,9 @@ func (s *GenerationService) StartGenerateVideo(ctx context.Context, userID strin
 		if imageCount > 9 || videoCount > 3 || audioCount > 3 {
 			return StartGenerateResult{}, errors.New("too many reference files")
 		}
+		if err := s.validateReferenceVideoUploadIDs(ctx, userID, ws.ID, in.ReferenceVideoUploadIDs); err != nil {
+			return StartGenerateResult{}, err
+		}
 	}
 
 	cost := settings.CreditCostForVideo(mode, duration)

@@ -47,6 +47,10 @@ func translateGenerationError(raw string, video bool) string {
 	switch {
 	case strings.Contains(lower, "video generation provider not configured"), strings.Contains(lower, "kie video not configured"):
 		return "Сервис генерации видео временно недоступен. Проверьте настройки KIE Video в админке."
+	case strings.Contains(lower, "video duration"), strings.Contains(lower, "video_url: invalid"), strings.Contains(lower, "expected [2000, 15000]"):
+		return "Референс-видео должно быть от 2 до 15 секунд. Выберите более короткий ролик."
+	case strings.Contains(lower, "reference video duration"):
+		return "Референс-видео должно быть от 2 до 15 секунд. Выберите более короткий ролик."
 	case strings.Contains(lower, "content safety"):
 		return "Запрос отклонён из‑за ограничений безопасности контента. Измените описание или исходные " + mediaShort + " и попробуйте снова."
 	case strings.Contains(lower, "nsfw"), strings.Contains(lower, "adult content"), strings.Contains(lower, "explicit"):

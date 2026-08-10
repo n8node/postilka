@@ -8,7 +8,7 @@ import { ProtectedMediaImage } from "@/components/media/ProtectedMediaImage";
 import { WorkspaceMediaPickerModal } from "@/components/generation/WorkspaceMediaPickerModal";
 import { ApiError } from "@/lib/api";
 import type { WorkspaceFile } from "@/lib/files-api";
-import { isAudioMime, isVideoMime } from "@/lib/file-media";
+import { isAudioMime, isVideoMime, probeMediaDuration } from "@/lib/file-media";
 import {
   uploadVideoGenerationMedia,
   uploadVideoGenerationMediaFromWorkspace,
@@ -17,6 +17,8 @@ import {
   REFERENCE_AUDIO_MAX,
   REFERENCE_IMAGE_MAX,
   REFERENCE_VIDEO_MAX,
+  REFERENCE_VIDEO_MAX_SECONDS,
+  REFERENCE_VIDEO_MIN_SECONDS,
   type VideoGenerationModeId,
   type VideoGenerationUpload,
   type VideoMediaKind,
@@ -55,6 +57,16 @@ function mediaKindFromWorkspace(file: WorkspaceFile): VideoMediaKind | null {
   if (file.mime_type.startsWith("image/")) return "image";
   if (isVideoMime(file.mime_type, file.name)) return "video";
   if (isAudioMime(file.mime_type, file.name)) return "audio";
+  return null;
+}
+
+function referenceVideoDurationError(seconds: number | undefined): string | null {
+  if (seconds == null || !Number.isFinite(seconds) || seconds <= 0) {
+    return "Не удалось определить длительность видео. Выберите другой файл.";
+  }
+  if (seconds < REFERENCE_VIDEO_MIN_SECONDS || seconds > REFERENCE_VIDEO_MAX_SECONDS) {
+    return `Референс-видео должно быть от ${REFERENCE_VIDEO_MIN_SECONDS} до ${REFERENCE_VIDEO_MAX_SECONDS} сек (сейчас ${seconds.toFixed(1)} сек).`;
+  }
   return null;
 }
 
@@ -400,6 +412,17 @@ export function VideoSourcePhotosPanel({
       return;
     }
 
+    if (pending.kind === "ref-video") {
+      const duration = await probeMediaDuration(file, file.type || "video/mp4");
+      const durationError = referenceVideoDurationError(duration);
+      if (durationError) {
+        setError(durationError);
+        setPending(null);
+        if (inputRef.current) inputRef.current.value = "";
+        return;
+      }
+    }
+
     setLoadingKind(pending.kind);
     setError(null);
     const previewUrl = URL.createObjectURL(file);
@@ -443,6 +466,14 @@ export function VideoSourcePhotosPanel({
     if (pending.kind === "ref-video" && mediaKind !== "video") {
       setError("Нужен видеофайл MP4 или MOV до 50 МБ");
       return;
+    }
+    if (pending.kind === "ref-video") {
+      const duration = file.media_metadata?.duration_seconds;
+      const durationError = referenceVideoDurationError(duration);
+      if (durationError) {
+        setError(durationError);
+        return;
+      }
     }
     if (pending.kind === "ref-audio" && mediaKind !== "audio") {
       setError("Нужен аудиофайл MP3 или WAV до 15 МБ");
@@ -543,7 +574,7 @@ export function VideoSourcePhotosPanel({
           />
           <ReferenceMediaGrid
             title="Референс-видео"
-            hint="MP4, MOV · до 50 МБ · до 3 шт."
+            hint="MP4, MOV · 2–15 сек · до 50 МБ · до 3 шт."
             items={referenceVideos}
             max={REFERENCE_VIDEO_MAX}
             loading={isLoading("ref-video")}
