@@ -277,7 +277,7 @@ func (s *KieVideoExampleService) submitExampleTask(ctx context.Context, example 
 	taskInput := ai.BuildVideoTaskInput(
 		example.ModelID, example.Mode, example.Prompt, example.AspectRatio, example.Duration, kieURLs,
 	)
-	taskID, err := client.CreateTask(ctx, ai.KieCreateTaskRequest{
+	taskID, err := client.CreateVideoTask(ctx, ai.KieCreateTaskRequest{
 		Model: example.ModelID,
 		Input: taskInput,
 	})

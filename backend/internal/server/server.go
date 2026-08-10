@@ -180,6 +180,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	generationSvc := service.NewGenerationService(
 		kieConfigSvc, kieVideoConfigSvc, genRepo, genJobRepo, genUploadRepo, aiBillingSvc, objectStorage, fileStorageSvc, wsSvc, yandexGptConfigSvc, quotaSvc,
 	)
+	generationSvc.StartGenerationWorker(context.Background())
 	generationHandler := handler.NewGenerationHandler(generationSvc)
 	videoGenerationHandler := handler.NewVideoGenerationHandler(generationSvc)
 

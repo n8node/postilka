@@ -195,7 +195,11 @@ func (s *GenerationService) GetJob(ctx context.Context, userID, jobID string) (G
 func jobToView(job model.AIGenerationJob, gen *model.AIGenerationView) model.AIGenerationJobView {
 	failMsg := job.FailMessage
 	if job.Status == model.GenJobStatusFailed && failMsg != "" {
-		failMsg = UserGenerationFailMessage(failMsg)
+		if model.IsVideoGenerationMode(job.Mode) {
+			failMsg = UserVideoGenerationFailMessage(failMsg)
+		} else {
+			failMsg = UserGenerationFailMessage(failMsg)
+		}
 	}
 	view := model.AIGenerationJobView{
 		ID:                   job.ID,

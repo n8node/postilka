@@ -155,7 +155,7 @@ func (h *VideoGenerationHandler) mapError(w http.ResponseWriter, err error) {
 	case errors.Is(err, repository.ErrNotFound):
 		writeErrorWithCode(w, http.StatusNotFound, "not_found", "Не найдено")
 	case errors.Is(err, service.ErrGenerationFailed):
-		writeErrorWithCode(w, http.StatusBadGateway, "generation_failed", service.UserGenerationFailMessage(generationErrorMessage(err)))
+		writeErrorWithCode(w, http.StatusBadGateway, "generation_failed", service.UserVideoGenerationFailMessage(generationErrorMessage(err)))
 	default:
 		msg := err.Error()
 		if strings.Contains(msg, "prompt is required") {
@@ -167,7 +167,7 @@ func (h *VideoGenerationHandler) mapError(w http.ResponseWriter, err error) {
 			return
 		}
 		if strings.Contains(strings.ToLower(msg), "kie") || strings.Contains(strings.ToLower(msg), "generation") {
-			writeErrorWithCode(w, http.StatusBadGateway, "generation_failed", service.UserGenerationFailMessage(msg))
+			writeErrorWithCode(w, http.StatusBadGateway, "generation_failed", service.UserVideoGenerationFailMessage(msg))
 			return
 		}
 		writeError(w, http.StatusInternalServerError, "Внутренняя ошибка")

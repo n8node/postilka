@@ -52,10 +52,19 @@ func (c *KieClient) taskHTTPClient() *http.Client {
 }
 
 func (c *KieClient) CreateTask(ctx context.Context, req KieCreateTaskRequest) (string, error) {
+	return c.createTask(ctx, req, NormalizeKieModelID)
+}
+
+// CreateVideoTask submits a video generation task using video model normalization.
+func (c *KieClient) CreateVideoTask(ctx context.Context, req KieCreateTaskRequest) (string, error) {
+	return c.createTask(ctx, req, NormalizeKieVideoModelID)
+}
+
+func (c *KieClient) createTask(ctx context.Context, req KieCreateTaskRequest, normalize func(string) string) (string, error) {
 	if c.apiKey == "" {
 		return "", fmt.Errorf("kie api key not configured")
 	}
-	model := NormalizeKieModelID(req.Model)
+	model := normalize(req.Model)
 	if model == "" {
 		return "", fmt.Errorf("kie model is required")
 	}

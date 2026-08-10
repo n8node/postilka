@@ -8,7 +8,15 @@ import (
 const generationNoChargeNote = " Средства не были списаны."
 
 func UserGenerationFailMessage(raw string) string {
-	msg := translateGenerationError(raw)
+	return userMediaGenerationFailMessage(raw, false)
+}
+
+func UserVideoGenerationFailMessage(raw string) string {
+	return userMediaGenerationFailMessage(raw, true)
+}
+
+func userMediaGenerationFailMessage(raw string, video bool) string {
+	msg := translateGenerationError(raw, video)
 	if !alreadyMentionsNoCharge(msg) {
 		msg += generationNoChargeNote
 	}
@@ -22,23 +30,31 @@ func alreadyMentionsNoCharge(msg string) bool {
 		strings.Contains(lower, "средства не")
 }
 
-func translateGenerationError(raw string) string {
+func translateGenerationError(raw string, video bool) string {
 	raw = normalizeProviderError(raw)
+	media := "изображение"
+	mediaShort := "фото"
+	if video {
+		media = "видео"
+		mediaShort = "видео"
+	}
 	if raw == "" {
-		return "Не удалось сгенерировать изображение. Попробуйте ещё раз."
+		return "Не удалось сгенерировать " + media + ". Попробуйте ещё раз."
 	}
 
 	lower := strings.ToLower(raw)
 
 	switch {
+	case strings.Contains(lower, "video generation provider not configured"), strings.Contains(lower, "kie video not configured"):
+		return "Сервис генерации видео временно недоступен. Проверьте настройки KIE Video в админке."
 	case strings.Contains(lower, "content safety"):
-		return "Запрос отклонён из‑за ограничений безопасности контента. Измените описание или исходные фото и попробуйте снова."
+		return "Запрос отклонён из‑за ограничений безопасности контента. Измените описание или исходные " + mediaShort + " и попробуйте снова."
 	case strings.Contains(lower, "nsfw"), strings.Contains(lower, "adult content"), strings.Contains(lower, "explicit"):
-		return "Изображение не прошло проверку на допустимый контент. Измените описание или исходные фото."
+		return "Контент не прошёл проверку. Измените описание или исходные " + mediaShort + "."
 	case strings.Contains(lower, "violat"), strings.Contains(lower, "policy"), strings.Contains(lower, "prohibited"), strings.Contains(lower, "not allowed"):
-		return "Запрос нарушает правила допустимого контента. Измените описание или исходные фото."
+		return "Запрос нарушает правила допустимого контента. Измените описание или исходные " + mediaShort + "."
 	case strings.Contains(lower, "sensitive"), strings.Contains(lower, "moderation"), strings.Contains(lower, "blocked"):
-		return "Запрос заблокирован модерацией. Измените описание или исходные фото."
+		return "Запрос заблокирован модерацией. Измените описание или исходные " + mediaShort + "."
 	case strings.Contains(lower, "invalid prompt"), strings.Contains(lower, "prompt too long"), strings.Contains(lower, "prompt is required"):
 		return "Проверьте описание: оно обязательно и не должно превышать лимит символов."
 	case strings.Contains(lower, "prompt"):
@@ -56,16 +72,16 @@ func translateGenerationError(raw string) string {
 	case strings.Contains(lower, "at least 2 photos"), strings.Contains(lower, "combine"):
 		return "Для режима комбинации нужно минимум 2 фото."
 	case strings.Contains(lower, "download failed"), strings.Contains(lower, "no result"), strings.Contains(lower, "without result"):
-		return "Сервис не вернул готовое изображение. Попробуйте ещё раз."
+		return "Сервис не вернул готовое " + media + ". Попробуйте ещё раз."
 	case strings.Contains(lower, "insufficient ai media credits"), strings.Contains(lower, "insufficient tokens"):
 		return "Недостаточно AI-кредитов или средств на кошельке."
 	case strings.Contains(lower, "generation failed"), strings.Contains(lower, "failed to generate"), strings.Contains(lower, "could not return an image"):
-		return "Не удалось сгенерировать изображение. Попробуйте изменить описание или параметры."
+		return "Не удалось сгенерировать " + media + ". Попробуйте изменить описание или параметры."
 	case strings.Contains(lower, "internal error"), strings.Contains(lower, "server error"), strings.Contains(lower, "502"), strings.Contains(lower, "503"):
 		return "Временная ошибка сервиса генерации. Попробуйте ещё раз позже."
 	default:
 		if isMostlyASCII(lower) && len(raw) > 12 {
-			return "Не удалось сгенерировать изображение. Попробуйте изменить описание или исходные фото."
+			return "Не удалось сгенерировать " + media + ". Попробуйте изменить описание или исходные " + mediaShort + "."
 		}
 		return raw
 	}

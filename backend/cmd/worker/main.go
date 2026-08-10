@@ -60,7 +60,6 @@ func main() {
 		fileStorageRepo, folderStorageRepo, wsRepo, planRepo, wsSvc, objectStorage, uploadSessions, uploadFileSettingsSvc,
 	)
 
-	kieSettingsRepo := repository.NewKieSettingsRepository(db.Pool)
 	encKey := cfg.EncryptionKey
 	if strings.TrimSpace(encKey) == "" {
 		encKey = cfg.JWTSecret
@@ -87,23 +86,6 @@ func main() {
 	publicationSvc := service.NewPublicationService(
 		postRepo, channelRepo, fileStorageRepo, objectStorage, channelTestSvc, telegramBotClient, quotaSvc, linkShortener,
 	)
-	kieConfigSvc := service.NewKieConfigService(kieSettingsRepo, cfg, secretCipher)
-	kieVideoSettingsRepo := repository.NewKieVideoSettingsRepository(db.Pool)
-	kieVideoExampleRepo := repository.NewKieVideoExampleRepository(db.Pool)
-	kieVideoConfigSvc := service.NewKieVideoConfigService(kieVideoSettingsRepo, cfg, secretCipher)
-	kieVideoExampleSvc := service.NewKieVideoExampleService(kieVideoConfigSvc, kieVideoExampleRepo, objectStorage)
-	kieVideoExampleSvc.StartWorker(ctx)
-	yandexGptConfigRepo := repository.NewYandexGptConfigRepository(db.Pool)
-	yandexGptConfigSvc := service.NewYandexGptConfigService(yandexGptConfigRepo, cfg, secretCipher)
-	genRepo := repository.NewAIGenerationRepository(db.Pool)
-	genJobRepo := repository.NewAIGenerationJobRepository(db.Pool)
-	genUploadRepo := repository.NewGenerationSourceUploadRepository(db.Pool)
-	aiBillingSvc := service.NewAIBillingService(quotaSvc, usageRepo, walletRepo, kieSettingsRepo)
-	generationSvc := service.NewGenerationService(
-		kieConfigSvc, kieVideoConfigSvc, genRepo, genJobRepo, genUploadRepo, aiBillingSvc, objectStorage, fileStorageSvc, wsSvc, yandexGptConfigSvc, quotaSvc,
-	)
-	generationSvc.StartGenerationWorker(ctx)
-
 	logger.Info("worker started", "publish_concurrency", cfg.WorkerPublishConcurrency, "version", config.Version)
 
 	ticker := time.NewTicker(30 * time.Second)

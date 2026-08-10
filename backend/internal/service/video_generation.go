@@ -238,6 +238,7 @@ func (s *GenerationService) submitPendingVideoJob(ctx context.Context, jobID str
 
 	baseURL, apiKey, err := s.kieVideoConfig.ResolveCredentials(ctx)
 	if err != nil {
+		slog.Warn("kie video credentials unavailable", "job_id", jobID, "err", err)
 		_ = s.jobRepo.MarkFailed(ctx, jobID, err.Error())
 		return err
 	}
@@ -296,7 +297,7 @@ func (s *GenerationService) submitPendingVideoJob(ctx context.Context, jobID str
 	taskInput := ai.BuildVideoTaskInput(
 		jobRow.Model, mode, jobRow.Prompt, jobRow.AspectRatio, duration, imageURLs,
 	)
-	taskID, err := client.CreateTask(ctx, ai.KieCreateTaskRequest{
+	taskID, err := client.CreateVideoTask(ctx, ai.KieCreateTaskRequest{
 		Model: jobRow.Model,
 		Input: taskInput,
 	})
@@ -305,7 +306,9 @@ func (s *GenerationService) submitPendingVideoJob(ctx context.Context, jobID str
 			deferSubmit(true)
 			return nil
 		}
-		_ = s.jobRepo.MarkFailed(ctx, jobID, generationFailMessage(err))
+		msg := generationFailMessage(err)
+		slog.Warn("kie video create task failed", "job_id", jobID, "mode", mode, "model", jobRow.Model, "err", err)
+		_ = s.jobRepo.MarkFailed(ctx, jobID, msg)
 		return err
 	}
 
