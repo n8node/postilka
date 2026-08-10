@@ -40,6 +40,7 @@ import { RichTextEditor } from "@/components/posts/RichTextEditor";
 import {
   ApiError,
   fetchChannels,
+  fetchMe,
   type ChannelListItem,
   type ChannelProvider,
 } from "@/lib/api";
@@ -50,12 +51,17 @@ import {
   type WorkspaceFile,
 } from "@/lib/files-api";
 import {
+  approvePost,
+  commentPost,
   createPost,
+  fetchPostApprovalEvents,
   fetchPosts,
   publishPost,
+  rejectPost,
   schedulePost,
   updatePost,
   type Post,
+  type PostApprovalEvent,
   type PostContent,
   type PostSaveInput,
   type PostSettings,
@@ -87,11 +93,19 @@ const PROVIDER_COLOR: Record<ChannelProvider, string> = {
 
 const STATUS_LABEL: Record<Post["status"], string> = {
   draft: "Черновик",
+  pending_approval: "На согласовании",
   scheduled: "Запланирован",
   publishing: "Публикуется",
   published: "Опубликован",
   failed: "Ошибка",
   canceled: "Отменён",
+};
+
+const APPROVAL_ACTION_LABEL: Record<PostApprovalEvent["action"], string> = {
+  submit: "Отправлено на согласование",
+  approve: "Одобрено",
+  reject: "Отклонено",
+  comment: "Комментарий",
 };
 
 const HASHTAG_SETS = [
@@ -790,6 +804,15 @@ export function PostComposer() {
   const [longitude, setLongitude] = useState("");
   const [linkPreview, setLinkPreview] = useState(true);
   const [utm, setUTM] = useState({ source: "", medium: "social", campaign: "", shorten: false });
+  const [approvalRequired, setApprovalRequired] = useState(false);
+  const [evergreenEnabled, setEvergreenEnabled] = useState(false);
+  const [intervalDays, setIntervalDays] = useState(7);
+  const [maxRuns, setMaxRuns] = useState("");
+  const [endsAt, setEndsAt] = useState("");
+  const [workspaceRole, setWorkspaceRole] = useState<string | null>(null);
+  const [currentStatus, setCurrentStatus] = useState<Post["status"] | null>(null);
+  const [approvalEvents, setApprovalEvents] = useState<PostApprovalEvent[]>([]);
+  const [discussionComment, setDiscussionComment] = useState("");
   const [timing, setTiming] = useState<Timing>("draft");
   const [scheduleAt, setScheduleAt] = useState("");
   const [activePreviewTab, setActivePreviewTab] = useState<"preview" | "discussion">("preview");
@@ -800,21 +823,36 @@ export function PostComposer() {
 
   const markDirty = useCallback(() => setDirty(true), []);
 
+  const isAdmin = workspaceRole === "owner" || workspaceRole === "admin";
+  const isPendingApproval = currentStatus === "pending_approval";
+  const composerLocked = isPendingApproval && !isAdmin;
+
+  const loadApprovalEvents = useCallback(async (id: string) => {
+    try {
+      const data = await fetchPostApprovalEvents(id);
+      setApprovalEvents(data.items);
+    } catch {
+      setApprovalEvents([]);
+    }
+  }, []);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [channelData, postData, fileData] = await Promise.all([
+      const [channelData, postData, fileData, meData] = await Promise.all([
         fetchChannels(),
         fetchPosts(),
         listFiles("recent"),
+        fetchMe(),
       ]);
-      const activeChannels = channelData.items.filter(
-        (channel) => channel.status === "active" && channel.publish_capabilities?.text,
-      );
       setChannels(channelData.items);
       setPosts(postData.items);
       setRecentFiles(fileData.files);
+      setWorkspaceRole(meData.active_workspace?.role ?? meData.workspace?.role ?? null);
+      const activeChannels = channelData.items.filter(
+        (channel) => channel.status === "active" && channel.publish_capabilities?.text,
+      );
       setSelectedIds(activeChannels.map((channel) => channel.id));
       setActiveChannelId(activeChannels[0]?.id ?? null);
     } catch (loadError) {
@@ -902,6 +940,14 @@ export function PostComposer() {
     setLatitude("");
     setLongitude("");
     setUTM({ source: "", medium: "social", campaign: "", shorten: false });
+    setApprovalRequired(false);
+    setEvergreenEnabled(false);
+    setIntervalDays(7);
+    setMaxRuns("");
+    setEndsAt("");
+    setCurrentStatus(null);
+    setApprovalEvents([]);
+    setDiscussionComment("");
     setTiming("draft");
     setScheduleAt("");
     setError(null);
@@ -911,8 +957,13 @@ export function PostComposer() {
 
   function openPost(post: Post) {
     if (dirty && !window.confirm("Несохранённые изменения будут потеряны. Открыть публикацию?")) return;
-    if (post.status !== "draft" && post.status !== "canceled" && post.status !== "failed") {
-      setError("Редактировать можно только черновики, отменённые и неудачные публикации");
+    if (
+      post.status !== "draft" &&
+      post.status !== "canceled" &&
+      post.status !== "failed" &&
+      post.status !== "pending_approval"
+    ) {
+      setError("Редактировать можно только черновики, отменённые, неудачные публикации и записи на согласовании");
       return;
     }
     const targetOverrides: Record<string, Override> = {};
@@ -971,6 +1022,15 @@ export function PostComposer() {
       campaign: storedUTM?.campaign ?? "",
       shorten: storedUTM?.shorten ?? false,
     });
+    setApprovalRequired(Boolean(post.settings.approval_required));
+    setEvergreenEnabled(Boolean(post.settings.recurrence?.enabled));
+    setIntervalDays(post.settings.recurrence?.interval_days ?? 7);
+    setMaxRuns(
+      post.settings.recurrence?.max_runs != null ? String(post.settings.recurrence.max_runs) : "",
+    );
+    setEndsAt(post.settings.recurrence?.ends_at ? post.settings.recurrence.ends_at.slice(0, 16) : "");
+    setCurrentStatus(post.status);
+    void loadApprovalEvents(post.id);
     setTiming("draft");
     setScheduleAt(post.due_at ? post.due_at.slice(0, 16) : "");
     setError(null);
@@ -1027,6 +1087,15 @@ export function PostComposer() {
             )
               ? linkPreview
               : undefined,
+          }
+        : undefined,
+      approval_required: approvalRequired || undefined,
+      recurrence: evergreenEnabled
+        ? {
+            enabled: true,
+            interval_days: intervalDays,
+            max_runs: maxRuns.trim() ? Number(maxRuns) : undefined,
+            ends_at: endsAt ? new Date(endsAt).toISOString() : undefined,
           }
         : undefined,
     };
@@ -1224,7 +1293,58 @@ export function PostComposer() {
     if (action === "schedule" && (!scheduleAt || new Date(scheduleAt) <= new Date())) {
       return "Выберите дату и время в будущем";
     }
+    if (evergreenEnabled && intervalDays < 1) {
+      return "Интервал evergreen-повтора должен быть не меньше 1 дня";
+    }
+    if (maxRuns.trim() && Number(maxRuns) < 1) {
+      return "Лимит повторов должен быть не меньше 1";
+    }
     return null;
+  }
+
+  async function handleApprovalDecision(action: "approve" | "reject") {
+    if (!postId) return;
+    setBusy(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const finalPost =
+        action === "approve"
+          ? await approvePost(postId, {
+              comment: discussionComment.trim() || undefined,
+              due_at:
+                timing === "schedule" && scheduleAt
+                  ? new Date(scheduleAt).toISOString()
+                  : undefined,
+              publish: timing === "now",
+            })
+          : await rejectPost(postId, { comment: discussionComment.trim() || undefined });
+      setPosts((current) => [finalPost, ...current.filter((item) => item.id !== finalPost.id)]);
+      setCurrentStatus(finalPost.status);
+      await loadApprovalEvents(finalPost.id);
+      setDiscussionComment("");
+      setSuccess(action === "approve" ? "Публикация одобрена" : "Публикация возвращена в черновик");
+    } catch (decisionError) {
+      setError(errorText(decisionError, "Не удалось обработать согласование"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function sendDiscussionComment() {
+    if (!postId || !discussionComment.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await commentPost(postId, discussionComment.trim());
+      setDiscussionComment("");
+      await loadApprovalEvents(postId);
+      setSuccess("Комментарий добавлен");
+    } catch (commentError) {
+      setError(errorText(commentError, "Не удалось отправить комментарий"));
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function save(action: Timing) {
@@ -1248,14 +1368,20 @@ export function PostComposer() {
         finalPost = await publishPost(saved.id);
       }
       setPostId(finalPost.id);
+      setCurrentStatus(finalPost.status);
       setPosts((current) => [finalPost, ...current.filter((item) => item.id !== finalPost.id)]);
+      if (finalPost.status === "pending_approval") {
+        await loadApprovalEvents(finalPost.id);
+      }
       setDirty(false);
       setSuccess(
-        action === "draft"
-          ? "Черновик сохранён"
-          : action === "schedule"
-            ? "Публикация запланирована"
-            : "Публикация передана в очередь",
+        finalPost.status === "pending_approval"
+          ? "Отправлено на согласование"
+          : action === "draft"
+            ? "Черновик сохранён"
+            : action === "schedule"
+              ? "Публикация запланирована"
+              : "Публикация передана в очередь",
       );
     } catch (saveError) {
       setError(errorText(saveError, "Не удалось сохранить публикацию"));
@@ -1928,8 +2054,8 @@ export function PostComposer() {
                     Сократить ссылку при публикации
                   </label>
                   <p className="mt-2 text-[11px] text-muted">
-                    UTM и настройка сокращения сохраняются отдельно для каждого выбранного канала.
-                    Само сокращение URL пока не выполняется.
+                    UTM и сокращение сохраняются отдельно для каждого выбранного канала. При
+                    публикации ссылки заменяются на go.postilka.ru с учётом UTM и переходов.
                   </p>
                   {noLinkPreviewDelivery.length > 0 && (
                     <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800">
@@ -2005,15 +2131,94 @@ export function PostComposer() {
               </div>
             )}
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              <label className="flex cursor-not-allowed items-center gap-2 rounded-lg border border-border p-3 text-xs text-muted opacity-60">
-                <input type="checkbox" disabled />
-                Evergreen-повторы — будет подключено
+              <label className="flex items-start gap-2 rounded-lg border border-border p-3 text-xs">
+                <input
+                  type="checkbox"
+                  checked={evergreenEnabled}
+                  disabled={composerLocked}
+                  onChange={(event) => {
+                    setEvergreenEnabled(event.target.checked);
+                    markDirty();
+                  }}
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="font-semibold">Evergreen-повторы</span>
+                  <span className="mt-1 block text-muted">
+                    После успешной публикации создаётся новая запланированная копия.
+                  </span>
+                </span>
               </label>
-              <label className="flex cursor-not-allowed items-center gap-2 rounded-lg border border-border p-3 text-xs text-muted opacity-60">
-                <input type="checkbox" disabled />
-                Согласование — будет подключено
+              <label className="flex items-start gap-2 rounded-lg border border-border p-3 text-xs">
+                <input
+                  type="checkbox"
+                  checked={approvalRequired}
+                  disabled={composerLocked}
+                  onChange={(event) => {
+                    setApprovalRequired(event.target.checked);
+                    markDirty();
+                  }}
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="font-semibold">Согласование</span>
+                  <span className="mt-1 block text-muted">
+                    Редакторы отправляют пост администратору перед публикацией.
+                  </span>
+                </span>
               </label>
             </div>
+            {evergreenEnabled && (
+              <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                <label className="text-xs">
+                  <span className="mb-1 block text-muted">Интервал, дней</span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={intervalDays}
+                    disabled={composerLocked}
+                    onChange={(event) => {
+                      setIntervalDays(Number(event.target.value) || 1);
+                      markDirty();
+                    }}
+                    className="w-full rounded-md border border-border px-2 py-1.5"
+                  />
+                </label>
+                <label className="text-xs">
+                  <span className="mb-1 block text-muted">Макс. повторов</span>
+                  <input
+                    type="number"
+                    min={1}
+                    value={maxRuns}
+                    disabled={composerLocked}
+                    onChange={(event) => {
+                      setMaxRuns(event.target.value);
+                      markDirty();
+                    }}
+                    placeholder="Без лимита"
+                    className="w-full rounded-md border border-border px-2 py-1.5"
+                  />
+                </label>
+                <label className="text-xs">
+                  <span className="mb-1 block text-muted">Завершить после</span>
+                  <input
+                    type="datetime-local"
+                    value={endsAt}
+                    disabled={composerLocked}
+                    onChange={(event) => {
+                      setEndsAt(event.target.value);
+                      markDirty();
+                    }}
+                    className="w-full rounded-md border border-border px-2 py-1.5"
+                  />
+                </label>
+              </div>
+            )}
+            {isPendingApproval && (
+              <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                Публикация ожидает согласования администратора workspace.
+              </p>
+            )}
           </Card>
 
           <Card
@@ -2031,14 +2236,15 @@ export function PostComposer() {
                     post.content.rich_message?.blocks?.[0]?.text ||
                     "Без текста";
                   const editable = ["draft", "failed", "canceled"].includes(post.status);
+                  const reviewable = post.status === "pending_approval";
                   return (
                     <button
                       key={post.id}
                       type="button"
-                      onClick={() => openPost(post)}
+                      onClick={() => (editable || reviewable) && openPost(post)}
                       className={cn(
                         "flex w-full items-center gap-3 py-3 text-left",
-                        !editable && "cursor-default",
+                        !editable && !reviewable && "cursor-default",
                       )}
                     >
                       <span
@@ -2046,6 +2252,8 @@ export function PostComposer() {
                           "rounded-full px-2 py-1 text-[11px] font-semibold",
                           post.status === "published"
                             ? "bg-emerald-50 text-emerald-700"
+                            : post.status === "pending_approval"
+                              ? "bg-amber-50 text-amber-800"
                             : post.status === "failed"
                               ? "bg-red-50 text-red-700"
                               : "bg-zinc-100 text-zinc-700",
@@ -2074,7 +2282,7 @@ export function PostComposer() {
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                disabled={busy}
+                disabled={busy || composerLocked}
                 onClick={() => void save("draft")}
                 className="inline-flex items-center gap-2 rounded-md border border-border bg-white px-4 py-2 text-sm font-semibold hover:bg-zinc-50 disabled:opacity-50"
               >
@@ -2084,7 +2292,7 @@ export function PostComposer() {
               {timing === "schedule" ? (
                 <button
                   type="button"
-                  disabled={busy}
+                  disabled={busy || composerLocked}
                   onClick={() => void save("schedule")}
                   className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
                 >
@@ -2094,7 +2302,7 @@ export function PostComposer() {
               ) : timing === "now" ? (
                 <button
                   type="button"
-                  disabled={busy}
+                  disabled={busy || composerLocked}
                   onClick={() => void save("now")}
                   className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
                 >
@@ -2176,12 +2384,64 @@ export function PostComposer() {
             </div>
 
             {activePreviewTab === "discussion" ? (
-              <div className="flex min-h-64 flex-col items-center justify-center text-center">
-                <MessageCircle className="mb-2 h-8 w-8 text-zinc-300" />
-                <p className="text-sm font-semibold">Обсуждений пока нет</p>
-                <p className="mt-1 max-w-64 text-xs text-muted">
-                  Комментарии команды появятся после подключения домена согласований.
-                </p>
+              <div className="flex min-h-64 flex-col gap-3">
+                {approvalEvents.length === 0 ? (
+                  <div className="flex flex-1 flex-col items-center justify-center text-center">
+                    <MessageCircle className="mb-2 h-8 w-8 text-zinc-300" />
+                    <p className="text-sm font-semibold">Обсуждений пока нет</p>
+                    <p className="mt-1 max-w-64 text-xs text-muted">
+                      Здесь появятся комментарии и решения по согласованию публикации.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="max-h-72 space-y-2 overflow-y-auto">
+                    {approvalEvents.map((event) => (
+                      <div key={event.id} className="rounded-lg border border-border bg-white p-3 text-left">
+                        <p className="text-xs font-semibold text-accent">
+                          {APPROVAL_ACTION_LABEL[event.action]}
+                        </p>
+                        {event.comment && (
+                          <p className="mt-1 text-sm text-zinc-800">{event.comment}</p>
+                        )}
+                        <p className="mt-1 text-[11px] text-muted">
+                          {new Date(event.created_at).toLocaleString("ru-RU")}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {postId && (
+                  <div className="space-y-2 border-t border-border pt-3">
+                    <textarea
+                      value={discussionComment}
+                      onChange={(event) => setDiscussionComment(event.target.value)}
+                      rows={3}
+                      placeholder="Комментарий для команды"
+                      className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                    />
+                    <div className="flex flex-wrap gap-2">
+                      <SmallButton onClick={() => void sendDiscussionComment()} disabled={busy}>
+                        Добавить комментарий
+                      </SmallButton>
+                      {isPendingApproval && isAdmin && (
+                        <>
+                          <SmallButton
+                            onClick={() => void handleApprovalDecision("approve")}
+                            disabled={busy}
+                          >
+                            Одобрить
+                          </SmallButton>
+                          <SmallButton
+                            onClick={() => void handleApprovalDecision("reject")}
+                            disabled={busy}
+                          >
+                            Отклонить
+                          </SmallButton>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             ) : selectedChannels.length === 0 ? (
               <div className="flex min-h-64 flex-col items-center justify-center text-center text-sm text-muted">

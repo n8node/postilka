@@ -8,12 +8,13 @@ import (
 type PostStatus string
 
 const (
-	PostStatusDraft      PostStatus = "draft"
-	PostStatusScheduled  PostStatus = "scheduled"
-	PostStatusPublishing PostStatus = "publishing"
-	PostStatusPublished  PostStatus = "published"
-	PostStatusFailed     PostStatus = "failed"
-	PostStatusCanceled   PostStatus = "canceled"
+	PostStatusDraft           PostStatus = "draft"
+	PostStatusPendingApproval PostStatus = "pending_approval"
+	PostStatusScheduled       PostStatus = "scheduled"
+	PostStatusPublishing      PostStatus = "publishing"
+	PostStatusPublished       PostStatus = "published"
+	PostStatusFailed          PostStatus = "failed"
+	PostStatusCanceled        PostStatus = "canceled"
 )
 
 type PostTargetStatus string
@@ -111,15 +112,25 @@ type PostUTMSettings struct {
 	Source   string `json:"source,omitempty"`
 	Medium   string `json:"medium,omitempty"`
 	Campaign string `json:"campaign,omitempty"`
-	// Shorten is persisted for the composer; URL shortening is not implemented yet.
 	Shorten  bool   `json:"shorten,omitempty"`
 }
 
+type PostRecurrenceSettings struct {
+	Enabled      bool       `json:"enabled,omitempty"`
+	IntervalDays int        `json:"interval_days,omitempty"`
+	MaxRuns      *int       `json:"max_runs,omitempty"`
+	EndsAt       *time.Time `json:"ends_at,omitempty"`
+	SourcePostID string     `json:"source_post_id,omitempty"`
+	RunNumber    int        `json:"run_number,omitempty"`
+}
+
 type PostSettings struct {
-	FirstComment string            `json:"first_comment,omitempty"`
-	Location     *PostLocation     `json:"location,omitempty"`
-	Link         *PostLinkSettings `json:"link,omitempty"`
-	UTM          *PostUTMSettings  `json:"utm,omitempty"`
+	FirstComment     string                  `json:"first_comment,omitempty"`
+	Location         *PostLocation           `json:"location,omitempty"`
+	Link             *PostLinkSettings       `json:"link,omitempty"`
+	UTM              *PostUTMSettings        `json:"utm,omitempty"`
+	ApprovalRequired bool                    `json:"approval_required,omitempty"`
+	Recurrence       *PostRecurrenceSettings `json:"recurrence,omitempty"`
 }
 
 type PostTarget struct {

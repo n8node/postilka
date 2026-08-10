@@ -68,6 +68,15 @@ export type PostContent = {
   rich_message?: TelegramRichMessage;
 };
 
+export type PostRecurrenceSettings = {
+  enabled?: boolean;
+  interval_days?: number;
+  max_runs?: number;
+  ends_at?: string;
+  source_post_id?: string;
+  run_number?: number;
+};
+
 export type PostSettings = {
   first_comment?: string;
   location?: {
@@ -85,6 +94,8 @@ export type PostSettings = {
     campaign?: string;
     shorten?: boolean;
   };
+  approval_required?: boolean;
+  recurrence?: PostRecurrenceSettings;
 };
 
 export type PostTargetSettings = {
@@ -112,7 +123,14 @@ export type PostMedia = {
 export type Post = {
   id: string;
   workspace_id: string;
-  status: "draft" | "scheduled" | "publishing" | "published" | "failed" | "canceled";
+  status:
+    | "draft"
+    | "pending_approval"
+    | "scheduled"
+    | "publishing"
+    | "published"
+    | "failed"
+    | "canceled";
   content: PostContent;
   settings: PostSettings;
   due_at?: string;
@@ -122,6 +140,16 @@ export type Post = {
   media: PostMedia[];
   created_at: string;
   updated_at: string;
+};
+
+export type PostApprovalEvent = {
+  id: string;
+  post_id: string;
+  workspace_id: string;
+  actor_user_id?: string;
+  action: "submit" | "approve" | "reject" | "comment";
+  comment?: string;
+  created_at: string;
 };
 
 export type PostSaveInput = {
@@ -167,4 +195,41 @@ export function publishPost(id: string) {
 
 export function cancelPost(id: string) {
   return apiFetch<Post>(`/posts/${encodeURIComponent(id)}/cancel`, { method: "POST" });
+}
+
+export function fetchPostApprovalEvents(id: string) {
+  return apiFetch<{ items: PostApprovalEvent[] }>(
+    `/posts/${encodeURIComponent(id)}/approval-events`,
+  );
+}
+
+export function submitPostApproval(id: string, body: { comment?: string; due_at?: string } = {}) {
+  return apiFetch<Post>(`/posts/${encodeURIComponent(id)}/submit-approval`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function approvePost(
+  id: string,
+  body: { comment?: string; due_at?: string; publish?: boolean } = {},
+) {
+  return apiFetch<Post>(`/posts/${encodeURIComponent(id)}/approve`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function rejectPost(id: string, body: { comment?: string } = {}) {
+  return apiFetch<Post>(`/posts/${encodeURIComponent(id)}/reject`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function commentPost(id: string, comment: string) {
+  return apiFetch<PostApprovalEvent>(`/posts/${encodeURIComponent(id)}/comments`, {
+    method: "POST",
+    body: JSON.stringify({ comment }),
+  });
 }

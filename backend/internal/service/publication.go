@@ -20,6 +20,8 @@ type PublicationService struct {
 	storage     *ObjectStorage
 	channelTest *ChannelTestService
 	telegram    *TelegramBotClient
+	quota       *QuotaService
+	shortener   *LinkShortenerService
 }
 
 func NewPublicationService(
@@ -29,10 +31,12 @@ func NewPublicationService(
 	storage *ObjectStorage,
 	channelTest *ChannelTestService,
 	telegram *TelegramBotClient,
+	quota *QuotaService,
+	shortener *LinkShortenerService,
 ) *PublicationService {
 	return &PublicationService{
 		posts: posts, channels: channels, files: files, storage: storage,
-		channelTest: channelTest, telegram: telegram,
+		channelTest: channelTest, telegram: telegram, quota: quota, shortener: shortener,
 	}
 }
 
@@ -44,9 +48,15 @@ func (s *PublicationService) Publish(ctx context.Context, postID string, allowRe
 	if err != nil {
 		return err
 	}
+	wasPublished := post.Status == model.PostStatusPublished
 	if err := ValidatePostForPublication(*post); err != nil {
 		_ = s.posts.FinalizePublication(ctx, postID, nil)
 		return err
+	}
+	if s.quota != nil && postHasPublishableTargets(*post) {
+		if err := s.quota.CheckPostQuota(ctx, post.WorkspaceID); err != nil {
+			return err
+		}
 	}
 
 	var earliestRetry *time.Time
@@ -86,7 +96,56 @@ func (s *PublicationService) Publish(ctx context.Context, postID string, allowRe
 			return err
 		}
 	}
-	return s.posts.FinalizePublication(ctx, postID, earliestRetry)
+	if err := s.posts.FinalizePublication(ctx, postID, earliestRetry); err != nil {
+		return err
+	}
+	if !wasPublished && s.quota != nil {
+		updated, err := s.posts.GetByID(ctx, postID)
+		if err != nil {
+			return err
+		}
+		if updated.Status == model.PostStatusPublished {
+			if err := s.quota.RecordPost(ctx, updated.WorkspaceID); err != nil {
+				return err
+			}
+			if err := s.scheduleNextRecurrence(ctx, updated); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (s *PublicationService) scheduleNextRecurrence(ctx context.Context, post *model.Post) error {
+	if post == nil || post.Settings.Recurrence == nil || !post.Settings.Recurrence.Enabled {
+		return nil
+	}
+	recurrence := post.Settings.Recurrence
+	if recurrence.IntervalDays < 1 {
+		return nil
+	}
+	runNumber := recurrence.RunNumber
+	if runNumber <= 0 {
+		runNumber = 1
+	}
+	if recurrence.MaxRuns != nil && runNumber >= *recurrence.MaxRuns {
+		return nil
+	}
+	nextDue := time.Now().Add(time.Duration(recurrence.IntervalDays) * 24 * time.Hour)
+	if recurrence.EndsAt != nil && nextDue.After(*recurrence.EndsAt) {
+		return nil
+	}
+	_, err := s.posts.CloneForRecurrence(ctx, post, nextDue)
+	return err
+}
+
+func postHasPublishableTargets(post model.Post) bool {
+	for _, target := range post.Targets {
+		if target.Status != model.PostTargetPublished && target.Status != model.PostTargetCanceled {
+			return true
+		}
+	}
+	return false
 }
 
 func safePublishError(err error) string {
@@ -123,8 +182,14 @@ func (s *PublicationService) publishTarget(
 		return "", err
 	}
 	content, settings := mergePostTarget(post.Content, post.Settings, targetSettings)
-	// UTM rewriting is target-local and never mutates the persisted post aggregate.
 	content = ApplyUTMToContent(content, settings.UTM)
+	var shortenErr error
+	content, shortenErr = ApplyLinkShorteningToContent(
+		ctx, content, s.shortener, post.WorkspaceID, post.ID, target.ID, target.ChannelID, settings.UTM,
+	)
+	if shortenErr != nil {
+		return "", shortenErr
+	}
 	if err := ValidatePostContent(content, settings); err != nil {
 		return "", err
 	}

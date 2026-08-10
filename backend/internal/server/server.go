@@ -104,10 +104,13 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	fileStorageRepo := repository.NewWorkspaceFileRepository(db.Pool)
 	objectStorage := service.NewObjectStorage(storageSettingsSvc)
 	postRepo := repository.NewPostRepository(db.Pool)
+	linkCodeRepo := repository.NewLinkCodeRepository(db.Pool)
+	linkShortener := service.NewLinkShortenerService(linkCodeRepo, cfg.LinkBaseURL)
+	postApprovalRepo := repository.NewPostApprovalRepository(db.Pool)
 	publicationSvc := service.NewPublicationService(
-		postRepo, channelRepo, fileStorageRepo, objectStorage, channelTestSvc, telegramBotClient,
+		postRepo, channelRepo, fileStorageRepo, objectStorage, channelTestSvc, telegramBotClient, quotaSvc, linkShortener,
 	)
-	postSvc := service.NewPostService(postRepo, channelRepo, wsSvc, publicationSvc)
+	postSvc := service.NewPostService(postRepo, channelRepo, wsSvc, publicationSvc, postApprovalRepo)
 	telegramSvc := service.NewTelegramService(telegramSettingsSvc, telegramQueueRepo, cfg.TelegramLocalProxy, logger)
 	telegramSettingsSvc.BindRuntimeStatus(telegramSvc.GetRuntimeStatus)
 	telegramSvc.Start()
@@ -154,6 +157,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	channelHandler := handler.NewChannelHandler(channelSvc, channelConnectSvc, channelTestSvc)
 	channelConnectHandler := handler.NewChannelConnectHandler(channelConnectSvc, cfg)
 	postHandler := handler.NewPostHandler(postSvc)
+	linkRedirectHandler := handler.NewLinkRedirectHandler(linkShortener)
 	publicPageHandler := handler.NewPublicPageHandler(publicPageSvc)
 	paymentWebhookHandler := handler.NewPaymentWebhookHandler(paymentSettingsSvc, checkoutSvc, logger)
 	uploadSessions := service.NewUploadSessionService(cfg.JWTSecret)
@@ -174,6 +178,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	billingHandler := handler.NewBillingHandler(billingSvc, checkoutSvc, wsSvc)
 
 	r.Get("/health", health.ServeHTTP)
+	r.Get("/go/{code}", linkRedirectHandler.Redirect)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/health", health.ServeHTTP)
@@ -281,6 +286,11 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Post("/posts/{id}/schedule", postHandler.Schedule)
 			r.Post("/posts/{id}/publish", postHandler.Publish)
 			r.Post("/posts/{id}/cancel", postHandler.Cancel)
+			r.Post("/posts/{id}/submit-approval", postHandler.SubmitApproval)
+			r.Post("/posts/{id}/approve", postHandler.Approve)
+			r.Post("/posts/{id}/reject", postHandler.Reject)
+			r.Post("/posts/{id}/comments", postHandler.Comment)
+			r.Get("/posts/{id}/approval-events", postHandler.ListApprovalEvents)
 		})
 
 		r.Group(func(r chi.Router) {

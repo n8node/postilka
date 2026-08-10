@@ -218,7 +218,7 @@ func (r *PostRepository) Update(
 		SET content = $3, settings = $4, status = 'draft', due_at = NULL,
 		    published_at = NULL, last_error = NULL, updated_at = NOW()
 		WHERE id = $1 AND workspace_id = $2
-		  AND status IN ('draft', 'failed', 'canceled')
+		  AND status IN ('draft', 'failed', 'canceled', 'pending_approval')
 	`, postID, workspaceID, contentRaw, settingsRaw)
 	if err != nil {
 		return nil, err
@@ -287,7 +287,7 @@ func (r *PostRepository) SetScheduled(ctx context.Context, workspaceID, postID s
 	defer tx.Rollback(ctx)
 	tag, err := tx.Exec(ctx, `
 		UPDATE posts SET status = 'scheduled', due_at = $3, last_error = NULL, updated_at = NOW()
-		WHERE id = $1 AND workspace_id = $2 AND status IN ('draft', 'scheduled', 'failed', 'canceled')
+		WHERE id = $1 AND workspace_id = $2 AND status IN ('draft', 'scheduled', 'failed', 'pending_approval', 'canceled')
 	`, postID, workspaceID, dueAt)
 	if err != nil {
 		return nil, err
@@ -312,7 +312,7 @@ func (r *PostRepository) SetScheduled(ctx context.Context, workspaceID, postID s
 func (r *PostRepository) SetPublishing(ctx context.Context, workspaceID, postID string) error {
 	tag, err := r.pool.Exec(ctx, `
 		UPDATE posts SET status = 'publishing', due_at = NULL, last_error = NULL, updated_at = NOW()
-		WHERE id = $1 AND workspace_id = $2 AND status IN ('draft', 'failed', 'scheduled')
+		WHERE id = $1 AND workspace_id = $2 AND status IN ('draft', 'failed', 'scheduled', 'pending_approval')
 	`, postID, workspaceID)
 	if err != nil {
 		return err
@@ -331,7 +331,7 @@ func (r *PostRepository) Cancel(ctx context.Context, workspaceID, postID string)
 	defer tx.Rollback(ctx)
 	tag, err := tx.Exec(ctx, `
 		UPDATE posts SET status = 'canceled', due_at = NULL, updated_at = NOW()
-		WHERE id = $1 AND workspace_id = $2 AND status IN ('draft', 'scheduled', 'failed')
+		WHERE id = $1 AND workspace_id = $2 AND status IN ('draft', 'scheduled', 'failed', 'pending_approval')
 	`, postID, workspaceID)
 	if err != nil {
 		return nil, err
@@ -467,6 +467,116 @@ func (r *PostRepository) ResetStaleTargets(ctx context.Context, postID string) e
 		  AND last_attempt_at < NOW() - INTERVAL '5 minutes'
 	`, postID)
 	return err
+}
+
+func (r *PostRepository) SetPendingApproval(
+	ctx context.Context,
+	workspaceID, postID string,
+	dueAt *time.Time,
+) (*model.Post, error) {
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE posts
+		SET status = 'pending_approval', due_at = $3, last_error = NULL, updated_at = NOW()
+		WHERE id = $1 AND workspace_id = $2
+		  AND status IN ('draft', 'failed', 'canceled', 'pending_approval')
+	`, postID, workspaceID, dueAt)
+	if err != nil {
+		return nil, err
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, ErrNotFound
+	}
+	return r.Get(ctx, workspaceID, postID)
+}
+
+func (r *PostRepository) RejectApproval(
+	ctx context.Context,
+	workspaceID, postID string,
+) (*model.Post, error) {
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE posts
+		SET status = 'draft', due_at = NULL, updated_at = NOW()
+		WHERE id = $1 AND workspace_id = $2 AND status = 'pending_approval'
+	`, postID, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, ErrNotFound
+	}
+	return r.Get(ctx, workspaceID, postID)
+}
+
+func (r *PostRepository) CloneForRecurrence(
+	ctx context.Context,
+	source *model.Post,
+	nextDue time.Time,
+) (*model.Post, error) {
+	if source == nil {
+		return nil, fmt.Errorf("source post required")
+	}
+	settings := source.Settings
+	if settings.Recurrence == nil {
+		return nil, fmt.Errorf("recurrence settings missing")
+	}
+	recurrence := *settings.Recurrence
+	sourceID := source.ID
+	if recurrence.SourcePostID != "" {
+		sourceID = recurrence.SourcePostID
+	}
+	runNumber := recurrence.RunNumber
+	if runNumber <= 0 {
+		runNumber = 1
+	}
+	runNumber++
+	recurrence.SourcePostID = sourceID
+	recurrence.RunNumber = runNumber
+	settings.Recurrence = &recurrence
+
+	contentRaw, err := json.Marshal(source.Content)
+	if err != nil {
+		return nil, err
+	}
+	settingsRaw, err := json.Marshal(settings)
+	if err != nil {
+		return nil, err
+	}
+
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	var postID string
+	if err := tx.QueryRow(ctx, `
+		INSERT INTO posts (workspace_id, created_by_user_id, status, content, settings, due_at)
+		VALUES ($1, $2, 'scheduled', $3, $4, $5)
+		RETURNING id
+	`, source.WorkspaceID, source.CreatedByUserID, contentRaw, settingsRaw, nextDue.UTC()).Scan(&postID); err != nil {
+		return nil, err
+	}
+
+	for _, target := range source.Targets {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO post_targets (workspace_id, post_id, channel_id, settings)
+			VALUES ($1, $2, $3, $4)
+		`, source.WorkspaceID, postID, target.ChannelID, normalizeJSON(target.Settings)); err != nil {
+			return nil, err
+		}
+	}
+	for _, media := range source.Media {
+		if _, err := tx.Exec(ctx, `
+			INSERT INTO post_media (workspace_id, post_id, file_id, position, settings)
+			VALUES ($1, $2, $3, $4, $5)
+		`, source.WorkspaceID, postID, media.FileID, media.Position, normalizeJSON(media.Settings)); err != nil {
+			return nil, err
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return r.Get(ctx, source.WorkspaceID, postID)
 }
 
 func (r *PostRepository) ValidateFiles(ctx context.Context, workspaceID string, fileIDs []string) error {

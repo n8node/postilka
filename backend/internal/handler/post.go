@@ -150,6 +150,91 @@ func (h *PostHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, post)
 }
 
+func (h *PostHandler) SubmitApproval(w http.ResponseWriter, r *http.Request) {
+	userID, ok := postUserID(w, r)
+	if !ok {
+		return
+	}
+	var req model.PostApprovalSubmitRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && r.ContentLength > 0 {
+		writeError(w, http.StatusBadRequest, "Некорректное тело запроса")
+		return
+	}
+	post, err := h.posts.SubmitForApproval(r.Context(), userID, r, chi.URLParam(r, "id"), req)
+	if err != nil {
+		writePostError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, post)
+}
+
+func (h *PostHandler) Approve(w http.ResponseWriter, r *http.Request) {
+	userID, ok := postUserID(w, r)
+	if !ok {
+		return
+	}
+	var req model.PostApprovalDecisionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && r.ContentLength > 0 {
+		writeError(w, http.StatusBadRequest, "Некорректное тело запроса")
+		return
+	}
+	post, err := h.posts.ApprovePost(r.Context(), userID, r, chi.URLParam(r, "id"), req)
+	if err != nil {
+		writePostError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, post)
+}
+
+func (h *PostHandler) Reject(w http.ResponseWriter, r *http.Request) {
+	userID, ok := postUserID(w, r)
+	if !ok {
+		return
+	}
+	var req model.PostApprovalDecisionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil && r.ContentLength > 0 {
+		writeError(w, http.StatusBadRequest, "Некорректное тело запроса")
+		return
+	}
+	post, err := h.posts.RejectPost(r.Context(), userID, r, chi.URLParam(r, "id"), req)
+	if err != nil {
+		writePostError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, post)
+}
+
+func (h *PostHandler) Comment(w http.ResponseWriter, r *http.Request) {
+	userID, ok := postUserID(w, r)
+	if !ok {
+		return
+	}
+	var req model.PostApprovalCommentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Некорректное тело запроса")
+		return
+	}
+	event, err := h.posts.CommentPost(r.Context(), userID, r, chi.URLParam(r, "id"), req)
+	if err != nil {
+		writePostError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, event)
+}
+
+func (h *PostHandler) ListApprovalEvents(w http.ResponseWriter, r *http.Request) {
+	userID, ok := postUserID(w, r)
+	if !ok {
+		return
+	}
+	items, err := h.posts.ListApprovalEvents(r.Context(), userID, r, chi.URLParam(r, "id"))
+	if err != nil {
+		writePostError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
 func writePostError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, service.ErrForbidden), errors.Is(err, service.ErrNotWorkspaceMember):
@@ -160,6 +245,8 @@ func writePostError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusNotFound, "Публикация не найдена или её состояние уже изменилось")
 	case errors.Is(err, service.ErrPostConflict):
 		writeError(w, http.StatusConflict, "Публикация уже выполняется или недоступна в текущем состоянии")
+	case errors.Is(err, service.ErrQuotaExceeded):
+		writeError(w, http.StatusPaymentRequired, "Достигнут лимит публикаций по тарифу")
 	case errors.Is(err, service.ErrInvalidPost):
 		message := strings.TrimPrefix(err.Error(), service.ErrInvalidPost.Error()+": ")
 		writeError(w, http.StatusBadRequest, message)

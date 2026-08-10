@@ -80,14 +80,16 @@ func main() {
 		channelRepo, userRepo, telegramBotClient, youtubeAPIClient, socialProviderSettingsSvc, wsSvc, secretCipher,
 	)
 	postRepo := repository.NewPostRepository(db.Pool)
+	usageRepo := repository.NewUsageRepository(db.Pool)
+	quotaSvc := service.NewQuotaService(planRepo, wsRepo, subscriptionRepo, usageRepo, channelRepo)
+	linkCodeRepo := repository.NewLinkCodeRepository(db.Pool)
+	linkShortener := service.NewLinkShortenerService(linkCodeRepo, cfg.LinkBaseURL)
 	publicationSvc := service.NewPublicationService(
-		postRepo, channelRepo, fileStorageRepo, objectStorage, channelTestSvc, telegramBotClient,
+		postRepo, channelRepo, fileStorageRepo, objectStorage, channelTestSvc, telegramBotClient, quotaSvc, linkShortener,
 	)
 	kieConfigSvc := service.NewKieConfigService(kieSettingsRepo, cfg, secretCipher)
 	yandexGptConfigRepo := repository.NewYandexGptConfigRepository(db.Pool)
 	yandexGptConfigSvc := service.NewYandexGptConfigService(yandexGptConfigRepo, cfg, secretCipher)
-	usageRepo := repository.NewUsageRepository(db.Pool)
-	quotaSvc := service.NewQuotaService(planRepo, wsRepo, subscriptionRepo, usageRepo, channelRepo)
 	genRepo := repository.NewAIGenerationRepository(db.Pool)
 	genJobRepo := repository.NewAIGenerationJobRepository(db.Pool)
 	genUploadRepo := repository.NewGenerationSourceUploadRepository(db.Pool)

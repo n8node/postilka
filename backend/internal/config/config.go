@@ -23,6 +23,7 @@ type Config struct {
 
 	PublicAppURL string `env:"PUBLIC_APP_URL" envDefault:"http://localhost/app"`
 	Domain       string `env:"DOMAIN" envDefault:"localhost"`
+	LinkBaseURL  string `env:"LINK_BASE_URL" envDefault:"https://go.postilka.ru"`
 
 	WorkerPublishConcurrency int `env:"WORKER_PUBLISH_CONCURRENCY" envDefault:"3"`
 

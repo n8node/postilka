@@ -38,6 +38,7 @@ type PostService struct {
 	channels    *repository.ChannelRepository
 	workspaces  *WorkspaceService
 	publication *PublicationService
+	approvals   *repository.PostApprovalRepository
 }
 
 func NewPostService(
@@ -45,8 +46,12 @@ func NewPostService(
 	channels *repository.ChannelRepository,
 	workspaces *WorkspaceService,
 	publication *PublicationService,
+	approvals *repository.PostApprovalRepository,
 ) *PostService {
-	return &PostService{posts: posts, channels: channels, workspaces: workspaces, publication: publication}
+	return &PostService{
+		posts: posts, channels: channels, workspaces: workspaces,
+		publication: publication, approvals: approvals,
+	}
 }
 
 func (s *PostService) requireEditor(
@@ -153,6 +158,13 @@ func (s *PostService) Schedule(
 	if dueAt.IsZero() || !dueAt.After(time.Now()) {
 		return nil, fmt.Errorf("%w: время публикации должно быть в будущем", ErrInvalidPost)
 	}
+	submit, err := s.shouldSubmitForApproval(ctx, userID, *post)
+	if err != nil {
+		return nil, err
+	}
+	if submit {
+		return s.SubmitForApproval(ctx, userID, r, postID, model.PostApprovalSubmitRequest{DueAt: &dueAt})
+	}
 	return s.posts.SetScheduled(ctx, ws.ID, postID, dueAt.UTC())
 }
 
@@ -175,6 +187,13 @@ func (s *PostService) PublishNow(
 	}
 	if err := s.validateExistingTargets(ctx, post); err != nil {
 		return nil, err
+	}
+	submit, err := s.shouldSubmitForApproval(ctx, userID, *post)
+	if err != nil {
+		return nil, err
+	}
+	if submit {
+		return s.SubmitForApproval(ctx, userID, r, postID, model.PostApprovalSubmitRequest{})
 	}
 	if err := s.posts.SetPublishing(ctx, ws.ID, postID); err != nil {
 		return nil, ErrPostConflict
@@ -532,6 +551,17 @@ func validatePostSettings(settings model.PostSettings) error {
 			if utf8.RuneCountInString(value) > limit || !safeUTMValue(value) {
 				return fmt.Errorf("%w: некорректное значение %s", ErrInvalidPost, name)
 			}
+		}
+	}
+	if settings.Recurrence != nil && settings.Recurrence.Enabled {
+		if settings.Recurrence.IntervalDays < 1 {
+			return fmt.Errorf("%w: интервал evergreen-повтора должен быть не меньше 1 дня", ErrInvalidPost)
+		}
+		if settings.Recurrence.MaxRuns != nil && *settings.Recurrence.MaxRuns < 1 {
+			return fmt.Errorf("%w: лимит повторов должен быть не меньше 1", ErrInvalidPost)
+		}
+		if settings.Recurrence.EndsAt != nil && settings.Recurrence.EndsAt.Before(time.Now()) {
+			return fmt.Errorf("%w: дата окончания повторов должна быть в будущем", ErrInvalidPost)
 		}
 	}
 	return nil
