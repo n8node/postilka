@@ -5,7 +5,10 @@ import (
 	"strings"
 )
 
-const DefaultVideoResolution = "768"
+const (
+	// DefaultMiniMaxH3Resolution is the KIE enum value for MiniMax H3 (768P or 2K).
+	DefaultMiniMaxH3Resolution = "768P"
+)
 
 // KieVideoMarketModels returns video models from KIE Market catalog.
 func KieVideoMarketModels() []KieModelInfo {
@@ -13,7 +16,7 @@ func KieVideoMarketModels() []KieModelInfo {
 }
 
 var kieVideoModelAliases = map[string]string{
-	"kling/v3-turbo-text2video": "kling/v3-turbo-text-to-video",
+	"kling/v3-turbo-text2video":  "kling/v3-turbo-text-to-video",
 	"kling/v3-turbo-image2video": "kling/v3-turbo-image-to-video",
 }
 
@@ -40,9 +43,51 @@ func NormalizeKieVideoModelID(modelID string) string {
 	return modelID
 }
 
+func isMiniMaxH3Model(modelID string) bool {
+	return strings.HasPrefix(modelID, "minimax-h3/")
+}
+
 // BuildVideoTaskInput builds model-specific input for video createTask.
 func BuildVideoTaskInput(modelID, mode, prompt, aspectRatio string, duration int, imageURLs []string) map[string]any {
 	modelID = NormalizeKieVideoModelID(modelID)
+	if isMiniMaxH3Model(modelID) {
+		return buildMiniMaxH3TaskInput(modelID, mode, prompt, aspectRatio, duration, imageURLs)
+	}
+	return buildGenericVideoTaskInput(modelID, mode, prompt, aspectRatio, duration, imageURLs)
+}
+
+func buildMiniMaxH3TaskInput(modelID, mode, prompt, aspectRatio string, duration int, imageURLs []string) map[string]any {
+	prompt = strings.TrimSpace(prompt)
+	aspectRatio = normalizeMiniMaxAspectRatio(aspectRatio)
+	duration = clampVideoDuration(duration)
+
+	input := map[string]any{
+		"prompt":     prompt,
+		"duration":   duration,
+		"resolution": DefaultMiniMaxH3Resolution,
+	}
+
+	mode = strings.ToLower(strings.TrimSpace(mode))
+	switch mode {
+	case "image-to-video":
+		if len(imageURLs) > 0 {
+			input["first_frame_url"] = imageURLs[0]
+		}
+	case "reference-to-video":
+		if len(imageURLs) > 0 {
+			input["reference_image_urls"] = imageURLs
+		}
+		if aspectRatio != "" {
+			input["aspect_ratio"] = aspectRatio
+		}
+	default:
+		input["aspect_ratio"] = aspectRatio
+	}
+
+	return input
+}
+
+func buildGenericVideoTaskInput(modelID, mode, prompt, aspectRatio string, duration int, imageURLs []string) map[string]any {
 	prompt = strings.TrimSpace(prompt)
 	aspectRatio = normalizeVideoAspectForModel(modelID, aspectRatio)
 	duration = clampVideoDuration(duration)
@@ -56,8 +101,6 @@ func BuildVideoTaskInput(modelID, mode, prompt, aspectRatio string, duration int
 	switch videoResolutionForModel(modelID) {
 	case "720p", "1080p":
 		input["resolution"] = videoResolutionForModel(modelID)
-	case "768":
-		input["resolution"] = DefaultVideoResolution
 	default:
 		input["resolution"] = "720p"
 	}
@@ -105,6 +148,16 @@ func clampVideoDuration(n int) int {
 	return n
 }
 
+func normalizeMiniMaxAspectRatio(ratio string) string {
+	ratio = strings.TrimSpace(ratio)
+	switch ratio {
+	case "9:16", "21:9", "16:9", "4:3", "1:1", "3:4", "adaptive":
+		return ratio
+	default:
+		return "16:9"
+	}
+}
+
 func normalizeVideoAspectForModel(modelID, ratio string) string {
 	ratio = strings.TrimSpace(ratio)
 	switch ratio {
@@ -113,7 +166,6 @@ func normalizeVideoAspectForModel(modelID, ratio string) string {
 		ratio = "16:9"
 	}
 
-	// Kling 2.6 / V3 Turbo: only 9:16, 16:9, 1:1 per KIE docs.
 	if strings.HasPrefix(modelID, "kling-2.6/") ||
 		strings.HasPrefix(modelID, "kling/v3-turbo") ||
 		strings.HasPrefix(modelID, "kling/v3-") {
@@ -125,14 +177,6 @@ func normalizeVideoAspectForModel(modelID, ratio string) string {
 		default:
 			return "16:9"
 		}
-	}
-
-	// Most market models reject 21:9 / 4:3 — map to nearest supported ratio.
-	switch ratio {
-	case "21:9", "4:3":
-		return "16:9"
-	case "3:4":
-		return "9:16"
 	}
 	return ratio
 }
@@ -147,17 +191,16 @@ func videoResolutionForModel(modelID string) string {
 	if strings.HasPrefix(modelID, "bytedance/") || strings.HasPrefix(modelID, "hailuo/") {
 		return "720p"
 	}
-	// Legacy default "768" is rejected by many models; 720p is safer.
 	return "720p"
 }
 
 func DefaultVideoModelForMode(mode string) string {
 	switch strings.TrimSpace(mode) {
 	case "image-to-video":
-		return "kling/v3-turbo-image-to-video"
+		return "minimax-h3/image-to-video"
 	case "reference-to-video":
-		return "happyhorse/reference-to-video"
+		return "minimax-h3/reference-to-video"
 	default:
-		return "kling/v3-turbo-text-to-video"
+		return "minimax-h3/text-to-video"
 	}
 }

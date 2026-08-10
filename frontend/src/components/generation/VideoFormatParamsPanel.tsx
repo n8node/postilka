@@ -1,10 +1,7 @@
 "use client";
 
-import {
-  aspectBoxSize,
-  VIDEO_SUPPORTED_ASPECT_RATIOS,
-  type VideoAspectRatioId,
-} from "@/lib/video-generation-data";
+import { KIE_VIDEO_ASPECT_RATIOS } from "@/lib/api";
+import { aspectBoxSize, type VideoAspectRatioId } from "@/lib/video-generation-data";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/Card";
 
@@ -33,7 +30,7 @@ export function VideoFormatParamsPanel({
 
       <p className="mb-2 text-[11px] text-zinc-400">Ориентация</p>
       <div className="mb-4 flex flex-wrap gap-2">
-        {VIDEO_SUPPORTED_ASPECT_RATIOS.map((ratio) => {
+        {KIE_VIDEO_ASPECT_RATIOS.map((ratio) => {
           const { w, h } = aspectBoxSize(ratio);
           const selected = aspectRatio === ratio;
           return (

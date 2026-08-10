@@ -1,15 +1,13 @@
 import type { KieVideoExample } from "@/lib/api";
+import { KIE_VIDEO_ASPECT_RATIOS } from "@/lib/api";
 import { Film, ImageIcon, Layers } from "lucide-react";
 
-/** Ratios supported by default Kling V3 Turbo models on KIE. */
-export const VIDEO_SUPPORTED_ASPECT_RATIOS = ["16:9", "9:16", "1:1"] as const;
 export type VideoGenerationModeId =
   | "text-to-video"
   | "image-to-video"
   | "reference-to-video";
 
-export type VideoAspectRatioId = (typeof VIDEO_SUPPORTED_ASPECT_RATIOS)[number];
-
+export type VideoAspectRatioId = (typeof KIE_VIDEO_ASPECT_RATIOS)[number];
 export type VideoGenerationUpload = {
   uploadId: string;
   previewUrl: string;
