@@ -12,7 +12,8 @@ import (
 )
 
 type AIGenerationRepository struct {
-	pool *pgxpool.Pool
+	pool    *pgxpool.Pool
+	columns aiGenerationColumnFlags
 }
 
 func NewAIGenerationRepository(pool *pgxpool.Pool) *AIGenerationRepository {
@@ -23,25 +24,39 @@ func (r *AIGenerationRepository) Create(ctx context.Context, g model.AIGeneratio
 	if g.ID == "" {
 		g.ID = uuid.NewString()
 	}
-	err := r.pool.QueryRow(ctx, `
-		INSERT INTO ai_generations (
-			id, user_id, workspace_id, mode, prompt, model, aspect_ratio, result_s3_key, result_content_type, preview_s3_key, video_duration_seconds, created_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now())
+	cols, argCount, includePreview := r.generationInsertSpec(ctx)
+	query := fmt.Sprintf(`
+		INSERT INTO ai_generations (%s)
+		VALUES (%s)
 		RETURNING created_at
-	`, g.ID, g.UserID, g.WorkspaceID, g.Mode, g.Prompt, g.Model, g.AspectRatio, g.ResultS3Key, g.ResultContentType, emptyStringToNull(g.PreviewS3Key), g.VideoDurationSeconds,
-	).Scan(&g.CreatedAt)
+	`, cols, generationInsertPlaceholders(argCount))
+
+	args := []any{
+		g.ID, g.UserID, g.WorkspaceID, g.Mode, g.Prompt, g.Model, g.AspectRatio,
+		g.ResultS3Key, g.ResultContentType,
+	}
+	if r.columns.videoDuration {
+		args = append(args, g.VideoDurationSeconds)
+	}
+	if includePreview {
+		args = append(args, emptyStringToNull(g.PreviewS3Key))
+	}
+
+	err := r.pool.QueryRow(ctx, query, args...).Scan(&g.CreatedAt)
 	return g, err
 }
 
 func (r *AIGenerationRepository) GetByID(ctx context.Context, id, userID string) (model.AIGeneration, error) {
 	var g model.AIGeneration
-	err := r.pool.QueryRow(ctx, `
-		SELECT id, user_id, workspace_id, mode, prompt, model, aspect_ratio, result_s3_key, result_content_type, preview_s3_key, video_duration_seconds, created_at
+	cols := r.generationSelectColumns(ctx)
+	query := fmt.Sprintf(`
+		SELECT %s
 		FROM ai_generations
 		WHERE id = $1 AND user_id = $2
-	`, id, userID).Scan(
+	`, cols)
+	err := r.pool.QueryRow(ctx, query, id, userID).Scan(
 		&g.ID, &g.UserID, &g.WorkspaceID, &g.Mode, &g.Prompt, &g.Model, &g.AspectRatio,
-		&g.ResultS3Key, &g.ResultContentType, &g.PreviewS3Key, &g.VideoDurationSeconds, &g.CreatedAt,
+		&g.ResultS3Key, &g.ResultContentType, &g.VideoDurationSeconds, &g.PreviewS3Key, &g.CreatedAt,
 	)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -64,17 +79,18 @@ func (r *AIGenerationRepository) listByWorkspace(ctx context.Context, workspaceI
 	if limit <= 0 || limit > 100 {
 		limit = 50
 	}
-	modeFilter := `mode NOT IN ('text-to-video', 'image-to-video', 'reference-to-video') AND result_content_type NOT LIKE 'video/%'`
+	modeFilter := `mode NOT IN ('text-to-video', 'image-to-video', 'reference-to-video') AND (result_content_type IS NULL OR result_content_type NOT LIKE 'video/%')`
 	if mediaKind == "video" {
-		modeFilter = `(mode IN ('text-to-video', 'image-to-video', 'reference-to-video') OR result_content_type LIKE 'video/%')`
+		modeFilter = `(mode IN ('text-to-video', 'image-to-video', 'reference-to-video') OR (result_content_type IS NOT NULL AND result_content_type LIKE 'video/%'))`
 	}
+	cols := r.generationSelectColumns(ctx)
 	query := fmt.Sprintf(`
-		SELECT id, user_id, workspace_id, mode, prompt, model, aspect_ratio, result_s3_key, result_content_type, preview_s3_key, video_duration_seconds, created_at
+		SELECT %s
 		FROM ai_generations
 		WHERE workspace_id = $1 AND %s
 		ORDER BY created_at DESC
 		LIMIT $2
-	`, modeFilter)
+	`, cols, modeFilter)
 	rows, err := r.pool.Query(ctx, query, workspaceID, limit)
 	if err != nil {
 		return nil, err
@@ -86,7 +102,7 @@ func (r *AIGenerationRepository) listByWorkspace(ctx context.Context, workspaceI
 		var g model.AIGenerationWithUsage
 		if err := rows.Scan(
 			&g.ID, &g.UserID, &g.WorkspaceID, &g.Mode, &g.Prompt, &g.Model, &g.AspectRatio,
-			&g.ResultS3Key, &g.ResultContentType, &g.PreviewS3Key, &g.VideoDurationSeconds, &g.CreatedAt,
+			&g.ResultS3Key, &g.ResultContentType, &g.VideoDurationSeconds, &g.PreviewS3Key, &g.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -100,11 +116,12 @@ func (r *AIGenerationRepository) ListOwnedByIDs(ctx context.Context, workspaceID
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	rows, err := r.pool.Query(ctx, `
-		SELECT id, user_id, workspace_id, mode, prompt, model, aspect_ratio, result_s3_key, result_content_type, preview_s3_key, video_duration_seconds, created_at
+	cols := r.generationSelectColumns(ctx)
+	rows, err := r.pool.Query(ctx, fmt.Sprintf(`
+		SELECT %s
 		FROM ai_generations
 		WHERE workspace_id = $1 AND id = ANY($2)
-	`, workspaceID, ids)
+	`, cols), workspaceID, ids)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +132,7 @@ func (r *AIGenerationRepository) ListOwnedByIDs(ctx context.Context, workspaceID
 		var g model.AIGeneration
 		if err := rows.Scan(
 			&g.ID, &g.UserID, &g.WorkspaceID, &g.Mode, &g.Prompt, &g.Model, &g.AspectRatio,
-			&g.ResultS3Key, &g.ResultContentType, &g.PreviewS3Key, &g.VideoDurationSeconds, &g.CreatedAt,
+			&g.ResultS3Key, &g.ResultContentType, &g.VideoDurationSeconds, &g.PreviewS3Key, &g.CreatedAt,
 		); err != nil {
 			return nil, err
 		}

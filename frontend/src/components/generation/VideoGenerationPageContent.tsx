@@ -49,6 +49,7 @@ export function VideoGenerationPageContent() {
   const [improving, setImproving] = useState(false);
   const [improveError, setImproveError] = useState<string | null>(null);
   const [history, setHistory] = useState<VideoGenerationHistoryItem[]>([]);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const creditsRemaining = useMediaCreditsRemaining();
   const setCreditsRemaining = useGenerationCreditsStore(
     (s) => s.setCreditsRemaining,
@@ -86,8 +87,12 @@ export function VideoGenerationPageContent() {
     try {
       const { items } = await fetchVideoGenerationHistory();
       setHistory(items.map(toVideoHistoryItem));
-    } catch {
+      setHistoryError(null);
+    } catch (err) {
       setHistory([]);
+      setHistoryError(
+        err instanceof ApiError ? err.message : "Не удалось загрузить историю",
+      );
     }
   }, []);
 
@@ -426,6 +431,7 @@ export function VideoGenerationPageContent() {
 
         <VideoGenerationHistory
           items={history}
+          loadError={historyError}
           onSelect={loadFromHistory}
           onDelete={async (ids) => {
             try {

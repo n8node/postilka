@@ -9,12 +9,14 @@ import { cn } from "@/lib/utils";
 
 type VideoGenerationHistoryProps = {
   items: VideoGenerationHistoryItem[];
+  loadError?: string | null;
   onSelect?: (item: VideoGenerationHistoryItem) => void;
   onDelete?: (ids: string[]) => Promise<void>;
 };
 
 export function VideoGenerationHistory({
   items,
+  loadError = null,
   onSelect,
   onDelete,
 }: VideoGenerationHistoryProps) {
@@ -99,6 +101,10 @@ export function VideoGenerationHistory({
           </div>
         ) : null}
       </div>
+
+      {loadError ? (
+        <p className="mb-2 text-[12px] text-red-600">{loadError}</p>
+      ) : null}
 
       {deleteError ? (
         <p className="mb-2 text-[12px] text-red-600">{deleteError}</p>

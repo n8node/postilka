@@ -16,6 +16,7 @@ type GenerationHistoryProps = {
   items: GenerationHistoryItem[];
   title?: string;
   emptyText?: string;
+  loadError?: string | null;
   onSelect?: (item: GenerationHistoryItem) => void;
   onDelete?: (ids: string[]) => Promise<void>;
   onDragStart?: () => void;
@@ -27,6 +28,7 @@ export function GenerationHistory({
   items,
   title = "История генераций",
   emptyText = "История пуста",
+  loadError = null,
   onSelect,
   onDelete,
   onDragStart,
@@ -130,6 +132,10 @@ export function GenerationHistory({
       ) : (
         <div className="mb-3" />
       )}
+
+      {loadError ? (
+        <p className="mb-3 text-[12px] text-red-600">{loadError}</p>
+      ) : null}
 
       {deleteError ? (
         <p className="mb-3 text-[12px] text-red-600">{deleteError}</p>

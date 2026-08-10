@@ -64,6 +64,7 @@ export function GenerationPageContent() {
   const [improving, setImproving] = useState(false);
   const [improveError, setImproveError] = useState<string | null>(null);
   const [history, setHistory] = useState<GenerationHistoryItem[]>([]);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const creditsRemaining = useMediaCreditsRemaining();
   const setCreditsRemaining = useGenerationCreditsStore(
     (s) => s.setCreditsRemaining,
@@ -97,8 +98,12 @@ export function GenerationPageContent() {
     try {
       const { items } = await fetchGenerationHistory();
       setHistory(items.map(toHistoryItem));
-    } catch {
+      setHistoryError(null);
+    } catch (err) {
       setHistory([]);
+      setHistoryError(
+        err instanceof ApiError ? err.message : "Не удалось загрузить историю",
+      );
     }
   }, []);
 
@@ -472,6 +477,7 @@ export function GenerationPageContent() {
 
         <GenerationHistory
           items={history}
+          loadError={historyError}
           onSelect={loadFromHistory}
           onDelete={async (ids) => {
             try {
