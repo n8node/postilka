@@ -83,11 +83,15 @@ export function GenerationHistory({
   };
 
   return (
-    <div className="generation-history-wrap mt-4 min-w-0 border-t border-border pt-4">
+    <div className={cn(title ? "generation-history-wrap mt-4 min-w-0 border-t border-border pt-4" : "generation-history-wrap min-w-0")}>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[11px] font-medium uppercase tracking-[0.04em] text-muted">
-          {title}
-        </p>
+        {title ? (
+          <p className="text-[11px] font-medium uppercase tracking-[0.04em] text-muted">
+            {title}
+          </p>
+        ) : (
+          <span />
+        )}
         <div className="flex flex-wrap items-center gap-2">
           {selectMode ? (
             <>

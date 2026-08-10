@@ -21,6 +21,7 @@ type VideoGenerationHistoryProps = {
   onDelete?: (ids: string[]) => Promise<void>;
   onDragStart?: () => void;
   onDragEnd?: () => void;
+  embedded?: boolean;
 };
 
 export function VideoGenerationHistory({
@@ -31,6 +32,7 @@ export function VideoGenerationHistory({
   onDelete,
   onDragStart,
   onDragEnd,
+  embedded = false,
 }: VideoGenerationHistoryProps) {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -76,43 +78,85 @@ export function VideoGenerationHistory({
   };
 
   return (
-    <div className="mt-4 border-t border-border pt-4">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-[11px] font-medium uppercase tracking-[0.04em] text-muted">
-          История видео
+    <div className={cn(!embedded && "mt-4 border-t border-border pt-4")}>
+      {!embedded ? (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <p className="text-[11px] font-medium uppercase tracking-[0.04em] text-muted">
+            История видео
+          </p>
+          {selectableItems.length > 0 && onDelete ? (
+            <div className="flex items-center gap-2">
+              {selectMode ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => void handleDelete()}
+                    disabled={selectedCount === 0 || deleting}
+                    className="text-[11px] font-medium text-red-600 disabled:opacity-40"
+                  >
+                    {deleting ? "Удаление…" : `Удалить (${selectedCount})`}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={exitSelectMode}
+                    className="text-[11px] font-medium text-muted"
+                  >
+                    Отмена
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setSelectMode(true)}
+                  className="text-[11px] font-medium text-muted hover:text-text"
+                >
+                  Выбрать
+                </button>
+              )}
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
+          {selectableItems.length > 0 && onDelete ? (
+            <div className="flex items-center gap-2">
+              {selectMode ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => void handleDelete()}
+                    disabled={selectedCount === 0 || deleting}
+                    className="text-[11px] font-medium text-red-600 disabled:opacity-40"
+                  >
+                    {deleting ? "Удаление…" : `Удалить (${selectedCount})`}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={exitSelectMode}
+                    className="text-[11px] font-medium text-muted"
+                  >
+                    Отмена
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setSelectMode(true)}
+                  className="text-[11px] font-medium text-muted hover:text-text"
+                >
+                  Выбрать
+                </button>
+              )}
+            </div>
+          ) : null}
+        </div>
+      )}
+
+      {canDragToReferences && !selectMode ? (
+        <p className="mb-3 text-[10px] text-zinc-400">
+          Перетащите видео в референс-видео слева
         </p>
-        {selectableItems.length > 0 && onDelete ? (
-          <div className="flex items-center gap-2">
-            {selectMode ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => void handleDelete()}
-                  disabled={selectedCount === 0 || deleting}
-                  className="text-[11px] font-medium text-red-600 disabled:opacity-40"
-                >
-                  {deleting ? "Удаление…" : `Удалить (${selectedCount})`}
-                </button>
-                <button
-                  type="button"
-                  onClick={exitSelectMode}
-                  className="text-[11px] font-medium text-muted"
-                >
-                  Отмена
-                </button>
-              </>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setSelectMode(true)}
-                className="text-[11px] font-medium text-muted hover:text-text"
-              >
-                Выбрать
-              </button>
-            )}
-          </div>
-        ) : null}
-      </div>
+      ) : null}
 
       {loadError ? (
         <p className="mb-2 text-[12px] text-red-600">{loadError}</p>

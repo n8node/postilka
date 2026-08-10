@@ -1,24 +1,35 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Film, Sparkles } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Film, PenLine, Sparkles } from "lucide-react";
+import { ProtectedMediaImage } from "@/components/media/ProtectedMediaImage";
 import { ProtectedMediaVideo } from "@/components/media/ProtectedMediaVideo";
 import { GenerationProgressPanel } from "@/components/generation/GenerationProgressPanel";
 import { VideoExamplesStrip } from "@/components/generation/VideoExamplesStrip";
 import { VideoFormatParamsPanel } from "@/components/generation/VideoFormatParamsPanel";
-import {
-  VideoGenerationHistory,
-} from "@/components/generation/VideoGenerationHistory";
+import { VideoGenerationCombinedHistory } from "@/components/generation/VideoGenerationCombinedHistory";
 import { VideoSidebarStats } from "@/components/generation/VideoSidebarStats";
 import { VideoSourcePhotosPanel } from "@/components/generation/VideoSourcePhotosPanel";
 import { Card } from "@/components/ui/Card";
 import { ApiError } from "@/lib/api";
-import { improveGenerationPrompt } from "@/lib/generation-api";
+import {
+  deleteGenerationHistory,
+  fetchGenerationHistory,
+  improveGenerationPrompt,
+} from "@/lib/generation-api";
 import {
   hasMediaCredits,
   useGenerationCreditsStore,
   useMediaCreditsRemaining,
 } from "@/lib/generation-credits-store";
+import {
+  toHistoryItem,
+  type GenerationHistoryItem,
+} from "@/lib/generation-data";
+import {
+  historyItemToUpload,
+} from "@/lib/generation-history-drop";
 import { useVideoGenerationJobStore } from "@/lib/video-generation-job-store";
 import {
   defaultDurationForMode,
@@ -46,6 +57,7 @@ import { historyVideoItemToUpload } from "@/lib/video-history-drop";
 import { cn } from "@/lib/utils";
 
 export function VideoGenerationPageContent() {
+  const router = useRouter();
   const [mode, setMode] = useState<VideoGenerationModeId>("text-to-video");
   const [prompt, setPrompt] = useState(defaultVideoPrompt);
   const [aspectRatio, setAspectRatio] = useState<VideoAspectRatioId>("16:9");
@@ -53,7 +65,10 @@ export function VideoGenerationPageContent() {
   const [improving, setImproving] = useState(false);
   const [improveError, setImproveError] = useState<string | null>(null);
   const [history, setHistory] = useState<VideoGenerationHistoryItem[]>([]);
+  const [photoHistory, setPhotoHistory] = useState<GenerationHistoryItem[]>([]);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [photoHistoryError, setPhotoHistoryError] = useState<string | null>(null);
+  const [previewIsImage, setPreviewIsImage] = useState(false);
   const creditsRemaining = useMediaCreditsRemaining();
   const setCreditsRemaining = useGenerationCreditsStore(
     (s) => s.setCreditsRemaining,
@@ -92,6 +107,19 @@ export function VideoGenerationPageContent() {
   const promptStep = hasSourceStep ? 3 : 2;
   const formatStep = hasSourceStep ? 4 : 3;
 
+  const loadPhotoHistory = useCallback(async () => {
+    try {
+      const { items } = await fetchGenerationHistory();
+      setPhotoHistory(items.map(toHistoryItem));
+      setPhotoHistoryError(null);
+    } catch (err) {
+      setPhotoHistory([]);
+      setPhotoHistoryError(
+        err instanceof ApiError ? err.message : "Не удалось загрузить историю фото",
+      );
+    }
+  }, []);
+
   const loadHistory = useCallback(async () => {
     try {
       const { items } = await fetchVideoGenerationHistory();
@@ -122,14 +150,17 @@ export function VideoGenerationPageContent() {
 
   useEffect(() => {
     void loadHistory();
+    void loadPhotoHistory();
     void loadPricing();
-  }, [loadHistory, loadPricing]);
+  }, [loadHistory, loadPhotoHistory, loadPricing]);
 
   useEffect(() => {
     if (completionSeq === 0) return;
+    setPreviewIsImage(false);
     void loadHistory();
+    void loadPhotoHistory();
     void loadPricing();
-  }, [completionSeq, loadHistory, loadPricing]);
+  }, [completionSeq, loadHistory, loadPhotoHistory, loadPricing]);
 
   useEffect(() => {
     if (!generating) return;
@@ -177,6 +208,7 @@ export function VideoGenerationPageContent() {
     setReferenceAudios([]);
     clearResult();
     clearError();
+    setPreviewIsImage(false);
     setImproveError(null);
     if (nextMode !== "text-to-video") {
       setPrompt("");
@@ -237,7 +269,8 @@ export function VideoGenerationPageContent() {
     }
   };
 
-  const loadFromHistory = (item: VideoGenerationHistoryItem) => {
+  const loadFromVideoHistory = (item: VideoGenerationHistoryItem) => {
+    setPreviewIsImage(false);
     setResultFromHistory(item.videoUrl, item.id);
     setPrompt(item.prompt);
     if (item.aspectRatio) {
@@ -248,6 +281,17 @@ export function VideoGenerationPageContent() {
     }
   };
 
+  const loadFromPhotoHistory = (item: GenerationHistoryItem) => {
+    setPreviewIsImage(true);
+    setResultFromHistory(item.imageUrl, item.id);
+    setPrompt(item.prompt);
+  };
+
+  const makePost = () => {
+    if (!resultGenerationId) return;
+    router.push(`/posts?generation=${encodeURIComponent(resultGenerationId)}`);
+  };
+
   const handleDeleteHistory = useCallback(
     async (ids: string[]) => {
       const res = await deleteVideoGenerationHistory(ids);
@@ -255,12 +299,59 @@ export function VideoGenerationPageContent() {
       setHistory((prev) => prev.filter((h) => !removed.has(h.id)));
       if (resultGenerationId && removed.has(resultGenerationId)) {
         clearResult();
+        setPreviewIsImage(false);
       }
     },
     [resultGenerationId, clearResult],
   );
 
-  const canDragHistoryToReferences = mode === "reference-to-video";
+  const handleDeletePhotoHistory = useCallback(
+    async (ids: string[]) => {
+      const res = await deleteGenerationHistory(ids);
+      const removed = new Set(res.deleted_ids);
+      setPhotoHistory((prev) => prev.filter((h) => !removed.has(h.id)));
+      if (resultGenerationId && removed.has(resultGenerationId)) {
+        clearResult();
+        setPreviewIsImage(false);
+      }
+    },
+    [resultGenerationId, clearResult],
+  );
+
+  const canDragPhotos =
+    mode === "reference-to-video" || mode === "image-to-video";
+  const canDragVideos = mode === "reference-to-video";
+
+  const handleHistoryPhotoDrop = useCallback(
+    async (
+      item: GenerationHistoryItem,
+      target:
+        | { kind: "first" }
+        | { kind: "last" }
+        | { kind: "ref-image"; slot: number },
+    ) => {
+      const upload = await historyItemToUpload(item);
+      const videoUpload: VideoGenerationUpload = {
+        uploadId: upload.uploadId,
+        previewUrl: upload.previewUrl,
+        mediaKind: "image",
+      };
+
+      if (target.kind === "first") {
+        setFirstFrame(videoUpload);
+      } else if (target.kind === "last") {
+        setLastFrame(videoUpload);
+      } else {
+        setReferenceImages((prev) =>
+          prev.map((value, index) =>
+            index === target.slot ? videoUpload : value,
+          ),
+        );
+      }
+      setHistoryDragActive(false);
+    },
+    [],
+  );
 
   const handleHistoryVideoDrop = useCallback(
     async (item: VideoGenerationHistoryItem, slot: number) => {
@@ -349,6 +440,7 @@ export function VideoGenerationPageContent() {
           onReferenceVideosChange={setReferenceVideos}
           onReferenceAudiosChange={setReferenceAudios}
           onHistoryVideoDrop={handleHistoryVideoDrop}
+          onHistoryPhotoDrop={handleHistoryPhotoDrop}
         />
 
         <Card hover>
@@ -418,6 +510,15 @@ export function VideoGenerationPageContent() {
           <p className="text-[11px] font-medium uppercase tracking-[0.04em] text-muted">
             Результат
           </p>
+          <button
+            type="button"
+            onClick={makePost}
+            disabled={!resultGenerationId}
+            className="flex items-center gap-1.5 rounded-lg border border-zinc-300 px-3 py-1.5 text-[12px] font-medium text-muted transition-colors hover:border-blue-200 hover:bg-blue-50 hover:text-blue-900 disabled:opacity-40"
+          >
+            <PenLine size={14} />
+            Сделать пост
+          </button>
         </div>
 
         {showProgress && !resultUrl ? (
@@ -429,12 +530,25 @@ export function VideoGenerationPageContent() {
             variant="video"
           />
         ) : resultUrl ? (
-          <div className="relative min-h-[360px] overflow-hidden rounded-lg bg-zinc-900">
-            <ProtectedMediaVideo
-              url={resultUrl}
-              className="h-full min-h-[360px] w-full object-contain"
-              controls
-            />
+          <div
+            className={cn(
+              "relative min-h-[360px] overflow-hidden rounded-lg",
+              previewIsImage ? "bg-zinc-50" : "bg-zinc-900",
+            )}
+          >
+            {previewIsImage ? (
+              <ProtectedMediaImage
+                url={resultUrl}
+                alt="Результат генерации"
+                className="h-full min-h-[360px] w-full object-contain"
+              />
+            ) : (
+              <ProtectedMediaVideo
+                url={resultUrl}
+                className="h-full min-h-[360px] w-full object-contain"
+                controls
+              />
+            )}
             {generating && activeJob ? (
               <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/50 to-transparent px-4 pb-4 pt-10">
                 <div className="mb-1 flex justify-between text-[11px] text-white">
@@ -460,14 +574,25 @@ export function VideoGenerationPageContent() {
           />
         )}
 
-        <VideoGenerationHistory
-          items={history}
-          loadError={historyError}
-          canDragToReferences={canDragHistoryToReferences}
-          onSelect={loadFromHistory}
+        <VideoGenerationCombinedHistory
+          photoItems={photoHistory}
+          videoItems={history}
+          photoLoadError={photoHistoryError}
+          videoLoadError={historyError}
+          canDragPhotos={canDragPhotos}
+          canDragVideos={canDragVideos}
+          onSelectPhoto={loadFromPhotoHistory}
+          onSelectVideo={loadFromVideoHistory}
           onDragStart={() => setHistoryDragActive(true)}
           onDragEnd={() => setHistoryDragActive(false)}
-          onDelete={async (ids) => {
+          onDeletePhotos={async (ids) => {
+            try {
+              await handleDeletePhotoHistory(ids);
+            } catch (err) {
+              throw err;
+            }
+          }}
+          onDeleteVideos={async (ids) => {
             try {
               await handleDeleteHistory(ids);
             } catch (err) {

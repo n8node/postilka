@@ -9,6 +9,31 @@ export type VideoGenerationModeId =
 
 export type VideoAspectRatioId = (typeof KIE_VIDEO_ASPECT_RATIOS)[number];
 
+export type VideoAspectRatioOption = {
+  id: VideoAspectRatioId;
+  label: string;
+  iconW: number;
+  iconH: number;
+};
+
+function ratioIconSize(ratio: string, max = 28): { iconW: number; iconH: number } {
+  const parts = ratio.split(":");
+  if (parts.length !== 2) return { iconW: max, iconH: max };
+  const w = Number(parts[0]);
+  const h = Number(parts[1]);
+  if (!w || !h) return { iconW: max, iconH: max };
+  if (w >= h) {
+    return { iconW: max, iconH: Math.max(12, Math.round((max * h) / w)) };
+  }
+  return { iconW: Math.max(12, Math.round((max * w) / h)), iconH: max };
+}
+
+export const videoAspectRatios: VideoAspectRatioOption[] =
+  KIE_VIDEO_ASPECT_RATIOS.map((ratio) => {
+    const { iconW, iconH } = ratioIconSize(ratio);
+    return { id: ratio, label: ratio, iconW, iconH };
+  });
+
 export type VideoMediaKind = "image" | "video" | "audio";
 
 export type VideoGenerationUpload = {

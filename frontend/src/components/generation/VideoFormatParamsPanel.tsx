@@ -1,9 +1,11 @@
 "use client";
 
-import { KIE_VIDEO_ASPECT_RATIOS } from "@/lib/api";
-import { aspectBoxSize, type VideoAspectRatioId } from "@/lib/video-generation-data";
-import { cn } from "@/lib/utils";
+import { AspectRatioPicker } from "@/components/generation/AspectRatioPicker";
 import { Card } from "@/components/ui/Card";
+import {
+  videoAspectRatios,
+  type VideoAspectRatioId,
+} from "@/lib/video-generation-data";
 
 type VideoFormatParamsPanelProps = {
   step: number;
@@ -24,46 +26,24 @@ export function VideoFormatParamsPanel({
 }: VideoFormatParamsPanelProps) {
   return (
     <Card hover>
-      <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.04em] text-muted">
-        {step} · Формат и длительность
-      </p>
-
-      <p className="mb-2 text-[11px] text-zinc-400">Ориентация</p>
-      <div className="mb-4 flex flex-wrap gap-2">
-        {KIE_VIDEO_ASPECT_RATIOS.map((ratio) => {
-          const { w, h } = aspectBoxSize(ratio);
-          const selected = aspectRatio === ratio;
-          return (
-            <button
-              key={ratio}
-              type="button"
-              disabled={disabled}
-              onClick={() => onAspectRatioChange(ratio)}
-              className={cn(
-                "flex flex-col items-center gap-1.5 rounded-lg border px-2 py-2 transition-colors",
-                selected
-                  ? "border-blue-200 bg-blue-50"
-                  : "border-border bg-bg hover:border-zinc-300",
-                disabled && "cursor-not-allowed opacity-60",
-              )}
-            >
-              <span
-                className={cn(
-                  "flex items-center justify-center rounded border bg-white",
-                  selected ? "border-blue-300" : "border-zinc-200",
-                )}
-                style={{ width: w, height: h }}
-              >
-                <span className="text-[9px] font-medium text-zinc-500">
-                  {ratio}
-                </span>
-              </span>
-            </button>
-          );
-        })}
+      <div className="mb-4 flex items-center gap-2">
+        <span className="flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-text text-[10px] font-semibold leading-none text-white">
+          {step}
+        </span>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.04em] text-text">
+          Формат и длительность
+        </p>
       </div>
 
-      <div className="flex items-center justify-between gap-3">
+      <AspectRatioPicker
+        value={aspectRatio}
+        onChange={onAspectRatioChange}
+        ratios={videoAspectRatios}
+        disabled={disabled}
+        columnsClassName="grid-cols-3 sm:grid-cols-6"
+      />
+
+      <div className="mt-4 flex items-center justify-between gap-3">
         <p className="text-[11px] text-zinc-400">Длительность</p>
         <span className="text-[12px] font-medium tabular-nums text-text">
           {duration} сек

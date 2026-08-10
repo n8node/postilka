@@ -35,6 +35,11 @@ import {
   validateReferenceVideoHistoryDrop,
   videoHistoryDropErrorMessage,
 } from "@/lib/video-history-drop";
+import type { GenerationHistoryItem } from "@/lib/generation-data";
+import {
+  GENERATION_HISTORY_DRAG_MIME,
+  parseHistoryDragItem,
+} from "@/lib/generation-history-drop";
 import { cn } from "@/lib/utils";
 
 type VideoSourcePhotosPanelProps = {
@@ -53,6 +58,13 @@ type VideoSourcePhotosPanelProps = {
   onHistoryVideoDrop: (
     item: VideoGenerationHistoryItem,
     slot: number,
+  ) => void | Promise<void>;
+  onHistoryPhotoDrop: (
+    item: GenerationHistoryItem,
+    target:
+      | { kind: "first" }
+      | { kind: "last" }
+      | { kind: "ref-image"; slot: number },
   ) => void | Promise<void>;
 };
 
@@ -162,9 +174,11 @@ function ReferenceFixedSlot({
   invalidMessage,
   shake,
   acceptVideoHistoryDrag,
+  acceptPhotoHistoryDrag,
   onPick,
   onClear,
   onVideoHistoryDrop,
+  onPhotoHistoryDrop,
   onVideoDragOver,
   onVideoDragLeave,
 }: {
@@ -175,18 +189,36 @@ function ReferenceFixedSlot({
   invalidMessage?: string | null;
   shake?: boolean;
   acceptVideoHistoryDrag?: boolean;
+  acceptPhotoHistoryDrag?: boolean;
   onPick: () => void;
   onClear: () => void;
   onVideoHistoryDrop?: (event: React.DragEvent) => void;
+  onPhotoHistoryDrop?: (event: React.DragEvent) => void;
   onVideoDragOver?: (event: React.DragEvent) => void;
   onVideoDragLeave?: (event: React.DragEvent) => void;
 }) {
   const handleDragOver = (event: React.DragEvent) => {
-    if (!acceptVideoHistoryDrag) return;
-    if (!event.dataTransfer.types.includes(VIDEO_HISTORY_DRAG_MIME)) return;
-    event.preventDefault();
-    event.dataTransfer.dropEffect = invalidDrop ? "none" : "copy";
-    onVideoDragOver?.(event);
+    const types = event.dataTransfer.types;
+    if (acceptVideoHistoryDrag && types.includes(VIDEO_HISTORY_DRAG_MIME)) {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = invalidDrop ? "none" : "copy";
+      onVideoDragOver?.(event);
+      return;
+    }
+    if (acceptPhotoHistoryDrag && types.includes(GENERATION_HISTORY_DRAG_MIME)) {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "copy";
+    }
+  };
+
+  const handleDrop = (event: React.DragEvent) => {
+    if (acceptVideoHistoryDrag && event.dataTransfer.types.includes(VIDEO_HISTORY_DRAG_MIME)) {
+      onVideoHistoryDrop?.(event);
+      return;
+    }
+    if (acceptPhotoHistoryDrag && event.dataTransfer.types.includes(GENERATION_HISTORY_DRAG_MIME)) {
+      onPhotoHistoryDrop?.(event);
+    }
   };
 
   return (
@@ -194,7 +226,7 @@ function ReferenceFixedSlot({
       className={cn(shake && "generation-slot-shake", "rounded-lg")}
       onDragOver={handleDragOver}
       onDragLeave={onVideoDragLeave}
-      onDrop={onVideoHistoryDrop}
+      onDrop={handleDrop}
     >
       <div className="relative">
         <button
@@ -363,6 +395,7 @@ export function VideoSourcePhotosPanel({
   onReferenceVideosChange,
   onReferenceAudiosChange,
   onHistoryVideoDrop,
+  onHistoryPhotoDrop,
 }: VideoSourcePhotosPanelProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState<PendingUpload | null>(null);
@@ -639,6 +672,44 @@ export function VideoSourcePhotosPanel({
     }
   };
 
+  const canDragPhotos =
+    mode === "reference-to-video" || mode === "image-to-video";
+
+  const handlePhotoHistoryDrop =
+    (
+      target:
+        | { kind: "first" }
+        | { kind: "last" }
+        | { kind: "ref-image"; slot: number },
+    ) =>
+    async (event: React.DragEvent) => {
+      event.preventDefault();
+      const item = parseHistoryDragItem(
+        event.dataTransfer.getData(GENERATION_HISTORY_DRAG_MIME),
+      );
+      if (!item) return;
+
+      const key =
+        target.kind === "ref-image"
+          ? `ref-image:${target.slot}`
+          : target.kind;
+      setLoadingKey(key);
+      setError(null);
+      try {
+        await onHistoryPhotoDrop(item, target);
+      } catch (err) {
+        setError(
+          err instanceof ApiError
+            ? err.message
+            : err instanceof Error
+              ? err.message
+              : "Не удалось использовать фото из истории",
+        );
+      } finally {
+        setLoadingKey(null);
+      }
+    };
+
   const handleVideoHistoryDrop =
     (slot: number) => async (event: React.DragEvent) => {
       event.preventDefault();
@@ -690,15 +761,25 @@ export function VideoSourcePhotosPanel({
             label="Первый кадр"
             upload={firstFrame}
             loading={isLoading("first")}
+            shake={historyDragActive && !firstFrame && !isLoading("first")}
+            acceptPhotoHistoryDrag={canDragPhotos}
             onPick={() => openSourceModal({ kind: "first" })}
             onClear={() => onFirstFrameChange(null)}
+            onPhotoHistoryDrop={(e) =>
+              void handlePhotoHistoryDrop({ kind: "first" })(e)
+            }
           />
           <ReferenceFixedSlot
             label="Последний кадр"
             upload={lastFrame}
             loading={isLoading("last")}
+            shake={historyDragActive && !lastFrame && !isLoading("last")}
+            acceptPhotoHistoryDrag={canDragPhotos}
             onPick={() => openSourceModal({ kind: "last" })}
             onClear={() => onLastFrameChange(null)}
+            onPhotoHistoryDrop={(e) =>
+              void handlePhotoHistoryDrop({ kind: "last" })(e)
+            }
           />
         </div>
       ) : (
@@ -730,6 +811,12 @@ export function VideoSourcePhotosPanel({
                   label={`Фото ${index + 1}`}
                   upload={upload}
                   loading={isLoading(`ref-image:${index}`)}
+                  shake={
+                    historyDragActive &&
+                    !upload &&
+                    !isLoading(`ref-image:${index}`)
+                  }
+                  acceptPhotoHistoryDrag={mode === "reference-to-video"}
                   onPick={() =>
                     openSourceModal({ kind: "ref-image", slot: index })
                   }
@@ -739,6 +826,9 @@ export function VideoSourcePhotosPanel({
                         i === index ? null : value,
                       ),
                     )
+                  }
+                  onPhotoHistoryDrop={(e) =>
+                    void handlePhotoHistoryDrop({ kind: "ref-image", slot: index })(e)
                   }
                 />
               ))}
