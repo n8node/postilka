@@ -51,7 +51,6 @@ func (g *kiePollGate) Wait(ctx context.Context) error {
 
 func (s *GenerationService) StartGenerationWorker(ctx context.Context) {
 	pollGate := newKiePollGate()
-	createGate := newKieCreateGate()
 	finalSem := make(chan struct{}, 4)
 
 	go func() {
@@ -62,7 +61,7 @@ func (s *GenerationService) StartGenerationWorker(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				s.pollDueJobs(ctx, pollGate, createGate, finalSem)
+				s.pollDueJobs(ctx, pollGate, s.createGate, finalSem)
 			}
 		}
 	}()

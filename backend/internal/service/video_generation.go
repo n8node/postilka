@@ -96,6 +96,11 @@ func (s *GenerationService) StartGenerateVideo(ctx context.Context, userID strin
 		return StartGenerateResult{}, err
 	}
 
+	if _, _, err := s.kieVideoConfig.ResolveCredentials(ctx); err != nil {
+		slog.Warn("video generation credentials unavailable", "user_id", userID, "err", err)
+		return StartGenerateResult{}, fmt.Errorf("%w: %v", ErrVideoGenerationNotConfigured, err)
+	}
+
 	modelID := ai.NormalizeKieVideoModelID(settings.ModelForMode(mode))
 	if modelID == "" {
 		modelID = ai.DefaultVideoModelForMode(mode)
@@ -119,6 +124,17 @@ func (s *GenerationService) StartGenerateVideo(ctx context.Context, userID strin
 	})
 	if err != nil {
 		return StartGenerateResult{}, err
+	}
+
+	submitCtx := context.Background()
+	if err := s.submitPendingVideoJob(submitCtx, job.ID, s.createGate); err != nil {
+		slog.Warn("inline video submit failed", "job_id", job.ID, "err", err)
+	}
+	if refreshed, err := s.jobRepo.GetByIDInternal(submitCtx, job.ID); err == nil {
+		job = refreshed
+	}
+	if job.Status == model.GenJobStatusFailed {
+		return StartGenerateResult{}, fmt.Errorf("%s", job.FailMessage)
 	}
 
 	return StartGenerateResult{Job: videoJobToView(job, nil)}, nil

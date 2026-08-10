@@ -36,7 +36,7 @@ func translateGenerationError(raw string, video bool) string {
 	mediaShort := "фото"
 	if video {
 		media = "видео"
-		mediaShort = "видео"
+		mediaShort = "фото или референсы"
 	}
 	if raw == "" {
 		return "Не удалось сгенерировать " + media + ". Попробуйте ещё раз."
@@ -65,6 +65,13 @@ func translateGenerationError(raw string, video bool) string {
 		return "Слишком много запросов. Подождите немного и попробуйте снова."
 	case strings.Contains(lower, "credit"), strings.Contains(lower, "quota"), strings.Contains(lower, "balance"):
 		return "Сервис генерации временно недоступен. Попробуйте позже."
+	case strings.Contains(lower, "kie error 422"), strings.Contains(lower, "validation error"), strings.Contains(lower, "validation"):
+		if video {
+			return "Некорректные параметры видео (формат, длительность или модель). Попробуйте 16:9 и 5–10 секунд."
+		}
+		return "Некорректные параметры генерации. Измените формат или описание."
+	case strings.Contains(lower, "kie error 402"), strings.Contains(lower, "insufficient credits"):
+		return "На аккаунте KIE недостаточно кредитов. Пополните баланс провайдера или обратитесь в поддержку."
 	case strings.Contains(lower, "not configured"), strings.Contains(lower, "api key"):
 		return "Сервис генерации временно недоступен. Обратитесь в поддержку."
 	case strings.Contains(lower, "image upload"), strings.Contains(lower, "upload"), strings.Contains(lower, "source photo"), strings.Contains(lower, "upload_not_found"):

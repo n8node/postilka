@@ -56,8 +56,10 @@ func BuildVideoTaskInput(modelID, mode, prompt, aspectRatio string, duration int
 	switch videoResolutionForModel(modelID) {
 	case "720p", "1080p":
 		input["resolution"] = videoResolutionForModel(modelID)
-	default:
+	case "768":
 		input["resolution"] = DefaultVideoResolution
+	default:
+		input["resolution"] = "720p"
 	}
 
 	mode = strings.ToLower(strings.TrimSpace(mode))
@@ -111,22 +113,42 @@ func normalizeVideoAspectForModel(modelID, ratio string) string {
 		ratio = "16:9"
 	}
 
-	if strings.HasPrefix(modelID, "kling-2.6/") {
+	// Kling 2.6 / V3 Turbo: only 9:16, 16:9, 1:1 per KIE docs.
+	if strings.HasPrefix(modelID, "kling-2.6/") ||
+		strings.HasPrefix(modelID, "kling/v3-turbo") ||
+		strings.HasPrefix(modelID, "kling/v3-") {
 		switch ratio {
 		case "9:16", "16:9", "1:1":
 			return ratio
+		case "3:4":
+			return "9:16"
 		default:
 			return "16:9"
 		}
+	}
+
+	// Most market models reject 21:9 / 4:3 — map to nearest supported ratio.
+	switch ratio {
+	case "21:9", "4:3":
+		return "16:9"
+	case "3:4":
+		return "9:16"
 	}
 	return ratio
 }
 
 func videoResolutionForModel(modelID string) string {
-	if strings.HasPrefix(modelID, "kling/v3-turbo") || strings.HasPrefix(modelID, "wan/") {
+	if strings.HasPrefix(modelID, "kling/") || strings.HasPrefix(modelID, "kling-") {
 		return "720p"
 	}
-	return DefaultVideoResolution
+	if strings.HasPrefix(modelID, "wan/") {
+		return "720p"
+	}
+	if strings.HasPrefix(modelID, "bytedance/") || strings.HasPrefix(modelID, "hailuo/") {
+		return "720p"
+	}
+	// Legacy default "768" is rejected by many models; 720p is safer.
+	return "720p"
 }
 
 func DefaultVideoModelForMode(mode string) string {

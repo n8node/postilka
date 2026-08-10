@@ -33,14 +33,15 @@ type GenerationService struct {
 	kieConfig      *KieConfigService
 	kieVideoConfig *KieVideoConfigService
 	genRepo        *repository.AIGenerationRepository
-	jobRepo     *repository.AIGenerationJobRepository
-	uploadRepo  *repository.GenerationSourceUploadRepository
-	aiBilling   *AIBillingService
-	objectStore *ObjectStorage
-	fileStorage *FileStorageService
-	wsSvc       *WorkspaceService
-	yandexGPT   *YandexGptConfigService
-	quota       *QuotaService
+	jobRepo        *repository.AIGenerationJobRepository
+	uploadRepo     *repository.GenerationSourceUploadRepository
+	aiBilling      *AIBillingService
+	objectStore    *ObjectStorage
+	fileStorage    *FileStorageService
+	wsSvc          *WorkspaceService
+	yandexGPT      *YandexGptConfigService
+	quota          *QuotaService
+	createGate     *kieCreateGate
 }
 
 func NewGenerationService(
@@ -68,6 +69,7 @@ func NewGenerationService(
 		wsSvc:       wsSvc,
 		yandexGPT:   yandexGPT,
 		quota:       quota,
+		createGate:  newKieCreateGate(),
 	}
 }
 
