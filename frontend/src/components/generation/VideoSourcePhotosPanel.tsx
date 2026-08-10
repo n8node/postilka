@@ -1,11 +1,18 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { FileAudio, FileVideo, ImageIcon, Plus, X } from "lucide-react";
+import { FileAudio, FolderOpen, HardDriveUpload, Plus, Upload, X } from "lucide-react";
 import { Card } from "@/components/ui/Card";
+import { FileThumbnail } from "@/components/files/FileThumbnail";
 import { ProtectedMediaImage } from "@/components/media/ProtectedMediaImage";
+import { WorkspaceMediaPickerModal } from "@/components/generation/WorkspaceMediaPickerModal";
 import { ApiError } from "@/lib/api";
-import { uploadVideoGenerationMedia } from "@/lib/video-generation-api";
+import type { WorkspaceFile } from "@/lib/files-api";
+import { isAudioMime, isVideoMime } from "@/lib/file-media";
+import {
+  uploadVideoGenerationMedia,
+  uploadVideoGenerationMediaFromWorkspace,
+} from "@/lib/video-generation-api";
 import {
   REFERENCE_AUDIO_MAX,
   REFERENCE_IMAGE_MAX,
@@ -44,12 +51,19 @@ function mediaKindFromFile(file: File): VideoMediaKind | null {
   return null;
 }
 
+function mediaKindFromWorkspace(file: WorkspaceFile): VideoMediaKind | null {
+  if (file.mime_type.startsWith("image/")) return "image";
+  if (isVideoMime(file.mime_type, file.name)) return "video";
+  if (isAudioMime(file.mime_type, file.name)) return "audio";
+  return null;
+}
+
 function acceptForPending(pending: PendingUpload | null): string {
   switch (pending?.kind) {
     case "first":
     case "last":
     case "ref-image":
-      return "image/*";
+      return "image/jpeg,image/png,image/webp";
     case "ref-video":
       return "video/mp4,video/quicktime,.mp4,.mov";
     case "ref-audio":
@@ -59,141 +73,255 @@ function acceptForPending(pending: PendingUpload | null): string {
   }
 }
 
-function FrameSlot({
-  label,
-  photo,
-  loading,
-  onPick,
-  onClear,
-}: {
-  label: string;
-  photo: VideoGenerationUpload | null;
-  loading: boolean;
-  onPick: () => void;
-  onClear: () => void;
-}) {
+function pendingMediaKind(pending: PendingUpload): VideoMediaKind {
+  switch (pending.kind) {
+    case "ref-video":
+      return "video";
+    case "ref-audio":
+      return "audio";
+    default:
+      return "image";
+  }
+}
+
+function SlotLoadingRing() {
   return (
-    <div className="flex flex-col gap-1.5">
-      <p className="text-[10px] font-medium text-zinc-500">{label}</p>
-      <button
-        type="button"
-        onClick={photo && !loading ? onClear : onPick}
-        disabled={loading}
-        aria-busy={loading}
-        className={cn(
-          "group relative flex h-[96px] w-full flex-col items-center justify-center gap-1.5 overflow-hidden rounded-lg border border-dashed transition-colors",
-          photo
-            ? "border-border border-solid bg-bg hover:border-accent"
-            : "border-zinc-300 bg-bg hover:border-accent hover:bg-blue-50",
-          loading && "cursor-wait",
-        )}
-      >
-        {photo ? (
-          <>
-            <ProtectedMediaImage
-              url={photo.previewUrl}
-              alt=""
-              className="absolute inset-0 h-full w-full object-cover"
-            />
-            <span className="absolute inset-x-0 bottom-0 bg-black/45 px-1 py-0.5 text-[9px] text-white opacity-0 transition-opacity group-hover:opacity-100">
-              Убрать
-            </span>
-          </>
-        ) : loading ? (
-          <span
-            className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-300 border-t-accent"
-            aria-hidden
-          />
-        ) : (
-          <>
-            <Plus size={18} className="text-zinc-400" />
-            <span className="px-2 text-center text-[10px] leading-tight text-zinc-400">
-              Загрузить
-            </span>
-          </>
-        )}
-      </button>
+    <span
+      className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-300 border-t-accent"
+      aria-hidden
+    />
+  );
+}
+
+function UploadPreview({
+  upload,
+}: {
+  upload: VideoGenerationUpload;
+}) {
+  if (upload.workspaceFileId) {
+    return (
+      <FileThumbnail
+        fileId={upload.workspaceFileId}
+        name={upload.fileName ?? ""}
+        mimeType={upload.mimeType ?? "application/octet-stream"}
+        size="sm"
+        className="absolute inset-0 h-full w-full rounded-lg border-0"
+      />
+    );
+  }
+
+  if (upload.mediaKind === "image") {
+    return (
+      <ProtectedMediaImage
+        url={upload.previewUrl}
+        alt=""
+        className="absolute inset-0 h-full w-full object-cover"
+        draggable={false}
+      />
+    );
+  }
+
+  if (upload.mediaKind === "video") {
+    return (
+      <>
+        <video
+          src={upload.previewUrl}
+          muted
+          preload="metadata"
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+        <div className="absolute inset-0 bg-black/10" />
+      </>
+    );
+  }
+
+  return (
+    <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-zinc-50 px-1">
+      <FileAudio size={20} className="text-zinc-400" />
+      <span className="line-clamp-2 text-center text-[9px] leading-tight text-zinc-500">
+        {upload.fileName || "Аудио"}
+      </span>
     </div>
   );
 }
 
-function ReferenceListSection({
+function MediaUploadSquare({
+  label,
+  upload,
+  loading,
+  onClear,
+  onPickComputer,
+  onPickDisk,
+}: {
+  label: string;
+  upload: VideoGenerationUpload | null;
+  loading: boolean;
+  onClear: () => void;
+  onPickComputer: () => void;
+  onPickDisk: () => void;
+}) {
+  return (
+    <div className="flex flex-col items-center gap-1.5">
+      <div className="relative">
+        <button
+          type="button"
+          onClick={upload && !loading ? onClear : onPickComputer}
+          disabled={loading}
+          aria-busy={loading}
+          className={cn(
+            "group relative flex h-[84px] w-[84px] flex-col items-center justify-center gap-1 overflow-hidden rounded-lg border border-dashed transition-colors",
+            upload
+              ? "border-border border-solid bg-bg hover:border-accent"
+              : "border-zinc-300 bg-bg hover:border-accent hover:bg-blue-50",
+            loading && "cursor-wait",
+          )}
+        >
+          {upload ? (
+            <UploadPreview upload={upload} />
+          ) : !loading ? (
+            <>
+              <Plus
+                size={14}
+                strokeWidth={1.75}
+                className="text-zinc-400 transition-colors group-hover:text-accent"
+              />
+              <span className="px-1 text-center text-[10px] leading-tight text-zinc-400 transition-colors group-hover:text-blue-900">
+                {label}
+              </span>
+            </>
+          ) : null}
+          {loading ? (
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-bg/70">
+              <SlotLoadingRing />
+            </div>
+          ) : null}
+        </button>
+        {upload && !loading ? (
+          <button
+            type="button"
+            onClick={onClear}
+            className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-border bg-surface text-zinc-400 shadow-sm hover:text-red-500"
+            aria-label="Убрать"
+          >
+            <X size={12} />
+          </button>
+        ) : null}
+      </div>
+      {!upload ? (
+        <div className="flex flex-wrap items-center justify-center gap-1">
+          <button
+            type="button"
+            disabled={loading}
+            onClick={onPickComputer}
+            className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-muted hover:bg-zinc-100 hover:text-text disabled:opacity-50"
+          >
+            <Upload size={10} />
+            ПК
+          </button>
+          <button
+            type="button"
+            disabled={loading}
+            onClick={onPickDisk}
+            className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-muted hover:bg-zinc-100 hover:text-text disabled:opacity-50"
+          >
+            <FolderOpen size={10} />
+            Диск
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ReferenceMediaGrid({
   title,
   hint,
-  icon: Icon,
   items,
   max,
   loading,
-  onAdd,
+  onAddComputer,
+  onAddDisk,
   onRemove,
+  onRemoveAll,
 }: {
   title: string;
   hint: string;
-  icon: typeof ImageIcon;
   items: VideoGenerationUpload[];
   max: number;
   loading: boolean;
-  onAdd: () => void;
+  onAddComputer: () => void;
+  onAddDisk: () => void;
   onRemove: (index: number) => void;
+  onRemoveAll: () => void;
 }) {
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-[11px] font-medium text-text">{title}</p>
+        <div>
+          <p className="text-[11px] font-medium text-text">{title}</p>
+          <p className="text-[10px] text-zinc-400">{hint}</p>
+        </div>
         {items.length > 0 ? (
           <button
             type="button"
-            onClick={() => onRemove(-1)}
+            onClick={onRemoveAll}
             className="text-[10px] font-medium text-red-500 hover:text-red-600"
           >
             Убрать все
           </button>
         ) : null}
       </div>
-      <div className="space-y-2">
+
+      <div className="flex flex-wrap gap-3">
         {items.map((item, index) => (
-          <div
-            key={`${item.uploadId}-${index}`}
-            className="flex items-center gap-2 rounded-lg border border-border bg-bg p-2"
-          >
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md bg-zinc-100">
-              {item.mediaKind === "image" ? (
-                <ProtectedMediaImage
-                  url={item.previewUrl}
-                  alt=""
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                <Icon size={16} className="text-zinc-400" />
-              )}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-[11px] font-medium text-text">
-                {item.fileName || `Файл ${index + 1}`}
-              </p>
-              <p className="text-[10px] text-zinc-400">{hint}</p>
+          <div key={`${item.uploadId}-${index}`} className="relative">
+            <div className="relative h-[84px] w-[84px] overflow-hidden rounded-lg border border-border bg-bg">
+              <UploadPreview upload={item} />
             </div>
             <button
               type="button"
               onClick={() => onRemove(index)}
-              className="rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-red-500"
+              className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full border border-border bg-surface text-zinc-400 shadow-sm hover:text-red-500"
               aria-label="Удалить"
             >
-              <X size={14} />
+              <X size={12} />
             </button>
           </div>
         ))}
+
+        {items.length < max ? (
+          <div className="flex h-[84px] w-[84px] flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-zinc-300 bg-bg">
+            {loading ? (
+              <SlotLoadingRing />
+            ) : (
+              <>
+                <HardDriveUpload size={16} className="text-zinc-400" />
+                <div className="flex flex-col gap-0.5">
+                  <button
+                    type="button"
+                    onClick={onAddComputer}
+                    className="text-[10px] font-medium text-accent hover:underline"
+                  >
+                    С ПК
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onAddDisk}
+                    className="text-[10px] font-medium text-accent hover:underline"
+                  >
+                    С диска
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        ) : null}
       </div>
-      {items.length < max ? (
-        <button
-          type="button"
-          disabled={loading}
-          onClick={onAdd}
-          className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-zinc-300 px-3 py-2.5 text-[11px] font-medium text-zinc-500 transition-colors hover:border-accent hover:bg-blue-50 hover:text-accent disabled:opacity-60"
-        >
-          <Plus size={14} />
-          Добавить ({items.length}/{max})
-        </button>
+
+      {items.length > 0 ? (
+        <p className="text-[10px] text-zinc-400">
+          {items.length}/{max}
+        </p>
       ) : null}
     </div>
   );
@@ -214,21 +342,93 @@ export function VideoSourcePhotosPanel({
 }: VideoSourcePhotosPanelProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState<PendingUpload | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loadingKind, setLoadingKind] = useState<PendingUpload["kind"] | null>(
+    null,
+  );
   const [error, setError] = useState<string | null>(null);
+  const [diskPickerOpen, setDiskPickerOpen] = useState(false);
+  const [diskPickerKind, setDiskPickerKind] = useState<VideoMediaKind>("image");
 
   if (mode === "text-to-video") return null;
 
-  const openPicker = (next: PendingUpload) => {
-    setPending(next);
-    inputRef.current?.click();
+  const isLoading = (kind: PendingUpload["kind"]) => loadingKind === kind;
+
+  const applyUpload = (
+    target: PendingUpload,
+    item: VideoGenerationUpload,
+  ) => {
+    switch (target.kind) {
+      case "first":
+        onFirstFrameChange(item);
+        break;
+      case "last":
+        onLastFrameChange(item);
+        break;
+      case "ref-image":
+        onReferenceImagesChange([...referenceImages, item]);
+        break;
+      case "ref-video":
+        onReferenceVideosChange([...referenceVideos, item]);
+        break;
+      case "ref-audio":
+        onReferenceAudiosChange([...referenceAudios, item]);
+        break;
+    }
   };
 
-  const handleFile = async (file: File | undefined) => {
-    if (!file || !pending) return;
+  const validateFileKind = (file: File, target: PendingUpload): VideoMediaKind | null => {
     const mediaKind = mediaKindFromFile(file);
+    if (!mediaKind) return null;
+    if (
+      (target.kind === "first" ||
+        target.kind === "last" ||
+        target.kind === "ref-image") &&
+      mediaKind !== "image"
+    ) {
+      return null;
+    }
+    if (target.kind === "ref-video" && mediaKind !== "video") return null;
+    if (target.kind === "ref-audio" && mediaKind !== "audio") return null;
+    return mediaKind;
+  };
+
+  const handleComputerFile = async (file: File | undefined) => {
+    if (!file || !pending) return;
+    const mediaKind = validateFileKind(file, pending);
     if (!mediaKind) {
-      setError("Поддерживаются изображения, видео MP4/MOV и аудио MP3/WAV");
+      setError("Выбран неподходящий тип файла");
+      return;
+    }
+
+    setLoadingKind(pending.kind);
+    setError(null);
+    const previewUrl = URL.createObjectURL(file);
+    try {
+      const upload = await uploadVideoGenerationMedia(file);
+      applyUpload(pending, {
+        uploadId: upload.id,
+        previewUrl,
+        mediaKind,
+        fileName: file.name,
+        mimeType: upload.content_type || file.type,
+      });
+    } catch (err) {
+      URL.revokeObjectURL(previewUrl);
+      setError(
+        err instanceof ApiError ? err.message : "Не удалось загрузить файл",
+      );
+    } finally {
+      setLoadingKind(null);
+      setPending(null);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  };
+
+  const handleWorkspaceFile = async (file: WorkspaceFile) => {
+    if (!pending) return;
+    const mediaKind = mediaKindFromWorkspace(file);
+    if (!mediaKind) {
+      setError("Выбран неподходящий тип файла");
       return;
     }
     if (
@@ -249,44 +449,37 @@ export function VideoSourcePhotosPanel({
       return;
     }
 
-    setLoading(true);
+    setLoadingKind(pending.kind);
     setError(null);
-    const previewUrl = URL.createObjectURL(file);
     try {
-      const upload = await uploadVideoGenerationMedia(file);
-      const item: VideoGenerationUpload = {
+      const upload = await uploadVideoGenerationMediaFromWorkspace(file.id);
+      applyUpload(pending, {
         uploadId: upload.id,
-        previewUrl,
+        previewUrl: "",
         mediaKind,
         fileName: file.name,
-      };
-      switch (pending.kind) {
-        case "first":
-          onFirstFrameChange(item);
-          break;
-        case "last":
-          onLastFrameChange(item);
-          break;
-        case "ref-image":
-          onReferenceImagesChange([...referenceImages, item]);
-          break;
-        case "ref-video":
-          onReferenceVideosChange([...referenceVideos, item]);
-          break;
-        case "ref-audio":
-          onReferenceAudiosChange([...referenceAudios, item]);
-          break;
-      }
+        workspaceFileId: file.id,
+        mimeType: file.mime_type,
+      });
     } catch (err) {
-      URL.revokeObjectURL(previewUrl);
       setError(
-        err instanceof ApiError ? err.message : "Не удалось загрузить файл",
+        err instanceof ApiError ? err.message : "Не удалось взять файл с диска",
       );
     } finally {
-      setLoading(false);
+      setLoadingKind(null);
       setPending(null);
-      if (inputRef.current) inputRef.current.value = "";
     }
+  };
+
+  const openComputer = (next: PendingUpload) => {
+    setPending(next);
+    inputRef.current?.click();
+  };
+
+  const openDisk = (next: PendingUpload) => {
+    setPending(next);
+    setDiskPickerKind(pendingMediaKind(next));
+    setDiskPickerOpen(true);
   };
 
   const removeReference = (
@@ -311,76 +504,92 @@ export function VideoSourcePhotosPanel({
         type="file"
         accept={acceptForPending(pending)}
         className="hidden"
-        onChange={(e) => void handleFile(e.target.files?.[0])}
+        onChange={(e) => void handleComputerFile(e.target.files?.[0])}
       />
 
       {mode === "image-to-video" ? (
-        <div className="grid grid-cols-2 gap-3">
-          <FrameSlot
+        <div className="mx-auto flex w-fit flex-wrap justify-center gap-4">
+          <MediaUploadSquare
             label="Первый кадр"
-            photo={firstFrame}
-            loading={loading && pending?.kind === "first"}
-            onPick={() => openPicker({ kind: "first" })}
+            upload={firstFrame}
+            loading={isLoading("first")}
             onClear={() => onFirstFrameChange(null)}
+            onPickComputer={() => openComputer({ kind: "first" })}
+            onPickDisk={() => openDisk({ kind: "first" })}
           />
-          <FrameSlot
+          <MediaUploadSquare
             label="Последний кадр"
-            photo={lastFrame}
-            loading={loading && pending?.kind === "last"}
-            onPick={() => openPicker({ kind: "last" })}
+            upload={lastFrame}
+            loading={isLoading("last")}
             onClear={() => onLastFrameChange(null)}
+            onPickComputer={() => openComputer({ kind: "last" })}
+            onPickDisk={() => openDisk({ kind: "last" })}
           />
         </div>
       ) : (
-        <div className="space-y-4">
-          <ReferenceListSection
+        <div className="space-y-5">
+          <ReferenceMediaGrid
             title="Референс-фото"
-            hint="JPG, PNG, WEBP · до 30 МБ"
-            icon={ImageIcon}
+            hint="JPG, PNG, WEBP · до 30 МБ · до 9 шт."
             items={referenceImages}
             max={REFERENCE_IMAGE_MAX}
-            loading={loading && pending?.kind === "ref-image"}
-            onAdd={() => openPicker({ kind: "ref-image" })}
+            loading={isLoading("ref-image")}
+            onAddComputer={() => openComputer({ kind: "ref-image" })}
+            onAddDisk={() => openDisk({ kind: "ref-image" })}
             onRemove={(index) =>
               removeReference(referenceImages, onReferenceImagesChange, index)
             }
+            onRemoveAll={() => onReferenceImagesChange([])}
           />
-          <ReferenceListSection
+          <ReferenceMediaGrid
             title="Референс-видео"
-            hint="MP4, MOV · до 50 МБ"
-            icon={FileVideo}
+            hint="MP4, MOV · до 50 МБ · до 3 шт."
             items={referenceVideos}
             max={REFERENCE_VIDEO_MAX}
-            loading={loading && pending?.kind === "ref-video"}
-            onAdd={() => openPicker({ kind: "ref-video" })}
+            loading={isLoading("ref-video")}
+            onAddComputer={() => openComputer({ kind: "ref-video" })}
+            onAddDisk={() => openDisk({ kind: "ref-video" })}
             onRemove={(index) =>
               removeReference(referenceVideos, onReferenceVideosChange, index)
             }
+            onRemoveAll={() => onReferenceVideosChange([])}
           />
-          <ReferenceListSection
+          <ReferenceMediaGrid
             title="Референс-аудио"
-            hint="MP3, WAV · до 15 МБ · только с фото или видео"
-            icon={FileAudio}
+            hint="MP3, WAV · до 15 МБ · до 3 шт."
             items={referenceAudios}
             max={REFERENCE_AUDIO_MAX}
-            loading={loading && pending?.kind === "ref-audio"}
-            onAdd={() => openPicker({ kind: "ref-audio" })}
+            loading={isLoading("ref-audio")}
+            onAddComputer={() => openComputer({ kind: "ref-audio" })}
+            onAddDisk={() => openDisk({ kind: "ref-audio" })}
             onRemove={(index) =>
               removeReference(referenceAudios, onReferenceAudiosChange, index)
             }
+            onRemoveAll={() => onReferenceAudiosChange([])}
           />
         </div>
       )}
 
       {mode === "image-to-video" ? (
-        <p className="mt-2 text-[10px] leading-snug text-zinc-400">
-          Нужен хотя бы один кадр — первый, последний или оба
+        <p className="mt-3 text-[10px] leading-snug text-zinc-400">
+          Нужен хотя бы один кадр — первый, последний или оба. Загрузите с компьютера
+          или выберите файл с диска проекта.
         </p>
       ) : null}
 
       {error ? (
         <p className="mt-2 text-[12px] text-red-600">{error}</p>
       ) : null}
+
+      <WorkspaceMediaPickerModal
+        open={diskPickerOpen}
+        mediaKind={diskPickerKind}
+        onClose={() => {
+          setDiskPickerOpen(false);
+          setPending(null);
+        }}
+        onSelect={(file) => void handleWorkspaceFile(file)}
+      />
     </Card>
   );
 }

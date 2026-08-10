@@ -452,6 +452,75 @@ func (s *GenerationService) UploadVideoGenerationSource(ctx context.Context, use
 	return upload.ToView(), nil
 }
 
+func (s *GenerationService) UploadGenerationSourceFromWorkspaceFile(
+	ctx context.Context,
+	userID string,
+	r *http.Request,
+	fileID string,
+	forVideo bool,
+) (model.GenerationSourceUploadView, error) {
+	ws, err := s.resolveWorkspace(ctx, userID, r)
+	if err != nil {
+		return model.GenerationSourceUploadView{}, err
+	}
+	wf, err := s.fileStorage.GetFile(ctx, userID, r, strings.TrimSpace(fileID))
+	if errors.Is(err, ErrFileNotFound) {
+		return model.GenerationSourceUploadView{}, ErrGenerationUploadNotFound
+	}
+	if err != nil {
+		return model.GenerationSourceUploadView{}, err
+	}
+
+	contentType := strings.Split(strings.TrimSpace(wf.MimeType), ";")[0]
+	var maxSize int64
+	if forVideo {
+		maxSize = kieUploadMaxBytes(contentType)
+		if maxSize <= 0 {
+			return model.GenerationSourceUploadView{}, ErrGenerationUploadInvalid
+		}
+	} else {
+		if !strings.HasPrefix(contentType, "image/") {
+			return model.GenerationSourceUploadView{}, ErrGenerationUploadInvalid
+		}
+		maxSize = 15 << 20
+	}
+	if wf.Size <= 0 || wf.Size > maxSize {
+		return model.GenerationSourceUploadView{}, ErrGenerationUploadInvalid
+	}
+
+	ext := path.Ext(wf.Name)
+	if ext == "" {
+		switch {
+		case strings.HasPrefix(contentType, "video/"):
+			ext = ".mp4"
+		case strings.HasPrefix(contentType, "audio/"):
+			ext = ".mp3"
+		case contentType == "image/png":
+			ext = ".png"
+		case contentType == "image/webp":
+			ext = ".webp"
+		default:
+			ext = ".jpg"
+		}
+	}
+	newKey := fmt.Sprintf("postilka/generation-sources/%s/%s%s", ws.ID, uuid.NewString(), ext)
+	if err := s.objectStore.CopyObject(ctx, wf.S3Key, newKey); err != nil {
+		return model.GenerationSourceUploadView{}, err
+	}
+
+	upload, err := s.uploadRepo.Create(ctx, model.GenerationSourceUpload{
+		UserID:      userID,
+		WorkspaceID: ws.ID,
+		S3Key:       newKey,
+		ContentType: contentType,
+	})
+	if err != nil {
+		_ = s.objectStore.DeleteObject(ctx, newKey)
+		return model.GenerationSourceUploadView{}, err
+	}
+	return upload.ToView(), nil
+}
+
 func kieUploadMaxBytes(contentType string) int64 {
 	ct := strings.ToLower(strings.TrimSpace(contentType))
 	switch {

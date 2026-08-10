@@ -169,14 +169,41 @@ func (h *VideoGenerationHandler) UploadSource(w http.ResponseWriter, r *http.Req
 	writeJSON(w, http.StatusOK, map[string]any{"upload": upload})
 }
 
+type uploadVideoSourceFromFileRequest struct {
+	FileID string `json:"file_id"`
+}
+
+func (h *VideoGenerationHandler) UploadSourceFromFile(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
+		return
+	}
+
+	var req uploadVideoSourceFromFileRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Некорректное тело запроса")
+		return
+	}
+
+	upload, err := h.generation.UploadGenerationSourceFromWorkspaceFile(r.Context(), userID, r, req.FileID, true)
+	if err != nil {
+		h.mapError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"upload": upload})
+}
+
 func (h *VideoGenerationHandler) mapError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, service.ErrInsufficientAICredits):
 		writeErrorWithCode(w, http.StatusPaymentRequired, "insufficient_credits", "Недостаточно AI-кредитов или средств на кошельке")
 	case errors.Is(err, service.ErrVideoGenerationNotConfigured):
 		writeErrorWithCode(w, http.StatusServiceUnavailable, "video_generation_not_configured", "Сервис генерации видео временно недоступен")
+	case errors.Is(err, service.ErrGenerationUploadInvalid):
+		writeErrorWithCode(w, http.StatusBadRequest, "upload_invalid", "Неподдерживаемый или слишком большой файл")
 	case errors.Is(err, service.ErrGenerationUploadNotFound):
-		writeErrorWithCode(w, http.StatusBadRequest, "upload_not_found", "Исходное фото не найдено")
+		writeErrorWithCode(w, http.StatusBadRequest, "upload_not_found", "Файл не найден на диске проекта")
 	case errors.Is(err, service.ErrVideoGenerationSourceRequired):
 		writeErrorWithCode(w, http.StatusBadRequest, "source_required", "Загрузите исходное фото")
 	case errors.Is(err, service.ErrNoPrimaryWS):

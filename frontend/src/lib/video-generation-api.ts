@@ -1,4 +1,5 @@
 import { ApiError, apiFetch, fetchBillingOverview, type BillingOverview } from "@/lib/api";
+import { postGenerationMultipart } from "@/lib/generation-upload";
 import type { VideoGenerationModeId } from "@/lib/video-generation-data";
 import { VIDEO_DURATION_MAX, VIDEO_DURATION_MIN } from "@/lib/video-generation-data";
 import { useGenerationCreditsStore } from "@/lib/generation-credits-store";
@@ -193,15 +194,25 @@ export async function pollVideoGenerationJob(
 export async function uploadVideoGenerationMedia(file: File) {
   const form = new FormData();
   form.append("file", file);
-  const res = await apiFetch<{
+  const res = await postGenerationMultipart<{
     upload: { id: string; content_type: string; created_at: string };
-  }>("/generation/video/upload", {
-    method: "POST",
-    body: form,
-  });
+  }>("/generation/video/upload", form);
   return {
     id: res.upload.id,
     content_type: res.upload.content_type,
     url: "",
+  };
+}
+
+export async function uploadVideoGenerationMediaFromWorkspace(fileId: string) {
+  const res = await apiFetch<{
+    upload: { id: string; content_type: string; created_at: string };
+  }>("/generation/video/upload/from-file", {
+    method: "POST",
+    body: JSON.stringify({ file_id: fileId }),
+  });
+  return {
+    id: res.upload.id,
+    content_type: res.upload.content_type,
   };
 }

@@ -16,6 +16,8 @@ export type VideoGenerationUpload = {
   previewUrl: string;
   mediaKind: VideoMediaKind;
   fileName?: string;
+  workspaceFileId?: string;
+  mimeType?: string;
 };
 
 export type VideoGenerationHistoryItem = {
