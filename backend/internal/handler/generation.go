@@ -185,6 +185,37 @@ type improvePromptRequest struct {
 	Mode   string `json:"mode"`
 }
 
+type composePostTextRequest struct {
+	Task string `json:"task"`
+	Text string `json:"text"`
+	Tone string `json:"tone"`
+}
+
+func (h *GenerationHandler) ComposePostText(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
+		return
+	}
+
+	var req composePostTextRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Некорректное тело запроса")
+		return
+	}
+
+	text, err := h.generation.ComposePostText(r.Context(), userID, r, service.ComposePostTextInput{
+		Task: req.Task,
+		Text: req.Text,
+		Tone: req.Tone,
+	})
+	if err != nil {
+		h.mapError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"text": text})
+}
+
 func (h *GenerationHandler) ImprovePrompt(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {

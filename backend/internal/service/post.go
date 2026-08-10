@@ -410,6 +410,10 @@ func validateContentForChannel(content model.PostContent, channel *model.Channel
 	if channel.Provider == model.ChannelProviderTelegram && format == "message" && textLength > 4096 {
 		return fmt.Errorf("%w: текст Telegram не должен превышать 4096 символов", ErrInvalidPost)
 	}
+	if channel.Provider == model.ChannelProviderTelegram &&
+		(format == "story" || format == "short_video") && textLength > 1024 {
+		return fmt.Errorf("%w: подпись к медиа Telegram не должна превышать 1024 символа", ErrInvalidPost)
+	}
 	if channel.Provider == model.ChannelProviderMAX && textLength > 4000 {
 		return fmt.Errorf("%w: текст MAX не должен превышать 4000 символов", ErrInvalidPost)
 	}
@@ -426,8 +430,17 @@ func ValidatePostForPublication(post model.Post) error {
 			return err
 		}
 		content, settings := mergePostTarget(post.Content, post.Settings, targetSettings)
-		if isPostContentEmpty(content) {
+		format := strings.ToLower(strings.TrimSpace(content.Format))
+		if format == "" {
+			format = "message"
+		}
+		if isPostContentEmpty(content) && format != "story" && format != "short_video" {
 			return fmt.Errorf("%w: введите текст публикации для каждого канала", ErrInvalidPost)
+		}
+		if format == "story" || format == "short_video" {
+			if len(post.Media) != 1 {
+				return fmt.Errorf("%w: для формата %s нужен ровно один медиафайл", ErrInvalidPost, format)
+			}
 		}
 		if err := ValidatePostContent(content, settings); err != nil {
 			return err
@@ -516,6 +529,17 @@ func ValidatePostContent(content model.PostContent, settings model.PostSettings)
 		}
 		if err := validateTelegramButtons(content.Buttons); err != nil {
 			return err
+		}
+	case "story", "short_video":
+		text := strings.TrimSpace(content.Text)
+		if utf8.RuneCountInString(text) > 1024 {
+			return fmt.Errorf("%w: подпись к медиа не должна превышать 1024 символа", ErrInvalidPost)
+		}
+		parseMode := strings.ToUpper(strings.TrimSpace(content.ParseMode))
+		if parseMode == "HTML" && text != "" {
+			if err := validateTelegramHTML(content.Text); err != nil {
+				return err
+			}
 		}
 	default:
 		return fmt.Errorf("%w: неизвестный формат публикации", ErrInvalidPost)

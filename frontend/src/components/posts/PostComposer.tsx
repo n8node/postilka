@@ -45,6 +45,7 @@ import {
   type ChannelProvider,
 } from "@/lib/api";
 import { channelDisplayName } from "@/lib/channelPresentation";
+import { composePostText } from "@/lib/generation-api";
 import {
   listFiles,
   uploadFile,
@@ -132,6 +133,26 @@ function htmlToPlain(html: string) {
   const node = document.createElement("div");
   node.innerHTML = html;
   return (node.innerText || node.textContent || "").trim();
+}
+
+type PostKind = "post" | "story" | "short_video";
+
+function formatToPostKind(format: PostContent["format"]): PostKind {
+  if (format === "story") return "story";
+  if (format === "short_video") return "short_video";
+  return "post";
+}
+
+function plainToEditorHTML(text: string) {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\n/g, "<br>");
+}
+
+function isVideoMime(mime: string) {
+  return mime.toLowerCase().startsWith("video/");
 }
 
 function buttonToEditable(button: TelegramButton): EditableButton {
@@ -791,6 +812,8 @@ export function PostComposer() {
   const [plain, setPlain] = useState("");
   const [overrides, setOverrides] = useState<Record<string, Override>>({});
   const [format, setFormat] = useState<PostContent["format"]>("message");
+  const [postKind, setPostKind] = useState<PostKind>("post");
+  const [aiBusy, setAiBusy] = useState(false);
   const [articleTitle, setArticleTitle] = useState("");
   const [articleBlocks, setArticleBlocks] = useState<ArticleBlock[]>([
     { type: "paragraph", text: "" },
@@ -880,6 +903,14 @@ export function PostComposer() {
     return () => window.removeEventListener("beforeunload", warn);
   }, [dirty]);
 
+  useEffect(() => {
+    if (postId) void loadApprovalEvents(postId);
+  }, [postId, loadApprovalEvents]);
+
+  useEffect(() => {
+    if (postId && activePreviewTab === "discussion") void loadApprovalEvents(postId);
+  }, [postId, activePreviewTab, loadApprovalEvents]);
+
   const selectedChannels = useMemo(
     () => channels.filter((channel) => selectedIds.includes(channel.id)),
     [channels, selectedIds],
@@ -887,7 +918,6 @@ export function PostComposer() {
   const activeChannel =
     selectedChannels.find((channel) => channel.id === activeChannelId) ?? selectedChannels[0] ?? null;
   const telegramChannels = selectedChannels.filter((channel) => channel.provider === "telegram");
-  const telegramOnly = selectedChannels.length > 0 && selectedChannels.every((c) => c.provider === "telegram");
   const currentOverride = activeChannel ? overrides[activeChannel.id] : undefined;
   const previewHTML = currentOverride?.detached ? currentOverride.html : html;
   const previewPlain = currentOverride?.detached ? currentOverride.plain : plain;
@@ -896,9 +926,12 @@ export function PostComposer() {
   const detectedURL = previewPlain.match(/https?:\/\/[^\s<]+/)?.[0] ?? "";
   const maxText = activeChannel?.publish_capabilities?.max_text_length || 4096;
   const hashtagCount = (previewPlain.match(/#[^\s#]+/g) || []).length;
-  const canArticle =
-    telegramOnly &&
-    telegramChannels.every((channel) => channel.publish_capabilities?.telegram_rich_messages);
+  const canArticle = telegramChannels.some(
+    (channel) => channel.publish_capabilities?.telegram_rich_messages,
+  );
+  const articleOnlyTelegram =
+    format !== "message" &&
+    selectedChannels.some((channel) => channel.provider !== "telegram");
   const canButtons =
     telegramChannels.length > 0 &&
     telegramChannels.every((channel) => channel.publish_capabilities?.inline_buttons);
@@ -931,6 +964,7 @@ export function PostComposer() {
     setPlain("");
     setOverrides({});
     setFormat("message");
+    setPostKind("post");
     setArticleTitle("");
     setArticleBlocks([{ type: "paragraph", text: "" }]);
     setButtonRows([]);
@@ -983,6 +1017,7 @@ export function PostComposer() {
     setPlain(htmlToPlain(post.content.text || ""));
     setOverrides(targetOverrides);
     setFormat(post.content.format || "message");
+    setPostKind(formatToPostKind(post.content.format || "message"));
     setArticleTitle(post.content.rich_message?.title ?? "");
     setArticleBlocks(
       post.content.rich_message?.blocks?.map((block) => ({ ...block })) ?? [
@@ -1113,7 +1148,8 @@ export function PostComposer() {
         : undefined;
     const content: PostContent = {
       format,
-      text: format === "message" ? html : "",
+      text:
+        format === "message" || format === "story" || format === "short_video" ? html : "",
       parse_mode: "HTML",
       entities: [],
       buttons: format === "message" ? apiButtons : [],
@@ -1155,16 +1191,99 @@ export function PostComposer() {
     };
   }
 
+  function switchPostKind(kind: PostKind) {
+    markDirty();
+    setPostKind(kind);
+    if (kind === "story") {
+      setFormat("story");
+      setMedia((current) => current.slice(0, 1));
+      return;
+    }
+    if (kind === "short_video") {
+      setFormat("short_video");
+      setMedia((current) => {
+        const video = current.find((item) => isVideoMime(item.file.mime_type));
+        return video ? [video] : current.slice(0, 1);
+      });
+      return;
+    }
+    setFormat(format === "article" || format === "rich_message" ? "article" : "message");
+  }
+
+  async function runAIAction(label: string) {
+    const taskMap: Record<string, { task: string; tone?: string }> = {
+      "Переписать с AI": { task: "rewrite" },
+      Сократить: { task: "shorten" },
+      "Изменить тон": { task: "tone", tone: window.prompt("Укажите желаемый тон", "дружелюбный") ?? "" },
+      "Подобрать хэштеги": { task: "hashtags" },
+    };
+    const mapped = taskMap[label];
+    if (!mapped) return;
+    if (mapped.task === "tone" && !mapped.tone?.trim()) return;
+    const sourceText = editorPlain.trim();
+    if (!sourceText) {
+      setError("Сначала введите текст публикации");
+      return;
+    }
+    setAiBusy(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const { text } = await composePostText({
+        task: mapped.task,
+        text: sourceText,
+        tone: mapped.tone,
+      });
+      if (mapped.task === "hashtags") {
+        appendHashtags(text);
+      } else {
+        updateCurrentText(plainToEditorHTML(text), text);
+      }
+      setSuccess("Текст обновлён с помощью AI");
+    } catch (aiError) {
+      setError(errorText(aiError, "Не удалось выполнить AI-действие"));
+    } finally {
+      setAiBusy(false);
+    }
+  }
+
   function validate(action: Timing) {
     if (selectedChannels.length === 0) return "Выберите хотя бы один активный канал";
-    if (format !== "message" && !canArticle) {
-      return "Режим Article доступен только когда выбраны Telegram-каналы с поддержкой rich messages";
+    if (postKind === "story" || format === "story") {
+      if (action !== "draft" && selectedChannels.some((channel) => channel.provider !== "telegram")) {
+        return "История поддерживается только для Telegram";
+      }
+      if (action !== "draft" && media.length !== 1) {
+        return "Для истории прикрепите ровно одно фото или видео";
+      }
     }
-    if (format === "message" && !plain.trim()) return "Введите текст публикации";
-    if (format !== "message" && articleBlocks.length === 0) {
+    if (postKind === "short_video" || format === "short_video") {
+      if (action !== "draft" && selectedChannels.some((channel) => channel.provider !== "telegram")) {
+        return "Короткое видео поддерживается только для Telegram";
+      }
+      if (action !== "draft" && media.length !== 1) {
+        return "Для короткого видео прикрепите ровно один файл";
+      }
+      if (action !== "draft" && media.length === 1 && !isVideoMime(media[0]!.file.mime_type)) {
+        return "Короткое видео должно быть файлом video/*";
+      }
+    }
+    if ((format === "article" || format === "rich_message") && !canArticle) {
+      return "Статья Telegram доступна, если выбран канал с поддержкой rich messages";
+    }
+    if (articleOnlyTelegram && action !== "draft") {
+      return "Статья Telegram публикуется только в Telegram — снимите остальные каналы или переключитесь на «Сообщение»";
+    }
+    if (format === "message" && !plain.trim() && postKind === "post") {
+      return "Введите текст публикации";
+    }
+    if ((format === "story" || format === "short_video") && !html.trim() && media.length === 0) {
+      return "Добавьте медиа или подпись";
+    }
+    if ((format === "article" || format === "rich_message") && articleBlocks.length === 0) {
       return "Добавьте хотя бы один блок статьи";
     }
-    if (format !== "message") {
+    if (format === "article" || format === "rich_message") {
       for (const block of articleBlocks) {
         if (
           ["paragraph", "heading", "code", "quote", "footer", "pullquote"].includes(block.type) &&
@@ -1266,30 +1385,6 @@ export function PostComposer() {
     ) {
       return "Проверьте координаты геопозиции";
     }
-    if (action !== "draft" && firstComment.trim() && noCommentDelivery.length > 0) {
-      return `Первый комментарий не доставляется: ${noCommentDelivery
-        .map((channel) => PROVIDER_LABEL[channel.provider])
-        .join(", ")}`;
-    }
-    if (
-      action !== "draft" &&
-      (locationName.trim() || latitude || longitude) &&
-      noLocationDelivery.length > 0
-    ) {
-      return `Геопозиция не доставляется: ${noLocationDelivery
-        .map((channel) => PROVIDER_LABEL[channel.provider])
-        .join(", ")}`;
-    }
-    if (
-      action !== "draft" &&
-      detectedURL &&
-      linkPreview !== true &&
-      noLinkPreviewDelivery.length > 0
-    ) {
-      return `Управление превью ссылки не доставляется: ${noLinkPreviewDelivery
-        .map((channel) => PROVIDER_LABEL[channel.provider])
-        .join(", ")}`;
-    }
     if (action === "schedule" && (!scheduleAt || new Date(scheduleAt) <= new Date())) {
       return "Выберите дату и время в будущем";
     }
@@ -1370,8 +1465,9 @@ export function PostComposer() {
       setPostId(finalPost.id);
       setCurrentStatus(finalPost.status);
       setPosts((current) => [finalPost, ...current.filter((item) => item.id !== finalPost.id)]);
-      if (finalPost.status === "pending_approval") {
+      if (finalPost.status === "pending_approval" || approvalRequired) {
         await loadApprovalEvents(finalPost.id);
+        setActivePreviewTab("discussion");
       }
       setDirty(false);
       setSuccess(
@@ -1486,29 +1582,45 @@ export function PostComposer() {
       >
         <div className="min-w-0 space-y-4">
           <div className="inline-flex rounded-lg bg-zinc-200/70 p-1">
-            <button type="button" className="rounded-md bg-white px-4 py-2 text-sm font-semibold shadow-sm">
-              Пост
-            </button>
-            <button
-              type="button"
-              disabled
-              title="Backend публикаций пока принимает только обычный пост"
-              className="cursor-not-allowed px-4 py-2 text-sm text-muted opacity-55"
-            >
-              История
-            </button>
-            <button
-              type="button"
-              disabled
-              title="Короткие видео появятся после отдельного backend-формата"
-              className="cursor-not-allowed px-4 py-2 text-sm text-muted opacity-55"
-            >
-              Короткое видео
-            </button>
+            {(
+              [
+                { id: "post" as const, label: "Пост" },
+                { id: "story" as const, label: "История" },
+                { id: "short_video" as const, label: "Короткое видео" },
+              ] as const
+            ).map(({ id, label }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => switchPostKind(id)}
+                disabled={composerLocked}
+                className={cn(
+                  "rounded-md px-4 py-2 text-sm font-semibold",
+                  postKind === id ? "bg-white shadow-sm" : "text-muted hover:text-text",
+                )}
+              >
+                {label}
+              </button>
+            ))}
           </div>
           <p className="-mt-2 text-xs text-muted">
-            Истории и короткие видео пока не поддерживаются API публикаций.
+            {postKind === "story"
+              ? "История — одно вертикальное фото или видео в Telegram с подписью."
+              : postKind === "short_video"
+                ? "Короткое видео — один video/* файл в Telegram с подписью."
+                : "Обычный пост: текст, медиа и статья Telegram."}
           </p>
+
+          {isPendingApproval && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <p className="font-semibold">Публикация на согласовании</p>
+              <p className="mt-1 text-xs">
+                {isAdmin
+                  ? "Вы можете одобрить или отклонить запись во вкладке «Обсуждение»."
+                  : "Редактирование заблокировано до решения администратора."}
+              </p>
+            </div>
+          )}
 
           <Card
             title="Каналы"
@@ -1682,19 +1794,21 @@ export function PostComposer() {
                 <button
                   key={label}
                   type="button"
-                  onClick={() => {
-                    setSuccess(null);
-                    setError("AI-действия ещё не подключены к endpoint генерации. Текст не изменён.");
-                  }}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1.5 text-xs font-semibold text-accent hover:bg-blue-100"
+                  disabled={aiBusy || composerLocked || format !== "message"}
+                  onClick={() => void runAIAction(label)}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1.5 text-xs font-semibold text-accent hover:bg-blue-100 disabled:opacity-50"
                 >
-                  <Sparkles className="h-3.5 w-3.5" />
+                  {aiBusy ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-3.5 w-3.5" />
+                  )}
                   {label}
                 </button>
               ))}
             </div>
 
-            {telegramOnly && (
+            {canArticle && postKind === "post" && (
               <div className="mb-3 inline-flex rounded-lg bg-zinc-100 p-1">
                 <button
                   type="button"
@@ -1707,31 +1821,43 @@ export function PostComposer() {
                     format === "message" && "bg-white shadow-sm",
                   )}
                 >
-                  Message
+                  Сообщение
                 </button>
                 <button
                   type="button"
-                  disabled={!canArticle}
                   onClick={() => {
                     setFormat("article");
                     markDirty();
                   }}
-                  title={canArticle ? "Telegram rich message" : "Канал не поддерживает rich messages"}
+                  title="Статья Telegram (rich message)"
                   className={cn(
-                    "rounded-md px-3 py-1.5 text-xs font-semibold disabled:opacity-40",
+                    "rounded-md px-3 py-1.5 text-xs font-semibold",
                     format !== "message" && "bg-white shadow-sm",
                   )}
                 >
-                  Article
+                  Статья Telegram
                 </button>
               </div>
             )}
+            {articleOnlyTelegram && (
+              <p className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                Статья Telegram будет опубликована только в Telegram. Остальные выбранные каналы
+                получат ошибку при публикации — снимите их или переключитесь на «Сообщение».
+              </p>
+            )}
 
-            {format === "message" ? (
+            {format === "message" || format === "story" || format === "short_video" ? (
               <RichTextEditor
                 html={editorHTML}
                 onChange={updateCurrentText}
-                placeholder="Напишите текст поста…"
+                placeholder={
+                  format === "story"
+                    ? "Подпись к истории (необязательно)…"
+                    : format === "short_video"
+                      ? "Подпись к видео (необязательно)…"
+                      : "Напишите текст поста…"
+                }
+                disabled={composerLocked}
               />
             ) : (
               <ArticleEditor
@@ -1747,12 +1873,12 @@ export function PostComposer() {
                 }}
               />
             )}
-            {format !== "message" && (
+            {format === "article" || format === "rich_message" ? (
               <p className="mt-2 text-xs text-muted">
-                В текущем интерфейсе Article использует одну общую блочную структуру. Отделённые
-                текстовые версии применяются в режиме Message.
+                Статья Telegram использует блочную разметку rich message. Отделённые текстовые
+                версии применяются в режиме «Сообщение».
               </p>
-            )}
+            ) : null}
 
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap gap-1.5">
@@ -1954,11 +2080,9 @@ export function PostComposer() {
                   placeholder="Необязательно"
                 />
                 {firstComment.trim() && noCommentDelivery.length > 0 && (
-                  <p className="mt-1 rounded-md border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] font-medium text-red-700">
-                    Сохранится в черновике, но не доставляется в{" "}
-                    {noCommentDelivery
-                      .map((channel) => PROVIDER_LABEL[channel.provider])
-                      .join(", ")}. Публикация и планирование заблокированы.
+                  <p className="mt-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800">
+                    Сохранится в черновике, но пока не доставляется в{" "}
+                    {noCommentDelivery.map((channel) => PROVIDER_LABEL[channel.provider]).join(", ")}.
                   </p>
                 )}
               </label>
@@ -2385,12 +2509,22 @@ export function PostComposer() {
 
             {activePreviewTab === "discussion" ? (
               <div className="flex min-h-64 flex-col gap-3">
-                {approvalEvents.length === 0 ? (
+                {!postId ? (
+                  <div className="flex flex-1 flex-col items-center justify-center text-center">
+                    <MessageCircle className="mb-2 h-8 w-8 text-zinc-300" />
+                    <p className="text-sm font-semibold">Сохраните черновик</p>
+                    <p className="mt-1 max-w-64 text-xs text-muted">
+                      Обсуждение и согласование доступны после первого сохранения публикации.
+                    </p>
+                  </div>
+                ) : approvalEvents.length === 0 ? (
                   <div className="flex flex-1 flex-col items-center justify-center text-center">
                     <MessageCircle className="mb-2 h-8 w-8 text-zinc-300" />
                     <p className="text-sm font-semibold">Обсуждений пока нет</p>
                     <p className="mt-1 max-w-64 text-xs text-muted">
-                      Здесь появятся комментарии и решения по согласованию публикации.
+                      {approvalRequired || isPendingApproval
+                        ? "Добавьте комментарий или дождитесь решения администратора."
+                        : "Включите «Согласование» или отправьте пост на публикацию, чтобы начать обсуждение."}
                     </p>
                   </div>
                 ) : (

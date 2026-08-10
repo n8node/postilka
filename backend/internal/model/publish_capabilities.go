@@ -33,7 +33,7 @@ func (p ChannelProvider) PublishCapabilities() PublishCapabilities {
 	case ChannelProviderTelegram:
 		return PublishCapabilities{
 			Text: true, Photo: true, Video: true,
-			Formats: []string{"message", "rich_message", "article"},
+			Formats: []string{"message", "rich_message", "article", "story", "short_video"},
 			RichText: true, Entities: true, TelegramRich: true,
 			InlineButtons: true, StyledButtons: true, CustomEmoji: true,
 			LinkPreview: true, ComposerMedia: true, ComposerLinkPreview: true,

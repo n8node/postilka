@@ -150,6 +150,11 @@ type TelegramMediaInput struct {
 	URL  string
 }
 
+type TelegramMediaSendOptions struct {
+	Caption   string
+	ParseMode string
+}
+
 type telegramSentMessage struct {
 	MessageID int64 `json:"message_id"`
 }
@@ -281,6 +286,7 @@ func (c *TelegramBotClient) SendMedia(
 	ctx context.Context,
 	token, chatID string,
 	media []TelegramMediaInput,
+	opts *TelegramMediaSendOptions,
 ) (string, error) {
 	if err := validateTelegramMedia(media); err != nil {
 		return "", err
@@ -290,10 +296,17 @@ func (c *TelegramBotClient) SendMedia(
 		if media[0].Type == TelegramMediaVideo {
 			method, field = "sendVideo", "video"
 		}
-		raw, err := c.api(ctx, token, method, map[string]any{
+		payload := map[string]any{
 			"chat_id": telegramChatIDParam(chatID),
 			field:     media[0].URL,
-		})
+		}
+		if opts != nil && strings.TrimSpace(opts.Caption) != "" {
+			payload["caption"] = opts.Caption
+			if parseMode := strings.TrimSpace(opts.ParseMode); parseMode != "" {
+				payload["parse_mode"] = parseMode
+			}
+		}
+		raw, err := c.api(ctx, token, method, payload)
 		if err != nil {
 			return "", sanitizeTelegramError(err)
 		}

@@ -15,6 +15,7 @@ import {
   Strikethrough,
   Underline,
   Undo2,
+  X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
@@ -89,7 +90,11 @@ type Props = {
 
 export function RichTextEditor({ html, onChange, placeholder, disabled }: Props) {
   const editorRef = useRef<HTMLDivElement>(null);
+  const savedRangeRef = useRef<Range | null>(null);
   const [emojiOpen, setEmojiOpen] = useState(false);
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [linkURL, setLinkURL] = useState("");
+  const [linkError, setLinkError] = useState<string | null>(null);
 
   useEffect(() => {
     const editor = editorRef.current;
@@ -107,6 +112,25 @@ export function RichTextEditor({ html, onChange, placeholder, disabled }: Props)
     editorRef.current?.focus();
     document.execCommand(name, false, value);
     emit();
+  }
+
+  function saveSelection() {
+    const selection = window.getSelection();
+    if (selection && selection.rangeCount > 0) {
+      savedRangeRef.current = selection.getRangeAt(0).cloneRange();
+    }
+  }
+
+  function restoreSelection() {
+    const editor = editorRef.current;
+    const range = savedRangeRef.current;
+    if (!editor || !range) return false;
+    editor.focus();
+    const selection = window.getSelection();
+    if (!selection) return false;
+    selection.removeAllRanges();
+    selection.addRange(range);
+    return true;
   }
 
   function wrapSelection(tag: "tg-spoiler" | "blockquote") {
@@ -128,15 +152,37 @@ export function RichTextEditor({ html, onChange, placeholder, disabled }: Props)
     emit();
   }
 
-  function addLink() {
-    const value = window.prompt("Ссылка (https://…)");
-    if (!value) return;
-    const href = safeURL(value);
+  function openLinkModal() {
+    saveSelection();
+    setLinkURL("");
+    setLinkError(null);
+    setLinkOpen(true);
+  }
+
+  function closeLinkModal() {
+    setLinkOpen(false);
+    setLinkURL("");
+    setLinkError(null);
+  }
+
+  function applyLink() {
+    const href = safeURL(linkURL.trim());
     if (!href) {
-      window.alert("Укажите корректную HTTP(S)-ссылку");
+      setLinkError("Укажите корректную HTTP(S)-ссылку");
       return;
     }
-    command("createLink", href);
+    if (!restoreSelection()) {
+      editorRef.current?.focus();
+    }
+    const selection = window.getSelection();
+    const selected = selection?.toString().trim() || href;
+    document.execCommand(
+      "insertHTML",
+      false,
+      `<a href="${escapeText(href)}">${escapeText(selected)}</a>`,
+    );
+    emit();
+    closeLinkModal();
   }
 
   function insertEmoji(emoji: string) {
@@ -149,7 +195,7 @@ export function RichTextEditor({ html, onChange, placeholder, disabled }: Props)
     { label: "Курсив", icon: Italic, action: () => command("italic") },
     { label: "Подчёркнутый", icon: Underline, action: () => command("underline") },
     { label: "Зачёркнутый", icon: Strikethrough, action: () => command("strikeThrough") },
-    { label: "Ссылка", icon: Link2, action: addLink },
+    { label: "Ссылка", icon: Link2, action: openLinkModal },
     { label: "Спойлер", icon: Braces, action: () => wrapSelection("tg-spoiler") },
     { label: "Цитата", icon: Quote, action: () => command("formatBlock", "blockquote") },
     { label: "Раскрываемая цитата", icon: Quote, action: () => wrapSelection("blockquote") },
@@ -163,7 +209,7 @@ export function RichTextEditor({ html, onChange, placeholder, disabled }: Props)
   ];
 
   return (
-    <div className={cn("overflow-hidden rounded-lg border border-border bg-white", disabled && "opacity-60")}>
+    <div className={cn("relative overflow-hidden rounded-lg border border-border bg-white", disabled && "opacity-60")}>
       <div className="flex flex-wrap items-center gap-1 border-b border-border bg-zinc-50 p-2">
         {tools.map(({ label, icon: Icon, action }) => (
           <button
@@ -215,6 +261,63 @@ export function RichTextEditor({ html, onChange, placeholder, disabled }: Props)
         onBlur={emit}
         className="min-h-40 px-4 py-3 text-[15px] leading-6 outline-none empty:before:pointer-events-none empty:before:text-zinc-400 empty:before:content-[attr(data-placeholder)] [&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-blue-300 [&_blockquote]:pl-3 [&_pre]:my-2 [&_pre]:rounded [&_pre]:bg-zinc-100 [&_pre]:p-2"
       />
+      {linkOpen && (
+        <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/30 p-4">
+          <div
+            role="dialog"
+            aria-labelledby="link-modal-title"
+            className="w-full max-w-md rounded-xl border border-border bg-white p-4 shadow-xl"
+          >
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h3 id="link-modal-title" className="text-sm font-semibold">
+                Вставить ссылку
+              </h3>
+              <button
+                type="button"
+                aria-label="Закрыть"
+                onClick={closeLinkModal}
+                className="rounded-md p-1 text-zinc-500 hover:bg-zinc-100"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <input
+              type="url"
+              value={linkURL}
+              onChange={(event) => {
+                setLinkURL(event.target.value);
+                setLinkError(null);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  applyLink();
+                }
+              }}
+              placeholder="https://example.com"
+              className="w-full rounded-lg border border-border px-3 py-2 text-sm outline-none focus:border-accent"
+              autoFocus
+            />
+            {linkError && <p className="mt-2 text-xs text-red-600">{linkError}</p>}
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={closeLinkModal}
+                className="rounded-lg px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-100"
+              >
+                Отмена
+              </button>
+              <button
+                type="button"
+                onClick={applyLink}
+                className="rounded-lg bg-accent px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90"
+              >
+                Применить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

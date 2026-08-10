@@ -333,6 +333,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Get("/generation/pricing", generationHandler.Pricing)
 			r.Post("/generation/upload", generationHandler.UploadSource)
 			r.Post("/generation/improve-prompt", generationHandler.ImprovePrompt)
+			r.Post("/generation/compose-text", generationHandler.ComposePostText)
 			r.Get("/media/ai-generations/{id}", generationHandler.ResultMedia)
 		})
 

@@ -96,6 +96,18 @@ func (s *QuotaService) CheckChannelQuota(ctx context.Context, workspaceID string
 	return nil
 }
 
+func (s *QuotaService) RecordTextTokens(ctx context.Context, workspaceID string, tokens int) error {
+	if tokens <= 0 {
+		return nil
+	}
+	_, assignedAt, err := s.getWorkspacePlan(ctx, workspaceID)
+	if err != nil {
+		return err
+	}
+	periodStart := s.periodStartForWorkspace(ctx, workspaceID, assignedAt)
+	return s.usage.Record(ctx, workspaceID, "ai_text_tokens", tokens, periodStart)
+}
+
 func (s *QuotaService) RecordPost(ctx context.Context, workspaceID string) error {
 	_, assignedAt, err := s.getWorkspacePlan(ctx, workspaceID)
 	if err != nil {

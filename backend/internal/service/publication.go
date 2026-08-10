@@ -206,19 +206,35 @@ func (s *PublicationService) publishTarget(
 		format = "message"
 	}
 	if channel.Provider == model.ChannelProviderTelegram {
-		if len(post.Media) > 0 {
-			// Composer media is intentionally a separate Telegram message/group.
-			// Text and buttons follow in their normal message to avoid duplicate captions.
+		switch format {
+		case "story", "short_video":
+			if len(post.Media) != 1 {
+				return "", fmt.Errorf("для формата %s нужен ровно один медиафайл", format)
+			}
 			media, err := s.telegramMedia(ctx, post)
 			if err != nil {
 				return "", err
 			}
-			if _, err := s.telegram.SendMedia(ctx, token, channel.ChatID, media); err != nil {
-				return "", err
+			if format == "short_video" && media[0].Type != TelegramMediaVideo {
+				return "", fmt.Errorf("короткое видео должно быть файлом video/*")
 			}
-		}
-		switch format {
+			parseMode := strings.ToUpper(strings.TrimSpace(content.ParseMode))
+			return s.telegram.SendMedia(ctx, token, channel.ChatID, media, &TelegramMediaSendOptions{
+				Caption:   content.Text,
+				ParseMode: parseMode,
+			})
 		case "message":
+			if len(post.Media) > 0 {
+				// Composer media is intentionally a separate Telegram message/group.
+				// Text and buttons follow in their normal message to avoid duplicate captions.
+				media, err := s.telegramMedia(ctx, post)
+				if err != nil {
+					return "", err
+				}
+				if _, err := s.telegram.SendMedia(ctx, token, channel.ChatID, media, nil); err != nil {
+					return "", err
+				}
+			}
 			parseMode := strings.ToUpper(strings.TrimSpace(content.ParseMode))
 			preview := (*bool)(nil)
 			if settings.Link != nil {

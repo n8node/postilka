@@ -134,6 +134,13 @@ export type GenerateImageBody = {
   combine_upload_ids?: string[];
 };
 
+export function composePostText(payload: { task: string; text: string; tone?: string }) {
+  return apiFetch<{ text: string }>("/generation/compose-text", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export function improveGenerationPrompt(payload: {
   prompt: string;
   mode: GenerationModeId;
