@@ -390,6 +390,82 @@ func (s *GenerationService) UploadSource(ctx context.Context, userID string, r *
 	return upload.ToView(), nil
 }
 
+func (s *GenerationService) UploadVideoGenerationSource(ctx context.Context, userID string, r *http.Request, file multipart.File, header *multipart.FileHeader) (model.GenerationSourceUploadView, error) {
+	ws, err := s.resolveWorkspace(ctx, userID, r)
+	if err != nil {
+		return model.GenerationSourceUploadView{}, err
+	}
+	if file == nil || header == nil {
+		return model.GenerationSourceUploadView{}, ErrGenerationUploadInvalid
+	}
+	defer file.Close()
+
+	const readLimit = (50 << 20) + 1
+	data, err := io.ReadAll(io.LimitReader(file, readLimit))
+	if err != nil {
+		return model.GenerationSourceUploadView{}, err
+	}
+	if len(data) == 0 {
+		return model.GenerationSourceUploadView{}, ErrGenerationUploadInvalid
+	}
+
+	contentType := strings.TrimSpace(header.Header.Get("Content-Type"))
+	if contentType == "" {
+		contentType = http.DetectContentType(data)
+	}
+	contentType = strings.Split(contentType, ";")[0]
+	maxSize := kieUploadMaxBytes(contentType)
+	if maxSize <= 0 || int64(len(data)) > maxSize {
+		return model.GenerationSourceUploadView{}, ErrGenerationUploadInvalid
+	}
+
+	ext := path.Ext(header.Filename)
+	if ext == "" {
+		switch {
+		case strings.HasPrefix(contentType, "video/"):
+			ext = ".mp4"
+		case strings.HasPrefix(contentType, "audio/"):
+			ext = ".mp3"
+		case contentType == "image/png":
+			ext = ".png"
+		case contentType == "image/webp":
+			ext = ".webp"
+		default:
+			ext = ".jpg"
+		}
+	}
+	key := fmt.Sprintf("postilka/generation-sources/%s/%s%s", ws.ID, uuid.NewString(), ext)
+	if err := s.objectStore.PutObject(ctx, key, contentType, data); err != nil {
+		return model.GenerationSourceUploadView{}, err
+	}
+
+	upload, err := s.uploadRepo.Create(ctx, model.GenerationSourceUpload{
+		UserID:      userID,
+		WorkspaceID: ws.ID,
+		S3Key:       key,
+		ContentType: contentType,
+	})
+	if err != nil {
+		_ = s.objectStore.DeleteObject(ctx, key)
+		return model.GenerationSourceUploadView{}, err
+	}
+	return upload.ToView(), nil
+}
+
+func kieUploadMaxBytes(contentType string) int64 {
+	ct := strings.ToLower(strings.TrimSpace(contentType))
+	switch {
+	case strings.HasPrefix(ct, "video/"):
+		return 50 << 20
+	case strings.HasPrefix(ct, "audio/"):
+		return 15 << 20
+	case strings.HasPrefix(ct, "image/"):
+		return 30 << 20
+	default:
+		return 0
+	}
+}
+
 func (s *GenerationService) ResultMediaURL(ctx context.Context, id, userID string) (string, error) {
 	key, err := s.resultS3Key(ctx, id, userID)
 	if err != nil {
@@ -402,6 +478,18 @@ func (s *GenerationService) ResultMediaObject(ctx context.Context, id, userID st
 	key, err := s.resultS3Key(ctx, id, userID)
 	if err != nil {
 		return nil, "", err
+	}
+	return s.objectStore.GetObject(ctx, key)
+}
+
+func (s *GenerationService) ResultPreviewMediaObject(ctx context.Context, id, userID string) (io.ReadCloser, string, error) {
+	gen, err := s.genRepo.GetByID(ctx, id, userID)
+	if err != nil {
+		return nil, "", err
+	}
+	key := strings.TrimSpace(gen.PreviewS3Key)
+	if key == "" {
+		return nil, "", repository.ErrNotFound
 	}
 	return s.objectStore.GetObject(ctx, key)
 }
@@ -586,6 +674,15 @@ func (s *GenerationService) kieImageURLs(
 	userID, workspaceID string,
 	uploadIDs []string,
 ) ([]string, error) {
+	return s.kieSourceURLs(ctx, client, userID, workspaceID, uploadIDs)
+}
+
+func (s *GenerationService) kieSourceURLs(
+	ctx context.Context,
+	client *ai.KieClient,
+	userID, workspaceID string,
+	uploadIDs []string,
+) ([]string, error) {
 	out := make([]string, 0, len(uploadIDs))
 	for _, rawID := range uploadIDs {
 		id := strings.TrimSpace(rawID)
@@ -598,14 +695,18 @@ func (s *GenerationService) kieImageURLs(
 		}
 		body, contentType, err := s.objectStore.GetObject(ctx, upload.S3Key)
 		if err != nil {
-			return nil, fmt.Errorf("source photo read: %w", err)
+			return nil, fmt.Errorf("source media read: %w", err)
 		}
-		data, err := io.ReadAll(io.LimitReader(body, 15<<20+1))
+		maxSize := kieUploadMaxBytes(upload.ContentType)
+		if maxSize <= 0 {
+			maxSize = 30 << 20
+		}
+		data, err := io.ReadAll(io.LimitReader(body, maxSize+1))
 		_ = body.Close()
 		if err != nil {
 			return nil, err
 		}
-		if len(data) == 0 || len(data) > 15<<20 {
+		if len(data) == 0 || int64(len(data)) > maxSize {
 			return nil, ErrGenerationUploadInvalid
 		}
 		if ct := strings.TrimSpace(upload.ContentType); ct != "" {
@@ -613,7 +714,7 @@ func (s *GenerationService) kieImageURLs(
 		}
 		kieURL, err := client.UploadFileStream(ctx, data, contentType, path.Base(upload.S3Key))
 		if err != nil {
-			return nil, fmt.Errorf("kie image upload: %w", err)
+			return nil, fmt.Errorf("kie media upload: %w", err)
 		}
 		out = append(out, kieURL)
 	}

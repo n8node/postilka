@@ -346,10 +346,12 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Get("/generation/video/pricing", videoGenerationHandler.Pricing)
 			r.Get("/generation/video/history", videoGenerationHandler.History)
 			r.Post("/generation/video/history/delete", videoGenerationHandler.DeleteHistory)
+			r.Post("/generation/video/upload", videoGenerationHandler.UploadSource)
 			r.Post("/generation/upload", generationHandler.UploadSource)
 			r.Post("/generation/improve-prompt", generationHandler.ImprovePrompt)
 			r.Post("/generation/compose-text", generationHandler.ComposePostText)
 			r.Get("/media/ai-generations/{id}", generationHandler.ResultMedia)
+			r.Get("/media/ai-generations/{id}/preview", generationHandler.ResultPreviewMedia)
 		})
 
 		r.Route("/admin", func(r chi.Router) {

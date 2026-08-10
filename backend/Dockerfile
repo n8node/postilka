@@ -23,7 +23,7 @@ FROM alpine:3.20
 ARG ALPINE_MIRROR
 # MAX Bot API (platform-api2.max.ru) uses TLS chains signed by Russian Trusted CA (MinDigital).
 RUN sed -i "s|https://dl-cdn.alpinelinux.org/alpine|${ALPINE_MIRROR}|g" /etc/apk/repositories \
-    && apk add --no-cache ca-certificates tzdata wget \
+    && apk add --no-cache ca-certificates tzdata wget ffmpeg \
     && wget -q -O /usr/local/share/ca-certificates/russian_trusted_root_ca.crt \
         https://gu-st.ru/content/lending/russian_trusted_root_ca_pem.crt \
     && wget -q -O /usr/local/share/ca-certificates/russian_trusted_sub_ca.crt \

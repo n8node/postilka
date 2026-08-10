@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Check, Play } from "lucide-react";
 import type { VideoGenerationHistoryItem } from "@/lib/video-generation-data";
 import { mediaUrl } from "@/lib/media-display";
+import { ProtectedMediaImage } from "@/components/media/ProtectedMediaImage";
 import { cn } from "@/lib/utils";
 
 type VideoGenerationHistoryProps = {
@@ -127,11 +128,26 @@ export function VideoGenerationHistory({
                     : "border-border hover:border-blue-200",
                 )}
               >
-                <div className="flex h-full w-full items-center justify-center bg-zinc-900/5">
-                  <Play
-                    size={24}
-                    className="text-zinc-400 group-hover:text-accent"
-                  />
+                <div className="relative h-full w-full bg-zinc-900/5">
+                  {item.thumbUrl ? (
+                    <ProtectedMediaImage
+                      url={mediaUrl(item.thumbUrl)}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center">
+                      <Play
+                        size={24}
+                        className="text-zinc-400 group-hover:text-accent"
+                      />
+                    </div>
+                  )}
+                  {item.thumbUrl ? (
+                    <span className="absolute inset-0 flex items-center justify-center bg-black/15 opacity-0 transition-opacity group-hover:opacity-100">
+                      <Play size={22} className="text-white drop-shadow" />
+                    </span>
+                  ) : null}
                 </div>
                 {selectMode && selected ? (
                   <span className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-accent text-white">
@@ -150,6 +166,7 @@ export function VideoGenerationHistory({
   );
 }
 
-export function videoHistoryMediaSrc(item: VideoGenerationHistoryItem): string {
+export function videoHistoryThumbSrc(item: VideoGenerationHistoryItem): string {
+  if (item.thumbUrl) return mediaUrl(item.thumbUrl);
   return mediaUrl(item.videoUrl);
 }

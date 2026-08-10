@@ -275,7 +275,8 @@ func (s *KieVideoExampleService) submitExampleTask(ctx context.Context, example 
 	}
 
 	taskInput := ai.BuildVideoTaskInput(
-		example.ModelID, example.Mode, example.Prompt, example.AspectRatio, example.Duration, kieURLs,
+		example.ModelID, example.Mode, example.Prompt, example.AspectRatio, example.Duration,
+		ai.VideoTaskSources{ReferenceImageURLs: kieURLs, FirstFrameURL: firstKieURL(kieURLs, example.Mode)},
 	)
 	taskID, err := client.CreateVideoTask(ctx, ai.KieCreateTaskRequest{
 		Model: example.ModelID,
@@ -285,6 +286,13 @@ func (s *KieVideoExampleService) submitExampleTask(ctx context.Context, example 
 		return err
 	}
 	return s.exampleRepo.MarkGenerating(ctx, example.ID, taskID)
+}
+
+func firstKieURL(urls []string, mode string) string {
+	if strings.TrimSpace(mode) != "image-to-video" || len(urls) == 0 {
+		return ""
+	}
+	return urls[0]
 }
 
 func (s *KieVideoExampleService) uploadSourceImages(ctx context.Context, files []*multipart.FileHeader) ([]string, error) {

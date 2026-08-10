@@ -13,6 +13,7 @@ export type VideoGenerationItem = {
   video_duration_seconds?: number;
   video_url?: string;
   image_url: string;
+  thumb_url?: string;
   media_type?: string;
   created_at: string;
   used_in_post?: boolean;
@@ -43,7 +44,10 @@ export type GenerateVideoBody = {
   aspect_ratio: string;
   duration: number;
   source_upload_id?: string;
+  last_frame_upload_id?: string;
   reference_upload_ids?: string[];
+  reference_video_upload_ids?: string[];
+  reference_audio_upload_ids?: string[];
 };
 
 export function creditsPerSecondForMode(
@@ -186,4 +190,18 @@ export async function pollVideoGenerationJob(
   }
 }
 
-export { uploadGenerationMedia as uploadVideoGenerationMedia } from "@/lib/generation-api";
+export async function uploadVideoGenerationMedia(file: File) {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await apiFetch<{
+    upload: { id: string; content_type: string; created_at: string };
+  }>("/generation/video/upload", {
+    method: "POST",
+    body: form,
+  });
+  return {
+    id: res.upload.id,
+    content_type: res.upload.content_type,
+    url: "",
+  };
+}

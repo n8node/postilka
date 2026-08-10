@@ -24,9 +24,12 @@ type AIGenerationJob struct {
 	Prompt             string
 	Model              string
 	AspectRatio        string
-	SourceUploadID       string
-	CombineUploadIDs     []string
-	ReferenceUploadIDs   []string
+	SourceUploadID           string
+	LastFrameUploadID        string
+	CombineUploadIDs         []string
+	ReferenceUploadIDs       []string
+	ReferenceVideoUploadIDs  []string
+	ReferenceAudioUploadIDs  []string
 	VideoDurationSeconds int
 	CreditCost           int
 	QuotaCreditsUsed   int

@@ -21,12 +21,15 @@ var (
 )
 
 type GenerateVideoInput struct {
-	Mode               string
-	Prompt             string
-	AspectRatio        string
-	Duration           int
-	SourceUploadID     string
-	ReferenceUploadIDs []string
+	Mode                    string
+	Prompt                  string
+	AspectRatio             string
+	Duration                int
+	SourceUploadID          string
+	LastFrameUploadID       string
+	ReferenceUploadIDs      []string
+	ReferenceVideoUploadIDs []string
+	ReferenceAudioUploadIDs []string
 }
 
 func normalizeVideoGenerationMode(mode string) string {
@@ -72,18 +75,21 @@ func (s *GenerationService) StartGenerateVideo(ctx context.Context, userID strin
 
 	switch mode {
 	case model.KieVideoModeImageToVideo:
-		if strings.TrimSpace(in.SourceUploadID) == "" {
+		if strings.TrimSpace(in.SourceUploadID) == "" && strings.TrimSpace(in.LastFrameUploadID) == "" {
 			return StartGenerateResult{}, ErrVideoGenerationSourceRequired
 		}
 	case model.KieVideoModeReferenceToVideo:
-		valid := 0
-		for _, id := range in.ReferenceUploadIDs {
-			if strings.TrimSpace(id) != "" {
-				valid++
-			}
+		imageCount := countNonEmptyIDs(in.ReferenceUploadIDs)
+		videoCount := countNonEmptyIDs(in.ReferenceVideoUploadIDs)
+		audioCount := countNonEmptyIDs(in.ReferenceAudioUploadIDs)
+		if imageCount == 0 && videoCount == 0 {
+			return StartGenerateResult{}, errors.New("reference image or video required")
 		}
-		if valid == 0 {
-			return StartGenerateResult{}, ErrVideoGenerationSourceRequired
+		if audioCount > 0 && imageCount == 0 && videoCount == 0 {
+			return StartGenerateResult{}, errors.New("reference audio requires image or video")
+		}
+		if imageCount > 9 || videoCount > 3 || audioCount > 3 {
+			return StartGenerateResult{}, errors.New("too many reference files")
 		}
 	}
 
@@ -107,20 +113,25 @@ func (s *GenerationService) StartGenerateVideo(ctx context.Context, userID strin
 	}
 
 	refIDs := append([]string(nil), in.ReferenceUploadIDs...)
+	refVideoIDs := append([]string(nil), in.ReferenceVideoUploadIDs...)
+	refAudioIDs := append([]string(nil), in.ReferenceAudioUploadIDs...)
 	job, err := s.jobRepo.Create(ctx, model.AIGenerationJob{
-		UserID:               userID,
-		WorkspaceID:          ws.ID,
-		Status:               model.GenJobStatusPreparing,
-		Progress:             5,
-		Mode:                 mode,
-		Prompt:               prompt,
-		Model:                modelID,
-		AspectRatio:          aspectRatio,
-		SourceUploadID:       strings.TrimSpace(in.SourceUploadID),
-		ReferenceUploadIDs:   refIDs,
-		VideoDurationSeconds: duration,
-		CreditCost:           cost,
-		PollAfter:            time.Now(),
+		UserID:                  userID,
+		WorkspaceID:             ws.ID,
+		Status:                  model.GenJobStatusPreparing,
+		Progress:                5,
+		Mode:                    mode,
+		Prompt:                  prompt,
+		Model:                   modelID,
+		AspectRatio:             aspectRatio,
+		SourceUploadID:          strings.TrimSpace(in.SourceUploadID),
+		LastFrameUploadID:       strings.TrimSpace(in.LastFrameUploadID),
+		ReferenceUploadIDs:      refIDs,
+		ReferenceVideoUploadIDs: refVideoIDs,
+		ReferenceAudioUploadIDs: refAudioIDs,
+		VideoDurationSeconds:    duration,
+		CreditCost:              cost,
+		PollAfter:               time.Now(),
 	})
 	if err != nil {
 		return StartGenerateResult{}, err
@@ -270,44 +281,94 @@ func (s *GenerationService) submitPendingVideoJob(ctx context.Context, jobID str
 	}
 	client := ai.NewKieClient(baseURL, apiKey)
 
-	var imageURLs []string
+	var taskSources ai.VideoTaskSources
 	switch mode {
 	case model.KieVideoModeImageToVideo:
-		sourceID := strings.TrimSpace(jobRow.SourceUploadID)
-		if sourceID == "" {
+		firstID := strings.TrimSpace(jobRow.SourceUploadID)
+		lastID := strings.TrimSpace(jobRow.LastFrameUploadID)
+		if firstID == "" && lastID == "" {
 			_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
 			_ = s.jobRepo.MarkFailed(ctx, jobID, ErrVideoGenerationSourceRequired.Error())
 			return ErrVideoGenerationSourceRequired
 		}
-		urls, err := s.kieImageURLs(ctx, client, userID, workspaceID, []string{sourceID})
-		if err != nil {
-			if isKieRateLimited(err) {
-				deferSubmit(true)
-				return nil
+		if firstID != "" {
+			urls, err := s.kieSourceURLs(ctx, client, userID, workspaceID, []string{firstID})
+			if err != nil {
+				if isKieRateLimited(err) {
+					deferSubmit(true)
+					return nil
+				}
+				_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
+				_ = s.jobRepo.MarkFailed(ctx, jobID, generationFailMessage(err))
+				return err
 			}
-			_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
-			_ = s.jobRepo.MarkFailed(ctx, jobID, generationFailMessage(err))
-			return err
+			if len(urls) > 0 {
+				taskSources.FirstFrameURL = urls[0]
+			}
 		}
-		imageURLs = urls
+		if lastID != "" {
+			urls, err := s.kieSourceURLs(ctx, client, userID, workspaceID, []string{lastID})
+			if err != nil {
+				if isKieRateLimited(err) {
+					deferSubmit(true)
+					return nil
+				}
+				_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
+				_ = s.jobRepo.MarkFailed(ctx, jobID, generationFailMessage(err))
+				return err
+			}
+			if len(urls) > 0 {
+				taskSources.LastFrameURL = urls[0]
+			}
+		}
 	case model.KieVideoModeReferenceToVideo:
-		ids := jobRow.ReferenceUploadIDs
-		if len(ids) == 0 {
+		imageIDs := nonEmptyUploadIDs(jobRow.ReferenceUploadIDs)
+		videoIDs := nonEmptyUploadIDs(jobRow.ReferenceVideoUploadIDs)
+		audioIDs := nonEmptyUploadIDs(jobRow.ReferenceAudioUploadIDs)
+		if len(imageIDs) == 0 && len(videoIDs) == 0 {
 			_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
 			_ = s.jobRepo.MarkFailed(ctx, jobID, ErrVideoGenerationSourceRequired.Error())
 			return ErrVideoGenerationSourceRequired
 		}
-		urls, err := s.kieImageURLs(ctx, client, userID, workspaceID, ids)
-		if err != nil {
-			if isKieRateLimited(err) {
-				deferSubmit(true)
-				return nil
+		if len(imageIDs) > 0 {
+			urls, err := s.kieSourceURLs(ctx, client, userID, workspaceID, imageIDs)
+			if err != nil {
+				if isKieRateLimited(err) {
+					deferSubmit(true)
+					return nil
+				}
+				_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
+				_ = s.jobRepo.MarkFailed(ctx, jobID, generationFailMessage(err))
+				return err
 			}
-			_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
-			_ = s.jobRepo.MarkFailed(ctx, jobID, generationFailMessage(err))
-			return err
+			taskSources.ReferenceImageURLs = urls
 		}
-		imageURLs = urls
+		if len(videoIDs) > 0 {
+			urls, err := s.kieSourceURLs(ctx, client, userID, workspaceID, videoIDs)
+			if err != nil {
+				if isKieRateLimited(err) {
+					deferSubmit(true)
+					return nil
+				}
+				_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
+				_ = s.jobRepo.MarkFailed(ctx, jobID, generationFailMessage(err))
+				return err
+			}
+			taskSources.ReferenceVideoURLs = urls
+		}
+		if len(audioIDs) > 0 {
+			urls, err := s.kieSourceURLs(ctx, client, userID, workspaceID, audioIDs)
+			if err != nil {
+				if isKieRateLimited(err) {
+					deferSubmit(true)
+					return nil
+				}
+				_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
+				_ = s.jobRepo.MarkFailed(ctx, jobID, generationFailMessage(err))
+				return err
+			}
+			taskSources.ReferenceAudioURLs = urls
+		}
 	}
 
 	if err := createGate.Wait(ctx); err != nil {
@@ -327,7 +388,7 @@ func (s *GenerationService) submitPendingVideoJob(ctx context.Context, jobID str
 
 	duration := modelClampVideoDuration(jobRow.VideoDurationSeconds)
 	taskInput := ai.BuildVideoTaskInput(
-		jobRow.Model, mode, jobRow.Prompt, jobRow.AspectRatio, duration, imageURLs,
+		jobRow.Model, mode, jobRow.Prompt, jobRow.AspectRatio, duration, taskSources,
 	)
 	taskID, err := client.CreateVideoTask(ctx, ai.KieCreateTaskRequest{
 		Model: jobRow.Model,
@@ -453,6 +514,17 @@ func (s *GenerationService) finalizeVideoJob(ctx context.Context, jobID string) 
 		return fmt.Errorf("%w: %v", ErrGenerationFailed, err)
 	}
 
+	previewKey := ""
+	if previewData, err := extractVideoPreviewJPEG(data); err != nil {
+		slog.Warn("video preview extract failed", "job_id", job.ID, "err", err)
+	} else if len(previewData) > 0 {
+		previewKey = videoGenerationPreviewS3Key(job.WorkspaceID)
+		if err := s.objectStore.PutObject(ctx, previewKey, "image/jpeg", previewData); err != nil {
+			slog.Warn("video preview upload failed", "job_id", job.ID, "err", err)
+			previewKey = ""
+		}
+	}
+
 	settings, _ := s.kieVideoConfig.GetSettings(ctx)
 	kopecks := 5000
 	if settings.KopecksPerMediaCredit > 0 {
@@ -468,6 +540,7 @@ func (s *GenerationService) finalizeVideoJob(ctx context.Context, jobID string) 
 		AspectRatio:          job.AspectRatio,
 		ResultS3Key:          key,
 		ResultContentType:    contentType,
+		PreviewS3Key:         previewKey,
 		VideoDurationSeconds: job.VideoDurationSeconds,
 	})
 	if err != nil {
@@ -493,4 +566,28 @@ func (s *GenerationService) finalizeVideoJob(ctx context.Context, jobID string) 
 
 func videoGenerationResultS3Key(workspaceID, ext string) string {
 	return fmt.Sprintf("postilka/video-generations/%s/%s%s", workspaceID, uuid.NewString(), ext)
+}
+
+func videoGenerationPreviewS3Key(workspaceID string) string {
+	return fmt.Sprintf("postilka/video-generations/%s/%s-preview.jpg", workspaceID, uuid.NewString())
+}
+
+func countNonEmptyIDs(ids []string) int {
+	n := 0
+	for _, id := range ids {
+		if strings.TrimSpace(id) != "" {
+			n++
+		}
+	}
+	return n
+}
+
+func nonEmptyUploadIDs(ids []string) []string {
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		if id = strings.TrimSpace(id); id != "" {
+			out = append(out, id)
+		}
+	}
+	return out
 }

@@ -8,9 +8,14 @@ export type VideoGenerationModeId =
   | "reference-to-video";
 
 export type VideoAspectRatioId = (typeof KIE_VIDEO_ASPECT_RATIOS)[number];
+
+export type VideoMediaKind = "image" | "video" | "audio";
+
 export type VideoGenerationUpload = {
   uploadId: string;
   previewUrl: string;
+  mediaKind: VideoMediaKind;
+  fileName?: string;
 };
 
 export type VideoGenerationHistoryItem = {
@@ -20,6 +25,7 @@ export type VideoGenerationHistoryItem = {
   aspectRatio?: string;
   videoDurationSeconds?: number;
   videoUrl: string;
+  thumbUrl?: string;
   createdAt: string;
   usedInPost?: boolean;
 };
@@ -27,7 +33,9 @@ export type VideoGenerationHistoryItem = {
 export const VIDEO_DURATION_MIN = 4;
 export const VIDEO_DURATION_MAX = 15;
 
-export const REFERENCE_PHOTO_SLOTS = 3;
+export const REFERENCE_IMAGE_MAX = 9;
+export const REFERENCE_VIDEO_MAX = 3;
+export const REFERENCE_AUDIO_MAX = 3;
 
 export const videoGenerationModes: {
   id: VideoGenerationModeId;
@@ -42,7 +50,7 @@ export const videoGenerationModes: {
   {
     id: "image-to-video",
     label: "Фото → видео",
-    desc: "Анимация одного исходного кадра",
+    desc: "Анимация между первым и последним кадром",
   },
   {
     id: "reference-to-video",
@@ -75,10 +83,6 @@ export const videoPromptPlaceholders: Record<VideoGenerationModeId, string> = {
 export const defaultVideoPrompt =
   "Кинематографичная сцена, плавное движение камеры, мягкий свет";
 
-export function emptyReferencePhotos(): (VideoGenerationUpload | null)[] {
-  return Array.from({ length: REFERENCE_PHOTO_SLOTS }, () => null);
-}
-
 export function toVideoHistoryItem(item: {
   id: string;
   mode: string;
@@ -87,6 +91,7 @@ export function toVideoHistoryItem(item: {
   video_duration_seconds?: number;
   video_url?: string;
   image_url?: string;
+  thumb_url?: string;
   created_at: string;
   used_in_post?: boolean;
 }): VideoGenerationHistoryItem {
@@ -97,6 +102,7 @@ export function toVideoHistoryItem(item: {
     aspectRatio: item.aspect_ratio,
     videoDurationSeconds: item.video_duration_seconds,
     videoUrl: item.video_url || item.image_url || "",
+    thumbUrl: item.thumb_url,
     createdAt: item.created_at,
     usedInPost: item.used_in_post,
   };

@@ -3,7 +3,6 @@
 import { Clock, Coins, Zap } from "lucide-react";
 import {
   videoCostForModeDuration,
-  videoWalletRubForCost,
   type VideoGenerationPricing,
 } from "@/lib/video-generation-api";
 import {
@@ -52,10 +51,6 @@ export function VideoSidebarStats({
 }: VideoSidebarStatsProps) {
   const modeCost =
     pricing !== null ? videoCostForModeDuration(pricing, mode, duration) : null;
-  const modeWalletRub =
-    modeCost !== null && pricing !== null
-      ? videoWalletRubForCost(pricing, modeCost)
-      : null;
   const elapsedMs = generating ? clientElapsedMs(generationStartedAt) : 0;
   const showLastRun = !generating && lastRun !== null;
 
@@ -81,11 +76,6 @@ export function VideoSidebarStats({
           </span>
           <span className="font-medium text-blue-900">
             {modeCost !== null ? formatMediaCreditCost(modeCost) : "—"}
-            {modeWalletRub != null && modeWalletRub > 0 ? (
-              <span className="ml-1 font-normal text-accent">
-                ({modeWalletRub.toLocaleString("ru-RU")} ₽ с кошелька)
-              </span>
-            ) : null}
           </span>
           <span className="col-span-2 text-[10px] leading-snug text-zinc-400">
             {duration} сек × режим «{videoModeLabels[mode]}»

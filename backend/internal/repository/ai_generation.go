@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -24,10 +25,10 @@ func (r *AIGenerationRepository) Create(ctx context.Context, g model.AIGeneratio
 	}
 	err := r.pool.QueryRow(ctx, `
 		INSERT INTO ai_generations (
-			id, user_id, workspace_id, mode, prompt, model, aspect_ratio, result_s3_key, result_content_type, video_duration_seconds, created_at
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
+			id, user_id, workspace_id, mode, prompt, model, aspect_ratio, result_s3_key, result_content_type, preview_s3_key, video_duration_seconds, created_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now())
 		RETURNING created_at
-	`, g.ID, g.UserID, g.WorkspaceID, g.Mode, g.Prompt, g.Model, g.AspectRatio, g.ResultS3Key, g.ResultContentType, g.VideoDurationSeconds,
+	`, g.ID, g.UserID, g.WorkspaceID, g.Mode, g.Prompt, g.Model, g.AspectRatio, g.ResultS3Key, g.ResultContentType, emptyStringToNull(g.PreviewS3Key), g.VideoDurationSeconds,
 	).Scan(&g.CreatedAt)
 	return g, err
 }
@@ -35,12 +36,12 @@ func (r *AIGenerationRepository) Create(ctx context.Context, g model.AIGeneratio
 func (r *AIGenerationRepository) GetByID(ctx context.Context, id, userID string) (model.AIGeneration, error) {
 	var g model.AIGeneration
 	err := r.pool.QueryRow(ctx, `
-		SELECT id, user_id, workspace_id, mode, prompt, model, aspect_ratio, result_s3_key, result_content_type, video_duration_seconds, created_at
+		SELECT id, user_id, workspace_id, mode, prompt, model, aspect_ratio, result_s3_key, result_content_type, preview_s3_key, video_duration_seconds, created_at
 		FROM ai_generations
 		WHERE id = $1 AND user_id = $2
 	`, id, userID).Scan(
 		&g.ID, &g.UserID, &g.WorkspaceID, &g.Mode, &g.Prompt, &g.Model, &g.AspectRatio,
-		&g.ResultS3Key, &g.ResultContentType, &g.VideoDurationSeconds, &g.CreatedAt,
+		&g.ResultS3Key, &g.ResultContentType, &g.PreviewS3Key, &g.VideoDurationSeconds, &g.CreatedAt,
 	)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -68,7 +69,7 @@ func (r *AIGenerationRepository) listByWorkspace(ctx context.Context, workspaceI
 		modeFilter = `(mode IN ('text-to-video', 'image-to-video', 'reference-to-video') OR result_content_type LIKE 'video/%')`
 	}
 	query := fmt.Sprintf(`
-		SELECT id, user_id, workspace_id, mode, prompt, model, aspect_ratio, result_s3_key, result_content_type, video_duration_seconds, created_at
+		SELECT id, user_id, workspace_id, mode, prompt, model, aspect_ratio, result_s3_key, result_content_type, preview_s3_key, video_duration_seconds, created_at
 		FROM ai_generations
 		WHERE workspace_id = $1 AND %s
 		ORDER BY created_at DESC
@@ -85,7 +86,7 @@ func (r *AIGenerationRepository) listByWorkspace(ctx context.Context, workspaceI
 		var g model.AIGenerationWithUsage
 		if err := rows.Scan(
 			&g.ID, &g.UserID, &g.WorkspaceID, &g.Mode, &g.Prompt, &g.Model, &g.AspectRatio,
-			&g.ResultS3Key, &g.ResultContentType, &g.VideoDurationSeconds, &g.CreatedAt,
+			&g.ResultS3Key, &g.ResultContentType, &g.PreviewS3Key, &g.VideoDurationSeconds, &g.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -100,7 +101,7 @@ func (r *AIGenerationRepository) ListOwnedByIDs(ctx context.Context, workspaceID
 		return nil, nil
 	}
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, user_id, workspace_id, mode, prompt, model, aspect_ratio, result_s3_key, result_content_type, video_duration_seconds, created_at
+		SELECT id, user_id, workspace_id, mode, prompt, model, aspect_ratio, result_s3_key, result_content_type, preview_s3_key, video_duration_seconds, created_at
 		FROM ai_generations
 		WHERE workspace_id = $1 AND id = ANY($2)
 	`, workspaceID, ids)
@@ -114,7 +115,7 @@ func (r *AIGenerationRepository) ListOwnedByIDs(ctx context.Context, workspaceID
 		var g model.AIGeneration
 		if err := rows.Scan(
 			&g.ID, &g.UserID, &g.WorkspaceID, &g.Mode, &g.Prompt, &g.Model, &g.AspectRatio,
-			&g.ResultS3Key, &g.ResultContentType, &g.VideoDurationSeconds, &g.CreatedAt,
+			&g.ResultS3Key, &g.ResultContentType, &g.PreviewS3Key, &g.VideoDurationSeconds, &g.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -139,4 +140,11 @@ func (r *AIGenerationRepository) SetWorkspaceFileID(ctx context.Context, id, fil
 		UPDATE ai_generations SET workspace_file_id = $2 WHERE id = $1
 	`, id, fileID)
 	return err
+}
+
+func emptyStringToNull(s string) any {
+	if strings.TrimSpace(s) == "" {
+		return nil
+	}
+	return s
 }

@@ -48,15 +48,15 @@ func isMiniMaxH3Model(modelID string) bool {
 }
 
 // BuildVideoTaskInput builds model-specific input for video createTask.
-func BuildVideoTaskInput(modelID, mode, prompt, aspectRatio string, duration int, imageURLs []string) map[string]any {
+func BuildVideoTaskInput(modelID, mode, prompt, aspectRatio string, duration int, src VideoTaskSources) map[string]any {
 	modelID = NormalizeKieVideoModelID(modelID)
 	if isMiniMaxH3Model(modelID) {
-		return buildMiniMaxH3TaskInput(modelID, mode, prompt, aspectRatio, duration, imageURLs)
+		return buildMiniMaxH3TaskInput(modelID, mode, prompt, aspectRatio, duration, src)
 	}
-	return buildGenericVideoTaskInput(modelID, mode, prompt, aspectRatio, duration, imageURLs)
+	return buildGenericVideoTaskInput(modelID, mode, prompt, aspectRatio, duration, src)
 }
 
-func buildMiniMaxH3TaskInput(modelID, mode, prompt, aspectRatio string, duration int, imageURLs []string) map[string]any {
+func buildMiniMaxH3TaskInput(modelID, mode, prompt, aspectRatio string, duration int, src VideoTaskSources) map[string]any {
 	prompt = strings.TrimSpace(prompt)
 	aspectRatio = normalizeMiniMaxAspectRatio(aspectRatio)
 	duration = clampVideoDuration(duration)
@@ -70,12 +70,21 @@ func buildMiniMaxH3TaskInput(modelID, mode, prompt, aspectRatio string, duration
 	mode = strings.ToLower(strings.TrimSpace(mode))
 	switch mode {
 	case "image-to-video":
-		if len(imageURLs) > 0 {
-			input["first_frame_url"] = imageURLs[0]
+		if u := strings.TrimSpace(src.FirstFrameURL); u != "" {
+			input["first_frame_url"] = u
+		}
+		if u := strings.TrimSpace(src.LastFrameURL); u != "" {
+			input["last_frame_url"] = u
 		}
 	case "reference-to-video":
-		if len(imageURLs) > 0 {
-			input["reference_image_urls"] = imageURLs
+		if len(src.ReferenceImageURLs) > 0 {
+			input["reference_image_urls"] = src.ReferenceImageURLs
+		}
+		if len(src.ReferenceVideoURLs) > 0 {
+			input["reference_video_urls"] = src.ReferenceVideoURLs
+		}
+		if len(src.ReferenceAudioURLs) > 0 {
+			input["reference_audio_urls"] = src.ReferenceAudioURLs
 		}
 		if aspectRatio != "" {
 			input["aspect_ratio"] = aspectRatio
@@ -87,7 +96,7 @@ func buildMiniMaxH3TaskInput(modelID, mode, prompt, aspectRatio string, duration
 	return input
 }
 
-func buildGenericVideoTaskInput(modelID, mode, prompt, aspectRatio string, duration int, imageURLs []string) map[string]any {
+func buildGenericVideoTaskInput(modelID, mode, prompt, aspectRatio string, duration int, src VideoTaskSources) map[string]any {
 	prompt = strings.TrimSpace(prompt)
 	aspectRatio = normalizeVideoAspectForModel(modelID, aspectRatio)
 	duration = clampVideoDuration(duration)
@@ -108,25 +117,30 @@ func buildGenericVideoTaskInput(modelID, mode, prompt, aspectRatio string, durat
 	mode = strings.ToLower(strings.TrimSpace(mode))
 	switch mode {
 	case "image-to-video":
-		if len(imageURLs) > 0 {
+		first := strings.TrimSpace(src.FirstFrameURL)
+		if first == "" && len(src.ReferenceImageURLs) > 0 {
+			first = src.ReferenceImageURLs[0]
+		}
+		if first != "" {
 			switch {
 			case strings.HasPrefix(modelID, "wan/"):
-				input["first_frame_url"] = imageURLs[0]
+				input["first_frame_url"] = first
 			case strings.HasPrefix(modelID, "kling"):
-				input["image_url"] = imageURLs[0]
+				input["image_url"] = first
 			default:
-				input["image_url"] = imageURLs[0]
+				input["image_url"] = first
 			}
 		}
 	case "reference-to-video":
-		if len(imageURLs) > 0 {
+		refs := src.ReferenceImageURLs
+		if len(refs) > 0 {
 			switch {
 			case strings.HasPrefix(modelID, "wan/"):
-				input["reference_image"] = imageURLs
+				input["reference_image"] = refs
 			case strings.HasPrefix(modelID, "happyhorse"):
-				input["reference_image"] = imageURLs
+				input["reference_image"] = refs
 			default:
-				input["reference_image"] = imageURLs
+				input["reference_image"] = refs
 			}
 		}
 	}

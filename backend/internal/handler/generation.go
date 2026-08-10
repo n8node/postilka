@@ -263,6 +263,29 @@ func (h *GenerationHandler) ResultMedia(w http.ResponseWriter, r *http.Request) 
 	_, _ = io.Copy(w, body)
 }
 
+func (h *GenerationHandler) ResultPreviewMedia(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
+		return
+	}
+
+	body, contentType, err := h.generation.ResultPreviewMediaObject(r.Context(), chi.URLParam(r, "id"), userID)
+	if err != nil {
+		h.mapError(w, err)
+		return
+	}
+	defer body.Close()
+
+	if contentType == "" {
+		contentType = "image/jpeg"
+	}
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Cache-Control", "private, max-age=3600")
+	w.WriteHeader(http.StatusOK)
+	_, _ = io.Copy(w, body)
+}
+
 func (h *GenerationHandler) mapError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, service.ErrInsufficientAICredits):

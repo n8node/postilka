@@ -13,8 +13,9 @@ type AIGeneration struct {
 	Prompt            string
 	Model             string
 	AspectRatio       string
-	ResultS3Key       string
+	ResultS3Key          string
 	ResultContentType    string
+	PreviewS3Key         string
 	VideoDurationSeconds int
 	WorkspaceFileID      *string
 	CreatedAt            time.Time
@@ -28,6 +29,7 @@ type AIGenerationView struct {
 	AspectRatio string `json:"aspect_ratio,omitempty"`
 	ImageURL             string `json:"image_url"`
 	VideoURL             string `json:"video_url,omitempty"`
+	ThumbURL             string `json:"thumb_url,omitempty"`
 	VideoDurationSeconds int    `json:"video_duration_seconds,omitempty"`
 	CreatedAt            string `json:"created_at"`
 	UsedInPost           bool   `json:"used_in_post"`
@@ -64,6 +66,9 @@ func (g AIGeneration) ToViewWithUsage(usedInPost bool) AIGenerationView {
 	if IsVideoGenerationMode(g.Mode) || strings.HasPrefix(g.ResultContentType, "video/") {
 		view.MediaType = "video"
 		view.VideoURL = mediaPath
+		if strings.TrimSpace(g.PreviewS3Key) != "" {
+			view.ThumbURL = AIGenerationPreviewPath(g.ID)
+		}
 	} else {
 		view.MediaType = "image"
 	}
@@ -72,6 +77,10 @@ func (g AIGeneration) ToViewWithUsage(usedInPost bool) AIGenerationView {
 
 func AIGenerationMediaPath(id string) string {
 	return "/api/v1/media/ai-generations/" + id
+}
+
+func AIGenerationPreviewPath(id string) string {
+	return "/api/v1/media/ai-generations/" + id + "/preview"
 }
 
 type AIUsageHistoryItem struct {

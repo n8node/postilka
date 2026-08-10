@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Sparkles } from "lucide-react";
+import { Film, Sparkles } from "lucide-react";
 import { ProtectedMediaVideo } from "@/components/media/ProtectedMediaVideo";
 import { GenerationProgressPanel } from "@/components/generation/GenerationProgressPanel";
 import { VideoExamplesStrip } from "@/components/generation/VideoExamplesStrip";
@@ -30,7 +30,6 @@ import {
 } from "@/lib/video-generation-api";
 import {
   defaultVideoPrompt,
-  emptyReferencePhotos,
   toVideoHistoryItem,
   videoGenerationModes,
   videoModeIcons,
@@ -56,10 +55,11 @@ export function VideoGenerationPageContent() {
   );
   const [pricing, setPricing] = useState<VideoGenerationPricing | null>(null);
   const [, setElapsedTick] = useState(0);
-  const [sourcePhoto, setSourcePhoto] = useState<VideoGenerationUpload | null>(
-    null,
-  );
-  const [referencePhotos, setReferencePhotos] = useState(emptyReferencePhotos);
+  const [firstFrame, setFirstFrame] = useState<VideoGenerationUpload | null>(null);
+  const [lastFrame, setLastFrame] = useState<VideoGenerationUpload | null>(null);
+  const [referenceImages, setReferenceImages] = useState<VideoGenerationUpload[]>([]);
+  const [referenceVideos, setReferenceVideos] = useState<VideoGenerationUpload[]>([]);
+  const [referenceAudios, setReferenceAudios] = useState<VideoGenerationUpload[]>([]);
 
   const generating = useVideoGenerationJobStore((s) => s.running);
   const activeJob = useVideoGenerationJobStore((s) => s.job);
@@ -81,8 +81,6 @@ export function VideoGenerationPageContent() {
   const hasSourceStep = mode !== "text-to-video";
   const promptStep = hasSourceStep ? 3 : 2;
   const formatStep = hasSourceStep ? 4 : 3;
-
-  const referenceFilledCount = referencePhotos.filter(Boolean).length;
 
   const loadHistory = useCallback(async () => {
     try {
@@ -134,23 +132,32 @@ export function VideoGenerationPageContent() {
     if (!prompt.trim() || generating || !hasMediaCredits(creditsRemaining)) {
       return false;
     }
-    if (mode === "image-to-video") return Boolean(sourcePhoto);
-    if (mode === "reference-to-video") return referenceFilledCount >= 1;
+    if (mode === "image-to-video") {
+      return Boolean(firstFrame || lastFrame);
+    }
+    if (mode === "reference-to-video") {
+      return referenceImages.length > 0 || referenceVideos.length > 0;
+    }
     return true;
   }, [
     prompt,
     generating,
     creditsRemaining,
     mode,
-    sourcePhoto,
-    referenceFilledCount,
+    firstFrame,
+    lastFrame,
+    referenceImages.length,
+    referenceVideos.length,
   ]);
 
   const handleModeChange = (nextMode: VideoGenerationModeId) => {
     if (generating) return;
     setMode(nextMode);
-    setSourcePhoto(null);
-    setReferencePhotos(emptyReferencePhotos());
+    setFirstFrame(null);
+    setLastFrame(null);
+    setReferenceImages([]);
+    setReferenceVideos([]);
+    setReferenceAudios([]);
     clearResult();
     clearError();
     setImproveError(null);
@@ -192,10 +199,11 @@ export function VideoGenerationPageContent() {
         prompt: prompt.trim(),
         aspect_ratio: aspectRatio,
         duration,
-        source_upload_id: sourcePhoto?.uploadId,
-        reference_upload_ids: referencePhotos
-          .filter((p): p is VideoGenerationUpload => p !== null)
-          .map((p) => p.uploadId),
+        source_upload_id: firstFrame?.uploadId,
+        last_frame_upload_id: lastFrame?.uploadId,
+        reference_upload_ids: referenceImages.map((p) => p.uploadId),
+        reference_video_upload_ids: referenceVideos.map((p) => p.uploadId),
+        reference_audio_upload_ids: referenceAudios.map((p) => p.uploadId),
       };
       const { job: started } = await startVideoGeneration(body);
       beginJob(started, Date.now());
@@ -295,14 +303,16 @@ export function VideoGenerationPageContent() {
 
         <VideoSourcePhotosPanel
           mode={mode}
-          sourcePhoto={sourcePhoto}
-          referencePhotos={referencePhotos}
-          onSourcePhotoChange={setSourcePhoto}
-          onReferencePhotoChange={(index, value) =>
-            setReferencePhotos((prev) =>
-              prev.map((photo, i) => (i === index ? value : photo)),
-            )
-          }
+          firstFrame={firstFrame}
+          lastFrame={lastFrame}
+          referenceImages={referenceImages}
+          referenceVideos={referenceVideos}
+          referenceAudios={referenceAudios}
+          onFirstFrameChange={setFirstFrame}
+          onLastFrameChange={setLastFrame}
+          onReferenceImagesChange={setReferenceImages}
+          onReferenceVideosChange={setReferenceVideos}
+          onReferenceAudiosChange={setReferenceAudios}
         />
 
         <Card hover>
@@ -352,7 +362,7 @@ export function VideoGenerationPageContent() {
           disabled={!canGenerate}
           className="flex h-11 items-center justify-center gap-2 rounded-lg bg-accent text-[13px] font-medium text-white disabled:cursor-not-allowed disabled:bg-zinc-300 disabled:text-zinc-500"
         >
-          <Sparkles size={16} />
+          <Film size={16} />
           {generating ? "Генерация…" : "Сгенерировать видео"}
         </button>
 
@@ -380,6 +390,7 @@ export function VideoGenerationPageContent() {
             status={activeJob?.status ?? "preparing"}
             active={generating}
             empty={!generating}
+            variant="video"
           />
         ) : resultUrl ? (
           <div className="relative min-h-[360px] overflow-hidden rounded-lg bg-zinc-900">
@@ -409,6 +420,7 @@ export function VideoGenerationPageContent() {
             status="preparing"
             active={false}
             empty
+            variant="video"
           />
         )}
 

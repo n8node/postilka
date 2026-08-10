@@ -22,12 +22,15 @@ func NewVideoGenerationHandler(generation *service.GenerationService) *VideoGene
 }
 
 type generateVideoRequest struct {
-	Mode               string   `json:"mode"`
-	Prompt             string   `json:"prompt"`
-	AspectRatio        string   `json:"aspect_ratio"`
-	Duration           int      `json:"duration"`
-	SourceUploadID     string   `json:"source_upload_id"`
-	ReferenceUploadIDs []string `json:"reference_upload_ids"`
+	Mode                    string   `json:"mode"`
+	Prompt                  string   `json:"prompt"`
+	AspectRatio             string   `json:"aspect_ratio"`
+	Duration                int      `json:"duration"`
+	SourceUploadID          string   `json:"source_upload_id"`
+	LastFrameUploadID       string   `json:"last_frame_upload_id"`
+	ReferenceUploadIDs      []string `json:"reference_upload_ids"`
+	ReferenceVideoUploadIDs []string `json:"reference_video_upload_ids"`
+	ReferenceAudioUploadIDs []string `json:"reference_audio_upload_ids"`
 }
 
 func (h *VideoGenerationHandler) Generate(w http.ResponseWriter, r *http.Request) {
@@ -44,12 +47,15 @@ func (h *VideoGenerationHandler) Generate(w http.ResponseWriter, r *http.Request
 	}
 
 	result, err := h.generation.StartGenerateVideo(r.Context(), userID, r, service.GenerateVideoInput{
-		Mode:               req.Mode,
-		Prompt:             req.Prompt,
-		AspectRatio:        req.AspectRatio,
-		Duration:           req.Duration,
-		SourceUploadID:     req.SourceUploadID,
-		ReferenceUploadIDs: req.ReferenceUploadIDs,
+		Mode:                    req.Mode,
+		Prompt:                  req.Prompt,
+		AspectRatio:             req.AspectRatio,
+		Duration:                req.Duration,
+		SourceUploadID:          req.SourceUploadID,
+		LastFrameUploadID:       req.LastFrameUploadID,
+		ReferenceUploadIDs:      req.ReferenceUploadIDs,
+		ReferenceVideoUploadIDs: req.ReferenceVideoUploadIDs,
+		ReferenceAudioUploadIDs: req.ReferenceAudioUploadIDs,
 	})
 	if err != nil {
 		h.mapError(w, err)
@@ -138,6 +144,29 @@ func (h *VideoGenerationHandler) DeleteHistory(w http.ResponseWriter, r *http.Re
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *VideoGenerationHandler) UploadSource(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
+		return
+	}
+	if err := r.ParseMultipartForm(52 << 20); err != nil {
+		writeError(w, http.StatusBadRequest, "Некорректный multipart запрос")
+		return
+	}
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Файл не передан")
+		return
+	}
+	upload, err := h.generation.UploadVideoGenerationSource(r.Context(), userID, r, file, header)
+	if err != nil {
+		h.mapError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"upload": upload})
 }
 
 func (h *VideoGenerationHandler) mapError(w http.ResponseWriter, err error) {
