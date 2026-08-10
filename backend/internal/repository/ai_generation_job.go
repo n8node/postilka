@@ -161,13 +161,44 @@ func (r *AIGenerationJobRepository) MarkFailed(ctx context.Context, id string, f
 	return err
 }
 
-func (r *AIGenerationJobRepository) SetKieTask(ctx context.Context, id, kieTaskID, status string, progress int) error {
+// TryClaimKieSubmit marks a preparing job as in-flight so only one submitter calls KIE createTask.
+func (r *AIGenerationJobRepository) TryClaimKieSubmit(ctx context.Context, id string) (bool, error) {
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE ai_generation_jobs
+		SET kie_state = 'submitting', updated_at = now()
+		WHERE id = $1
+		  AND status = $2
+		  AND COALESCE(TRIM(kie_task_id), '') = ''
+		  AND COALESCE(kie_state, '') <> 'submitting'
+	`, id, model.GenJobStatusPreparing)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() == 1, nil
+}
+
+func (r *AIGenerationJobRepository) ReleaseKieSubmitClaim(ctx context.Context, id string) error {
 	_, err := r.pool.Exec(ctx, `
 		UPDATE ai_generation_jobs
-		SET kie_task_id = $2, status = $3, progress = $4, poll_after = now(), updated_at = now()
+		SET kie_state = '', updated_at = now()
 		WHERE id = $1
-	`, id, kieTaskID, status, progress)
+		  AND COALESCE(TRIM(kie_task_id), '') = ''
+		  AND kie_state = 'submitting'
+	`, id)
 	return err
+}
+
+func (r *AIGenerationJobRepository) SetKieTask(ctx context.Context, id, kieTaskID, status string, progress int) (bool, error) {
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE ai_generation_jobs
+		SET kie_task_id = $2, status = $3, progress = $4, kie_state = 'waiting',
+		    poll_after = now(), updated_at = now()
+		WHERE id = $1 AND COALESCE(TRIM(kie_task_id), '') = ''
+	`, id, kieTaskID, status, progress)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() == 1, nil
 }
 
 func (r *AIGenerationJobRepository) ListDueForPoll(ctx context.Context, limit int) ([]string, error) {

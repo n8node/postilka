@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"mime/multipart"
 	"net/http"
 	"net/url"
@@ -428,6 +429,13 @@ func (s *GenerationService) submitPendingJob(ctx context.Context, jobID string, 
 	if jobRow.Status != model.GenJobStatusPreparing {
 		return nil
 	}
+	claimed, err := s.jobRepo.TryClaimKieSubmit(ctx, jobID)
+	if err != nil {
+		return err
+	}
+	if !claimed {
+		return nil
+	}
 
 	userID := jobRow.UserID
 	workspaceID := jobRow.WorkspaceID
@@ -444,6 +452,7 @@ func (s *GenerationService) submitPendingJob(ctx context.Context, jobID string, 
 	startedAt := jobRow.CreatedAt
 
 	deferSubmit := func(rateLimited bool) {
+		_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
 		jobRow, _ = s.jobRepo.GetByIDInternal(ctx, jobID)
 		p := ai.NextJobProgress(jobRow.Progress, model.GenJobStatusPreparing, "", 0, startedAt)
 		retryAt := time.Now().Add(2 * time.Second)
@@ -458,6 +467,7 @@ func (s *GenerationService) submitPendingJob(ctx context.Context, jobID string, 
 
 	baseURL, apiKey, err := s.kieConfig.ResolveCredentials(ctx)
 	if err != nil {
+		_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
 		_ = s.jobRepo.MarkFailed(ctx, jobID, err.Error())
 		return err
 	}
@@ -468,6 +478,7 @@ func (s *GenerationService) submitPendingJob(ctx context.Context, jobID string, 
 	case generationModeFilter, "image-to-image":
 		sourceID := strings.TrimSpace(in.SourceUploadID)
 		if sourceID == "" {
+			_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
 			_ = s.jobRepo.MarkFailed(ctx, jobID, ErrGenerationSourceRequired.Error())
 			return ErrGenerationSourceRequired
 		}
@@ -477,12 +488,14 @@ func (s *GenerationService) submitPendingJob(ctx context.Context, jobID string, 
 				deferSubmit(true)
 				return nil
 			}
+			_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
 			_ = s.jobRepo.MarkFailed(ctx, jobID, generationFailMessage(err))
 			return err
 		}
 		imageURLs = urls
 	case "combine":
 		if len(in.CombineUploadIDs) < 2 {
+			_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
 			_ = s.jobRepo.MarkFailed(ctx, jobID, ErrGenerationCombineMin.Error())
 			return ErrGenerationCombineMin
 		}
@@ -492,6 +505,7 @@ func (s *GenerationService) submitPendingJob(ctx context.Context, jobID string, 
 				deferSubmit(true)
 				return nil
 			}
+			_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
 			_ = s.jobRepo.MarkFailed(ctx, jobID, generationFailMessage(err))
 			return err
 		}
@@ -500,9 +514,11 @@ func (s *GenerationService) submitPendingJob(ctx context.Context, jobID string, 
 
 	jobRow, err = s.jobRepo.GetByIDInternal(ctx, jobID)
 	if err != nil {
+		_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
 		return err
 	}
 	if strings.TrimSpace(jobRow.KieTaskID) != "" {
+		_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
 		return nil
 	}
 	p = ai.NextJobProgress(jobRow.Progress, model.GenJobStatusPreparing, "", 0, startedAt)
@@ -515,9 +531,11 @@ func (s *GenerationService) submitPendingJob(ctx context.Context, jobID string, 
 
 	jobRow, err = s.jobRepo.GetByIDInternal(ctx, jobID)
 	if err != nil {
+		_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
 		return err
 	}
 	if strings.TrimSpace(jobRow.KieTaskID) != "" {
+		_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
 		return nil
 	}
 
@@ -539,13 +557,21 @@ func (s *GenerationService) submitPendingJob(ctx context.Context, jobID string, 
 			deferSubmit(true)
 			return nil
 		}
+		_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
 		_ = s.jobRepo.MarkFailed(ctx, jobID, generationFailMessage(err))
 		return err
 	}
 
 	jobRow, _ = s.jobRepo.GetByIDInternal(ctx, jobID)
 	p = ai.NextJobProgress(jobRow.Progress, model.GenJobStatusWaiting, "waiting", 0, startedAt)
-	_ = s.jobRepo.SetKieTask(ctx, jobID, taskID, model.GenJobStatusWaiting, p)
+	set, err := s.jobRepo.SetKieTask(ctx, jobID, taskID, model.GenJobStatusWaiting, p)
+	if err != nil {
+		return err
+	}
+	if !set {
+		slog.Warn("kie task already assigned", "job_id", jobID, "orphan_task_id", taskID)
+		return nil
+	}
 	_ = s.jobRepo.UpdateProgress(ctx, jobID, model.GenJobStatusWaiting, "waiting", p, "", time.Now())
 	return nil
 }

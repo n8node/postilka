@@ -232,7 +232,15 @@ func (s *GenerationService) submitPendingVideoJob(ctx context.Context, jobID str
 	if jobRow.Status != model.GenJobStatusPreparing {
 		return nil
 	}
+	claimed, err := s.jobRepo.TryClaimKieSubmit(ctx, jobID)
+	if err != nil {
+		return err
+	}
+	if !claimed {
+		return nil
+	}
 	if s.kieVideoConfig == nil {
+		_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
 		_ = s.jobRepo.MarkFailed(ctx, jobID, ErrVideoGenerationNotConfigured.Error())
 		return ErrVideoGenerationNotConfigured
 	}
@@ -243,6 +251,7 @@ func (s *GenerationService) submitPendingVideoJob(ctx context.Context, jobID str
 	startedAt := jobRow.CreatedAt
 
 	deferSubmit := func(rateLimited bool) {
+		_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
 		jobRow, _ = s.jobRepo.GetByIDInternal(ctx, jobID)
 		p := ai.NextJobProgress(jobRow.Progress, model.GenJobStatusPreparing, "", 0, startedAt)
 		retryAt := time.Now().Add(2 * time.Second)
@@ -255,6 +264,7 @@ func (s *GenerationService) submitPendingVideoJob(ctx context.Context, jobID str
 	baseURL, apiKey, err := s.kieVideoConfig.ResolveCredentials(ctx)
 	if err != nil {
 		slog.Warn("kie video credentials unavailable", "job_id", jobID, "err", err)
+		_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
 		_ = s.jobRepo.MarkFailed(ctx, jobID, err.Error())
 		return err
 	}
@@ -265,6 +275,7 @@ func (s *GenerationService) submitPendingVideoJob(ctx context.Context, jobID str
 	case model.KieVideoModeImageToVideo:
 		sourceID := strings.TrimSpace(jobRow.SourceUploadID)
 		if sourceID == "" {
+			_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
 			_ = s.jobRepo.MarkFailed(ctx, jobID, ErrVideoGenerationSourceRequired.Error())
 			return ErrVideoGenerationSourceRequired
 		}
@@ -274,6 +285,7 @@ func (s *GenerationService) submitPendingVideoJob(ctx context.Context, jobID str
 				deferSubmit(true)
 				return nil
 			}
+			_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
 			_ = s.jobRepo.MarkFailed(ctx, jobID, generationFailMessage(err))
 			return err
 		}
@@ -281,6 +293,7 @@ func (s *GenerationService) submitPendingVideoJob(ctx context.Context, jobID str
 	case model.KieVideoModeReferenceToVideo:
 		ids := jobRow.ReferenceUploadIDs
 		if len(ids) == 0 {
+			_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
 			_ = s.jobRepo.MarkFailed(ctx, jobID, ErrVideoGenerationSourceRequired.Error())
 			return ErrVideoGenerationSourceRequired
 		}
@@ -290,6 +303,7 @@ func (s *GenerationService) submitPendingVideoJob(ctx context.Context, jobID str
 				deferSubmit(true)
 				return nil
 			}
+			_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
 			_ = s.jobRepo.MarkFailed(ctx, jobID, generationFailMessage(err))
 			return err
 		}
@@ -303,9 +317,11 @@ func (s *GenerationService) submitPendingVideoJob(ctx context.Context, jobID str
 
 	jobRow, err = s.jobRepo.GetByIDInternal(ctx, jobID)
 	if err != nil {
+		_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
 		return err
 	}
 	if strings.TrimSpace(jobRow.KieTaskID) != "" {
+		_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
 		return nil
 	}
 
@@ -324,13 +340,21 @@ func (s *GenerationService) submitPendingVideoJob(ctx context.Context, jobID str
 		}
 		msg := generationFailMessage(err)
 		slog.Warn("kie video create task failed", "job_id", jobID, "mode", mode, "model", jobRow.Model, "err", err)
+		_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
 		_ = s.jobRepo.MarkFailed(ctx, jobID, msg)
 		return err
 	}
 
 	jobRow, _ = s.jobRepo.GetByIDInternal(ctx, jobID)
 	p := ai.NextJobProgress(jobRow.Progress, model.GenJobStatusWaiting, "waiting", 0, startedAt)
-	_ = s.jobRepo.SetKieTask(ctx, jobID, taskID, model.GenJobStatusWaiting, p)
+	set, err := s.jobRepo.SetKieTask(ctx, jobID, taskID, model.GenJobStatusWaiting, p)
+	if err != nil {
+		return err
+	}
+	if !set {
+		slog.Warn("kie video task already assigned", "job_id", jobID, "orphan_task_id", taskID)
+		return nil
+	}
 	_ = s.jobRepo.UpdateProgress(ctx, jobID, model.GenJobStatusWaiting, "waiting", p, "", time.Now())
 	return nil
 }
