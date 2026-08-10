@@ -13,6 +13,7 @@ import {
 import { AdminEmailSettingsPage } from "@/components/admin/AdminEmailSettingsPage";
 import { AdminInvitesPage } from "@/components/admin/AdminInvitesPage";
 import { AdminKiePage } from "@/components/admin/AdminKiePage";
+import { AdminKieVideoPage } from "@/components/admin/AdminKieVideoPage";
 import { AdminPaymentSettingsPage } from "@/components/admin/AdminPaymentSettingsPage";
 import { AdminTelegramPage } from "@/components/admin/AdminTelegramPage";
 import { AdminYandexGptPage } from "@/components/admin/AdminYandexGptPage";
@@ -25,7 +26,8 @@ type SettingsKey =
   | "payment"
   | "email-smtp"
   | "ai-yandex-gpt"
-  | "ai-kie";
+  | "ai-kie"
+  | "ai-kie-video";
 
 const SETTINGS_MENU: { key: SettingsKey; label: string; description: string }[] = [
   {
@@ -62,6 +64,11 @@ const SETTINGS_MENU: { key: SettingsKey; label: string; description: string }[] 
     key: "ai-kie",
     label: "AI — KIE.ai",
     description: "Изображения и фильтры",
+  },
+  {
+    key: "ai-kie-video",
+    label: "AI — KIE.ai (видео)",
+    description: "Видео, модели и примеры",
   },
 ];
 
@@ -213,6 +220,9 @@ function SettingsSectionContent({
   }
   if (selected === "ai-kie") {
     return <AdminKiePage embedded />;
+  }
+  if (selected === "ai-kie-video") {
+    return <AdminKieVideoPage embedded />;
   }
   return null;
 }

@@ -1998,3 +1998,125 @@ export function testAdminKieConnection(payload?: {
   });
 }
 
+export type KieVideoAdminSettings = {
+  api_base_url: string;
+  api_key_set: boolean;
+  model_text_to_video: string;
+  model_image_to_video: string;
+  model_reference_to_video: string;
+  default_duration_text_to_video: number;
+  default_duration_image_to_video: number;
+  default_duration_reference_to_video: number;
+  kopecks_per_video_second: number;
+  kopecks_per_reference_video_second: number;
+  updated_at?: string;
+};
+
+export type KieVideoModel = {
+  id: string;
+  name: string;
+  category: string;
+};
+
+export type KieVideoTestResult = {
+  ok: boolean;
+  message?: string;
+  models?: KieVideoModel[];
+  credits_remaining?: number;
+};
+
+export type KieVideoExample = {
+  id: string;
+  mode: string;
+  prompt: string;
+  aspect_ratio: string;
+  duration: number;
+  model_id?: string;
+  status: "pending" | "generating" | "ready" | "failed";
+  fail_message?: string;
+  video_url?: string;
+  source_image_urls?: string[];
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export const KIE_VIDEO_ASPECT_RATIOS = [
+  "9:16",
+  "21:9",
+  "16:9",
+  "4:3",
+  "1:1",
+  "3:4",
+] as const;
+
+export function fetchAdminKieVideoSettings() {
+  return apiFetch<{ settings: KieVideoAdminSettings }>("/admin/config/kie-video");
+}
+
+export function updateAdminKieVideoSettings(payload: Record<string, unknown>) {
+  return apiFetch<{ settings: KieVideoAdminSettings }>("/admin/config/kie-video", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function testAdminKieVideoConnection(payload?: {
+  api_base_url?: string;
+  api_key?: string;
+}) {
+  return apiFetch<KieVideoTestResult>("/admin/config/kie-video/test", {
+    method: "POST",
+    body: JSON.stringify(payload ?? {}),
+  });
+}
+
+export function fetchAdminKieVideoExamples() {
+  return apiFetch<{ examples: KieVideoExample[] }>("/admin/config/kie-video/examples");
+}
+
+export async function createAdminKieVideoExample(payload: {
+  mode: string;
+  prompt: string;
+  aspect_ratio: string;
+  duration: number;
+  images?: File[];
+}) {
+  const formData = new FormData();
+  formData.append("mode", payload.mode);
+  formData.append("prompt", payload.prompt);
+  formData.append("aspect_ratio", payload.aspect_ratio);
+  formData.append("duration", String(payload.duration));
+  for (const file of payload.images ?? []) {
+    formData.append("images", file);
+  }
+
+  const base =
+    process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "/app/api/v1";
+  const res = await fetch(`${base}/admin/config/kie-video/examples`, {
+    method: "POST",
+    credentials: "include",
+    body: formData,
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg =
+      typeof data === "object" && data && "error" in data
+        ? String((data as { error: string }).error)
+        : `HTTP ${res.status}`;
+    throw new ApiError(res.status, msg);
+  }
+  return data as { example: KieVideoExample };
+}
+
+export function deleteAdminKieVideoExample(id: string) {
+  return apiFetch<{ ok: boolean }>(`/admin/config/kie-video/examples/${id}`, {
+    method: "DELETE",
+  });
+}
+
+export function fetchVideoGenerationExamples() {
+  return apiFetch<{ examples: KieVideoExample[] }>("/generation/video-examples");
+}
+

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"strings"
@@ -152,8 +153,14 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	yandexGptConfigSvc := service.NewYandexGptConfigService(yandexGptConfigRepo, cfg, secretCipher)
 	kieSettingsRepo := repository.NewKieSettingsRepository(db.Pool)
 	kieConfigSvc := service.NewKieConfigService(kieSettingsRepo, cfg, secretCipher)
+	kieVideoSettingsRepo := repository.NewKieVideoSettingsRepository(db.Pool)
+	kieVideoExampleRepo := repository.NewKieVideoExampleRepository(db.Pool)
+	kieVideoConfigSvc := service.NewKieVideoConfigService(kieVideoSettingsRepo, cfg, secretCipher)
+	kieVideoExampleSvc := service.NewKieVideoExampleService(kieVideoConfigSvc, kieVideoExampleRepo, objectStorage)
+	kieVideoExampleSvc.StartWorker(context.Background())
 	yandexGptConfigHandler := handler.NewYandexGptConfigHandler(yandexGptConfigSvc)
 	kieConfigHandler := handler.NewKieConfigHandler(kieConfigSvc)
+	kieVideoConfigHandler := handler.NewKieVideoConfigHandler(kieVideoConfigSvc, kieVideoExampleSvc)
 	channelHandler := handler.NewChannelHandler(channelSvc, channelConnectSvc, channelTestSvc)
 	channelConnectHandler := handler.NewChannelConnectHandler(channelConnectSvc, cfg)
 	postHandler := handler.NewPostHandler(postSvc)
@@ -331,6 +338,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Get("/generation/usage-history", generationHandler.UsageHistory)
 			r.Post("/generation/history/delete", generationHandler.DeleteHistory)
 			r.Get("/generation/pricing", generationHandler.Pricing)
+			r.Get("/generation/video-examples", kieVideoConfigHandler.ListExamplesPublic)
 			r.Post("/generation/upload", generationHandler.UploadSource)
 			r.Post("/generation/improve-prompt", generationHandler.ImprovePrompt)
 			r.Post("/generation/compose-text", generationHandler.ComposePostText)
@@ -380,6 +388,12 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Get("/config/kie", kieConfigHandler.GetAdmin)
 				r.Put("/config/kie", kieConfigHandler.UpdateAdmin)
 				r.Post("/config/kie/test", kieConfigHandler.TestConnection)
+				r.Get("/config/kie-video", kieVideoConfigHandler.GetAdmin)
+				r.Put("/config/kie-video", kieVideoConfigHandler.UpdateAdmin)
+				r.Post("/config/kie-video/test", kieVideoConfigHandler.TestConnection)
+				r.Get("/config/kie-video/examples", kieVideoConfigHandler.ListExamplesAdmin)
+				r.Post("/config/kie-video/examples", kieVideoConfigHandler.CreateExampleAdmin)
+				r.Delete("/config/kie-video/examples/{id}", kieVideoConfigHandler.DeleteExampleAdmin)
 				r.Get("/settings/upload-files", uploadFileSettingsHandler.GetAdmin)
 				r.Put("/settings/upload-files", uploadFileSettingsHandler.UpdateAdmin)
 				r.Get("/telegram", telegramHandler.GetAdmin)

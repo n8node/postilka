@@ -36,6 +36,7 @@ type Config struct {
 	YandexGPTFolderID string `env:"YANDEX_GPT_FOLDER_ID"`
 	YandexGPTBaseURL  string `env:"YANDEX_GPT_BASE_URL" envDefault:"https://llm.api.cloud.yandex.net/v1"`
 	KIEAPIKey         string `env:"KIE_API_KEY"`
+	KIEVideoAPIKey    string `env:"KIE_VIDEO_API_KEY"`
 }
 
 func Load() (*Config, error) {

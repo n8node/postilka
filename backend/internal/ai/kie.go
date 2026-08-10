@@ -59,6 +59,22 @@ func (c *KieClient) TestConnection(ctx context.Context) (KieConnectionResult, er
 	}, nil
 }
 
+func (c *KieClient) TestConnectionVideo(ctx context.Context) (KieConnectionResult, error) {
+	if c.apiKey == "" {
+		return KieConnectionResult{}, fmt.Errorf("kie api key not configured")
+	}
+
+	credits, err := c.fetchCredits(ctx)
+	if err != nil {
+		return KieConnectionResult{}, err
+	}
+
+	return KieConnectionResult{
+		CreditsRemaining: credits,
+		Models:           KieVideoMarketModels(),
+	}, nil
+}
+
 func (c *KieClient) fetchCredits(ctx context.Context) (float64, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/api/v1/chat/credit", nil)
 	if err != nil {

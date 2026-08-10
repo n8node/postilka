@@ -88,6 +88,11 @@ func main() {
 		postRepo, channelRepo, fileStorageRepo, objectStorage, channelTestSvc, telegramBotClient, quotaSvc, linkShortener,
 	)
 	kieConfigSvc := service.NewKieConfigService(kieSettingsRepo, cfg, secretCipher)
+	kieVideoSettingsRepo := repository.NewKieVideoSettingsRepository(db.Pool)
+	kieVideoExampleRepo := repository.NewKieVideoExampleRepository(db.Pool)
+	kieVideoConfigSvc := service.NewKieVideoConfigService(kieVideoSettingsRepo, cfg, secretCipher)
+	kieVideoExampleSvc := service.NewKieVideoExampleService(kieVideoConfigSvc, kieVideoExampleRepo, objectStorage)
+	kieVideoExampleSvc.StartWorker(ctx)
 	yandexGptConfigRepo := repository.NewYandexGptConfigRepository(db.Pool)
 	yandexGptConfigSvc := service.NewYandexGptConfigService(yandexGptConfigRepo, cfg, secretCipher)
 	genRepo := repository.NewAIGenerationRepository(db.Pool)
