@@ -38,8 +38,23 @@ export const VIDEO_DURATION_MAX = 15;
 export const REFERENCE_IMAGE_MAX = 9;
 export const REFERENCE_VIDEO_MIN_SECONDS = 2;
 export const REFERENCE_VIDEO_MAX_SECONDS = 15;
+export const REFERENCE_VIDEO_MAX_BYTES = 50 * 1024 * 1024;
 export const REFERENCE_AUDIO_MAX = 3;
 export const REFERENCE_VIDEO_MAX = 3;
+
+export function emptyReferenceImageSlots(): (VideoGenerationUpload | null)[] {
+  return Array.from({ length: REFERENCE_IMAGE_MAX }, () => null);
+}
+
+export function emptyReferenceVideoSlots(): (VideoGenerationUpload | null)[] {
+  return Array.from({ length: REFERENCE_VIDEO_MAX }, () => null);
+}
+
+export function filledReferenceCount(
+  slots: (VideoGenerationUpload | null)[],
+): number {
+  return slots.filter(Boolean).length;
+}
 
 export const videoGenerationModes: {
   id: VideoGenerationModeId;

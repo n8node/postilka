@@ -1,10 +1,11 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { FileAudio, FolderOpen, HardDriveUpload, Plus, Upload, X } from "lucide-react";
+import { FileAudio, HardDriveUpload, Plus, X } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { FileThumbnail } from "@/components/files/FileThumbnail";
 import { ProtectedMediaImage } from "@/components/media/ProtectedMediaImage";
+import { MediaSourcePickerModal } from "@/components/generation/MediaSourcePickerModal";
 import { WorkspaceMediaPickerModal } from "@/components/generation/WorkspaceMediaPickerModal";
 import { ApiError } from "@/lib/api";
 import type { WorkspaceFile } from "@/lib/files-api";
@@ -17,34 +18,55 @@ import {
   REFERENCE_AUDIO_MAX,
   REFERENCE_IMAGE_MAX,
   REFERENCE_VIDEO_MAX,
-  REFERENCE_VIDEO_MAX_SECONDS,
-  REFERENCE_VIDEO_MIN_SECONDS,
+  filledReferenceCount,
   type VideoGenerationModeId,
   type VideoGenerationUpload,
+  type VideoGenerationHistoryItem,
   type VideoMediaKind,
 } from "@/lib/video-generation-data";
+import {
+  VIDEO_HISTORY_DRAG_MIME,
+  getCachedVideoHistorySize,
+  getActiveVideoHistoryDragItem,
+  parseVideoHistoryDragItem,
+  prefetchVideoHistorySize,
+  referenceVideoDurationError,
+  referenceVideoSizeError,
+  validateReferenceVideoHistoryDrop,
+  videoHistoryDropErrorMessage,
+} from "@/lib/video-history-drop";
 import { cn } from "@/lib/utils";
 
 type VideoSourcePhotosPanelProps = {
   mode: VideoGenerationModeId;
   firstFrame: VideoGenerationUpload | null;
   lastFrame: VideoGenerationUpload | null;
-  referenceImages: VideoGenerationUpload[];
-  referenceVideos: VideoGenerationUpload[];
+  referenceImages: (VideoGenerationUpload | null)[];
+  referenceVideos: (VideoGenerationUpload | null)[];
   referenceAudios: VideoGenerationUpload[];
+  historyDragActive: boolean;
   onFirstFrameChange: (value: VideoGenerationUpload | null) => void;
   onLastFrameChange: (value: VideoGenerationUpload | null) => void;
-  onReferenceImagesChange: (items: VideoGenerationUpload[]) => void;
-  onReferenceVideosChange: (items: VideoGenerationUpload[]) => void;
+  onReferenceImagesChange: (items: (VideoGenerationUpload | null)[]) => void;
+  onReferenceVideosChange: (items: (VideoGenerationUpload | null)[]) => void;
   onReferenceAudiosChange: (items: VideoGenerationUpload[]) => void;
+  onHistoryVideoDrop: (
+    item: VideoGenerationHistoryItem,
+    slot: number,
+  ) => void | Promise<void>;
 };
 
 type PendingUpload =
   | { kind: "first" }
   | { kind: "last" }
-  | { kind: "ref-image" }
-  | { kind: "ref-video" }
+  | { kind: "ref-image"; slot: number }
+  | { kind: "ref-video"; slot: number }
   | { kind: "ref-audio" };
+
+type SourceModalTarget =
+  | { kind: "first" | "last" }
+  | { kind: "ref-image"; slot: number }
+  | { kind: "ref-video"; slot: number };
 
 function mediaKindFromFile(file: File): VideoMediaKind | null {
   if (file.type.startsWith("image/")) return "image";
@@ -57,16 +79,6 @@ function mediaKindFromWorkspace(file: WorkspaceFile): VideoMediaKind | null {
   if (file.mime_type.startsWith("image/")) return "image";
   if (isVideoMime(file.mime_type, file.name)) return "video";
   if (isAudioMime(file.mime_type, file.name)) return "audio";
-  return null;
-}
-
-function referenceVideoDurationError(seconds: number | undefined): string | null {
-  if (seconds == null || !Number.isFinite(seconds) || seconds <= 0) {
-    return "Не удалось определить длительность видео. Выберите другой файл.";
-  }
-  if (seconds < REFERENCE_VIDEO_MIN_SECONDS || seconds > REFERENCE_VIDEO_MAX_SECONDS) {
-    return `Референс-видео должно быть от ${REFERENCE_VIDEO_MIN_SECONDS} до ${REFERENCE_VIDEO_MAX_SECONDS} сек (сейчас ${seconds.toFixed(1)} сек).`;
-  }
   return null;
 }
 
@@ -85,17 +97,6 @@ function acceptForPending(pending: PendingUpload | null): string {
   }
 }
 
-function pendingMediaKind(pending: PendingUpload): VideoMediaKind {
-  switch (pending.kind) {
-    case "ref-video":
-      return "video";
-    case "ref-audio":
-      return "audio";
-    default:
-      return "image";
-  }
-}
-
 function SlotLoadingRing() {
   return (
     <span
@@ -105,11 +106,7 @@ function SlotLoadingRing() {
   );
 }
 
-function UploadPreview({
-  upload,
-}: {
-  upload: VideoGenerationUpload;
-}) {
+function UploadPreview({ upload }: { upload: VideoGenerationUpload }) {
   if (upload.workspaceFileId) {
     return (
       <FileThumbnail
@@ -157,34 +154,61 @@ function UploadPreview({
   );
 }
 
-function MediaUploadSquare({
+function ReferenceFixedSlot({
   label,
   upload,
   loading,
+  invalidDrop,
+  invalidMessage,
+  shake,
+  acceptVideoHistoryDrag,
+  onPick,
   onClear,
-  onPickComputer,
-  onPickDisk,
+  onVideoHistoryDrop,
+  onVideoDragOver,
+  onVideoDragLeave,
 }: {
   label: string;
   upload: VideoGenerationUpload | null;
   loading: boolean;
+  invalidDrop?: boolean;
+  invalidMessage?: string | null;
+  shake?: boolean;
+  acceptVideoHistoryDrag?: boolean;
+  onPick: () => void;
   onClear: () => void;
-  onPickComputer: () => void;
-  onPickDisk: () => void;
+  onVideoHistoryDrop?: (event: React.DragEvent) => void;
+  onVideoDragOver?: (event: React.DragEvent) => void;
+  onVideoDragLeave?: (event: React.DragEvent) => void;
 }) {
+  const handleDragOver = (event: React.DragEvent) => {
+    if (!acceptVideoHistoryDrag) return;
+    if (!event.dataTransfer.types.includes(VIDEO_HISTORY_DRAG_MIME)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = invalidDrop ? "none" : "copy";
+    onVideoDragOver?.(event);
+  };
+
   return (
-    <div className="flex flex-col items-center gap-1.5">
+    <div
+      className={cn(shake && "generation-slot-shake", "rounded-lg")}
+      onDragOver={handleDragOver}
+      onDragLeave={onVideoDragLeave}
+      onDrop={onVideoHistoryDrop}
+    >
       <div className="relative">
         <button
           type="button"
-          onClick={upload && !loading ? onClear : onPickComputer}
+          onClick={upload && !loading ? onClear : onPick}
           disabled={loading}
           aria-busy={loading}
           className={cn(
             "group relative flex h-[84px] w-[84px] flex-col items-center justify-center gap-1 overflow-hidden rounded-lg border border-dashed transition-colors",
-            upload
-              ? "border-border border-solid bg-bg hover:border-accent"
-              : "border-zinc-300 bg-bg hover:border-accent hover:bg-blue-50",
+            invalidDrop
+              ? "border-red-400 bg-red-50"
+              : upload
+                ? "border-border border-solid bg-bg hover:border-accent"
+                : "border-zinc-300 bg-bg hover:border-accent hover:bg-blue-50",
             loading && "cursor-wait",
           )}
         >
@@ -195,10 +219,22 @@ function MediaUploadSquare({
               <Plus
                 size={14}
                 strokeWidth={1.75}
-                className="text-zinc-400 transition-colors group-hover:text-accent"
+                className={cn(
+                  "transition-colors",
+                  invalidDrop
+                    ? "text-red-400"
+                    : "text-zinc-400 group-hover:text-accent",
+                )}
               />
-              <span className="px-1 text-center text-[10px] leading-tight text-zinc-400 transition-colors group-hover:text-blue-900">
-                {label}
+              <span
+                className={cn(
+                  "px-1 text-center text-[10px] leading-tight transition-colors",
+                  invalidDrop
+                    ? "text-red-600"
+                    : "text-zinc-400 group-hover:text-blue-900",
+                )}
+              >
+                {invalidDrop && invalidMessage ? invalidMessage : label}
               </span>
             </>
           ) : null}
@@ -219,47 +255,19 @@ function MediaUploadSquare({
           </button>
         ) : null}
       </div>
-      {!upload ? (
-        <div className="flex flex-wrap items-center justify-center gap-1">
-          <button
-            type="button"
-            disabled={loading}
-            onClick={onPickComputer}
-            className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-muted hover:bg-zinc-100 hover:text-text disabled:opacity-50"
-          >
-            <Upload size={10} />
-            ПК
-          </button>
-          <button
-            type="button"
-            disabled={loading}
-            onClick={onPickDisk}
-            className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium text-muted hover:bg-zinc-100 hover:text-text disabled:opacity-50"
-          >
-            <FolderOpen size={10} />
-            Диск
-          </button>
-        </div>
-      ) : null}
     </div>
   );
 }
 
-function ReferenceMediaGrid({
-  title,
-  hint,
+function ReferenceAudioGrid({
   items,
-  max,
   loading,
   onAddComputer,
   onAddDisk,
   onRemove,
   onRemoveAll,
 }: {
-  title: string;
-  hint: string;
   items: VideoGenerationUpload[];
-  max: number;
   loading: boolean;
   onAddComputer: () => void;
   onAddDisk: () => void;
@@ -270,8 +278,10 @@ function ReferenceMediaGrid({
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
         <div>
-          <p className="text-[11px] font-medium text-text">{title}</p>
-          <p className="text-[10px] text-zinc-400">{hint}</p>
+          <p className="text-[11px] font-medium text-text">Референс-аудио</p>
+          <p className="text-[10px] text-zinc-400">
+            MP3, WAV · до 15 МБ · до 3 шт.
+          </p>
         </div>
         {items.length > 0 ? (
           <button
@@ -301,7 +311,7 @@ function ReferenceMediaGrid({
           </div>
         ))}
 
-        {items.length < max ? (
+        {items.length < REFERENCE_AUDIO_MAX ? (
           <div className="flex h-[84px] w-[84px] flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-zinc-300 bg-bg">
             {loading ? (
               <SlotLoadingRing />
@@ -332,7 +342,7 @@ function ReferenceMediaGrid({
 
       {items.length > 0 ? (
         <p className="text-[10px] text-zinc-400">
-          {items.length}/{max}
+          {items.length}/{REFERENCE_AUDIO_MAX}
         </p>
       ) : null}
     </div>
@@ -346,26 +356,42 @@ export function VideoSourcePhotosPanel({
   referenceImages,
   referenceVideos,
   referenceAudios,
+  historyDragActive,
   onFirstFrameChange,
   onLastFrameChange,
   onReferenceImagesChange,
   onReferenceVideosChange,
   onReferenceAudiosChange,
+  onHistoryVideoDrop,
 }: VideoSourcePhotosPanelProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [pending, setPending] = useState<PendingUpload | null>(null);
-  const [loadingKind, setLoadingKind] = useState<PendingUpload["kind"] | null>(
+  const [loadingKey, setLoadingKey] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [sourceModal, setSourceModal] = useState<SourceModalTarget | null>(
     null,
   );
-  const [error, setError] = useState<string | null>(null);
-  const [diskPickerOpen, setDiskPickerOpen] = useState(false);
-  const [diskPickerKind, setDiskPickerKind] = useState<VideoMediaKind>("image");
+  const [audioDiskOpen, setAudioDiskOpen] = useState(false);
+  const [videoDragSlot, setVideoDragSlot] = useState<number | null>(null);
+  const [videoDragInvalid, setVideoDragInvalid] = useState<{
+    slot: number;
+    message: string;
+  } | null>(null);
 
   if (mode === "text-to-video") return null;
 
-  const isLoading = (kind: PendingUpload["kind"]) => loadingKind === kind;
+  const dropZoneClass = historyDragActive ? "generation-drop-target-active" : "";
 
-  const applyUpload = (
+  const loadingKeyFor = (target: PendingUpload): string => {
+    if ("slot" in target && target.slot !== undefined) {
+      return `${target.kind}:${target.slot}`;
+    }
+    return target.kind;
+  };
+
+  const isLoading = (key: string) => loadingKey === key;
+
+  const setSlotUpload = (
     target: PendingUpload,
     item: VideoGenerationUpload,
   ) => {
@@ -377,10 +403,18 @@ export function VideoSourcePhotosPanel({
         onLastFrameChange(item);
         break;
       case "ref-image":
-        onReferenceImagesChange([...referenceImages, item]);
+        onReferenceImagesChange(
+          referenceImages.map((value, index) =>
+            index === target.slot ? item : value,
+          ),
+        );
         break;
       case "ref-video":
-        onReferenceVideosChange([...referenceVideos, item]);
+        onReferenceVideosChange(
+          referenceVideos.map((value, index) =>
+            index === target.slot ? item : value,
+          ),
+        );
         break;
       case "ref-audio":
         onReferenceAudiosChange([...referenceAudios, item]);
@@ -388,7 +422,10 @@ export function VideoSourcePhotosPanel({
     }
   };
 
-  const validateFileKind = (file: File, target: PendingUpload): VideoMediaKind | null => {
+  const validateFileKind = (
+    file: File,
+    target: PendingUpload,
+  ): VideoMediaKind | null => {
     const mediaKind = mediaKindFromFile(file);
     if (!mediaKind) return null;
     if (
@@ -413,6 +450,13 @@ export function VideoSourcePhotosPanel({
     }
 
     if (pending.kind === "ref-video") {
+      const sizeError = referenceVideoSizeError(file.size);
+      if (sizeError) {
+        setError(sizeError);
+        setPending(null);
+        if (inputRef.current) inputRef.current.value = "";
+        return;
+      }
       const duration = await probeMediaDuration(file, file.type || "video/mp4");
       const durationError = referenceVideoDurationError(duration);
       if (durationError) {
@@ -423,12 +467,13 @@ export function VideoSourcePhotosPanel({
       }
     }
 
-    setLoadingKind(pending.kind);
+    const key = loadingKeyFor(pending);
+    setLoadingKey(key);
     setError(null);
     const previewUrl = URL.createObjectURL(file);
     try {
       const upload = await uploadVideoGenerationMedia(file);
-      applyUpload(pending, {
+      setSlotUpload(pending, {
         uploadId: upload.id,
         previewUrl,
         mediaKind,
@@ -441,50 +486,61 @@ export function VideoSourcePhotosPanel({
         err instanceof ApiError ? err.message : "Не удалось загрузить файл",
       );
     } finally {
-      setLoadingKind(null);
+      setLoadingKey(null);
       setPending(null);
       if (inputRef.current) inputRef.current.value = "";
     }
   };
 
-  const handleWorkspaceFile = async (file: WorkspaceFile) => {
-    if (!pending) return;
+  const handleWorkspaceFile = async (
+    file: WorkspaceFile,
+    targetOverride?: PendingUpload,
+  ) => {
+    const target = targetOverride ?? pending;
+    if (!target) return;
     const mediaKind = mediaKindFromWorkspace(file);
     if (!mediaKind) {
       setError("Выбран неподходящий тип файла");
       return;
     }
     if (
-      (pending.kind === "first" ||
-        pending.kind === "last" ||
-        pending.kind === "ref-image") &&
+      (target.kind === "first" ||
+        target.kind === "last" ||
+        target.kind === "ref-image") &&
       mediaKind !== "image"
     ) {
       setError("Для кадров и референс-фото нужен файл изображения");
       return;
     }
-    if (pending.kind === "ref-video" && mediaKind !== "video") {
+    if (target.kind === "ref-video" && mediaKind !== "video") {
       setError("Нужен видеофайл MP4 или MOV до 50 МБ");
       return;
     }
-    if (pending.kind === "ref-video") {
-      const duration = file.media_metadata?.duration_seconds;
-      const durationError = referenceVideoDurationError(duration);
+    if (target.kind === "ref-video") {
+      const durationError = referenceVideoDurationError(
+        file.media_metadata?.duration_seconds,
+      );
       if (durationError) {
         setError(durationError);
         return;
       }
+      const sizeError = referenceVideoSizeError(file.size);
+      if (sizeError) {
+        setError(sizeError);
+        return;
+      }
     }
-    if (pending.kind === "ref-audio" && mediaKind !== "audio") {
+    if (target.kind === "ref-audio" && mediaKind !== "audio") {
       setError("Нужен аудиофайл MP3 или WAV до 15 МБ");
       return;
     }
 
-    setLoadingKind(pending.kind);
+    const key = loadingKeyFor(target);
+    setLoadingKey(key);
     setError(null);
     try {
       const upload = await uploadVideoGenerationMediaFromWorkspace(file.id);
-      applyUpload(pending, {
+      setSlotUpload(target, {
         uploadId: upload.id,
         previewUrl: "",
         mediaKind,
@@ -497,7 +553,7 @@ export function VideoSourcePhotosPanel({
         err instanceof ApiError ? err.message : "Не удалось взять файл с диска",
       );
     } finally {
-      setLoadingKind(null);
+      setLoadingKey(null);
       setPending(null);
     }
   };
@@ -507,26 +563,116 @@ export function VideoSourcePhotosPanel({
     inputRef.current?.click();
   };
 
-  const openDisk = (next: PendingUpload) => {
-    setPending(next);
-    setDiskPickerKind(pendingMediaKind(next));
-    setDiskPickerOpen(true);
+  const openSourceModal = (target: SourceModalTarget) => {
+    setSourceModal(target);
   };
 
-  const removeReference = (
-    items: VideoGenerationUpload[],
-    setter: (next: VideoGenerationUpload[]) => void,
-    index: number,
-  ) => {
-    if (index < 0) {
-      setter([]);
+  const sourceModalTitle = (target: SourceModalTarget): string => {
+    if (target.kind === "first") return "Первый кадр";
+    if (target.kind === "last") return "Последний кадр";
+    if (target.kind === "ref-image") return `Фото ${target.slot + 1}`;
+    if (target.kind === "ref-video") return `Видео ${target.slot + 1}`;
+    return "Выберите источник";
+  };
+
+  const sourceModalSubtitle = (target: SourceModalTarget): string | undefined => {
+    if (target.kind === "ref-video") {
+      return "MP4, MOV · 2–15 сек · до 50 МБ";
+    }
+    if (target.kind === "ref-image" || target.kind === "first" || target.kind === "last") {
+      return "JPG, PNG, WEBP";
+    }
+    return undefined;
+  };
+
+  const handleSourceModalComputer = () => {
+    if (!sourceModal) return;
+    if (sourceModal.kind === "first") {
+      openComputer({ kind: "first" });
+    } else if (sourceModal.kind === "last") {
+      openComputer({ kind: "last" });
+    } else if (sourceModal.kind === "ref-image") {
+      openComputer({ kind: "ref-image", slot: sourceModal.slot });
+    } else if (sourceModal.kind === "ref-video") {
+      openComputer({ kind: "ref-video", slot: sourceModal.slot });
+    }
+    setSourceModal(null);
+  };
+
+  const handleSourceModalDisk = (file: WorkspaceFile) => {
+    if (!sourceModal) return;
+    let target: PendingUpload;
+    if (sourceModal.kind === "first") {
+      target = { kind: "first" };
+    } else if (sourceModal.kind === "last") {
+      target = { kind: "last" };
+    } else if (sourceModal.kind === "ref-image") {
+      target = { kind: "ref-image", slot: sourceModal.slot };
+    } else if (sourceModal.kind === "ref-video") {
+      target = { kind: "ref-video", slot: sourceModal.slot };
+    } else {
       return;
     }
-    setter(items.filter((_, i) => i !== index));
+    void handleWorkspaceFile(file, target);
+    setSourceModal(null);
   };
 
+  const handleVideoDragOver = (slot: number) => {
+    const parsed = getActiveVideoHistoryDragItem();
+    if (!parsed) return;
+
+    void prefetchVideoHistorySize(parsed);
+    const size = getCachedVideoHistorySize(parsed.id);
+    const validation = validateReferenceVideoHistoryDrop(parsed, size);
+    setVideoDragSlot(slot);
+    if (!validation.valid && validation.message) {
+      setVideoDragInvalid({ slot, message: validation.message });
+    } else {
+      setVideoDragInvalid(null);
+    }
+  };
+
+  const handleVideoDragLeave = (slot: number) => {
+    if (videoDragSlot === slot) {
+      setVideoDragSlot(null);
+      setVideoDragInvalid(null);
+    }
+  };
+
+  const handleVideoHistoryDrop =
+    (slot: number) => async (event: React.DragEvent) => {
+      event.preventDefault();
+      const item = parseVideoHistoryDragItem(
+        event.dataTransfer.getData(VIDEO_HISTORY_DRAG_MIME),
+      );
+      if (!item) return;
+
+      const size = getCachedVideoHistorySize(item.id);
+      const validation = validateReferenceVideoHistoryDrop(item, size);
+      setVideoDragSlot(null);
+      setVideoDragInvalid(null);
+
+      if (!validation.valid) {
+        setError(validation.message ?? "Видео не подходит как референс");
+        return;
+      }
+
+      setLoadingKey(`ref-video:${slot}`);
+      setError(null);
+      try {
+        await onHistoryVideoDrop(item, slot);
+      } catch (err) {
+        setError(videoHistoryDropErrorMessage(err));
+      } finally {
+        setLoadingKey(null);
+      }
+    };
+
+  const imageCount = filledReferenceCount(referenceImages);
+  const videoCount = filledReferenceCount(referenceVideos);
+
   return (
-    <Card hover>
+    <Card hover className={dropZoneClass}>
       <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.04em] text-muted">
         2 · Исходники
       </p>
@@ -540,61 +686,144 @@ export function VideoSourcePhotosPanel({
 
       {mode === "image-to-video" ? (
         <div className="mx-auto flex w-fit flex-wrap justify-center gap-4">
-          <MediaUploadSquare
+          <ReferenceFixedSlot
             label="Первый кадр"
             upload={firstFrame}
             loading={isLoading("first")}
+            onPick={() => openSourceModal({ kind: "first" })}
             onClear={() => onFirstFrameChange(null)}
-            onPickComputer={() => openComputer({ kind: "first" })}
-            onPickDisk={() => openDisk({ kind: "first" })}
           />
-          <MediaUploadSquare
+          <ReferenceFixedSlot
             label="Последний кадр"
             upload={lastFrame}
             loading={isLoading("last")}
+            onPick={() => openSourceModal({ kind: "last" })}
             onClear={() => onLastFrameChange(null)}
-            onPickComputer={() => openComputer({ kind: "last" })}
-            onPickDisk={() => openDisk({ kind: "last" })}
           />
         </div>
       ) : (
         <div className="space-y-5">
-          <ReferenceMediaGrid
-            title="Референс-фото"
-            hint="JPG, PNG, WEBP · до 30 МБ · до 9 шт."
-            items={referenceImages}
-            max={REFERENCE_IMAGE_MAX}
-            loading={isLoading("ref-image")}
-            onAddComputer={() => openComputer({ kind: "ref-image" })}
-            onAddDisk={() => openDisk({ kind: "ref-image" })}
-            onRemove={(index) =>
-              removeReference(referenceImages, onReferenceImagesChange, index)
-            }
-            onRemoveAll={() => onReferenceImagesChange([])}
-          />
-          <ReferenceMediaGrid
-            title="Референс-видео"
-            hint="MP4, MOV · 2–15 сек · до 50 МБ · до 3 шт."
-            items={referenceVideos}
-            max={REFERENCE_VIDEO_MAX}
-            loading={isLoading("ref-video")}
-            onAddComputer={() => openComputer({ kind: "ref-video" })}
-            onAddDisk={() => openDisk({ kind: "ref-video" })}
-            onRemove={(index) =>
-              removeReference(referenceVideos, onReferenceVideosChange, index)
-            }
-            onRemoveAll={() => onReferenceVideosChange([])}
-          />
-          <ReferenceMediaGrid
-            title="Референс-аудио"
-            hint="MP3, WAV · до 15 МБ · до 3 шт."
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <p className="text-[11px] font-medium text-text">
+                  Референс-фото
+                </p>
+                <p className="text-[10px] text-zinc-400">
+                  JPG, PNG, WEBP · до 30 МБ · до {REFERENCE_IMAGE_MAX} шт.
+                </p>
+              </div>
+              {imageCount > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => onReferenceImagesChange(referenceImages.map(() => null))}
+                  className="text-[10px] font-medium text-red-500 hover:text-red-600"
+                >
+                  Убрать все
+                </button>
+              ) : null}
+            </div>
+            <div className="mx-auto grid w-fit grid-cols-3 gap-3">
+              {referenceImages.map((upload, index) => (
+                <ReferenceFixedSlot
+                  key={index}
+                  label={`Фото ${index + 1}`}
+                  upload={upload}
+                  loading={isLoading(`ref-image:${index}`)}
+                  onPick={() =>
+                    openSourceModal({ kind: "ref-image", slot: index })
+                  }
+                  onClear={() =>
+                    onReferenceImagesChange(
+                      referenceImages.map((value, i) =>
+                        i === index ? null : value,
+                      ),
+                    )
+                  }
+                />
+              ))}
+            </div>
+            {imageCount > 0 ? (
+              <p className="text-[10px] text-zinc-400">
+                {imageCount}/{REFERENCE_IMAGE_MAX}
+              </p>
+            ) : null}
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <p className="text-[11px] font-medium text-text">
+                  Референс-видео
+                </p>
+                <p className="text-[10px] text-zinc-400">
+                  MP4, MOV · 2–15 сек · до 50 МБ · до {REFERENCE_VIDEO_MAX} шт.
+                  · можно перетащить из истории
+                </p>
+              </div>
+              {videoCount > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => onReferenceVideosChange(referenceVideos.map(() => null))}
+                  className="text-[10px] font-medium text-red-500 hover:text-red-600"
+                >
+                  Убрать все
+                </button>
+              ) : null}
+            </div>
+            <div className="mx-auto flex w-fit flex-wrap justify-center gap-3">
+              {referenceVideos.map((upload, index) => (
+                <ReferenceFixedSlot
+                  key={index}
+                  label={`Видео ${index + 1}`}
+                  upload={upload}
+                  loading={isLoading(`ref-video:${index}`)}
+                  invalidDrop={
+                    videoDragSlot === index &&
+                    videoDragInvalid?.slot === index
+                  }
+                  invalidMessage={videoDragInvalid?.message}
+                  shake={
+                    historyDragActive &&
+                    !upload &&
+                    !isLoading(`ref-video:${index}`)
+                  }
+                  acceptVideoHistoryDrag
+                  onPick={() =>
+                    openSourceModal({ kind: "ref-video", slot: index })
+                  }
+                  onClear={() =>
+                    onReferenceVideosChange(
+                      referenceVideos.map((value, i) =>
+                        i === index ? null : value,
+                      ),
+                    )
+                  }
+                  onVideoDragOver={() => handleVideoDragOver(index)}
+                  onVideoDragLeave={() => handleVideoDragLeave(index)}
+                  onVideoHistoryDrop={(e) => void handleVideoHistoryDrop(index)(e)}
+                />
+              ))}
+            </div>
+            {videoCount > 0 ? (
+              <p className="text-[10px] text-zinc-400">
+                {videoCount}/{REFERENCE_VIDEO_MAX}
+              </p>
+            ) : null}
+          </div>
+
+          <ReferenceAudioGrid
             items={referenceAudios}
-            max={REFERENCE_AUDIO_MAX}
             loading={isLoading("ref-audio")}
             onAddComputer={() => openComputer({ kind: "ref-audio" })}
-            onAddDisk={() => openDisk({ kind: "ref-audio" })}
+            onAddDisk={() => {
+              setPending({ kind: "ref-audio" });
+              setAudioDiskOpen(true);
+            }}
             onRemove={(index) =>
-              removeReference(referenceAudios, onReferenceAudiosChange, index)
+              onReferenceAudiosChange(
+                referenceAudios.filter((_, i) => i !== index),
+              )
             }
             onRemoveAll={() => onReferenceAudiosChange([])}
           />
@@ -603,8 +832,7 @@ export function VideoSourcePhotosPanel({
 
       {mode === "image-to-video" ? (
         <p className="mt-3 text-[10px] leading-snug text-zinc-400">
-          Нужен хотя бы один кадр — первый, последний или оба. Загрузите с компьютера
-          или выберите файл с диска проекта.
+          Нужен хотя бы один кадр — первый, последний или оба.
         </p>
       ) : null}
 
@@ -612,11 +840,24 @@ export function VideoSourcePhotosPanel({
         <p className="mt-2 text-[12px] text-red-600">{error}</p>
       ) : null}
 
+      <MediaSourcePickerModal
+        open={sourceModal !== null}
+        title={
+          sourceModal ? sourceModalTitle(sourceModal) : "Выберите источник"
+        }
+        subtitle={sourceModal ? sourceModalSubtitle(sourceModal) : undefined}
+        mediaKind={sourceModal?.kind === "ref-video" ? "video" : "image"}
+        referenceVideoFilter={sourceModal?.kind === "ref-video"}
+        onClose={() => setSourceModal(null)}
+        onPickComputer={handleSourceModalComputer}
+        onPickDiskFile={handleSourceModalDisk}
+      />
+
       <WorkspaceMediaPickerModal
-        open={diskPickerOpen}
-        mediaKind={diskPickerKind}
+        open={audioDiskOpen}
+        mediaKind="audio"
         onClose={() => {
-          setDiskPickerOpen(false);
+          setAudioDiskOpen(false);
           setPending(null);
         }}
         onSelect={(file) => void handleWorkspaceFile(file)}

@@ -5,20 +5,32 @@ import { Check, Play } from "lucide-react";
 import type { VideoGenerationHistoryItem } from "@/lib/video-generation-data";
 import { mediaUrl } from "@/lib/media-display";
 import { ProtectedMediaImage } from "@/components/media/ProtectedMediaImage";
+import {
+  VIDEO_HISTORY_DRAG_MIME,
+  prefetchVideoHistorySize,
+  serializeVideoHistoryDragItem,
+  setActiveVideoHistoryDragItem,
+} from "@/lib/video-history-drop";
 import { cn } from "@/lib/utils";
 
 type VideoGenerationHistoryProps = {
   items: VideoGenerationHistoryItem[];
   loadError?: string | null;
+  canDragToReferences?: boolean;
   onSelect?: (item: VideoGenerationHistoryItem) => void;
   onDelete?: (ids: string[]) => Promise<void>;
+  onDragStart?: () => void;
+  onDragEnd?: () => void;
 };
 
 export function VideoGenerationHistory({
   items,
   loadError = null,
+  canDragToReferences = false,
   onSelect,
   onDelete,
+  onDragStart,
+  onDragEnd,
 }: VideoGenerationHistoryProps) {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -116,12 +128,33 @@ export function VideoGenerationHistory({
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
           {items.map((item) => {
             const selected = selectedIds.has(item.id);
+            const posted = Boolean(item.usedInPost);
+            const draggable =
+              canDragToReferences && !selectMode && !posted;
+
             return (
               <button
                 key={item.id}
                 type="button"
+                draggable={draggable}
+                onDragStart={(event) => {
+                  if (!draggable) return;
+                  event.dataTransfer.setData(
+                    VIDEO_HISTORY_DRAG_MIME,
+                    serializeVideoHistoryDragItem(item),
+                  );
+                  event.dataTransfer.effectAllowed = "copy";
+                  setActiveVideoHistoryDragItem(item);
+                  void prefetchVideoHistorySize(item);
+                  onDragStart?.();
+                }}
+                onDragEnd={() => {
+                  setActiveVideoHistoryDragItem(null);
+                  onDragEnd?.();
+                }}
                 onClick={() => {
                   if (selectMode) {
+                    if (posted) return;
                     toggleSelected(item.id);
                     return;
                   }
@@ -132,7 +165,13 @@ export function VideoGenerationHistory({
                   selectMode && selected
                     ? "border-blue-400 ring-2 ring-blue-200"
                     : "border-border hover:border-blue-200",
+                  draggable && "cursor-grab active:cursor-grabbing",
                 )}
+                title={
+                  draggable
+                    ? `${item.prompt}\nПеретащите в референс-видео`
+                    : item.prompt
+                }
               >
                 <div className="relative h-full w-full bg-zinc-900/5">
                   {item.thumbUrl ? (

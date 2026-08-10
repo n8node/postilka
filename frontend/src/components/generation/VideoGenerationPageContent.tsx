@@ -30,6 +30,9 @@ import {
 } from "@/lib/video-generation-api";
 import {
   defaultVideoPrompt,
+  emptyReferenceImageSlots,
+  emptyReferenceVideoSlots,
+  filledReferenceCount,
   toVideoHistoryItem,
   videoGenerationModes,
   videoModeIcons,
@@ -39,6 +42,7 @@ import {
   type VideoGenerationModeId,
   type VideoGenerationUpload,
 } from "@/lib/video-generation-data";
+import { historyVideoItemToUpload } from "@/lib/video-history-drop";
 import { cn } from "@/lib/utils";
 
 export function VideoGenerationPageContent() {
@@ -58,9 +62,14 @@ export function VideoGenerationPageContent() {
   const [, setElapsedTick] = useState(0);
   const [firstFrame, setFirstFrame] = useState<VideoGenerationUpload | null>(null);
   const [lastFrame, setLastFrame] = useState<VideoGenerationUpload | null>(null);
-  const [referenceImages, setReferenceImages] = useState<VideoGenerationUpload[]>([]);
-  const [referenceVideos, setReferenceVideos] = useState<VideoGenerationUpload[]>([]);
+  const [referenceImages, setReferenceImages] = useState<
+    (VideoGenerationUpload | null)[]
+  >(() => emptyReferenceImageSlots());
+  const [referenceVideos, setReferenceVideos] = useState<
+    (VideoGenerationUpload | null)[]
+  >(() => emptyReferenceVideoSlots());
   const [referenceAudios, setReferenceAudios] = useState<VideoGenerationUpload[]>([]);
+  const [historyDragActive, setHistoryDragActive] = useState(false);
 
   const generating = useVideoGenerationJobStore((s) => s.running);
   const activeJob = useVideoGenerationJobStore((s) => s.job);
@@ -141,7 +150,10 @@ export function VideoGenerationPageContent() {
       return Boolean(firstFrame || lastFrame);
     }
     if (mode === "reference-to-video") {
-      return referenceImages.length > 0 || referenceVideos.length > 0;
+      return (
+        filledReferenceCount(referenceImages) > 0 ||
+        filledReferenceCount(referenceVideos) > 0
+      );
     }
     return true;
   }, [
@@ -151,8 +163,8 @@ export function VideoGenerationPageContent() {
     mode,
     firstFrame,
     lastFrame,
-    referenceImages.length,
-    referenceVideos.length,
+    referenceImages,
+    referenceVideos,
   ]);
 
   const handleModeChange = (nextMode: VideoGenerationModeId) => {
@@ -160,8 +172,8 @@ export function VideoGenerationPageContent() {
     setMode(nextMode);
     setFirstFrame(null);
     setLastFrame(null);
-    setReferenceImages([]);
-    setReferenceVideos([]);
+    setReferenceImages(emptyReferenceImageSlots());
+    setReferenceVideos(emptyReferenceVideoSlots());
     setReferenceAudios([]);
     clearResult();
     clearError();
@@ -206,8 +218,12 @@ export function VideoGenerationPageContent() {
         duration,
         source_upload_id: firstFrame?.uploadId,
         last_frame_upload_id: lastFrame?.uploadId,
-        reference_upload_ids: referenceImages.map((p) => p.uploadId),
-        reference_video_upload_ids: referenceVideos.map((p) => p.uploadId),
+        reference_upload_ids: referenceImages
+          .filter((item): item is VideoGenerationUpload => item !== null)
+          .map((p) => p.uploadId),
+        reference_video_upload_ids: referenceVideos
+          .filter((item): item is VideoGenerationUpload => item !== null)
+          .map((p) => p.uploadId),
         reference_audio_upload_ids: referenceAudios.map((p) => p.uploadId),
       };
       const { job: started } = await startVideoGeneration(body);
@@ -242,6 +258,19 @@ export function VideoGenerationPageContent() {
       }
     },
     [resultGenerationId, clearResult],
+  );
+
+  const canDragHistoryToReferences = mode === "reference-to-video";
+
+  const handleHistoryVideoDrop = useCallback(
+    async (item: VideoGenerationHistoryItem, slot: number) => {
+      const upload = await historyVideoItemToUpload(item);
+      setReferenceVideos((prev) =>
+        prev.map((value, index) => (index === slot ? upload : value)),
+      );
+      setHistoryDragActive(false);
+    },
+    [],
   );
 
   const showProgress = generating || (!resultUrl && !generating);
@@ -313,11 +342,13 @@ export function VideoGenerationPageContent() {
           referenceImages={referenceImages}
           referenceVideos={referenceVideos}
           referenceAudios={referenceAudios}
+          historyDragActive={historyDragActive}
           onFirstFrameChange={setFirstFrame}
           onLastFrameChange={setLastFrame}
           onReferenceImagesChange={setReferenceImages}
           onReferenceVideosChange={setReferenceVideos}
           onReferenceAudiosChange={setReferenceAudios}
+          onHistoryVideoDrop={handleHistoryVideoDrop}
         />
 
         <Card hover>
@@ -432,7 +463,10 @@ export function VideoGenerationPageContent() {
         <VideoGenerationHistory
           items={history}
           loadError={historyError}
+          canDragToReferences={canDragHistoryToReferences}
           onSelect={loadFromHistory}
+          onDragStart={() => setHistoryDragActive(true)}
+          onDragEnd={() => setHistoryDragActive(false)}
           onDelete={async (ids) => {
             try {
               await handleDeleteHistory(ids);
