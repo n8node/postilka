@@ -10,6 +10,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"net/url"
 	"strconv"
 	"strings"
@@ -88,18 +89,26 @@ func (c *TelegramBotClient) apiMultipart(
 			return nil, err
 		}
 	}
-	part, err := writer.CreateFormFile(fileField, filename)
+	fileHeader := make(textproto.MIMEHeader)
+	fileHeader.Set("Content-Disposition", fmt.Sprintf(`form-data; name="%s"; filename="%s"`, fileField, filename))
+	fileHeader.Set("Content-Type", "video/mp4")
+	part, err := writer.CreatePart(fileHeader)
 	if err != nil {
 		return nil, err
 	}
 	if _, err := part.Write(fileData); err != nil {
 		return nil, err
 	}
+	contentType := writer.FormDataContentType()
 	if err := writer.Close(); err != nil {
 		return nil, err
 	}
 
-	resp, err := c.doRequest(ctx, http.MethodPost, endpoint, writer.FormDataContentType(), buf.Bytes())
+	uploadClient := &http.Client{
+		Timeout:   5 * time.Minute,
+		Transport: c.client.Transport,
+	}
+	resp, err := c.doRequestWithClient(ctx, uploadClient, http.MethodPost, endpoint, contentType, buf.Bytes())
 	if err != nil {
 		return nil, sanitizeTelegramError(err)
 	}
@@ -137,6 +146,17 @@ func (c *TelegramBotClient) doRequest(
 	contentType string,
 	body []byte,
 ) (*http.Response, error) {
+	return c.doRequestWithClient(ctx, c.client, method, endpoint, contentType, body)
+}
+
+func (c *TelegramBotClient) doRequestWithClient(
+	ctx context.Context,
+	client *http.Client,
+	method string,
+	endpoint string,
+	contentType string,
+	body []byte,
+) (*http.Response, error) {
 	reqBody := body
 	if reqBody == nil {
 		reqBody = []byte{}
@@ -154,7 +174,7 @@ func (c *TelegramBotClient) doRequest(
 
 	cfg, err := c.providerSettings.GetEffective(ctx)
 	if err != nil || !cfg.ProxyEnabled || len(cfg.ProxyURLs) == 0 {
-		return makeRequest(c.client)
+		return makeRequest(client)
 	}
 
 	var proxies []string
@@ -165,7 +185,7 @@ func (c *TelegramBotClient) doRequest(
 	}
 	var lastErr error
 	for idx, proxyURL := range proxies {
-		proxyClient, err := httpClientForProxy(c.client, proxyURL)
+		proxyClient, err := httpClientForProxy(client, proxyURL)
 		if err != nil {
 			lastErr = fmt.Errorf("proxy %s: %w", maskProxyURLForError(proxyURL), err)
 			if !cfg.ProxyAutoFailover {
@@ -474,6 +494,7 @@ func (c *TelegramBotClient) SendVideoNote(
 	}
 	fields := map[string]string{
 		"chat_id": fmt.Sprint(telegramChatIDParam(chatID)),
+		"length":  strconv.Itoa(telegramVideoNoteDiameter),
 	}
 	if disableNotification {
 		fields["disable_notification"] = "true"

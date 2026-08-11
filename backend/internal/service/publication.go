@@ -233,16 +233,6 @@ func telegramLinkPreview(settings model.PostSettings) *bool {
 	return nil
 }
 
-func telegramUsesVideoNote(format string, settings model.PostSettings, media []TelegramMediaInput) bool {
-	if len(media) != 1 || media[0].Type != TelegramMediaVideo {
-		return false
-	}
-	if format == "short_video" {
-		return true
-	}
-	return settings.TelegramVideoNote
-}
-
 func (s *PublicationService) telegramFinishPublish(
 	ctx context.Context,
 	token, chatID string,
@@ -306,7 +296,42 @@ func (s *PublicationService) sendTelegramVideoNote(
 	if err != nil {
 		return "", err
 	}
-	return s.telegram.SendVideoNote(ctx, token, chatID, filename, videoData, silent)
+	prepared, err := prepareTelegramVideoNoteBytes(videoData)
+	if err != nil {
+		return "", err
+	}
+	slog.Info(
+		"telegram publish: sending video note",
+		"post_id", post.ID,
+		"chat_id", chatID,
+		"source_bytes", len(videoData),
+		"prepared_bytes", len(prepared),
+		"filename", filename,
+	)
+	return s.telegram.SendVideoNote(ctx, token, chatID, filename, prepared, silent)
+}
+
+func (s *PublicationService) shouldSendTelegramVideoNote(
+	ctx context.Context,
+	post *model.Post,
+	format string,
+	settings model.PostSettings,
+) (bool, error) {
+	if format != "short_video" && !settings.TelegramVideoNote {
+		return false, nil
+	}
+	if len(post.Media) != 1 {
+		return false, fmt.Errorf("%w: для кружка нужен ровно один видеофайл", ErrInvalidPost)
+	}
+	file, err := s.files.GetByID(ctx, post.WorkspaceID, post.Media[0].FileID, false)
+	if err != nil {
+		return false, fmt.Errorf("медиафайл не найден или удалён")
+	}
+	mime := strings.ToLower(strings.TrimSpace(strings.Split(file.MimeType, ";")[0]))
+	if !strings.HasPrefix(mime, "video/") {
+		return false, fmt.Errorf("%w: кружок Telegram поддерживает только видео", ErrInvalidPost)
+	}
+	return true, nil
 }
 
 func (s *PublicationService) publishTarget(
@@ -368,7 +393,11 @@ func (s *PublicationService) publishTarget(
 				return "", fmt.Errorf("короткое видео должно быть файлом video/*")
 			}
 			parseMode := strings.ToUpper(strings.TrimSpace(content.ParseMode))
-			if telegramUsesVideoNote(format, settings, media) {
+			useVideoNote, err := s.shouldSendTelegramVideoNote(ctx, post, format, settings)
+			if err != nil {
+				return "", err
+			}
+			if useVideoNote {
 				msgID, err := s.sendTelegramVideoNote(ctx, token, channel.ChatID, post, silent)
 				if err != nil {
 					return "", err
@@ -401,7 +430,11 @@ func (s *PublicationService) publishTarget(
 					return "", err
 				}
 				parseMode := strings.ToUpper(strings.TrimSpace(content.ParseMode))
-				if telegramUsesVideoNote(format, settings, media) {
+				useVideoNote, err := s.shouldSendTelegramVideoNote(ctx, post, format, settings)
+				if err != nil {
+					return "", err
+				}
+				if useVideoNote {
 					msgID, err := s.sendTelegramVideoNote(ctx, token, channel.ChatID, post, silent)
 					if err != nil {
 						return "", err

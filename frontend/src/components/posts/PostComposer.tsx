@@ -1743,8 +1743,13 @@ export function PostComposer() {
           currentStatus === "draft");
 
       let finalPost: Post;
-      if (canPublishWithoutSave) {
-        finalPost = await publishPost(postId);
+      if (action === "now") {
+        const saved = postId
+          ? await updatePost(postId, buildPayload())
+          : await createPost(buildPayload());
+        finalPost = await publishPost(saved.id);
+      } else if (canPublishWithoutSave) {
+        finalPost = await publishPost(postId!);
       } else {
         const saved = postId
           ? await updatePost(postId, buildPayload())
@@ -1752,8 +1757,6 @@ export function PostComposer() {
         finalPost = saved;
         if (action === "schedule") {
           finalPost = await schedulePost(saved.id, new Date(scheduleAt).toISOString());
-        } else if (action === "now") {
-          finalPost = await publishPost(saved.id);
         }
       }
       if (action === "now" && finalPost.status === "failed") {
