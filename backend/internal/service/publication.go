@@ -262,6 +262,53 @@ func (s *PublicationService) telegramFinishPublish(
 	return messageID, nil
 }
 
+func (s *PublicationService) telegramVideoNoteFile(ctx context.Context, post *model.Post) ([]byte, string, error) {
+	if s.files == nil || s.storage == nil {
+		return nil, "", fmt.Errorf("хранилище медиа недоступно")
+	}
+	if len(post.Media) != 1 {
+		return nil, "", fmt.Errorf("%w: для кружка нужен ровно один видеофайл", ErrInvalidPost)
+	}
+	file, err := s.files.GetByID(ctx, post.WorkspaceID, post.Media[0].FileID, false)
+	if err != nil {
+		return nil, "", fmt.Errorf("медиафайл не найден или удалён")
+	}
+	mime := strings.ToLower(strings.TrimSpace(strings.Split(file.MimeType, ";")[0]))
+	if !strings.HasPrefix(mime, "video/") {
+		return nil, "", fmt.Errorf("%w: кружок Telegram поддерживает только видео", ErrInvalidPost)
+	}
+	body, _, err := s.storage.GetObject(ctx, file.S3Key)
+	if err != nil {
+		return nil, "", fmt.Errorf("не удалось прочитать видео для публикации")
+	}
+	defer body.Close()
+	data, err := io.ReadAll(io.LimitReader(body, maxTelegramVideoNoteBytes+1))
+	if err != nil {
+		return nil, "", fmt.Errorf("не удалось прочитать видео для публикации")
+	}
+	if len(data) > maxTelegramVideoNoteBytes {
+		return nil, "", fmt.Errorf(
+			"%w: видео для кружка Telegram не должно превышать %d МБ",
+			ErrInvalidPost,
+			maxTelegramVideoNoteBytes>>20,
+		)
+	}
+	return data, file.Name, nil
+}
+
+func (s *PublicationService) sendTelegramVideoNote(
+	ctx context.Context,
+	token, chatID string,
+	post *model.Post,
+	silent bool,
+) (string, error) {
+	videoData, filename, err := s.telegramVideoNoteFile(ctx, post)
+	if err != nil {
+		return "", err
+	}
+	return s.telegram.SendVideoNote(ctx, token, chatID, filename, videoData, silent)
+}
+
 func (s *PublicationService) publishTarget(
 	ctx context.Context,
 	post *model.Post,
@@ -322,7 +369,7 @@ func (s *PublicationService) publishTarget(
 			}
 			parseMode := strings.ToUpper(strings.TrimSpace(content.ParseMode))
 			if telegramUsesVideoNote(format, settings, media) {
-				msgID, err := s.telegram.SendVideoNote(ctx, token, channel.ChatID, media[0].URL, silent)
+				msgID, err := s.sendTelegramVideoNote(ctx, token, channel.ChatID, post, silent)
 				if err != nil {
 					return "", err
 				}
@@ -355,7 +402,7 @@ func (s *PublicationService) publishTarget(
 				}
 				parseMode := strings.ToUpper(strings.TrimSpace(content.ParseMode))
 				if telegramUsesVideoNote(format, settings, media) {
-					msgID, err := s.telegram.SendVideoNote(ctx, token, channel.ChatID, media[0].URL, silent)
+					msgID, err := s.sendTelegramVideoNote(ctx, token, channel.ChatID, post, silent)
 					if err != nil {
 						return "", err
 					}

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -17,6 +18,8 @@ import (
 
 	"github.com/postilka/postilka/internal/model"
 )
+
+const maxTelegramVideoNoteBytes = 50 << 20
 
 type TelegramBotClient struct {
 	providerSettings *TelegramProviderSettingsService
@@ -67,6 +70,64 @@ func (c *TelegramBotClient) api(ctx context.Context, token, method string, paylo
 		return nil, fmt.Errorf("telegram api: request failed")
 	}
 	return parsed.Result, nil
+}
+
+func (c *TelegramBotClient) apiMultipart(
+	ctx context.Context,
+	token, method string,
+	fields map[string]string,
+	fileField, filename string,
+	fileData []byte,
+) (json.RawMessage, error) {
+	endpoint := fmt.Sprintf("https://api.telegram.org/bot%s/%s", strings.TrimSpace(token), method)
+
+	var buf bytes.Buffer
+	writer := multipart.NewWriter(&buf)
+	for key, value := range fields {
+		if err := writer.WriteField(key, value); err != nil {
+			return nil, err
+		}
+	}
+	part, err := writer.CreateFormFile(fileField, filename)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := part.Write(fileData); err != nil {
+		return nil, err
+	}
+	if err := writer.Close(); err != nil {
+		return nil, err
+	}
+
+	resp, err := c.doRequest(ctx, http.MethodPost, endpoint, writer.FormDataContentType(), buf.Bytes())
+	if err != nil {
+		return nil, sanitizeTelegramError(err)
+	}
+	defer resp.Body.Close()
+
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	var parsed telegramAPIResponse
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return nil, fmt.Errorf("telegram api: invalid response")
+	}
+	if !parsed.OK {
+		if parsed.Description != "" {
+			return nil, fmt.Errorf("telegram api: %s", parsed.Description)
+		}
+		return nil, fmt.Errorf("telegram api: request failed")
+	}
+	return parsed.Result, nil
+}
+
+func telegramVideoNoteFilename(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "video.mp4"
+	}
+	if !strings.Contains(name, ".") {
+		return name + ".mp4"
+	}
+	return name
 }
 
 func (c *TelegramBotClient) doRequest(
@@ -397,20 +458,35 @@ func (c *TelegramBotClient) SendMedia(
 
 func (c *TelegramBotClient) SendVideoNote(
 	ctx context.Context,
-	token, chatID, videoURL string,
+	token, chatID, filename string,
+	videoData []byte,
 	disableNotification bool,
 ) (string, error) {
-	if validateHTTPURL(videoURL) != nil {
-		return "", fmt.Errorf("%w: некорректная ссылка на видео Telegram", ErrInvalidPost)
+	if len(videoData) == 0 {
+		return "", fmt.Errorf("%w: пустой видеофайл для кружка Telegram", ErrInvalidPost)
 	}
-	payload := map[string]any{
-		"chat_id":    telegramChatIDParam(chatID),
-		"video_note": videoURL,
+	if len(videoData) > maxTelegramVideoNoteBytes {
+		return "", fmt.Errorf(
+			"%w: видео для кружка Telegram не должно превышать %d МБ",
+			ErrInvalidPost,
+			maxTelegramVideoNoteBytes>>20,
+		)
+	}
+	fields := map[string]string{
+		"chat_id": fmt.Sprint(telegramChatIDParam(chatID)),
 	}
 	if disableNotification {
-		payload["disable_notification"] = true
+		fields["disable_notification"] = "true"
 	}
-	raw, err := c.api(ctx, token, "sendVideoNote", payload)
+	raw, err := c.apiMultipart(
+		ctx,
+		token,
+		"sendVideoNote",
+		fields,
+		"video_note",
+		telegramVideoNoteFilename(filename),
+		videoData,
+	)
 	if err != nil {
 		return "", sanitizeTelegramError(err)
 	}

@@ -1344,10 +1344,7 @@ export function PostComposer() {
       telegram_silent:
         telegramChannels.length > 0 && canTelegramSilent && telegramSilent ? true : undefined,
       telegram_video_note:
-        telegramChannels.length > 0 &&
-        canTelegramVideoNote &&
-        telegramVideoNote &&
-        singleVideoAttached
+        telegramChannels.length > 0 && telegramVideoNote && singleVideoAttached
           ? true
           : undefined,
       recurrence: evergreenEnabled

@@ -2,6 +2,22 @@ package service
 
 import "testing"
 
+func TestTelegramVideoNoteFilename(t *testing.T) {
+	tests := []struct {
+		in   string
+		want string
+	}{
+		{"", "video.mp4"},
+		{"clip", "clip.mp4"},
+		{"circle.MP4", "circle.MP4"},
+	}
+	for _, tt := range tests {
+		if got := telegramVideoNoteFilename(tt.in); got != tt.want {
+			t.Fatalf("telegramVideoNoteFilename(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
+
 func TestCanPostInChat(t *testing.T) {
 	tests := []struct {
 		name     string
