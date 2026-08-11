@@ -404,6 +404,7 @@ export function VideoSourcePhotosPanel({
   const [sourceModal, setSourceModal] = useState<SourceModalTarget | null>(
     null,
   );
+  const sourceModalTargetRef = useRef<SourceModalTarget | null>(null);
   const [audioDiskOpen, setAudioDiskOpen] = useState(false);
   const [videoDragSlot, setVideoDragSlot] = useState<number | null>(null);
   const [videoDragInvalid, setVideoDragInvalid] = useState<{
@@ -550,17 +551,18 @@ export function VideoSourcePhotosPanel({
       return;
     }
     if (target.kind === "ref-video") {
-      const durationError = referenceVideoDurationError(
-        file.media_metadata?.duration_seconds,
-      );
-      if (durationError) {
-        setError(durationError);
-        return;
-      }
       const sizeError = referenceVideoSizeError(file.size);
       if (sizeError) {
         setError(sizeError);
         return;
+      }
+      const duration = file.media_metadata?.duration_seconds;
+      if (duration != null && Number.isFinite(duration) && duration > 0) {
+        const durationError = referenceVideoDurationError(duration);
+        if (durationError) {
+          setError(durationError);
+          return;
+        }
       }
     }
     if (target.kind === "ref-audio" && mediaKind !== "audio") {
@@ -597,6 +599,7 @@ export function VideoSourcePhotosPanel({
   };
 
   const openSourceModal = (target: SourceModalTarget) => {
+    sourceModalTargetRef.current = target;
     setSourceModal(target);
   };
 
@@ -619,35 +622,39 @@ export function VideoSourcePhotosPanel({
   };
 
   const handleSourceModalComputer = () => {
-    if (!sourceModal) return;
-    if (sourceModal.kind === "first") {
+    const target = sourceModalTargetRef.current;
+    if (!target) return;
+    if (target.kind === "first") {
       openComputer({ kind: "first" });
-    } else if (sourceModal.kind === "last") {
+    } else if (target.kind === "last") {
       openComputer({ kind: "last" });
-    } else if (sourceModal.kind === "ref-image") {
-      openComputer({ kind: "ref-image", slot: sourceModal.slot });
-    } else if (sourceModal.kind === "ref-video") {
-      openComputer({ kind: "ref-video", slot: sourceModal.slot });
+    } else if (target.kind === "ref-image") {
+      openComputer({ kind: "ref-image", slot: target.slot });
+    } else if (target.kind === "ref-video") {
+      openComputer({ kind: "ref-video", slot: target.slot });
     }
+    sourceModalTargetRef.current = null;
     setSourceModal(null);
   };
 
   const handleSourceModalDisk = (file: WorkspaceFile) => {
-    if (!sourceModal) return;
+    const targetModal = sourceModalTargetRef.current;
+    if (!targetModal) return;
     let target: PendingUpload;
-    if (sourceModal.kind === "first") {
+    if (targetModal.kind === "first") {
       target = { kind: "first" };
-    } else if (sourceModal.kind === "last") {
+    } else if (targetModal.kind === "last") {
       target = { kind: "last" };
-    } else if (sourceModal.kind === "ref-image") {
-      target = { kind: "ref-image", slot: sourceModal.slot };
-    } else if (sourceModal.kind === "ref-video") {
-      target = { kind: "ref-video", slot: sourceModal.slot };
+    } else if (targetModal.kind === "ref-image") {
+      target = { kind: "ref-image", slot: targetModal.slot };
+    } else if (targetModal.kind === "ref-video") {
+      target = { kind: "ref-video", slot: targetModal.slot };
     } else {
       return;
     }
-    void handleWorkspaceFile(file, target);
+    sourceModalTargetRef.current = null;
     setSourceModal(null);
+    void handleWorkspaceFile(file, target);
   };
 
   const handleVideoDragOver = (slot: number) => {
@@ -938,7 +945,10 @@ export function VideoSourcePhotosPanel({
         subtitle={sourceModal ? sourceModalSubtitle(sourceModal) : undefined}
         mediaKind={sourceModal?.kind === "ref-video" ? "video" : "image"}
         referenceVideoFilter={sourceModal?.kind === "ref-video"}
-        onClose={() => setSourceModal(null)}
+        onClose={() => {
+          sourceModalTargetRef.current = null;
+          setSourceModal(null);
+        }}
         onPickComputer={handleSourceModalComputer}
         onPickDiskFile={handleSourceModalDisk}
       />

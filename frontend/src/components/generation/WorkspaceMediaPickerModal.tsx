@@ -327,7 +327,9 @@ export function WorkspaceMediaPickerModal({
                 type="button"
                 onClick={() => {
                   onSelect(file);
-                  onClose();
+                  if (!embedded) {
+                    onClose();
+                  }
                 }}
                 className="min-w-0 text-left"
               >
