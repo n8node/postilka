@@ -1119,9 +1119,6 @@ export function PostComposer() {
   const noLocationDelivery = selectedChannels.filter(
     (channel) => !channel.publish_capabilities?.composer_location,
   );
-  const noLinkPreviewDelivery = selectedChannels.filter(
-    (channel) => !channel.publish_capabilities?.composer_link_preview,
-  );
   const canTelegramPin = telegramChannels.every((channel) => channel.publish_capabilities?.composer_pin);
   const canTelegramSilent = telegramChannels.every(
     (channel) => channel.publish_capabilities?.composer_silent,
