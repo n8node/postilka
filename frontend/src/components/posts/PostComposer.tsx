@@ -2978,6 +2978,7 @@ export function PostComposer() {
                   <Monitor className="h-4 w-4" />
                 </button>
               </div>
+              </div>
             </div>
 
             <div className="post-composer-preview-body p-4 pt-3">
