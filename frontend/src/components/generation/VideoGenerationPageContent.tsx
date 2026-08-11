@@ -173,6 +173,16 @@ export function VideoGenerationPageContent() {
     setDuration(defaultDurationForMode(pricing, mode));
   }, [mode, pricing]);
 
+  const costInput = useMemo(
+    () => ({
+      firstFrame,
+      lastFrame,
+      referenceImages,
+      referenceVideos,
+    }),
+    [firstFrame, lastFrame, referenceImages, referenceVideos],
+  );
+
   const canGenerate = useMemo(() => {
     if (!prompt.trim() || generating || !hasMediaCredits(creditsRemaining)) {
       return false;
@@ -499,6 +509,7 @@ export function VideoGenerationPageContent() {
           mode={mode}
           duration={duration}
           pricing={pricing}
+          costInput={costInput}
           generating={generating}
           generationStartedAt={generationStartedAt}
           lastRun={lastRun}

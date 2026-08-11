@@ -2,7 +2,8 @@
 
 import { Clock, Coins, Zap } from "lucide-react";
 import {
-  videoCostForModeDuration,
+  videoCostBreakdown,
+  type VideoGenerationCostInput,
   type VideoGenerationPricing,
 } from "@/lib/video-generation-api";
 import {
@@ -25,6 +26,7 @@ type VideoSidebarStatsProps = {
   mode: VideoGenerationModeId;
   duration: number;
   pricing: VideoGenerationPricing | null;
+  costInput: Omit<VideoGenerationCostInput, "mode" | "duration">;
   generating: boolean;
   generationStartedAt: number | null;
   lastRun: LastRunStats | null;
@@ -40,17 +42,40 @@ function formatCreditsLabel(value: number | null): string {
   return `${value} медиа-кредитов осталось`;
 }
 
+function formatCostBreakdown(
+  breakdown: ReturnType<typeof videoCostBreakdown>,
+): string {
+  const parts: string[] = [];
+  if (breakdown.inputVideoDurationSeconds > 0) {
+    parts.push(
+      `${breakdown.outputDurationSeconds} сек выход + ${breakdown.inputVideoDurationSeconds} сек реф.видео`,
+    );
+  } else {
+    parts.push(`${breakdown.outputDurationSeconds} сек`);
+  }
+  parts.push(`× ${breakdown.ratePerSecond} кред/сек`);
+  if (breakdown.extraImageCount > 0) {
+    parts.push(
+      `+ ${breakdown.extraImageCount} доп. фото × ${breakdown.extraImageCredits / breakdown.extraImageCount} кред`,
+    );
+  }
+  return parts.join(" · ");
+}
+
 export function VideoSidebarStats({
   creditsRemaining,
   mode,
   duration,
   pricing,
+  costInput,
   generating,
   generationStartedAt,
   lastRun,
 }: VideoSidebarStatsProps) {
-  const modeCost =
-    pricing !== null ? videoCostForModeDuration(pricing, mode, duration) : null;
+  const breakdown =
+    pricing !== null
+      ? videoCostBreakdown(pricing, { mode, duration, ...costInput })
+      : null;
   const elapsedMs = generating ? clientElapsedMs(generationStartedAt) : 0;
   const showLastRun = !generating && lastRun !== null;
 
@@ -75,10 +100,23 @@ export function VideoSidebarStats({
             Стоимость
           </span>
           <span className="font-medium text-blue-900">
-            {modeCost !== null ? formatMediaCreditCost(modeCost) : "—"}
+            {breakdown !== null
+              ? formatMediaCreditCost(breakdown.totalCredits)
+              : "—"}
           </span>
           <span className="col-span-2 text-[10px] leading-snug text-zinc-400">
-            {duration} сек × режим «{videoModeLabels[mode]}»
+            {breakdown !== null ? formatCostBreakdown(breakdown) : "—"}
+          </span>
+          {breakdown?.hasUnknownInputVideoDuration ? (
+            <span className="col-span-2 text-[10px] leading-snug text-amber-700">
+              Длительность части референс-видео неизвестна — итог может быть выше
+            </span>
+          ) : null}
+          <span className="col-span-2 text-[10px] leading-snug text-zinc-400">
+            Режим «{videoModeLabels[mode]}»
+            {breakdown && breakdown.inputImageCount > breakdown.freeReferenceImages
+              ? ` · ${breakdown.inputImageCount} фото (${breakdown.freeReferenceImages} бесплатно у KIE)`
+              : null}
           </span>
         </div>
 

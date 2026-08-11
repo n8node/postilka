@@ -32,6 +32,24 @@ type GenerateVideoInput struct {
 	ReferenceAudioUploadIDs []string
 }
 
+func inputImageCountForVideoMode(mode string, in GenerateVideoInput) int {
+	switch normalizeVideoGenerationMode(mode) {
+	case model.KieVideoModeReferenceToVideo:
+		return countNonEmptyIDs(in.ReferenceUploadIDs)
+	case model.KieVideoModeImageToVideo:
+		n := 0
+		if strings.TrimSpace(in.SourceUploadID) != "" {
+			n++
+		}
+		if strings.TrimSpace(in.LastFrameUploadID) != "" {
+			n++
+		}
+		return n
+	default:
+		return 0
+	}
+}
+
 func normalizeVideoGenerationMode(mode string) string {
 	switch strings.ToLower(strings.TrimSpace(mode)) {
 	case model.KieVideoModeImageToVideo:
@@ -96,7 +114,17 @@ func (s *GenerationService) StartGenerateVideo(ctx context.Context, userID strin
 		}
 	}
 
-	cost := settings.CreditCostForVideo(mode, duration)
+	inputVideoDurations, err := s.referenceVideoDurationsForUploadIDs(ctx, userID, ws.ID, in.ReferenceVideoUploadIDs)
+	if err != nil {
+		return StartGenerateResult{}, err
+	}
+	costBreakdown := settings.CreditCostForVideoRequest(model.VideoGenerationCostInput{
+		Mode:                   mode,
+		OutputDurationSeconds:  duration,
+		InputImageCount:        inputImageCountForVideoMode(mode, in),
+		InputVideoDurationSecs: inputVideoDurations,
+	})
+	cost := costBreakdown.TotalCredits
 	kopecks := settings.KopecksPerMediaCredit
 	if kopecks <= 0 {
 		kopecks = 5000
@@ -179,10 +207,12 @@ func (s *GenerationService) GetVideoPricing(ctx context.Context, userID string, 
 	}
 	priceRub := float64(settings.MediaCreditPriceRub())
 	out := model.VideoGenerationPricingView{
-		CreditsPerSecondText:      settings.CreditsPerSecondForMode(model.KieVideoModeTextToVideo),
-		CreditsPerSecondImage:     settings.CreditsPerSecondForMode(model.KieVideoModeImageToVideo),
-		CreditsPerSecondReference: settings.CreditsPerSecondForMode(model.KieVideoModeReferenceToVideo),
-		DefaultDurationText:       settings.DefaultDurationForMode(model.KieVideoModeTextToVideo),
+		CreditsPerSecondText:          settings.CreditsPerSecondForMode(model.KieVideoModeTextToVideo),
+		CreditsPerSecondImage:         settings.CreditsPerSecondForMode(model.KieVideoModeImageToVideo),
+		CreditsPerSecondReference:     settings.CreditsPerSecondForMode(model.KieVideoModeReferenceToVideo),
+		CreditsPerExtraReferenceImage: settings.CreditsPerExtraReferenceImage,
+		FreeReferenceImages:           model.KieVideoFreeReferenceImages,
+		DefaultDurationText:           settings.DefaultDurationForMode(model.KieVideoModeTextToVideo),
 		DefaultDurationImage:      settings.DefaultDurationForMode(model.KieVideoModeImageToVideo),
 		DefaultDurationReference:  settings.DefaultDurationForMode(model.KieVideoModeReferenceToVideo),
 		MediaCreditPriceRub:       priceRub,

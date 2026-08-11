@@ -2010,6 +2010,8 @@ export type KieVideoAdminSettings = {
   credits_per_second_text_to_video: number;
   credits_per_second_image_to_video: number;
   credits_per_second_reference_to_video: number;
+  credits_per_extra_reference_image: number;
+  free_reference_images?: number;
   media_credit_price_rub: number;
   updated_at?: string;
 };

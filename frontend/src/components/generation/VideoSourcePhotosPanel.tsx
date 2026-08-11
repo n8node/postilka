@@ -483,6 +483,7 @@ export function VideoSourcePhotosPanel({
       return;
     }
 
+    let probedVideoDuration: number | undefined;
     if (pending.kind === "ref-video") {
       const sizeError = referenceVideoSizeError(file.size);
       if (sizeError) {
@@ -491,8 +492,8 @@ export function VideoSourcePhotosPanel({
         if (inputRef.current) inputRef.current.value = "";
         return;
       }
-      const duration = await probeMediaDuration(file, file.type || "video/mp4");
-      const durationError = referenceVideoDurationError(duration);
+      probedVideoDuration = await probeMediaDuration(file, file.type || "video/mp4");
+      const durationError = referenceVideoDurationError(probedVideoDuration);
       if (durationError) {
         setError(durationError);
         setPending(null);
@@ -513,6 +514,10 @@ export function VideoSourcePhotosPanel({
         mediaKind,
         fileName: file.name,
         mimeType: upload.content_type || file.type,
+        durationSeconds:
+          pending.kind === "ref-video"
+            ? upload.duration_seconds ?? probedVideoDuration
+            : undefined,
       });
     } catch (err) {
       URL.revokeObjectURL(previewUrl);
@@ -550,6 +555,7 @@ export function VideoSourcePhotosPanel({
       setError("Нужен видеофайл MP4 или MOV до 50 МБ");
       return;
     }
+    let workspaceVideoDuration: number | undefined;
     if (target.kind === "ref-video") {
       const sizeError = referenceVideoSizeError(file.size);
       if (sizeError) {
@@ -558,6 +564,7 @@ export function VideoSourcePhotosPanel({
       }
       const duration = file.media_metadata?.duration_seconds;
       if (duration != null && Number.isFinite(duration) && duration > 0) {
+        workspaceVideoDuration = duration;
         const durationError = referenceVideoDurationError(duration);
         if (durationError) {
           setError(durationError);
@@ -582,6 +589,10 @@ export function VideoSourcePhotosPanel({
         fileName: file.name,
         workspaceFileId: file.id,
         mimeType: file.mime_type,
+        durationSeconds:
+          target.kind === "ref-video"
+            ? upload.duration_seconds ?? workspaceVideoDuration
+            : undefined,
       });
     } catch (err) {
       setError(

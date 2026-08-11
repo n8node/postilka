@@ -1,6 +1,7 @@
 package model
 
 import (
+	"math"
 	"strings"
 	"time"
 )
@@ -11,6 +12,9 @@ const (
 	KieVideoModeReferenceToVideo = "reference-to-video"
 
 	KieVideoExampleMaxCount = 4
+
+	// KieVideoFreeReferenceImages — first N input images are free per KIE billing.
+	KieVideoFreeReferenceImages = 5
 )
 
 var KieVideoAspectRatios = []string{"9:16", "21:9", "16:9", "4:3", "1:1", "3:4"}
@@ -27,6 +31,7 @@ type KieVideoSettings struct {
 	CreditsPerSecondTextToVideo      int
 	CreditsPerSecondImageToVideo     int
 	CreditsPerSecondReferenceToVideo int
+	CreditsPerExtraReferenceImage    int
 	KopecksPerMediaCredit            int
 	UpdatedAt                        time.Time
 }
@@ -43,6 +48,8 @@ type KieVideoSettingsDTO struct {
 	CreditsPerSecondTextToVideo      int    `json:"credits_per_second_text_to_video"`
 	CreditsPerSecondImageToVideo     int    `json:"credits_per_second_image_to_video"`
 	CreditsPerSecondReferenceToVideo int    `json:"credits_per_second_reference_to_video"`
+	CreditsPerExtraReferenceImage    int    `json:"credits_per_extra_reference_image"`
+	FreeReferenceImages              int    `json:"free_reference_images"`
 	MediaCreditPriceRub              int    `json:"media_credit_price_rub"`
 	UpdatedAt                        string `json:"updated_at,omitempty"`
 }
@@ -59,6 +66,7 @@ type KieVideoUpdateRequest struct {
 	CreditsPerSecondTextToVideo      *int    `json:"credits_per_second_text_to_video"`
 	CreditsPerSecondImageToVideo     *int    `json:"credits_per_second_image_to_video"`
 	CreditsPerSecondReferenceToVideo *int    `json:"credits_per_second_reference_to_video"`
+	CreditsPerExtraReferenceImage    *int    `json:"credits_per_extra_reference_image"`
 	MediaCreditPriceRub              *int    `json:"media_credit_price_rub"`
 }
 
@@ -107,14 +115,80 @@ func (s KieVideoSettings) CreditsPerSecondForMode(mode string) int {
 	}
 }
 
-// CreditCostForVideo returns total credits: durationSeconds × creditsPerSecond(mode).
+// VideoGenerationCostInput describes billable inputs for a video generation request.
+type VideoGenerationCostInput struct {
+	Mode                   string
+	OutputDurationSeconds  int
+	InputImageCount        int
+	InputVideoDurationSecs []float64
+}
+
+// VideoGenerationCostBreakdown is a user-visible cost estimate aligned with KIE billing.
+type VideoGenerationCostBreakdown struct {
+	OutputDurationSeconds     int `json:"output_duration_seconds"`
+	InputVideoDurationSeconds int `json:"input_video_duration_seconds"`
+	BillableSeconds           int `json:"billable_seconds"`
+	RatePerSecond             int `json:"rate_per_second"`
+	BaseCredits               int `json:"base_credits"`
+	InputImageCount           int `json:"input_image_count"`
+	FreeReferenceImages       int `json:"free_reference_images"`
+	ExtraImageCount           int `json:"extra_image_count"`
+	ExtraImageCredits         int `json:"extra_image_credits"`
+	TotalCredits              int `json:"total_credits"`
+}
+
+// CreditCostForVideo returns total credits for output duration only (legacy/simple display).
 func (s KieVideoSettings) CreditCostForVideo(mode string, durationSeconds int) int {
-	durationSeconds = clampVideoDuration(durationSeconds)
-	rate := s.CreditsPerSecondForMode(mode)
-	if rate <= 0 || durationSeconds <= 0 {
-		return 0
+	return s.CreditCostForVideoRequest(VideoGenerationCostInput{
+		Mode:                  mode,
+		OutputDurationSeconds: durationSeconds,
+	}).TotalCredits
+}
+
+// CreditCostForVideoRequest applies KIE formula:
+// rate × (output + input video seconds) + extra image credits beyond free tier.
+func (s KieVideoSettings) CreditCostForVideoRequest(in VideoGenerationCostInput) VideoGenerationCostBreakdown {
+	outputSec := clampVideoDuration(in.OutputDurationSeconds)
+	inputVideoSec := sumCeilVideoDurationSeconds(in.InputVideoDurationSecs)
+	billableSec := outputSec + inputVideoSec
+	rate := s.CreditsPerSecondForMode(in.Mode)
+	baseCredits := 0
+	if rate > 0 && billableSec > 0 {
+		baseCredits = billableSec * rate
 	}
-	return durationSeconds * rate
+
+	freeImages := KieVideoFreeReferenceImages
+	inputImages := nonNegative(in.InputImageCount)
+	extraImages := 0
+	if inputImages > freeImages {
+		extraImages = inputImages - freeImages
+	}
+	extraImageRate := nonNegative(s.CreditsPerExtraReferenceImage)
+	extraImageCredits := extraImages * extraImageRate
+
+	return VideoGenerationCostBreakdown{
+		OutputDurationSeconds:     outputSec,
+		InputVideoDurationSeconds: inputVideoSec,
+		BillableSeconds:           billableSec,
+		RatePerSecond:             rate,
+		BaseCredits:               baseCredits,
+		InputImageCount:           inputImages,
+		FreeReferenceImages:       freeImages,
+		ExtraImageCount:           extraImages,
+		ExtraImageCredits:         extraImageCredits,
+		TotalCredits:              baseCredits + extraImageCredits,
+	}
+}
+
+func sumCeilVideoDurationSeconds(durations []float64) int {
+	total := 0
+	for _, d := range durations {
+		if d <= 0 {
+			continue
+		}
+		total += int(math.Ceil(d))
+	}
+	return total
 }
 
 func (s KieVideoSettings) WalletCostCents(creditCount int) int64 {

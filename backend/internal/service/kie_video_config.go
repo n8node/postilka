@@ -88,6 +88,12 @@ func (s *KieVideoConfigService) Update(ctx context.Context, in model.KieVideoUpd
 		}
 		current.CreditsPerSecondReferenceToVideo = *in.CreditsPerSecondReferenceToVideo
 	}
+	if in.CreditsPerExtraReferenceImage != nil {
+		if *in.CreditsPerExtraReferenceImage < 0 || *in.CreditsPerExtraReferenceImage > 1_000_000 {
+			return model.KieVideoSettingsDTO{}, errors.New("invalid credits per extra reference image")
+		}
+		current.CreditsPerExtraReferenceImage = *in.CreditsPerExtraReferenceImage
+	}
 	if in.MediaCreditPriceRub != nil {
 		if *in.MediaCreditPriceRub <= 0 || *in.MediaCreditPriceRub > 100_000 {
 			return model.KieVideoSettingsDTO{}, errors.New("invalid media credit price rub")
@@ -216,6 +222,7 @@ func defaultKieVideoSettings() model.KieVideoSettings {
 		CreditsPerSecondTextToVideo:      5,
 		CreditsPerSecondImageToVideo:     5,
 		CreditsPerSecondReferenceToVideo: 8,
+		CreditsPerExtraReferenceImage:    3,
 		KopecksPerMediaCredit:            5000,
 	}
 }
@@ -233,6 +240,8 @@ func toKieVideoSettingsDTO(s model.KieVideoSettings) model.KieVideoSettingsDTO {
 		CreditsPerSecondTextToVideo:      s.CreditsPerSecondTextToVideo,
 		CreditsPerSecondImageToVideo:     s.CreditsPerSecondImageToVideo,
 		CreditsPerSecondReferenceToVideo: s.CreditsPerSecondReferenceToVideo,
+		CreditsPerExtraReferenceImage:    s.CreditsPerExtraReferenceImage,
+		FreeReferenceImages:              model.KieVideoFreeReferenceImages,
 		MediaCreditPriceRub:              s.MediaCreditPriceRub(),
 	}
 	if !s.UpdatedAt.IsZero() {

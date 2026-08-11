@@ -43,6 +43,8 @@ export type VideoGenerationUpload = {
   fileName?: string;
   workspaceFileId?: string;
   mimeType?: string;
+  /** Probed duration for reference videos (seconds). */
+  durationSeconds?: number;
 };
 
 export type VideoGenerationHistoryItem = {
@@ -84,6 +86,7 @@ export function isReferenceVideoDurationValid(
 }
 export const REFERENCE_AUDIO_MAX = 3;
 export const REFERENCE_VIDEO_MAX = 3;
+export const KIE_VIDEO_FREE_REFERENCE_IMAGES = 5;
 
 export function emptyReferenceImageSlots(): (VideoGenerationUpload | null)[] {
   return Array.from({ length: REFERENCE_IMAGE_MAX }, () => null);

@@ -184,6 +184,7 @@ export async function historyVideoItemToUpload(
     mediaKind: "video",
     fileName: file.name,
     mimeType: upload.content_type || type,
+    durationSeconds: duration ?? item.videoDurationSeconds,
   };
 }
 

@@ -29,6 +29,7 @@ const DEFAULT_SETTINGS: KieVideoAdminSettings = {
   credits_per_second_text_to_video: 5,
   credits_per_second_image_to_video: 5,
   credits_per_second_reference_to_video: 8,
+  credits_per_extra_reference_image: 3,
   media_credit_price_rub: 50,
 };
 
@@ -310,6 +311,7 @@ export function AdminKieVideoPage({ embedded = false }: { embedded?: boolean }) 
         credits_per_second_text_to_video: form.credits_per_second_text_to_video,
         credits_per_second_image_to_video: form.credits_per_second_image_to_video,
         credits_per_second_reference_to_video: form.credits_per_second_reference_to_video,
+        credits_per_extra_reference_image: form.credits_per_extra_reference_image,
         media_credit_price_rub: Math.max(1, mediaCreditPriceRub),
       };
       if (newApiKey.trim()) {
@@ -537,8 +539,11 @@ export function AdminKieVideoPage({ embedded = false }: { embedded?: boolean }) 
         <div>
           <h2 className="text-base font-semibold text-slate-900">Кредиты за секунду</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Списание = длительность (сек) × кредиты за секунду. Сначала расходуется included-квота
-            тарифа, остаток — с кошелька пользователя.
+            Формула KIE:{" "}
+            <span className="font-medium text-slate-700">
+              кред/сек × (длительность выхода + сумма референс-видео) + доп. фото сверх 5
+            </span>
+            . Аудио бесплатно. Сначала included-квота тарифа, остаток — с кошелька.
           </p>
         </div>
 
@@ -587,6 +592,33 @@ export function AdminKieVideoPage({ embedded = false }: { embedded?: boolean }) 
             </div>
           );
         })}
+        <div>
+          <label className="mb-1.5 block text-sm font-medium">
+            Доп. референс-фото (6-е и далее), кред/шт
+          </label>
+          <input
+            type="number"
+            min={0}
+            value={form.credits_per_extra_reference_image}
+            onChange={(e) =>
+              patch(
+                "credits_per_extra_reference_image",
+                Math.max(0, parseInt(e.target.value, 10) || 0),
+              )
+            }
+            className="max-w-[140px] rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+          />
+          <p className="mt-1 text-xs text-slate-500">
+            Первые 5 входных изображений у KIE бесплатны. Пример reference→video: 15 сек выход + 10 сек
+            реф.видео = 25 сек × {form.credits_per_second_reference_to_video} кред/сек ={" "}
+            {25 * form.credits_per_second_reference_to_video} кред; +2 доп. фото ×{" "}
+            {form.credits_per_extra_reference_image} ={" "}
+            {2 * form.credits_per_extra_reference_image} кред → итого{" "}
+            {25 * form.credits_per_second_reference_to_video +
+              2 * form.credits_per_extra_reference_image}{" "}
+            кред.
+          </p>
+        </div>
       </section>
 
       <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">

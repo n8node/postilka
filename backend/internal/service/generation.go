@@ -421,6 +421,7 @@ func (s *GenerationService) UploadVideoGenerationSource(ctx context.Context, use
 	if maxSize <= 0 || int64(len(data)) > maxSize {
 		return model.GenerationSourceUploadView{}, ErrGenerationUploadInvalid
 	}
+	var probedVideoDuration float64
 	if strings.HasPrefix(contentType, "video/") {
 		dur, err := probeVideoDurationSeconds(data)
 		if err != nil {
@@ -429,6 +430,7 @@ func (s *GenerationService) UploadVideoGenerationSource(ctx context.Context, use
 		if err := validateReferenceVideoDuration(dur); err != nil {
 			return model.GenerationSourceUploadView{}, err
 		}
+		probedVideoDuration = dur
 	}
 
 	ext := path.Ext(header.Filename)
@@ -460,6 +462,9 @@ func (s *GenerationService) UploadVideoGenerationSource(ctx context.Context, use
 	if err != nil {
 		_ = s.objectStore.DeleteObject(ctx, key)
 		return model.GenerationSourceUploadView{}, err
+	}
+	if probedVideoDuration > 0 {
+		return upload.ToViewWithDuration(probedVideoDuration), nil
 	}
 	return upload.ToView(), nil
 }
@@ -499,6 +504,7 @@ func (s *GenerationService) UploadGenerationSourceFromWorkspaceFile(
 	if wf.Size <= 0 || wf.Size > maxSize {
 		return model.GenerationSourceUploadView{}, ErrGenerationUploadInvalid
 	}
+	var probedVideoDuration float64
 	if forVideo && strings.HasPrefix(contentType, "video/") {
 		dur, err := s.referenceVideoDurationForWorkspaceFile(ctx, wf)
 		if err != nil {
@@ -507,6 +513,7 @@ func (s *GenerationService) UploadGenerationSourceFromWorkspaceFile(
 		if err := validateReferenceVideoDuration(dur); err != nil {
 			return model.GenerationSourceUploadView{}, err
 		}
+		probedVideoDuration = dur
 	}
 
 	ext := path.Ext(wf.Name)
@@ -539,6 +546,9 @@ func (s *GenerationService) UploadGenerationSourceFromWorkspaceFile(
 		_ = s.objectStore.DeleteObject(ctx, newKey)
 		return model.GenerationSourceUploadView{}, err
 	}
+	if probedVideoDuration > 0 {
+		return upload.ToViewWithDuration(probedVideoDuration), nil
+	}
 	return upload.ToView(), nil
 }
 
@@ -567,7 +577,8 @@ func (s *GenerationService) referenceVideoDurationForWorkspaceFile(ctx context.C
 	return probeVideoDurationSeconds(data)
 }
 
-func (s *GenerationService) validateReferenceVideoUploadIDs(ctx context.Context, userID, workspaceID string, uploadIDs []string) error {
+func (s *GenerationService) referenceVideoDurationsForUploadIDs(ctx context.Context, userID, workspaceID string, uploadIDs []string) ([]float64, error) {
+	var durations []float64
 	for _, rawID := range uploadIDs {
 		id := strings.TrimSpace(rawID)
 		if id == "" {
@@ -575,29 +586,35 @@ func (s *GenerationService) validateReferenceVideoUploadIDs(ctx context.Context,
 		}
 		upload, err := s.uploadRepo.GetByID(ctx, id, userID, workspaceID)
 		if err != nil {
-			return ErrGenerationUploadNotFound
+			return nil, ErrGenerationUploadNotFound
 		}
 		if !strings.HasPrefix(strings.ToLower(upload.ContentType), "video/") {
 			continue
 		}
 		body, _, err := s.objectStore.GetObject(ctx, upload.S3Key)
 		if err != nil {
-			return fmt.Errorf("source media read: %w", err)
+			return nil, fmt.Errorf("source media read: %w", err)
 		}
 		data, readErr := io.ReadAll(io.LimitReader(body, (50<<20)+1))
 		_ = body.Close()
 		if readErr != nil {
-			return readErr
+			return nil, readErr
 		}
 		dur, err := probeVideoDurationSeconds(data)
 		if err != nil {
-			return ErrGenerationUploadInvalid
+			return nil, ErrGenerationUploadInvalid
 		}
 		if err := validateReferenceVideoDuration(dur); err != nil {
-			return err
+			return nil, err
 		}
+		durations = append(durations, dur)
 	}
-	return nil
+	return durations, nil
+}
+
+func (s *GenerationService) validateReferenceVideoUploadIDs(ctx context.Context, userID, workspaceID string, uploadIDs []string) error {
+	_, err := s.referenceVideoDurationsForUploadIDs(ctx, userID, workspaceID, uploadIDs)
+	return err
 }
 
 func kieUploadMaxBytes(contentType string) int64 {

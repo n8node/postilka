@@ -106,9 +106,10 @@ type GenerationSourceUpload struct {
 }
 
 type GenerationSourceUploadView struct {
-	ID          string `json:"id"`
-	ContentType string `json:"content_type"`
-	CreatedAt   string `json:"created_at"`
+	ID              string   `json:"id"`
+	ContentType     string   `json:"content_type"`
+	CreatedAt       string   `json:"created_at"`
+	DurationSeconds *float64 `json:"duration_seconds,omitempty"`
 }
 
 func (u GenerationSourceUpload) ToView() GenerationSourceUploadView {
@@ -117,4 +118,12 @@ func (u GenerationSourceUpload) ToView() GenerationSourceUploadView {
 		ContentType: u.ContentType,
 		CreatedAt:   u.CreatedAt.UTC().Format(time.RFC3339),
 	}
+}
+
+func (u GenerationSourceUpload) ToViewWithDuration(durationSeconds float64) GenerationSourceUploadView {
+	view := u.ToView()
+	if durationSeconds > 0 {
+		view.DurationSeconds = &durationSeconds
+	}
+	return view
 }

@@ -64,6 +64,8 @@ type VideoGenerationPricingView struct {
 	CreditsPerSecondText     int     `json:"credits_per_second_text_to_video"`
 	CreditsPerSecondImage    int     `json:"credits_per_second_image_to_video"`
 	CreditsPerSecondReference int    `json:"credits_per_second_reference_to_video"`
+	CreditsPerExtraReferenceImage int `json:"credits_per_extra_reference_image"`
+	FreeReferenceImages       int     `json:"free_reference_images"`
 	DefaultDurationText      int     `json:"default_duration_text_to_video"`
 	DefaultDurationImage     int     `json:"default_duration_image_to_video"`
 	DefaultDurationReference int     `json:"default_duration_reference_to_video"`

@@ -1,24 +1,14 @@
 import { ApiError, apiFetch, fetchBillingOverview, type BillingOverview } from "@/lib/api";
+import type { GenerationJob } from "@/lib/generation-api";
 import { postGenerationMultipart } from "@/lib/generation-upload";
 import type { VideoGenerationModeId } from "@/lib/video-generation-data";
-import { VIDEO_DURATION_MAX, VIDEO_DURATION_MIN } from "@/lib/video-generation-data";
+import {
+  KIE_VIDEO_FREE_REFERENCE_IMAGES,
+  VIDEO_DURATION_MAX,
+  VIDEO_DURATION_MIN,
+  type VideoGenerationUpload,
+} from "@/lib/video-generation-data";
 import { useGenerationCreditsStore } from "@/lib/generation-credits-store";
-import type { GenerationJob } from "@/lib/generation-api";
-
-export type VideoGenerationItem = {
-  id: string;
-  mode: string;
-  prompt: string;
-  model: string;
-  aspect_ratio?: string;
-  video_duration_seconds?: number;
-  video_url?: string;
-  image_url: string;
-  thumb_url?: string;
-  media_type?: string;
-  created_at: string;
-  used_in_post?: boolean;
-};
 
 export type VideoGenerationPricing = {
   text_to_video: number;
@@ -27,6 +17,8 @@ export type VideoGenerationPricing = {
   credits_per_second_text_to_video: number;
   credits_per_second_image_to_video: number;
   credits_per_second_reference_to_video: number;
+  credits_per_extra_reference_image: number;
+  free_reference_images: number;
   default_duration_text_to_video: number;
   default_duration_image_to_video: number;
   default_duration_reference_to_video: number;
@@ -50,6 +42,40 @@ export type GenerateVideoBody = {
   reference_video_upload_ids?: string[];
   reference_audio_upload_ids?: string[];
 };
+
+export type VideoGenerationCostInput = {
+  mode: VideoGenerationModeId;
+  duration: number;
+  firstFrame: VideoGenerationUpload | null;
+  lastFrame: VideoGenerationUpload | null;
+  referenceImages: (VideoGenerationUpload | null)[];
+  referenceVideos: (VideoGenerationUpload | null)[];
+};
+
+export type VideoGenerationCostBreakdown = {
+  outputDurationSeconds: number;
+  inputVideoDurationSeconds: number;
+  billableSeconds: number;
+  ratePerSecond: number;
+  baseCredits: number;
+  inputImageCount: number;
+  freeReferenceImages: number;
+  extraImageCount: number;
+  extraImageCredits: number;
+  totalCredits: number;
+  hasUnknownInputVideoDuration: boolean;
+};
+
+function clampDuration(n: number): number {
+  if (n < VIDEO_DURATION_MIN) return VIDEO_DURATION_MIN;
+  if (n > VIDEO_DURATION_MAX) return VIDEO_DURATION_MAX;
+  return n;
+}
+
+function ceilSeconds(value: number): number {
+  if (!Number.isFinite(value) || value <= 0) return 0;
+  return Math.ceil(value);
+}
 
 export function creditsPerSecondForMode(
   pricing: VideoGenerationPricing,
@@ -79,13 +105,82 @@ export function defaultDurationForMode(
   }
 }
 
+export function inputImageCountForVideoMode(input: VideoGenerationCostInput): number {
+  switch (input.mode) {
+    case "reference-to-video":
+      return input.referenceImages.filter((item) => item !== null).length;
+    case "image-to-video": {
+      let count = 0;
+      if (input.firstFrame) count++;
+      if (input.lastFrame) count++;
+      return count;
+    }
+    default:
+      return 0;
+  }
+}
+
+export function videoCostBreakdown(
+  pricing: VideoGenerationPricing,
+  input: VideoGenerationCostInput,
+): VideoGenerationCostBreakdown {
+  const outputDurationSeconds = clampDuration(input.duration);
+  const ratePerSecond = creditsPerSecondForMode(pricing, input.mode);
+  const freeReferenceImages =
+    pricing.free_reference_images > 0
+      ? pricing.free_reference_images
+      : KIE_VIDEO_FREE_REFERENCE_IMAGES;
+  const extraImageRate = Math.max(0, pricing.credits_per_extra_reference_image ?? 0);
+
+  let inputVideoDurationSeconds = 0;
+  let hasUnknownInputVideoDuration = false;
+  for (const item of input.referenceVideos) {
+    if (!item) continue;
+    if (
+      item.durationSeconds == null ||
+      !Number.isFinite(item.durationSeconds) ||
+      item.durationSeconds <= 0
+    ) {
+      hasUnknownInputVideoDuration = true;
+      continue;
+    }
+    inputVideoDurationSeconds += ceilSeconds(item.durationSeconds);
+  }
+
+  const billableSeconds = outputDurationSeconds + inputVideoDurationSeconds;
+  const baseCredits = billableSeconds * ratePerSecond;
+  const inputImageCount = inputImageCountForVideoMode(input);
+  const extraImageCount = Math.max(0, inputImageCount - freeReferenceImages);
+  const extraImageCredits = extraImageCount * extraImageRate;
+
+  return {
+    outputDurationSeconds,
+    inputVideoDurationSeconds,
+    billableSeconds,
+    ratePerSecond,
+    baseCredits,
+    inputImageCount,
+    freeReferenceImages,
+    extraImageCount,
+    extraImageCredits,
+    totalCredits: baseCredits + extraImageCredits,
+    hasUnknownInputVideoDuration,
+  };
+}
+
 export function videoCostForModeDuration(
   pricing: VideoGenerationPricing,
   mode: VideoGenerationModeId,
   duration: number,
 ): number {
-  const sec = clampDuration(duration);
-  return sec * creditsPerSecondForMode(pricing, mode);
+  return videoCostBreakdown(pricing, {
+    mode,
+    duration,
+    firstFrame: null,
+    lastFrame: null,
+    referenceImages: [],
+    referenceVideos: [],
+  }).totalCredits;
 }
 
 export function videoWalletRubForCost(
@@ -93,12 +188,6 @@ export function videoWalletRubForCost(
   credits: number,
 ): number {
   return credits * pricing.media_credit_price_rub;
-}
-
-function clampDuration(n: number): number {
-  if (n < VIDEO_DURATION_MIN) return VIDEO_DURATION_MIN;
-  if (n > VIDEO_DURATION_MAX) return VIDEO_DURATION_MAX;
-  return n;
 }
 
 function mediaCreditsFromOverview(overview: BillingOverview): number | null {
@@ -123,6 +212,8 @@ export async function fetchVideoGenerationPricing() {
           credits_per_second_text_to_video: 5,
           credits_per_second_image_to_video: 5,
           credits_per_second_reference_to_video: 8,
+          credits_per_extra_reference_image: 3,
+          free_reference_images: KIE_VIDEO_FREE_REFERENCE_IMAGES,
           default_duration_text_to_video: 5,
           default_duration_image_to_video: 5,
           default_duration_reference_to_video: 5,
@@ -195,18 +286,29 @@ export async function uploadVideoGenerationMedia(file: File) {
   const form = new FormData();
   form.append("file", file);
   const res = await postGenerationMultipart<{
-    upload: { id: string; content_type: string; created_at: string };
+    upload: {
+      id: string;
+      content_type: string;
+      created_at: string;
+      duration_seconds?: number;
+    };
   }>("/generation/video/upload", form);
   return {
     id: res.upload.id,
     content_type: res.upload.content_type,
+    duration_seconds: res.upload.duration_seconds,
     url: "",
   };
 }
 
 export async function uploadVideoGenerationMediaFromWorkspace(fileId: string) {
   const res = await apiFetch<{
-    upload: { id: string; content_type: string; created_at: string };
+    upload: {
+      id: string;
+      content_type: string;
+      created_at: string;
+      duration_seconds?: number;
+    };
   }>("/generation/video/upload/from-file", {
     method: "POST",
     body: JSON.stringify({ file_id: fileId }),
@@ -214,5 +316,21 @@ export async function uploadVideoGenerationMediaFromWorkspace(fileId: string) {
   return {
     id: res.upload.id,
     content_type: res.upload.content_type,
+    duration_seconds: res.upload.duration_seconds,
   };
 }
+
+export type VideoGenerationItem = {
+  id: string;
+  mode: string;
+  prompt: string;
+  model: string;
+  aspect_ratio?: string;
+  video_duration_seconds?: number;
+  video_url?: string;
+  image_url: string;
+  thumb_url?: string;
+  media_type?: string;
+  created_at: string;
+  used_in_post?: boolean;
+};
