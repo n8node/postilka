@@ -145,6 +145,9 @@ type PostSettings struct {
 	TelegramMediaLayout     string                   `json:"telegram_media_layout,omitempty"`
 	TelegramCaptionPosition string                   `json:"telegram_caption_position,omitempty"`
 	TelegramMediaOrder      string                   `json:"telegram_media_order,omitempty"`
+	TelegramPin             bool                     `json:"telegram_pin,omitempty"`
+	TelegramSilent          bool                     `json:"telegram_silent,omitempty"`
+	TelegramVideoNote       bool                     `json:"telegram_video_note,omitempty"`
 	MaxButtons              [][]TelegramInlineButton `json:"max_buttons,omitempty"`
 }
 

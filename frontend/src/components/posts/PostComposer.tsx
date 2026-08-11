@@ -4,10 +4,12 @@ import {
   AlertTriangle,
   ArrowDown,
   ArrowUp,
+  BellOff,
   CalendarClock,
   Check,
   ChevronDown,
   ChevronUp,
+  Circle,
   Copy,
   FileImage,
   GripVertical,
@@ -17,6 +19,7 @@ import {
   MapPin,
   MessageCircle,
   Monitor,
+  Pin,
   Plus,
   Save,
   Send,
@@ -959,6 +962,9 @@ export function PostComposer() {
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
   const [linkPreview, setLinkPreview] = useState(true);
+  const [telegramPin, setTelegramPin] = useState(false);
+  const [telegramSilent, setTelegramSilent] = useState(false);
+  const [telegramVideoNote, setTelegramVideoNote] = useState(false);
   const [telegramMediaLayout, setTelegramMediaLayout] = useState<"separate" | "caption">("separate");
   const [telegramCaptionPosition, setTelegramCaptionPosition] = useState<"above" | "below">("below");
   const [telegramMediaOrder, setTelegramMediaOrder] = useState<"media_first" | "text_first">("media_first");
@@ -1116,6 +1122,15 @@ export function PostComposer() {
   const noLinkPreviewDelivery = selectedChannels.filter(
     (channel) => !channel.publish_capabilities?.composer_link_preview,
   );
+  const canTelegramPin = telegramChannels.every((channel) => channel.publish_capabilities?.composer_pin);
+  const canTelegramSilent = telegramChannels.every(
+    (channel) => channel.publish_capabilities?.composer_silent,
+  );
+  const canTelegramVideoNote = telegramChannels.every(
+    (channel) => channel.publish_capabilities?.composer_video_note,
+  );
+  const singleVideoAttached =
+    media.length === 1 && isVideoMime(media[0]!.file.mime_type);
 
   function resetNew() {
     if (dirty && !window.confirm("Несохранённые изменения будут потеряны. Продолжить?")) return;
@@ -1138,6 +1153,10 @@ export function PostComposer() {
     setTelegramMediaLayout("separate");
     setTelegramCaptionPosition("below");
     setTelegramMediaOrder("media_first");
+    setTelegramPin(false);
+    setTelegramSilent(false);
+    setTelegramVideoNote(false);
+    setLinkPreview(true);
     setFirstComment("");
     setLocationName("");
     setLatitude("");
@@ -1224,6 +1243,9 @@ export function PostComposer() {
     setLatitude(post.settings.location ? String(post.settings.location.latitude) : "");
     setLongitude(post.settings.location ? String(post.settings.location.longitude) : "");
     setLinkPreview(post.settings.link?.preview_enabled ?? true);
+    setTelegramPin(Boolean(post.settings.telegram_pin));
+    setTelegramSilent(Boolean(post.settings.telegram_silent));
+    setTelegramVideoNote(Boolean(post.settings.telegram_video_note));
     setTelegramMediaLayout(post.settings.telegram_media_layout === "caption" ? "caption" : "separate");
     setTelegramCaptionPosition(
       post.settings.telegram_caption_position === "above" ? "above" : "below",
@@ -1318,6 +1340,16 @@ export function PostComposer() {
         media.length > 0 && telegramChannels.length > 0 && telegramMediaLayout === "separate"
           ? telegramMediaOrder
           : undefined,
+      telegram_pin: telegramChannels.length > 0 && canTelegramPin && telegramPin ? true : undefined,
+      telegram_silent:
+        telegramChannels.length > 0 && canTelegramSilent && telegramSilent ? true : undefined,
+      telegram_video_note:
+        telegramChannels.length > 0 &&
+        canTelegramVideoNote &&
+        telegramVideoNote &&
+        singleVideoAttached
+          ? true
+          : undefined,
       recurrence: evergreenEnabled
         ? {
             enabled: true,
@@ -1403,6 +1435,7 @@ export function PostComposer() {
     }
     if (kind === "short_video") {
       setFormat("short_video");
+      setTelegramVideoNote(true);
       setMedia((current) => {
         const video = current.find((item) => isVideoMime(item.file.mime_type));
         return video ? [video] : current.slice(0, 1);
@@ -1410,6 +1443,7 @@ export function PostComposer() {
       return;
     }
     setFormat(format === "article" || format === "rich_message" ? "article" : "message");
+    setTelegramVideoNote(false);
   }
 
   async function runAIAction(label: string) {
@@ -1469,6 +1503,14 @@ export function PostComposer() {
       if (action !== "draft" && media.length === 1 && !isVideoMime(media[0]!.file.mime_type)) {
         return "Короткое видео должно быть файлом video/*";
       }
+    }
+    if (
+      action !== "draft" &&
+      telegramVideoNote &&
+      postKind === "post" &&
+      (!singleVideoAttached || media.length !== 1)
+    ) {
+      return "Для отправки в круге прикрепите ровно одно видео";
     }
     if ((format === "article" || format === "rich_message") && !canArticle) {
       return "Статья Telegram доступна, если выбран канал с поддержкой rich messages";
@@ -1880,7 +1922,7 @@ export function PostComposer() {
             {postKind === "story"
               ? "История — одно вертикальное фото или видео в Telegram с подписью."
               : postKind === "short_video"
-                ? "Короткое видео — один video/* файл в Telegram с подписью."
+                ? "Короткое видео отправляется в Telegram как кружок (video note) с подписью отдельным сообщением."
                 : "Обычный пост: текст, медиа и статья Telegram."}
           </p>
 
@@ -2540,21 +2582,109 @@ export function PostComposer() {
               </div>
             </Card>
 
-            <Card title="Ссылка и UTM">
-              {detectedURL ? (
-                <>
-                  <p className="truncate text-sm font-medium text-accent">{detectedURL}</p>
-                  <label className="mt-2 flex items-center gap-2 text-xs">
+            {telegramChannels.length > 0 && (
+              <Card title="Настройки Telegram">
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={telegramPin}
+                      disabled={!canTelegramPin || composerLocked}
+                      onChange={(event) => {
+                        setTelegramPin(event.target.checked);
+                        markDirty();
+                      }}
+                    />
+                    <Pin className="h-3.5 w-3.5 shrink-0 text-muted" />
+                    Закрепить
+                  </label>
+                  <label className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={telegramSilent}
+                      disabled={!canTelegramSilent || composerLocked}
+                      onChange={(event) => {
+                        setTelegramSilent(event.target.checked);
+                        markDirty();
+                      }}
+                    />
+                    <BellOff className="h-3.5 w-3.5 shrink-0 text-muted" />
+                    Отправить без звука
+                  </label>
+                  <label
+                    className={cn(
+                      "flex items-center gap-2 text-sm",
+                      !singleVideoAttached && "opacity-60",
+                    )}
+                    title={
+                      !singleVideoAttached
+                        ? "Прикрепите ровно одно видео"
+                        : undefined
+                    }
+                  >
+                    <input
+                      type="checkbox"
+                      checked={telegramVideoNote}
+                      disabled={
+                        !canTelegramVideoNote ||
+                        !singleVideoAttached ||
+                        composerLocked ||
+                        postKind === "short_video"
+                      }
+                      onChange={(event) => {
+                        setTelegramVideoNote(event.target.checked);
+                        markDirty();
+                      }}
+                    />
+                    <Circle className="h-3.5 w-3.5 shrink-0 text-muted" />
+                    Отправить в круге
+                  </label>
+                  <label
+                    className={cn(
+                      "flex items-center gap-2 text-sm",
+                      !detectedURL && "opacity-60",
+                    )}
+                    title={
+                      !detectedURL
+                        ? "Добавьте ссылку в текст публикации"
+                        : undefined
+                    }
+                  >
                     <input
                       type="checkbox"
                       checked={linkPreview}
+                      disabled={
+                        !detectedURL ||
+                        !telegramChannels.some(
+                          (channel) => channel.publish_capabilities?.composer_link_preview,
+                        ) ||
+                        composerLocked
+                      }
                       onChange={(event) => {
                         setLinkPreview(event.target.checked);
                         markDirty();
                       }}
                     />
-                    Показывать превью ссылки
+                    <Link2 className="h-3.5 w-3.5 shrink-0 text-muted" />
+                    Прикрепить ссылку
                   </label>
+                </div>
+                <p className="mt-2 text-[11px] text-muted">
+                  «Прикрепить ссылку» включает превью URL из текста. «Отправить в круге» доступно
+                  для одного видео; в режиме «Короткое видео» кружок включается автоматически.
+                </p>
+                {telegramPin && !canTelegramPin && (
+                  <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800">
+                    Закрепление пока недоступно для выбранных Telegram-каналов.
+                  </p>
+                )}
+              </Card>
+            )}
+
+            <Card title="Ссылка и UTM">
+              {detectedURL ? (
+                <>
+                  <p className="truncate text-sm font-medium text-accent">{detectedURL}</p>
                   <div className="mt-3 grid gap-2 sm:grid-cols-3">
                     {(["source", "medium", "campaign"] as const).map((key) => (
                       <input
@@ -2581,8 +2711,8 @@ export function PostComposer() {
                     Сократить ссылку при публикации
                   </label>
                   <p className="mt-2 text-[11px] text-muted">
-                    UTM и сокращение сохраняются отдельно для каждого выбранного канала. При
-                    публикации URL заменяются на короткие отслеживаемые ссылки с учётом UTM.
+                    UTM и сокращение сохраняются отдельно для каждого выбранного канала. Превью
+                    ссылки настраивается в блоке «Настройки Telegram».
                   </p>
                   {noLinkPreviewDelivery.length > 0 && (
                     <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800">

@@ -102,6 +102,12 @@ export type PostSettings = {
   telegram_caption_position?: "above" | "below";
   /** media_first | text_first — message order when telegram_media_layout is separate */
   telegram_media_order?: "media_first" | "text_first";
+  /** Pin message in Telegram channel after publish */
+  telegram_pin?: boolean;
+  /** Send without notification sound in Telegram */
+  telegram_silent?: boolean;
+  /** Send single video as video note (circle) in Telegram */
+  telegram_video_note?: boolean;
   /** MAX-only inline link buttons */
   max_buttons?: TelegramButton[][];
 };

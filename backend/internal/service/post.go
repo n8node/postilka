@@ -567,6 +567,9 @@ func ValidatePostForPublication(post model.Post) error {
 				return fmt.Errorf("%w: для формата %s нужен ровно один медиафайл", ErrInvalidPost, format)
 			}
 		}
+		if settings.TelegramVideoNote && format == "message" && len(post.Media) != 1 {
+			return fmt.Errorf("%w: для отправки в круге нужен ровно один видеофайл", ErrInvalidPost)
+		}
 		if err := ValidatePostContent(content, settings); err != nil {
 			return err
 		}

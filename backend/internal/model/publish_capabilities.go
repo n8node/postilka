@@ -26,6 +26,9 @@ type PublishCapabilities struct {
 	ComposerFirstComment bool `json:"composer_first_comment"`
 	ComposerLocation     bool `json:"composer_location"`
 	ComposerLinkPreview  bool `json:"composer_link_preview"`
+	ComposerPin          bool `json:"composer_pin,omitempty"`
+	ComposerSilent       bool `json:"composer_silent,omitempty"`
+	ComposerVideoNote    bool `json:"composer_video_note,omitempty"`
 }
 
 func (p ChannelProvider) PublishCapabilities() PublishCapabilities {
@@ -37,6 +40,7 @@ func (p ChannelProvider) PublishCapabilities() PublishCapabilities {
 			RichText: true, Entities: true, TelegramRich: true,
 			InlineButtons: true, StyledButtons: true, CustomEmoji: true,
 			LinkPreview: true, ComposerMedia: true, ComposerLinkPreview: true,
+			ComposerPin: true, ComposerSilent: true, ComposerVideoNote: true,
 			MediaAlbum: true, MaxMedia: 10, MaxTextLength: 4096, MaxButtons: 100,
 		}
 	case ChannelProviderVK:

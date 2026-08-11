@@ -133,11 +133,12 @@ func (c *TelegramBotClient) SendMessage(ctx context.Context, token, chatID, text
 }
 
 type TelegramMessageInput struct {
-	Text               string
-	ParseMode          string
-	Entities           []model.TelegramMessageEntity
-	Buttons            [][]model.TelegramInlineButton
-	LinkPreviewEnabled *bool
+	Text                string
+	ParseMode           string
+	Entities            []model.TelegramMessageEntity
+	Buttons             [][]model.TelegramInlineButton
+	LinkPreviewEnabled  *bool
+	DisableNotification bool
 }
 
 const (
@@ -155,6 +156,7 @@ type TelegramMediaSendOptions struct {
 	ParseMode             string
 	Buttons               [][]model.TelegramInlineButton
 	ShowCaptionAboveMedia bool
+	DisableNotification   bool
 }
 
 type telegramSentMessage struct {
@@ -283,6 +285,9 @@ func (c *TelegramBotClient) SendFormattedMessage(
 	if input.LinkPreviewEnabled != nil {
 		payload["link_preview_options"] = map[string]bool{"is_disabled": !*input.LinkPreviewEnabled}
 	}
+	if input.DisableNotification {
+		payload["disable_notification"] = true
+	}
 	if markup := telegramReplyMarkup(input.Buttons); markup != nil {
 		payload["reply_markup"] = markup
 	}
@@ -366,6 +371,9 @@ func (c *TelegramBotClient) SendMedia(
 			if markup := telegramReplyMarkup(opts.Buttons); markup != nil {
 				payload["reply_markup"] = markup
 			}
+			if opts.DisableNotification {
+				payload["disable_notification"] = true
+			}
 		}
 		raw, err := c.api(ctx, token, method, payload)
 		if err != nil {
@@ -373,20 +381,67 @@ func (c *TelegramBotClient) SendMedia(
 		}
 		return telegramMessageID(raw)
 	}
-	raw, err := c.api(ctx, token, "sendMediaGroup", map[string]any{
+	groupPayload := map[string]any{
 		"chat_id": telegramChatIDParam(chatID),
 		"media":   telegramMediaGroupPayload(media, opts),
-	})
+	}
+	if opts != nil && opts.DisableNotification {
+		groupPayload["disable_notification"] = true
+	}
+	raw, err := c.api(ctx, token, "sendMediaGroup", groupPayload)
 	if err != nil {
 		return "", sanitizeTelegramError(err)
 	}
 	return telegramMediaGroupMessageID(raw)
 }
 
+func (c *TelegramBotClient) SendVideoNote(
+	ctx context.Context,
+	token, chatID, videoURL string,
+	disableNotification bool,
+) (string, error) {
+	if validateHTTPURL(videoURL) != nil {
+		return "", fmt.Errorf("%w: некорректная ссылка на видео Telegram", ErrInvalidPost)
+	}
+	payload := map[string]any{
+		"chat_id":    telegramChatIDParam(chatID),
+		"video_note": videoURL,
+	}
+	if disableNotification {
+		payload["disable_notification"] = true
+	}
+	raw, err := c.api(ctx, token, "sendVideoNote", payload)
+	if err != nil {
+		return "", sanitizeTelegramError(err)
+	}
+	return telegramMessageID(raw)
+}
+
+func (c *TelegramBotClient) PinChatMessage(
+	ctx context.Context,
+	token, chatID, messageID string,
+	disableNotification bool,
+) error {
+	msgID, err := strconv.ParseInt(strings.TrimSpace(messageID), 10, 64)
+	if err != nil || msgID <= 0 {
+		return fmt.Errorf("%w: некорректный идентификатор сообщения Telegram", ErrInvalidPost)
+	}
+	payload := map[string]any{
+		"chat_id":    telegramChatIDParam(chatID),
+		"message_id": msgID,
+	}
+	if disableNotification {
+		payload["disable_notification"] = true
+	}
+	_, err = c.api(ctx, token, "pinChatMessage", payload)
+	return sanitizeTelegramError(err)
+}
+
 func (c *TelegramBotClient) SendRichMessage(
 	ctx context.Context,
 	token, chatID string,
 	message model.TelegramRichMessage,
+	disableNotification bool,
 ) (string, error) {
 	if err := ValidateTelegramRichMessage(message); err != nil {
 		return "", err
@@ -401,6 +456,9 @@ func (c *TelegramBotClient) SendRichMessage(
 	}
 	if markup := telegramReplyMarkup(message.Buttons); markup != nil {
 		payload["reply_markup"] = markup
+	}
+	if disableNotification {
+		payload["disable_notification"] = true
 	}
 	raw, err := c.api(ctx, token, "sendRichMessage", payload)
 	if err != nil {

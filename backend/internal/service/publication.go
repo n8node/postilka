@@ -226,6 +226,42 @@ func hasTelegramButtons(buttons [][]model.TelegramInlineButton) bool {
 	return len(buttons) > 0 && len(buttons[0]) > 0
 }
 
+func telegramLinkPreview(settings model.PostSettings) *bool {
+	if settings.Link != nil {
+		return settings.Link.PreviewEnabled
+	}
+	return nil
+}
+
+func telegramUsesVideoNote(format string, settings model.PostSettings, media []TelegramMediaInput) bool {
+	if len(media) != 1 || media[0].Type != TelegramMediaVideo {
+		return false
+	}
+	if format == "short_video" {
+		return true
+	}
+	return settings.TelegramVideoNote
+}
+
+func (s *PublicationService) telegramFinishPublish(
+	ctx context.Context,
+	token, chatID string,
+	settings model.PostSettings,
+	messageID string,
+) (string, error) {
+	if settings.TelegramPin && strings.TrimSpace(messageID) != "" {
+		if err := s.telegram.PinChatMessage(ctx, token, chatID, messageID, settings.TelegramSilent); err != nil {
+			slog.Warn(
+				"telegram publish: pin message failed after delivery",
+				"chat_id", chatID,
+				"message_id", messageID,
+				"error", err,
+			)
+		}
+	}
+	return messageID, nil
+}
+
 func (s *PublicationService) publishTarget(
 	ctx context.Context,
 	post *model.Post,
@@ -270,6 +306,8 @@ func (s *PublicationService) publishTarget(
 		format = "message"
 	}
 	if channel.Provider == model.ChannelProviderTelegram {
+		silent := settings.TelegramSilent
+		preview := telegramLinkPreview(settings)
 		switch format {
 		case "story", "short_video":
 			if len(post.Media) != 1 {
@@ -283,10 +321,32 @@ func (s *PublicationService) publishTarget(
 				return "", fmt.Errorf("короткое видео должно быть файлом video/*")
 			}
 			parseMode := strings.ToUpper(strings.TrimSpace(content.ParseMode))
-			return s.telegram.SendMedia(ctx, token, channel.ChatID, media, &TelegramMediaSendOptions{
-				Caption:   content.Text,
-				ParseMode: parseMode,
+			if telegramUsesVideoNote(format, settings, media) {
+				msgID, err := s.telegram.SendVideoNote(ctx, token, channel.ChatID, media[0].URL, silent)
+				if err != nil {
+					return "", err
+				}
+				if strings.TrimSpace(content.Text) != "" {
+					textID, err := s.telegram.SendFormattedMessage(ctx, token, channel.ChatID, TelegramMessageInput{
+						Text: content.Text, ParseMode: parseMode, Entities: content.Entities,
+						Buttons: content.Buttons, LinkPreviewEnabled: preview, DisableNotification: silent,
+					})
+					if err != nil {
+						return "", err
+					}
+					if msgID == "" {
+						msgID = textID
+					}
+				}
+				return s.telegramFinishPublish(ctx, token, channel.ChatID, settings, msgID)
+			}
+			msgID, err := s.telegram.SendMedia(ctx, token, channel.ChatID, media, &TelegramMediaSendOptions{
+				Caption: content.Text, ParseMode: parseMode, DisableNotification: silent,
 			})
+			if err != nil {
+				return "", err
+			}
+			return s.telegramFinishPublish(ctx, token, channel.ChatID, settings, msgID)
 		case "message":
 			if len(post.Media) > 0 {
 				media, err := s.telegramMedia(ctx, post)
@@ -294,11 +354,33 @@ func (s *PublicationService) publishTarget(
 					return "", err
 				}
 				parseMode := strings.ToUpper(strings.TrimSpace(content.ParseMode))
+				if telegramUsesVideoNote(format, settings, media) {
+					msgID, err := s.telegram.SendVideoNote(ctx, token, channel.ChatID, media[0].URL, silent)
+					if err != nil {
+						return "", err
+					}
+					if strings.TrimSpace(content.Text) != "" {
+						textID, err := s.telegram.SendFormattedMessage(ctx, token, channel.ChatID, TelegramMessageInput{
+							Text: content.Text, ParseMode: parseMode, Entities: content.Entities,
+							Buttons: content.Buttons, LinkPreviewEnabled: preview, DisableNotification: silent,
+						})
+						if err != nil {
+							return "", err
+						}
+						if settings.TelegramPin {
+							msgID = textID
+						} else if msgID == "" {
+							msgID = textID
+						}
+					}
+					return s.telegramFinishPublish(ctx, token, channel.ChatID, settings, msgID)
+				}
 				if telegramMediaLayoutCombined(settings) {
 					opts := &TelegramMediaSendOptions{
 						Caption:               content.Text,
 						ParseMode:             parseMode,
 						ShowCaptionAboveMedia: telegramCaptionAbove(settings, len(media)),
+						DisableNotification:   silent,
 					}
 					if len(media) == 1 {
 						opts.Buttons = content.Buttons
@@ -309,26 +391,23 @@ func (s *PublicationService) publishTarget(
 					}
 					if len(media) > 1 && hasTelegramButtons(content.Buttons) {
 						if _, err := s.telegram.SendFormattedMessage(ctx, token, channel.ChatID, TelegramMessageInput{
-							Text:    "·",
-							Buttons: content.Buttons,
+							Text: "·", Buttons: content.Buttons, DisableNotification: silent,
 						}); err != nil {
 							return "", err
 						}
 					}
-					return msgID, nil
+					return s.telegramFinishPublish(ctx, token, channel.ChatID, settings, msgID)
 				}
 				sendTelegramMedia := func() error {
-					_, err := s.telegram.SendMedia(ctx, token, channel.ChatID, media, nil)
+					_, err := s.telegram.SendMedia(ctx, token, channel.ChatID, media, &TelegramMediaSendOptions{
+						DisableNotification: silent,
+					})
 					return err
 				}
 				sendTelegramText := func() (string, error) {
-					preview := (*bool)(nil)
-					if settings.Link != nil {
-						preview = settings.Link.PreviewEnabled
-					}
 					return s.telegram.SendFormattedMessage(ctx, token, channel.ChatID, TelegramMessageInput{
 						Text: content.Text, ParseMode: parseMode, Entities: content.Entities,
-						Buttons: content.Buttons, LinkPreviewEnabled: preview,
+						Buttons: content.Buttons, LinkPreviewEnabled: preview, DisableNotification: silent,
 					})
 				}
 				if telegramTextBeforeMedia(settings) {
@@ -339,21 +418,26 @@ func (s *PublicationService) publishTarget(
 					if err := sendTelegramMedia(); err != nil {
 						return "", err
 					}
-					return msgID, nil
+					return s.telegramFinishPublish(ctx, token, channel.ChatID, settings, msgID)
 				}
 				if err := sendTelegramMedia(); err != nil {
 					return "", err
 				}
+				msgID, err := sendTelegramText()
+				if err != nil {
+					return "", err
+				}
+				return s.telegramFinishPublish(ctx, token, channel.ChatID, settings, msgID)
 			}
 			parseMode := strings.ToUpper(strings.TrimSpace(content.ParseMode))
-			preview := (*bool)(nil)
-			if settings.Link != nil {
-				preview = settings.Link.PreviewEnabled
-			}
-			return s.telegram.SendFormattedMessage(ctx, token, channel.ChatID, TelegramMessageInput{
+			msgID, err := s.telegram.SendFormattedMessage(ctx, token, channel.ChatID, TelegramMessageInput{
 				Text: content.Text, ParseMode: parseMode, Entities: content.Entities,
-				Buttons: content.Buttons, LinkPreviewEnabled: preview,
+				Buttons: content.Buttons, LinkPreviewEnabled: preview, DisableNotification: silent,
 			})
+			if err != nil {
+				return "", err
+			}
+			return s.telegramFinishPublish(ctx, token, channel.ChatID, settings, msgID)
 		case "rich_message", "article":
 			if content.RichMessage == nil {
 				return "", fmt.Errorf("не задан rich_message")
@@ -362,7 +446,11 @@ func (s *PublicationService) publishTarget(
 			if content.Buttons != nil {
 				rich.Buttons = content.Buttons
 			}
-			return s.telegram.SendRichMessage(ctx, token, channel.ChatID, rich)
+			msgID, err := s.telegram.SendRichMessage(ctx, token, channel.ChatID, rich, silent)
+			if err != nil {
+				return "", err
+			}
+			return s.telegramFinishPublish(ctx, token, channel.ChatID, settings, msgID)
 		default:
 			return "", fmt.Errorf("формат %s не поддерживается Telegram", format)
 		}

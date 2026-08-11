@@ -1651,6 +1651,9 @@ export type PublishCapabilities = {
   composer_first_comment: boolean;
   composer_location: boolean;
   composer_link_preview: boolean;
+  composer_pin?: boolean;
+  composer_silent?: boolean;
+  composer_video_note?: boolean;
 };
 
 export type ChannelListItem = Channel & {
