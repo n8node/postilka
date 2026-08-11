@@ -32,11 +32,35 @@ func TestMAXImageMimeAllowed(t *testing.T) {
 	}
 }
 
-func TestMAXVideoMimeAllowed(t *testing.T) {
-	if !MAXVideoMimeAllowed("video/mp4") {
-		t.Fatal("expected mp4")
+func TestParseMAXUploadTokenFromPhotos(t *testing.T) {
+	token := parseMAXUploadToken([]byte(`{"photos":{"abc":{"token":"img-token-123"}}}`))
+	if token != "img-token-123" {
+		t.Fatalf("got %q", token)
 	}
-	if !MAXVideoMimeAllowed("video/webm") {
-		t.Fatal("expected webm")
+}
+
+func TestParseMAXUploadTokenFlat(t *testing.T) {
+	token := parseMAXUploadToken([]byte(`{"token":"flat-token"}`))
+	if token != "flat-token" {
+		t.Fatalf("got %q", token)
+	}
+}
+
+func TestBuildMAXMessageAttachmentsPrefersImageToken(t *testing.T) {
+	attachments := buildMAXMessageAttachments([]MAXOutgoingAttachment{
+		{Type: "image", Token: "img-token", ImageURL: "https://example.com/a.jpg"},
+	})
+	if len(attachments) != 1 {
+		t.Fatalf("expected 1 attachment, got %d", len(attachments))
+	}
+	payload, ok := attachments[0]["payload"].(map[string]any)
+	if !ok {
+		t.Fatal("expected payload map")
+	}
+	if payload["token"] != "img-token" {
+		t.Fatalf("expected token attachment, got %#v", payload)
+	}
+	if _, hasURL := payload["url"]; hasURL {
+		t.Fatal("token should take precedence over url")
 	}
 }

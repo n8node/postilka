@@ -63,6 +63,10 @@ func (s *PublicationService) Publish(ctx context.Context, postID string, allowRe
 		_ = s.posts.FinalizePublication(ctx, postID, nil)
 		return err
 	}
+	if err := validatePostTargets(ctx, s.channels, post); err != nil {
+		_ = s.posts.FinalizePublication(ctx, postID, nil)
+		return err
+	}
 	if s.quota != nil && postHasPublishableTargets(*post) {
 		if err := s.quota.CheckPostQuota(ctx, post.WorkspaceID); err != nil {
 			return err
@@ -449,7 +453,7 @@ func (s *PublicationService) maxMedia(
 		if err != nil {
 			return nil, fmt.Errorf("медиафайл не найден или удалён")
 		}
-		mime := strings.ToLower(strings.TrimSpace(file.MimeType))
+		mime := strings.ToLower(strings.TrimSpace(strings.Split(file.MimeType, ";")[0]))
 		switch {
 		case strings.HasPrefix(mime, "image/"):
 			if !oauthclient.MAXImageMimeAllowed(mime) {
@@ -458,16 +462,25 @@ func (s *PublicationService) maxMedia(
 			if file.Size > oauthclient.MaxMAXImageBytes {
 				return nil, fmt.Errorf("изображение MAX не должно превышать %d МБ", oauthclient.MaxMAXImageBytes>>20)
 			}
-			signedURL, err := s.storage.PresignGetWithOptions(ctx, file.S3Key, PresignGetOptions{
-				Expires: 30 * time.Minute,
-				Inline:  true,
-			})
+			body, _, err := s.storage.GetObject(ctx, file.S3Key)
 			if err != nil {
-				return nil, fmt.Errorf("не удалось подготовить медиафайл для публикации")
+				return nil, fmt.Errorf("не удалось прочитать изображение для публикации")
+			}
+			data, err := io.ReadAll(io.LimitReader(body, oauthclient.MaxMAXImageBytes+1))
+			body.Close()
+			if err != nil {
+				return nil, fmt.Errorf("не удалось прочитать изображение для публикации")
+			}
+			if int64(len(data)) > oauthclient.MaxMAXImageBytes {
+				return nil, fmt.Errorf("изображение MAX не должно превышать %d МБ", oauthclient.MaxMAXImageBytes>>20)
+			}
+			imageToken, err := s.maxClient.UploadImage(ctx, botToken, data, file.Name)
+			if err != nil {
+				return nil, err
 			}
 			media = append(media, oauthclient.MAXOutgoingAttachment{
-				Type:     "image",
-				ImageURL: signedURL,
+				Type:  "image",
+				Token: imageToken,
 			})
 		case strings.HasPrefix(mime, "video/"):
 			if !oauthclient.MAXVideoMimeAllowed(mime) {

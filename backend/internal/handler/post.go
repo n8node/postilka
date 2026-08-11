@@ -260,8 +260,15 @@ func writePostError(w http.ResponseWriter, err error) {
 	default:
 		slog.Error("post operation failed", "error", err)
 		msg := "Не удалось выполнить операцию с публикацией"
-		if te := strings.TrimPrefix(err.Error(), "telegram api: "); te != err.Error() {
+		errMsg := strings.TrimSpace(err.Error())
+		if te := strings.TrimPrefix(errMsg, "telegram api: "); te != errMsg {
 			writeError(w, http.StatusBadGateway, te)
+			return
+		}
+		if strings.HasPrefix(errMsg, "max messages:") ||
+			strings.HasPrefix(errMsg, "max upload") ||
+			strings.Contains(errMsg, "MAX ") {
+			writeError(w, http.StatusBadGateway, errMsg)
 			return
 		}
 		writeError(w, http.StatusInternalServerError, msg)

@@ -222,7 +222,13 @@ func (s *PostService) publishAndGet(ctx context.Context, workspaceID, postID str
 		if getErr == nil && postPublishDelivered(*post) {
 			return post, nil
 		}
-		return nil, err
+		if errors.Is(err, repository.ErrNotFound) ||
+			errors.Is(err, ErrInvalidPost) ||
+			errors.Is(err, ErrQuotaExceeded) ||
+			errors.Is(err, ErrPublishFailed) {
+			return nil, err
+		}
+		return nil, fmt.Errorf("%w: %s", ErrPublishFailed, safePublishError(err))
 	}
 	post, err := s.posts.Get(ctx, workspaceID, postID)
 	if err != nil {
@@ -265,8 +271,12 @@ func (s *PostService) Cancel(
 }
 
 func (s *PostService) validateExistingTargets(ctx context.Context, post *model.Post) error {
+	return validatePostTargets(ctx, s.channels, post)
+}
+
+func validatePostTargets(ctx context.Context, channels *repository.ChannelRepository, post *model.Post) error {
 	for _, target := range post.Targets {
-		channel, err := s.channels.GetByID(ctx, post.WorkspaceID, target.ChannelID)
+		channel, err := channels.GetByID(ctx, post.WorkspaceID, target.ChannelID)
 		if err != nil {
 			return fmt.Errorf("%w: канал не найден", ErrInvalidPost)
 		}
@@ -558,9 +568,6 @@ func ValidatePostForPublication(post model.Post) error {
 			}
 		}
 		if err := ValidatePostContent(content, settings); err != nil {
-			return err
-		}
-		if err := validateTelegramComposerMedia(content, settings, len(post.Media), nil); err != nil {
 			return err
 		}
 	}

@@ -654,7 +654,55 @@ func (c *MAXBotClient) CreateUpload(ctx context.Context, botToken, uploadType st
 	return &parsed, nil
 }
 
-func (c *MAXBotClient) uploadMultipartFile(ctx context.Context, uploadURL string, data []byte, filename string) error {
+func parseMAXUploadToken(respBody []byte) string {
+	var flat struct {
+		Token string `json:"token"`
+	}
+	if err := json.Unmarshal(respBody, &flat); err == nil {
+		if token := strings.TrimSpace(flat.Token); token != "" {
+			return token
+		}
+	}
+	var photos struct {
+		Photos map[string]struct {
+			Token string `json:"token"`
+		} `json:"photos"`
+	}
+	if err := json.Unmarshal(respBody, &photos); err == nil {
+		for _, photo := range photos.Photos {
+			if token := strings.TrimSpace(photo.Token); token != "" {
+				return token
+			}
+		}
+	}
+	return ""
+}
+
+func maxUploadTokenFromURL(rawURL string) string {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil {
+		return ""
+	}
+	for _, key := range []string{"token", "access_token"} {
+		if token := strings.TrimSpace(parsed.Query().Get(key)); token != "" {
+			return token
+		}
+	}
+	return ""
+}
+
+func (c *MAXBotClient) uploadMultipartFile(ctx context.Context, botToken, uploadURL string, data []byte, filename string) error {
+	_, err := c.uploadMultipartFileReturningToken(ctx, botToken, uploadURL, data, filename)
+	return err
+}
+
+func (c *MAXBotClient) uploadMultipartFileReturningToken(
+	ctx context.Context,
+	botToken,
+	uploadURL string,
+	data []byte,
+	filename string,
+) (string, error) {
 	if strings.TrimSpace(filename) == "" {
 		filename = "upload.bin"
 	}
@@ -662,34 +710,65 @@ func (c *MAXBotClient) uploadMultipartFile(ctx context.Context, uploadURL string
 	writer := multipart.NewWriter(&buf)
 	part, err := writer.CreateFormFile("data", filename)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if _, err := part.Write(data); err != nil {
-		return err
+		return "", err
 	}
 	if err := writer.Close(); err != nil {
-		return err
+		return "", err
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, uploadURL, &buf)
 	if err != nil {
-		return err
+		return "", err
 	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
+	if token := strings.TrimSpace(botToken); token != "" {
+		req.Header.Set("Authorization", token)
+	}
 
 	resp, err := c.http().Do(req)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer resp.Body.Close()
 	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
-		return err
+		return "", err
 	}
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("max upload file: HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+		return "", fmt.Errorf("max upload file: HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
 	}
-	return nil
+	if token := parseMAXUploadToken(respBody); token != "" {
+		return token, nil
+	}
+	return "", nil
+}
+
+func (c *MAXBotClient) UploadImage(ctx context.Context, botToken string, data []byte, filename string) (string, error) {
+	if int64(len(data)) > MaxMAXImageBytes {
+		return "", fmt.Errorf("изображение MAX не должно превышать %d МБ", MaxMAXImageBytes>>20)
+	}
+	upload, err := c.CreateUpload(ctx, botToken, "image")
+	if err != nil {
+		return "", err
+	}
+	token, err := c.uploadMultipartFileReturningToken(ctx, botToken, upload.URL, data, filename)
+	if err != nil {
+		return "", err
+	}
+	if token == "" {
+		token = strings.TrimSpace(upload.Token)
+	}
+	if token == "" {
+		token = maxUploadTokenFromURL(upload.URL)
+	}
+	if token == "" {
+		return "", fmt.Errorf("max upload image: token not returned")
+	}
+	time.Sleep(500 * time.Millisecond)
+	return token, nil
 }
 
 func (c *MAXBotClient) UploadVideo(ctx context.Context, botToken string, data []byte, filename string) (string, error) {
@@ -702,9 +781,12 @@ func (c *MAXBotClient) UploadVideo(ctx context.Context, botToken string, data []
 	}
 	token := strings.TrimSpace(upload.Token)
 	if token == "" {
+		token = maxUploadTokenFromURL(upload.URL)
+	}
+	if token == "" {
 		return "", fmt.Errorf("max upload video: token not returned")
 	}
-	if err := c.uploadMultipartFile(ctx, upload.URL, data, filename); err != nil {
+	if err := c.uploadMultipartFile(ctx, botToken, upload.URL, data, filename); err != nil {
 		return "", err
 	}
 	time.Sleep(500 * time.Millisecond)
@@ -752,10 +834,10 @@ func buildMAXMessageAttachments(items []MAXOutgoingAttachment) []map[string]any 
 		payload := map[string]any{}
 		switch item.Type {
 		case "image":
-			if url := strings.TrimSpace(item.ImageURL); url != "" {
-				payload["url"] = url
-			} else if token := strings.TrimSpace(item.Token); token != "" {
+			if token := strings.TrimSpace(item.Token); token != "" {
 				payload["token"] = token
+			} else if url := strings.TrimSpace(item.ImageURL); url != "" {
+				payload["url"] = url
 			}
 		case "video":
 			if token := strings.TrimSpace(item.Token); token != "" {
