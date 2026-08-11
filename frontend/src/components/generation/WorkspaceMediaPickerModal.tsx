@@ -13,9 +13,8 @@ import {
 } from "@/lib/files-api";
 import { isAudioMime, isVideoMime } from "@/lib/file-media";
 import {
+  isReferenceVideoDurationValid,
   REFERENCE_VIDEO_MAX_BYTES,
-  REFERENCE_VIDEO_MAX_SECONDS,
-  REFERENCE_VIDEO_MIN_SECONDS,
   type VideoMediaKind,
 } from "@/lib/video-generation-data";
 import { cn } from "@/lib/utils";
@@ -45,10 +44,7 @@ function passesReferenceVideoFilter(file: WorkspaceFile): boolean {
     // Duration is validated on select (backend probes via ffprobe if metadata missing).
     return true;
   }
-  return (
-    duration >= REFERENCE_VIDEO_MIN_SECONDS &&
-    duration <= REFERENCE_VIDEO_MAX_SECONDS
-  );
+  return isReferenceVideoDurationValid(duration);
 }
 
 function tabsForKind(kind: VideoMediaKind): { id: PickerTab; label: string }[] {

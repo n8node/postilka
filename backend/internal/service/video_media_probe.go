@@ -11,9 +11,14 @@ import (
 )
 
 const (
-	kieReferenceVideoMinDurationSec = 2.0
-	kieReferenceVideoMaxDurationSec = 15.0
+	kieReferenceVideoMinDurationSec       = 2.0
+	kieReferenceVideoMaxDurationSec       = 15.0
+	kieReferenceVideoDurationToleranceSec = 0.5 // MP4/ffprobe often reports slightly over nominal length
 )
+
+func referenceVideoMaxAllowedDurationSec() float64 {
+	return kieReferenceVideoMaxDurationSec + kieReferenceVideoDurationToleranceSec
+}
 
 var ErrReferenceVideoDuration = errors.New("reference video duration must be between 2 and 15 seconds")
 
@@ -28,10 +33,32 @@ func referenceVideoDurationUserMessage(seconds float64) string {
 }
 
 func validateReferenceVideoDuration(seconds float64) error {
-	if seconds < kieReferenceVideoMinDurationSec || seconds > kieReferenceVideoMaxDurationSec {
+	if seconds < kieReferenceVideoMinDurationSec || seconds > referenceVideoMaxAllowedDurationSec() {
 		return fmt.Errorf("%w (%.3f sec)", ErrReferenceVideoDuration, seconds)
 	}
 	return nil
+}
+
+// ReferenceVideoDurationHTTPMessage returns a user-facing message, including probed duration when available.
+func ReferenceVideoDurationHTTPMessage(err error) string {
+	return referenceVideoDurationUserMessage(extractReferenceVideoDurationSeconds(err))
+}
+
+func extractReferenceVideoDurationSeconds(err error) float64 {
+	for err != nil {
+		msg := err.Error()
+		if i := strings.LastIndex(msg, " sec)"); i > 0 {
+			start := strings.LastIndex(msg[:i], "(")
+			if start >= 0 {
+				raw := strings.TrimSpace(msg[start+1 : i])
+				if seconds, parseErr := strconv.ParseFloat(raw, 64); parseErr == nil {
+					return seconds
+				}
+			}
+		}
+		err = errors.Unwrap(err)
+	}
+	return 0
 }
 
 func probeVideoDurationSeconds(data []byte) (float64, error) {

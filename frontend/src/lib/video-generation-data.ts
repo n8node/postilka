@@ -63,7 +63,25 @@ export const VIDEO_DURATION_MAX = 15;
 export const REFERENCE_IMAGE_MAX = 9;
 export const REFERENCE_VIDEO_MIN_SECONDS = 2;
 export const REFERENCE_VIDEO_MAX_SECONDS = 15;
+/** MP4/ffprobe often reports slightly over nominal length (e.g. 15.04s for a 15s clip). */
+export const REFERENCE_VIDEO_DURATION_TOLERANCE = 0.5;
 export const REFERENCE_VIDEO_MAX_BYTES = 50 * 1024 * 1024;
+
+export function referenceVideoMaxAllowedSeconds(): number {
+  return REFERENCE_VIDEO_MAX_SECONDS + REFERENCE_VIDEO_DURATION_TOLERANCE;
+}
+
+export function isReferenceVideoDurationValid(
+  seconds: number | undefined | null,
+): boolean {
+  if (seconds == null || !Number.isFinite(seconds) || seconds <= 0) {
+    return false;
+  }
+  return (
+    seconds >= REFERENCE_VIDEO_MIN_SECONDS &&
+    seconds <= referenceVideoMaxAllowedSeconds()
+  );
+}
 export const REFERENCE_AUDIO_MAX = 3;
 export const REFERENCE_VIDEO_MAX = 3;
 

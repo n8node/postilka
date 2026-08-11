@@ -9,6 +9,7 @@ import type {
   VideoGenerationUpload,
 } from "@/lib/video-generation-data";
 import {
+  isReferenceVideoDurationValid,
   REFERENCE_VIDEO_MAX_BYTES,
   REFERENCE_VIDEO_MAX_SECONDS,
   REFERENCE_VIDEO_MIN_SECONDS,
@@ -81,10 +82,7 @@ export function referenceVideoDurationError(
   if (seconds == null || !Number.isFinite(seconds) || seconds <= 0) {
     return "Не удалось определить длительность";
   }
-  if (
-    seconds < REFERENCE_VIDEO_MIN_SECONDS ||
-    seconds > REFERENCE_VIDEO_MAX_SECONDS
-  ) {
+  if (!isReferenceVideoDurationValid(seconds)) {
     return `Длительность ${seconds.toFixed(1)} сек — нужно ${REFERENCE_VIDEO_MIN_SECONDS}–${REFERENCE_VIDEO_MAX_SECONDS} сек`;
   }
   return null;

@@ -201,7 +201,7 @@ func (h *VideoGenerationHandler) mapError(w http.ResponseWriter, err error) {
 	case errors.Is(err, service.ErrVideoGenerationNotConfigured):
 		writeErrorWithCode(w, http.StatusServiceUnavailable, "video_generation_not_configured", "Сервис генерации видео временно недоступен")
 	case errors.Is(err, service.ErrReferenceVideoDuration):
-		writeErrorWithCode(w, http.StatusBadRequest, "reference_video_duration", "Референс-видео должно быть от 2 до 15 секунд. Выберите более короткий ролик.")
+		writeErrorWithCode(w, http.StatusBadRequest, "reference_video_duration", service.ReferenceVideoDurationHTTPMessage(err))
 	case errors.Is(err, service.ErrGenerationUploadInvalid):
 		writeErrorWithCode(w, http.StatusBadRequest, "upload_invalid", "Неподдерживаемый или слишком большой файл")
 	case errors.Is(err, service.ErrGenerationUploadNotFound):
