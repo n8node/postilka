@@ -190,6 +190,30 @@ func (s *ChannelTestService) publish(
 		return "", nil
 
 	case model.ChannelProviderMAX:
+		if photoURL != "" {
+			if err := s.maxClient.SendChannelMessage(ctx, token, ch.ChatID, text, []oauthclient.MAXOutgoingAttachment{{
+				Type: "image", ImageURL: photoURL,
+			}}); err != nil {
+				return "", err
+			}
+			return "", nil
+		}
+		if videoURL != "" {
+			data, filename, err := s.maxClient.DownloadHTTPMedia(ctx, videoURL, oauthclient.MaxMAXVideoBytes, "video.mp4")
+			if err != nil {
+				return "", err
+			}
+			videoToken, err := s.maxClient.UploadVideo(ctx, token, data, filename)
+			if err != nil {
+				return "", err
+			}
+			if err := s.maxClient.SendChannelMessage(ctx, token, ch.ChatID, text, []oauthclient.MAXOutgoingAttachment{{
+				Type: "video", Token: videoToken,
+			}}); err != nil {
+				return "", err
+			}
+			return "", nil
+		}
 		if err := s.maxClient.SendText(ctx, token, ch.ChatID, text); err != nil {
 			return "", err
 		}

@@ -6,14 +6,23 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
+	"path"
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const maxAPIBase = "https://platform-api2.max.ru"
+
+const (
+	MaxMAXMediaAttachments = 12
+	MaxMAXImageBytes       = 50 << 20
+	MaxMAXVideoBytes       = 250 << 20
+)
 
 var maxWebhookSecretPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]{5,256}$`)
 
@@ -588,7 +597,185 @@ type maxInlineButton struct {
 	URL  string `json:"url"`
 }
 
-func (c *MAXBotClient) SendText(ctx context.Context, botToken, chatID, text string) error {
+// MAXOutgoingAttachment is a media item ready to attach to a MAX channel message.
+type MAXOutgoingAttachment struct {
+	Type     string // "image" or "video"
+	ImageURL string // public URL for images
+	Token    string // upload token for video (or image upload flow)
+}
+
+func MAXImageMimeAllowed(mimeType string) bool {
+	switch strings.ToLower(strings.TrimSpace(mimeType)) {
+	case "image/jpeg", "image/jpg", "image/png", "image/gif",
+		"image/tiff", "image/bmp", "image/heic", "image/heif":
+		return true
+	default:
+		return false
+	}
+}
+
+func MAXVideoMimeAllowed(mimeType string) bool {
+	mimeType = strings.ToLower(strings.TrimSpace(mimeType))
+	switch mimeType {
+	case "video/mp4", "video/quicktime", "video/x-matroska", "video/webm", "video/mkv":
+		return true
+	default:
+		return strings.HasPrefix(mimeType, "video/")
+	}
+}
+
+type maxUploadEndpoint struct {
+	URL   string `json:"url"`
+	Token string `json:"token"`
+}
+
+func (c *MAXBotClient) CreateUpload(ctx context.Context, botToken, uploadType string) (*maxUploadEndpoint, error) {
+	uploadType = strings.TrimSpace(uploadType)
+	if uploadType == "" {
+		return nil, fmt.Errorf("max upload: empty type")
+	}
+	endpoint := maxAPIBase + "/uploads?" + url.Values{"type": {uploadType}}.Encode()
+	respBody, status, err := c.do(ctx, http.MethodPost, endpoint, botToken, nil)
+	if err != nil {
+		return nil, err
+	}
+	if status >= 400 {
+		return nil, fmt.Errorf("max upload init: HTTP %d: %s", status, strings.TrimSpace(string(respBody)))
+	}
+	var parsed maxUploadEndpoint
+	if err := json.Unmarshal(respBody, &parsed); err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(parsed.URL) == "" {
+		return nil, fmt.Errorf("max upload init: empty upload url")
+	}
+	return &parsed, nil
+}
+
+func (c *MAXBotClient) uploadMultipartFile(ctx context.Context, uploadURL string, data []byte, filename string) error {
+	if strings.TrimSpace(filename) == "" {
+		filename = "upload.bin"
+	}
+	var buf bytes.Buffer
+	writer := multipart.NewWriter(&buf)
+	part, err := writer.CreateFormFile("data", filename)
+	if err != nil {
+		return err
+	}
+	if _, err := part.Write(data); err != nil {
+		return err
+	}
+	if err := writer.Close(); err != nil {
+		return err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, uploadURL, &buf)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	resp, err := c.http().Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("max upload file: HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+	}
+	return nil
+}
+
+func (c *MAXBotClient) UploadVideo(ctx context.Context, botToken string, data []byte, filename string) (string, error) {
+	if int64(len(data)) > MaxMAXVideoBytes {
+		return "", fmt.Errorf("видео MAX не должно превышать %d МБ", MaxMAXVideoBytes>>20)
+	}
+	upload, err := c.CreateUpload(ctx, botToken, "video")
+	if err != nil {
+		return "", err
+	}
+	token := strings.TrimSpace(upload.Token)
+	if token == "" {
+		return "", fmt.Errorf("max upload video: token not returned")
+	}
+	if err := c.uploadMultipartFile(ctx, upload.URL, data, filename); err != nil {
+		return "", err
+	}
+	time.Sleep(500 * time.Millisecond)
+	return token, nil
+}
+
+func (c *MAXBotClient) DownloadHTTPMedia(
+	ctx context.Context,
+	rawURL string,
+	maxBytes int64,
+	defaultName string,
+) ([]byte, string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimSpace(rawURL), nil)
+	if err != nil {
+		return nil, "", err
+	}
+	resp, err := c.http().Do(req)
+	if err != nil {
+		return nil, "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 400 {
+		return nil, "", fmt.Errorf("загрузка медиа: HTTP %d", resp.StatusCode)
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxBytes+1))
+	if err != nil {
+		return nil, "", err
+	}
+	if int64(len(data)) > maxBytes {
+		return nil, "", fmt.Errorf("медиафайл слишком большой (лимит %d МБ)", maxBytes>>20)
+	}
+	name := strings.TrimSpace(path.Base(req.URL.Path))
+	if name == "" || name == "." || name == "/" {
+		name = defaultName
+	}
+	return data, name, nil
+}
+
+func buildMAXMessageAttachments(items []MAXOutgoingAttachment) []map[string]any {
+	if len(items) == 0 {
+		return nil
+	}
+	out := make([]map[string]any, 0, len(items))
+	for _, item := range items {
+		payload := map[string]any{}
+		switch item.Type {
+		case "image":
+			if url := strings.TrimSpace(item.ImageURL); url != "" {
+				payload["url"] = url
+			} else if token := strings.TrimSpace(item.Token); token != "" {
+				payload["token"] = token
+			}
+		case "video":
+			if token := strings.TrimSpace(item.Token); token != "" {
+				payload["token"] = token
+			}
+		}
+		if len(payload) == 0 {
+			continue
+		}
+		out = append(out, map[string]any{
+			"type":    item.Type,
+			"payload": payload,
+		})
+	}
+	return out
+}
+
+func (c *MAXBotClient) SendChannelMessage(
+	ctx context.Context,
+	botToken, chatID, text string,
+	attachments []MAXOutgoingAttachment,
+) error {
 	botToken = strings.TrimSpace(botToken)
 	chatID = strings.TrimSpace(chatID)
 	if botToken == "" {
@@ -606,7 +793,13 @@ func (c *MAXBotClient) SendText(ctx context.Context, botToken, chatID, text stri
 		return err
 	}
 
-	body := maxMessageLinkRequest{Text: text}
+	body := map[string]any{}
+	if strings.TrimSpace(text) != "" {
+		body["text"] = text
+	}
+	if atts := buildMAXMessageAttachments(attachments); len(atts) > 0 {
+		body["attachments"] = atts
+	}
 	payload, err := json.Marshal(body)
 	if err != nil {
 		return err
@@ -615,20 +808,35 @@ func (c *MAXBotClient) SendText(ctx context.Context, botToken, chatID, text stri
 	endpoint := maxAPIBase + "/messages?" + url.Values{
 		"chat_id": {strconv.FormatInt(chat.ChatID, 10)},
 	}.Encode()
-	respBody, status, err := c.do(ctx, http.MethodPost, endpoint, botToken, payload)
-	if err != nil {
-		return err
-	}
-	if status >= 400 {
+
+	var lastErr error
+	for attempt := 0; attempt < 5; attempt++ {
+		if attempt > 0 {
+			time.Sleep(time.Duration(attempt) * 500 * time.Millisecond)
+		}
+		respBody, status, err := c.do(ctx, http.MethodPost, endpoint, botToken, payload)
+		if err != nil {
+			return err
+		}
+		if status < 400 {
+			return nil
+		}
 		msg := strings.TrimSpace(string(respBody))
+		lastErr = fmt.Errorf("max messages: HTTP %d: %s", status, msg)
 		if strings.Contains(msg, "proto.payload") {
 			return fmt.Errorf(
 				"некорректный chat_id канала MAX — укажите числовой ID или ссылку вида channel_name, не полный URL в поле ID",
 			)
 		}
-		return fmt.Errorf("max messages: HTTP %d: %s", status, msg)
+		if !strings.Contains(msg, "attachment.not.ready") {
+			return lastErr
+		}
 	}
-	return nil
+	return lastErr
+}
+
+func (c *MAXBotClient) SendText(ctx context.Context, botToken, chatID, text string) error {
+	return c.SendChannelMessage(ctx, botToken, chatID, text, nil)
 }
 
 func (c *MAXBotClient) SendMessageLink(

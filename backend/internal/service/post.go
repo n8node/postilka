@@ -198,10 +198,42 @@ func (s *PostService) PublishNow(
 	if err := s.posts.SetPublishing(ctx, ws.ID, postID); err != nil {
 		return nil, ErrPostConflict
 	}
+	return s.publishAndGet(ctx, ws.ID, postID)
+}
+
+func (s *PostService) publishAndGet(ctx context.Context, workspaceID, postID string) (*model.Post, error) {
 	if err := s.publication.Publish(ctx, postID, false); err != nil {
+		post, getErr := s.posts.Get(ctx, workspaceID, postID)
+		if getErr == nil && postPublishDelivered(*post) {
+			return post, nil
+		}
 		return nil, err
 	}
-	return s.posts.Get(ctx, ws.ID, postID)
+	post, err := s.posts.Get(ctx, workspaceID, postID)
+	if err != nil {
+		if fallback, fbErr := s.posts.GetByID(ctx, postID); fbErr == nil && fallback.WorkspaceID == workspaceID {
+			return fallback, nil
+		}
+		return nil, err
+	}
+	return post, nil
+}
+
+func postPublishDelivered(post model.Post) bool {
+	if post.Status == model.PostStatusPublished {
+		return true
+	}
+	hasDeliverable := false
+	for _, target := range post.Targets {
+		if target.Status == model.PostTargetCanceled {
+			continue
+		}
+		hasDeliverable = true
+		if target.Status != model.PostTargetPublished {
+			return false
+		}
+	}
+	return hasDeliverable
 }
 
 func (s *PostService) Cancel(
@@ -226,8 +258,17 @@ func (s *PostService) validateExistingTargets(ctx context.Context, post *model.P
 		if channel.Status != model.ChannelStatusActive {
 			return fmt.Errorf("%w: канал «%s» неактивен или требует переподключения", ErrInvalidPost, channel.Name)
 		}
-		if len(post.Media) > 0 && channel.Provider != model.ChannelProviderTelegram {
-			return fmt.Errorf("%w: вложения композера пока публикуются только в Telegram", ErrInvalidPost)
+		if len(post.Media) > 0 && !channel.Provider.PublishCapabilities().ComposerMedia {
+			return fmt.Errorf("%w: вложения композера для %s пока не поддерживаются", ErrInvalidPost, channel.Provider.Label())
+		}
+		if len(post.Media) > 0 && channel.Provider == model.ChannelProviderMAX {
+			maxMedia := channel.Provider.PublishCapabilities().MaxMedia
+			if maxMedia <= 0 {
+				maxMedia = 12
+			}
+			if len(post.Media) > maxMedia {
+				return fmt.Errorf("%w: MAX принимает не более %d вложений", ErrInvalidPost, maxMedia)
+			}
 		}
 		targetSettings, err := DecodePostTargetSettings(target.Settings)
 		if err != nil {

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/postilka/postilka/internal/config"
+	oauthclient "github.com/postilka/postilka/internal/oauth"
 	"github.com/postilka/postilka/internal/repository"
 	"github.com/postilka/postilka/internal/service"
 )
@@ -84,7 +85,7 @@ func main() {
 	linkCodeRepo := repository.NewLinkCodeRepository(db.Pool)
 	linkShortener := service.NewLinkShortenerService(linkCodeRepo, cfg.LinkBaseURL)
 	publicationSvc := service.NewPublicationService(
-		postRepo, channelRepo, fileStorageRepo, objectStorage, channelTestSvc, telegramBotClient, quotaSvc, linkShortener,
+		postRepo, channelRepo, fileStorageRepo, objectStorage, channelTestSvc, telegramBotClient, oauthclient.NewMAXBotClient(), quotaSvc, linkShortener,
 	)
 	logger.Info("worker started", "publish_concurrency", cfg.WorkerPublishConcurrency, "version", config.Version)
 

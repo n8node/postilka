@@ -104,10 +104,7 @@ func (s *PostService) ApprovePost(
 		if err := s.posts.SetPublishing(ctx, ws.ID, postID); err != nil {
 			return nil, ErrPostConflict
 		}
-		if err := s.publication.Publish(ctx, postID, false); err != nil {
-			return nil, err
-		}
-		return s.posts.Get(ctx, ws.ID, postID)
+		return s.publishAndGet(ctx, ws.ID, postID)
 	}
 	return s.posts.SetScheduled(ctx, ws.ID, postID, *dueAt)
 }

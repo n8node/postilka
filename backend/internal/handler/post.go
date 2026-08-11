@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -251,6 +252,7 @@ func writePostError(w http.ResponseWriter, err error) {
 		message := strings.TrimPrefix(err.Error(), service.ErrInvalidPost.Error()+": ")
 		writeError(w, http.StatusBadRequest, message)
 	default:
+		slog.Error("post operation failed", "error", err)
 		writeError(w, http.StatusInternalServerError, "Не удалось выполнить операцию с публикацией")
 	}
 }

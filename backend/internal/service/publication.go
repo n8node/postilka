@@ -4,12 +4,15 @@ import (
 	"context"
 	"fmt"
 	"html"
+	"io"
+	"log/slog"
 	"regexp"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/postilka/postilka/internal/model"
+	oauthclient "github.com/postilka/postilka/internal/oauth"
 	"github.com/postilka/postilka/internal/repository"
 )
 
@@ -20,6 +23,7 @@ type PublicationService struct {
 	storage     *ObjectStorage
 	channelTest *ChannelTestService
 	telegram    *TelegramBotClient
+	maxClient   *oauthclient.MAXBotClient
 	quota       *QuotaService
 	shortener   *LinkShortenerService
 }
@@ -31,12 +35,17 @@ func NewPublicationService(
 	storage *ObjectStorage,
 	channelTest *ChannelTestService,
 	telegram *TelegramBotClient,
+	maxClient *oauthclient.MAXBotClient,
 	quota *QuotaService,
 	shortener *LinkShortenerService,
 ) *PublicationService {
+	if maxClient == nil {
+		maxClient = oauthclient.NewMAXBotClient()
+	}
 	return &PublicationService{
 		posts: posts, channels: channels, files: files, storage: storage,
-		channelTest: channelTest, telegram: telegram, quota: quota, shortener: shortener,
+		channelTest: channelTest, telegram: telegram, maxClient: maxClient,
+		quota: quota, shortener: shortener,
 	}
 }
 
@@ -102,14 +111,24 @@ func (s *PublicationService) Publish(ctx context.Context, postID string, allowRe
 	if !wasPublished && s.quota != nil {
 		updated, err := s.posts.GetByID(ctx, postID)
 		if err != nil {
-			return err
+			slog.Warn("post publish: reload for post-publish bookkeeping", "post_id", postID, "error", err)
+			return nil
 		}
 		if updated.Status == model.PostStatusPublished {
 			if err := s.quota.RecordPost(ctx, updated.WorkspaceID); err != nil {
-				return err
+				slog.Warn(
+					"post publish: quota record failed after successful delivery",
+					"post_id", postID,
+					"workspace_id", updated.WorkspaceID,
+					"error", err,
+				)
 			}
 			if err := s.scheduleNextRecurrence(ctx, updated); err != nil {
-				return err
+				slog.Warn(
+					"post publish: recurrence schedule failed after successful delivery",
+					"post_id", postID,
+					"error", err,
+				)
 			}
 		}
 	}
@@ -174,8 +193,8 @@ func (s *PublicationService) publishTarget(
 	if channel.Status != model.ChannelStatusActive {
 		return "", fmt.Errorf("канал «%s» неактивен или требует переподключения", channel.Name)
 	}
-	if len(post.Media) > 0 && channel.Provider != model.ChannelProviderTelegram {
-		return "", fmt.Errorf("вложения композера пока публикуются только в Telegram")
+	if len(post.Media) > 0 && !channel.Provider.PublishCapabilities().ComposerMedia {
+		return "", fmt.Errorf("вложения композера для %s пока не поддерживаются", channel.Provider.Label())
 	}
 	targetSettings, err := DecodePostTargetSettings(target.Settings)
 	if err != nil {
@@ -258,6 +277,27 @@ func (s *PublicationService) publishTarget(
 		}
 	}
 
+	if channel.Provider == model.ChannelProviderMAX {
+		if format != "message" {
+			return "", fmt.Errorf("формат %s пока поддерживается только Telegram", format)
+		}
+		text := readableProviderText(content)
+		if len(post.Media) > 0 {
+			attachments, err := s.maxMedia(ctx, token, post)
+			if err != nil {
+				return "", err
+			}
+			if err := s.maxClient.SendChannelMessage(ctx, token, channel.ChatID, text, attachments); err != nil {
+				return "", err
+			}
+			return "", nil
+		}
+		if err := s.maxClient.SendText(ctx, token, channel.ChatID, text); err != nil {
+			return "", err
+		}
+		return "", nil
+	}
+
 	if format != "message" {
 		return "", fmt.Errorf("формат %s пока поддерживается только Telegram", format)
 	}
@@ -297,6 +337,77 @@ func (s *PublicationService) telegramMedia(
 			return nil, fmt.Errorf("не удалось подготовить медиафайл для публикации")
 		}
 		media = append(media, TelegramMediaInput{Type: mediaType, URL: signedURL})
+	}
+	return media, nil
+}
+
+func (s *PublicationService) maxMedia(
+	ctx context.Context,
+	botToken string,
+	post *model.Post,
+) ([]oauthclient.MAXOutgoingAttachment, error) {
+	if s.files == nil || s.storage == nil || s.maxClient == nil {
+		return nil, fmt.Errorf("хранилище медиа недоступно")
+	}
+	if len(post.Media) > oauthclient.MaxMAXMediaAttachments {
+		return nil, fmt.Errorf("MAX принимает не более %d вложений в одном сообщении", oauthclient.MaxMAXMediaAttachments)
+	}
+	media := make([]oauthclient.MAXOutgoingAttachment, 0, len(post.Media))
+	for _, attached := range post.Media {
+		file, err := s.files.GetByID(ctx, post.WorkspaceID, attached.FileID, false)
+		if err != nil {
+			return nil, fmt.Errorf("медиафайл не найден или удалён")
+		}
+		mime := strings.ToLower(strings.TrimSpace(file.MimeType))
+		switch {
+		case strings.HasPrefix(mime, "image/"):
+			if !oauthclient.MAXImageMimeAllowed(mime) {
+				return nil, fmt.Errorf("MAX не поддерживает формат изображения %s", file.MimeType)
+			}
+			if file.Size > oauthclient.MaxMAXImageBytes {
+				return nil, fmt.Errorf("изображение MAX не должно превышать %d МБ", oauthclient.MaxMAXImageBytes>>20)
+			}
+			signedURL, err := s.storage.PresignGetWithOptions(ctx, file.S3Key, PresignGetOptions{
+				Expires: 30 * time.Minute,
+				Inline:  true,
+			})
+			if err != nil {
+				return nil, fmt.Errorf("не удалось подготовить медиафайл для публикации")
+			}
+			media = append(media, oauthclient.MAXOutgoingAttachment{
+				Type:     "image",
+				ImageURL: signedURL,
+			})
+		case strings.HasPrefix(mime, "video/"):
+			if !oauthclient.MAXVideoMimeAllowed(mime) {
+				return nil, fmt.Errorf("MAX не поддерживает формат видео %s", file.MimeType)
+			}
+			if file.Size > oauthclient.MaxMAXVideoBytes {
+				return nil, fmt.Errorf("видео MAX не должно превышать %d МБ", oauthclient.MaxMAXVideoBytes>>20)
+			}
+			body, _, err := s.storage.GetObject(ctx, file.S3Key)
+			if err != nil {
+				return nil, fmt.Errorf("не удалось прочитать видеофайл для публикации")
+			}
+			data, err := io.ReadAll(io.LimitReader(body, oauthclient.MaxMAXVideoBytes+1))
+			body.Close()
+			if err != nil {
+				return nil, fmt.Errorf("не удалось прочитать видеофайл для публикации")
+			}
+			if int64(len(data)) > oauthclient.MaxMAXVideoBytes {
+				return nil, fmt.Errorf("видео MAX не должно превышать %d МБ", oauthclient.MaxMAXVideoBytes>>20)
+			}
+			videoToken, err := s.maxClient.UploadVideo(ctx, botToken, data, file.Name)
+			if err != nil {
+				return nil, err
+			}
+			media = append(media, oauthclient.MAXOutgoingAttachment{
+				Type:  "video",
+				Token: videoToken,
+			})
+		default:
+			return nil, fmt.Errorf("MAX поддерживает только изображения и видео")
+		}
 	}
 	return media, nil
 }

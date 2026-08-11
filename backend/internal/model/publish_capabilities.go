@@ -46,7 +46,14 @@ func (p ChannelProvider) PublishCapabilities() PublishCapabilities {
 			MediaAlbum: true, MaxMedia: 10, MaxTextLength: 16384,
 		}
 	case ChannelProviderMAX:
-		return PublishCapabilities{Text: true, Formats: []string{"message"}, MaxTextLength: 4000}
+		return PublishCapabilities{
+			Text: true, Photo: true, Video: true,
+			Formats: []string{"message"},
+			ComposerMedia: true,
+			MediaAlbum:    true,
+			MaxMedia:      12,
+			MaxTextLength: 4000,
+		}
 	case ChannelProviderRutube:
 		return PublishCapabilities{
 			Text:     true,

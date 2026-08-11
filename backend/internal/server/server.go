@@ -12,6 +12,7 @@ import (
 	"github.com/postilka/postilka/internal/config"
 	"github.com/postilka/postilka/internal/handler"
 	"github.com/postilka/postilka/internal/middleware"
+	oauthclient "github.com/postilka/postilka/internal/oauth"
 	"github.com/postilka/postilka/internal/repository"
 	"github.com/postilka/postilka/internal/service"
 )
@@ -109,7 +110,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	linkShortener := service.NewLinkShortenerService(linkCodeRepo, cfg.LinkBaseURL)
 	postApprovalRepo := repository.NewPostApprovalRepository(db.Pool)
 	publicationSvc := service.NewPublicationService(
-		postRepo, channelRepo, fileStorageRepo, objectStorage, channelTestSvc, telegramBotClient, quotaSvc, linkShortener,
+		postRepo, channelRepo, fileStorageRepo, objectStorage, channelTestSvc, telegramBotClient, oauthclient.NewMAXBotClient(), quotaSvc, linkShortener,
 	)
 	postSvc := service.NewPostService(postRepo, channelRepo, wsSvc, publicationSvc, postApprovalRepo)
 	telegramSvc := service.NewTelegramService(telegramSettingsSvc, telegramQueueRepo, cfg.TelegramLocalProxy, logger)
