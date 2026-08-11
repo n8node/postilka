@@ -21,7 +21,7 @@ type UsePinnedElementOptions = {
 type UsePinnedElementResult = {
   hostRef: RefObject<HTMLDivElement | null>;
   targetRef: RefObject<HTMLElement | null>;
-  anchorRef: RefObject<HTMLElement | null>;
+  anchorRef: RefObject<HTMLDivElement | null>;
   pinnedStyle: CSSProperties | undefined;
 };
 
@@ -32,7 +32,7 @@ export function usePinnedElement({
 }: UsePinnedElementOptions): UsePinnedElementResult {
   const hostRef = useRef<HTMLDivElement>(null);
   const targetRef = useRef<HTMLElement>(null);
-  const anchorRef = useRef<HTMLElement>(null);
+  const anchorRef = useRef<HTMLDivElement>(null);
   const [pinnedStyle, setPinnedStyle] = useState<CSSProperties | undefined>(undefined);
 
   useLayoutEffect(() => {
