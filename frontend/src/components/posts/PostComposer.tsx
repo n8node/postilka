@@ -827,6 +827,8 @@ export function PostComposer() {
   const [longitude, setLongitude] = useState("");
   const [linkPreview, setLinkPreview] = useState(true);
   const [telegramMediaLayout, setTelegramMediaLayout] = useState<"separate" | "caption">("separate");
+  const [telegramCaptionPosition, setTelegramCaptionPosition] = useState<"above" | "below">("below");
+  const [telegramMediaOrder, setTelegramMediaOrder] = useState<"media_first" | "text_first">("media_first");
   const [utm, setUTM] = useState({ source: "", medium: "social", campaign: "", shorten: false });
   const [approvalRequired, setApprovalRequired] = useState(false);
   const [evergreenEnabled, setEvergreenEnabled] = useState(false);
@@ -971,6 +973,8 @@ export function PostComposer() {
     setButtonRows([]);
     setMedia([]);
     setTelegramMediaLayout("separate");
+    setTelegramCaptionPosition("below");
+    setTelegramMediaOrder("media_first");
     setFirstComment("");
     setLocationName("");
     setLatitude("");
@@ -1053,6 +1057,12 @@ export function PostComposer() {
     setLongitude(post.settings.location ? String(post.settings.location.longitude) : "");
     setLinkPreview(post.settings.link?.preview_enabled ?? true);
     setTelegramMediaLayout(post.settings.telegram_media_layout === "caption" ? "caption" : "separate");
+    setTelegramCaptionPosition(
+      post.settings.telegram_caption_position === "above" ? "above" : "below",
+    );
+    setTelegramMediaOrder(
+      post.settings.telegram_media_order === "text_first" ? "text_first" : "media_first",
+    );
     const storedUTM = post.targets[0]?.settings?.settings?.utm;
     setUTM({
       source: storedUTM?.source ?? "",
@@ -1130,6 +1140,14 @@ export function PostComposer() {
       approval_required: approvalRequired || undefined,
       telegram_media_layout:
         media.length > 0 && telegramChannels.length > 0 ? telegramMediaLayout : undefined,
+      telegram_caption_position:
+        media.length > 0 && telegramChannels.length > 0 && telegramMediaLayout === "caption"
+          ? telegramCaptionPosition
+          : undefined,
+      telegram_media_order:
+        media.length > 0 && telegramChannels.length > 0 && telegramMediaLayout === "separate"
+          ? telegramMediaOrder
+          : undefined,
       recurrence: evergreenEnabled
         ? {
             enabled: true,
@@ -2006,20 +2024,90 @@ export function PostComposer() {
                     </SmallButton>
                   </div>
                 </div>
-                <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
-                  {telegramMediaLayout === "caption" ? (
-                    <>
-                      Текст уйдёт подписью к медиа (лимит 1024 символа). При одном файле кнопки
-                      прикрепятся к тому же сообщению; при альбоме — отдельным сообщением с
-                      кнопками.
-                    </>
-                  ) : (
-                    <>
-                      В Telegram вложения отправляются первым сообщением, затем текст и кнопки —
-                      вторым. Это две отдельные записи в канале.
-                    </>
-                  )}
-                </div>
+                {telegramMediaLayout === "caption" ? (
+                  <div>
+                    <p className="mb-1.5 text-xs font-semibold text-zinc-700">Текст относительно медиа</p>
+                    <div className="flex flex-wrap gap-2">
+                      <SmallButton
+                        active={telegramCaptionPosition === "above"}
+                        onClick={() => {
+                          setTelegramCaptionPosition("above");
+                          markDirty();
+                        }}
+                      >
+                        Текст сверху
+                      </SmallButton>
+                      <SmallButton
+                        active={telegramCaptionPosition === "below"}
+                        onClick={() => {
+                          setTelegramCaptionPosition("below");
+                          markDirty();
+                        }}
+                      >
+                        Текст снизу
+                      </SmallButton>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <p className="mb-1.5 text-xs font-semibold text-zinc-700">Порядок в канале</p>
+                    <div className="flex flex-wrap gap-2">
+                      <SmallButton
+                        active={telegramMediaOrder === "media_first"}
+                        onClick={() => {
+                          setTelegramMediaOrder("media_first");
+                          markDirty();
+                        }}
+                      >
+                        Сначала медиа
+                      </SmallButton>
+                      <SmallButton
+                        active={telegramMediaOrder === "text_first"}
+                        onClick={() => {
+                          setTelegramMediaOrder("text_first");
+                          markDirty();
+                        }}
+                      >
+                        Сначала текст
+                      </SmallButton>
+                    </div>
+                  </div>
+                )}
+                {telegramMediaLayout === "caption" && (
+                  <div
+                    className={cn(
+                      "rounded-lg border px-3 py-2 text-xs",
+                      plain.length > 1024
+                        ? "border-red-200 bg-red-50 font-medium text-red-700"
+                        : plain.length > 900
+                          ? "border-amber-200 bg-amber-50 text-amber-900"
+                          : "border-blue-200 bg-blue-50 text-blue-800",
+                    )}
+                  >
+                    <p>
+                      В режиме «одним сообщением» текст становится подписью к медиа. Лимит Telegram
+                      — <strong>1024 символа</strong> (сейчас {plain.length}).
+                    </p>
+                    {plain.length > 1024 && (
+                      <p className="mt-1">
+                        Сократите текст или переключитесь на «Медиа и текст отдельно» — там лимит
+                        4096 символов.
+                      </p>
+                    )}
+                    {plain.length <= 1024 && (
+                      <p className="mt-1">
+                        При одном файле кнопки прикрепятся к тому же сообщению; при альбоме —
+                        отдельным сообщением с кнопками.
+                      </p>
+                    )}
+                  </div>
+                )}
+                {telegramMediaLayout === "separate" && (
+                  <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+                    Два сообщения в канале: порядок задаётся кнопками выше. Текст может быть до 4096
+                    символов; лимит подписи 1024 здесь не применяется.
+                  </div>
+                )}
               </div>
             )}
             {mediaPicker && (

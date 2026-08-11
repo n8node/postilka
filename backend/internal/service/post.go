@@ -621,6 +621,14 @@ func validatePostSettings(settings model.PostSettings) error {
 	if layout != "" && layout != model.TelegramMediaLayoutSeparate && layout != model.TelegramMediaLayoutCaption {
 		return fmt.Errorf("%w: некорректный режим доставки медиа в Telegram", ErrInvalidPost)
 	}
+	captionPos := strings.TrimSpace(settings.TelegramCaptionPosition)
+	if captionPos != "" && captionPos != model.TelegramCaptionPositionAbove && captionPos != model.TelegramCaptionPositionBelow {
+		return fmt.Errorf("%w: некорректная позиция подписи Telegram", ErrInvalidPost)
+	}
+	mediaOrder := strings.TrimSpace(settings.TelegramMediaOrder)
+	if mediaOrder != "" && mediaOrder != model.TelegramMediaOrderMediaFirst && mediaOrder != model.TelegramMediaOrderTextFirst {
+		return fmt.Errorf("%w: некорректный порядок медиа и текста в Telegram", ErrInvalidPost)
+	}
 	if utf8.RuneCountInString(settings.FirstComment) > 4096 {
 		return fmt.Errorf("%w: первый комментарий не должен превышать 4096 символов", ErrInvalidPost)
 	}

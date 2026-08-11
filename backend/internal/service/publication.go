@@ -185,6 +185,14 @@ func telegramMediaLayoutCombined(settings model.PostSettings) bool {
 	return strings.TrimSpace(settings.TelegramMediaLayout) == model.TelegramMediaLayoutCaption
 }
 
+func telegramCaptionAbove(settings model.PostSettings) bool {
+	return strings.TrimSpace(settings.TelegramCaptionPosition) == model.TelegramCaptionPositionAbove
+}
+
+func telegramTextBeforeMedia(settings model.PostSettings) bool {
+	return strings.TrimSpace(settings.TelegramMediaOrder) == model.TelegramMediaOrderTextFirst
+}
+
 func hasTelegramButtons(buttons [][]model.TelegramInlineButton) bool {
 	return len(buttons) > 0 && len(buttons[0]) > 0
 }
@@ -259,8 +267,9 @@ func (s *PublicationService) publishTarget(
 				parseMode := strings.ToUpper(strings.TrimSpace(content.ParseMode))
 				if telegramMediaLayoutCombined(settings) {
 					opts := &TelegramMediaSendOptions{
-						Caption:   content.Text,
-						ParseMode: parseMode,
+						Caption:               content.Text,
+						ParseMode:             parseMode,
+						ShowCaptionAboveMedia: telegramCaptionAbove(settings),
 					}
 					if len(media) == 1 {
 						opts.Buttons = content.Buttons
@@ -279,9 +288,31 @@ func (s *PublicationService) publishTarget(
 					}
 					return msgID, nil
 				}
-				// Composer media is intentionally a separate Telegram message/group.
-				// Text and buttons follow in their normal message to avoid duplicate captions.
-				if _, err := s.telegram.SendMedia(ctx, token, channel.ChatID, media, nil); err != nil {
+				sendTelegramMedia := func() error {
+					_, err := s.telegram.SendMedia(ctx, token, channel.ChatID, media, nil)
+					return err
+				}
+				sendTelegramText := func() (string, error) {
+					preview := (*bool)(nil)
+					if settings.Link != nil {
+						preview = settings.Link.PreviewEnabled
+					}
+					return s.telegram.SendFormattedMessage(ctx, token, channel.ChatID, TelegramMessageInput{
+						Text: content.Text, ParseMode: parseMode, Entities: content.Entities,
+						Buttons: content.Buttons, LinkPreviewEnabled: preview,
+					})
+				}
+				if telegramTextBeforeMedia(settings) {
+					msgID, err := sendTelegramText()
+					if err != nil {
+						return "", err
+					}
+					if err := sendTelegramMedia(); err != nil {
+						return "", err
+					}
+					return msgID, nil
+				}
+				if err := sendTelegramMedia(); err != nil {
 					return "", err
 				}
 			}

@@ -127,16 +127,24 @@ type PostRecurrenceSettings struct {
 const (
 	TelegramMediaLayoutSeparate = "separate"
 	TelegramMediaLayoutCaption  = "caption"
+
+	TelegramCaptionPositionAbove = "above"
+	TelegramCaptionPositionBelow = "below"
+
+	TelegramMediaOrderMediaFirst = "media_first"
+	TelegramMediaOrderTextFirst  = "text_first"
 )
 
 type PostSettings struct {
-	FirstComment        string                  `json:"first_comment,omitempty"`
-	Location            *PostLocation           `json:"location,omitempty"`
-	Link                *PostLinkSettings       `json:"link,omitempty"`
-	UTM                 *PostUTMSettings        `json:"utm,omitempty"`
-	ApprovalRequired    bool                    `json:"approval_required,omitempty"`
-	Recurrence          *PostRecurrenceSettings `json:"recurrence,omitempty"`
-	TelegramMediaLayout string                  `json:"telegram_media_layout,omitempty"`
+	FirstComment            string                  `json:"first_comment,omitempty"`
+	Location                *PostLocation           `json:"location,omitempty"`
+	Link                    *PostLinkSettings       `json:"link,omitempty"`
+	UTM                     *PostUTMSettings        `json:"utm,omitempty"`
+	ApprovalRequired        bool                    `json:"approval_required,omitempty"`
+	Recurrence              *PostRecurrenceSettings `json:"recurrence,omitempty"`
+	TelegramMediaLayout     string                  `json:"telegram_media_layout,omitempty"`
+	TelegramCaptionPosition string                  `json:"telegram_caption_position,omitempty"`
+	TelegramMediaOrder      string                  `json:"telegram_media_order,omitempty"`
 }
 
 type PostTarget struct {

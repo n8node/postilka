@@ -176,11 +176,15 @@ func TestTelegramMediaPayloadHasNoCaption(t *testing.T) {
 		}
 	}
 	captionPayload := telegramMediaGroupPayload(media, &TelegramMediaSendOptions{
-		Caption:   "Подпись",
-		ParseMode: "HTML",
+		Caption:               "Подпись",
+		ParseMode:             "HTML",
+		ShowCaptionAboveMedia: true,
 	})
 	if captionPayload[0]["caption"] != "Подпись" {
 		t.Fatalf("expected caption on first media item: %#v", captionPayload[0])
+	}
+	if captionPayload[0]["show_caption_above_media"] != true {
+		t.Fatalf("expected show_caption_above_media: %#v", captionPayload[0])
 	}
 	sanitized := safePublishError(errors.New("request failed for " + media[0].URL))
 	if strings.Contains(sanitized, "signature=secret") || !strings.Contains(sanitized, "ссылка скрыта") {

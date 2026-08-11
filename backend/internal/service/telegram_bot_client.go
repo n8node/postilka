@@ -151,9 +151,10 @@ type TelegramMediaInput struct {
 }
 
 type TelegramMediaSendOptions struct {
-	Caption   string
-	ParseMode string
-	Buttons   [][]model.TelegramInlineButton
+	Caption               string
+	ParseMode             string
+	Buttons               [][]model.TelegramInlineButton
+	ShowCaptionAboveMedia bool
 }
 
 type telegramSentMessage struct {
@@ -284,6 +285,9 @@ func telegramMediaGroupPayload(media []TelegramMediaInput, opts *TelegramMediaSe
 			if parseMode := strings.TrimSpace(opts.ParseMode); parseMode != "" {
 				entry["parse_mode"] = parseMode
 			}
+			if opts.ShowCaptionAboveMedia {
+				entry["show_caption_above_media"] = true
+			}
 		}
 		items = append(items, entry)
 	}
@@ -312,6 +316,9 @@ func (c *TelegramBotClient) SendMedia(
 			payload["caption"] = opts.Caption
 			if parseMode := strings.TrimSpace(opts.ParseMode); parseMode != "" {
 				payload["parse_mode"] = parseMode
+			}
+			if opts.ShowCaptionAboveMedia {
+				payload["show_caption_above_media"] = true
 			}
 		}
 		if opts != nil {
