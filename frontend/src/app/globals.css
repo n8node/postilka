@@ -19,27 +19,10 @@ body {
   align-items: start;
 }
 
-.post-composer-resizer {
-  align-self: stretch;
-  display: flex;
-  min-height: 100%;
-  cursor: col-resize;
-  align-items: flex-start;
-  justify-content: center;
-  padding-top: 12rem;
-  color: #a1a1aa;
-  touch-action: none;
-}
-
 .post-composer-resizer:hover,
 .post-composer-resizer:focus-visible {
   color: var(--accent);
   outline: none;
-}
-
-.post-composer-preview {
-  position: sticky;
-  top: 1rem;
 }
 
 @media (max-width: 1279px) {
@@ -54,7 +37,47 @@ body {
 
   .post-composer-preview {
     position: static;
+    max-height: none;
   }
+
+  .post-composer-preview-panel {
+    max-height: none;
+  }
+}
+
+.post-composer-preview {
+  position: sticky;
+  top: 0;
+  align-self: start;
+  z-index: 10;
+  max-height: 100dvh;
+}
+
+.post-composer-preview-panel {
+  display: flex;
+  max-height: 100dvh;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.post-composer-preview-body {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.post-composer-resizer {
+  align-self: start;
+  position: sticky;
+  top: 0;
+  display: flex;
+  min-height: 4rem;
+  cursor: col-resize;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 1rem;
+  color: #a1a1aa;
+  touch-action: none;
 }
 
 @keyframes file-appear {

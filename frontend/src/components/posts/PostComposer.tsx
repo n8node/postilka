@@ -2908,51 +2908,6 @@ export function PostComposer() {
               </div>
             )}
           </Card>
-
-          <div className="sticky bottom-0 z-20 -mx-2 flex flex-wrap items-center justify-between gap-3 border-t border-border bg-white/95 p-3 shadow-[0_-8px_24px_rgba(0,0,0,0.04)] backdrop-blur">
-            <span className="text-xs text-muted">
-              {dirty ? "Есть несохранённые изменения" : postId ? "Все изменения сохранены" : ""}
-            </span>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                disabled={busy || composerLocked}
-                onClick={() => void save("draft")}
-                className="inline-flex items-center gap-2 rounded-md border border-border bg-white px-4 py-2 text-sm font-semibold hover:bg-zinc-50 disabled:opacity-50"
-              >
-                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                Сохранить черновик
-              </button>
-              {timing === "schedule" ? (
-                <button
-                  type="button"
-                  disabled={busy || composerLocked}
-                  onClick={() => void save("schedule")}
-                  className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                >
-                  <CalendarClock className="h-4 w-4" />
-                  Запланировать
-                </button>
-              ) : timing === "now" ? (
-                <button
-                  type="button"
-                  disabled={busy || composerLocked || publishLocked}
-                  onClick={() => void save("now")}
-                  className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-                  title={
-                    publishLocked
-                      ? currentStatus === "published"
-                        ? "Публикация уже отправлена — создайте новую запись"
-                        : "Публикация уже выполняется"
-                      : undefined
-                  }
-                >
-                  <Send className="h-4 w-4" />
-                  Опубликовать
-                </button>
-              ) : null}
-            </div>
-          </div>
         </div>
 
         <div
@@ -2980,8 +2935,9 @@ export function PostComposer() {
         </div>
 
         <aside className="post-composer-preview min-w-0">
-          <div className="rounded-xl border border-border bg-surface p-4 shadow-sm">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div className="post-composer-preview-panel rounded-xl border border-border bg-surface shadow-sm">
+            <div className="shrink-0 border-b border-border p-4 pb-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex rounded-lg bg-zinc-100 p-1">
                 <button
                   type="button"
@@ -3024,6 +2980,7 @@ export function PostComposer() {
               </div>
             </div>
 
+            <div className="post-composer-preview-body p-4 pt-3">
             {activePreviewTab === "discussion" ? (
               <div className="flex min-h-64 flex-col gap-3">
                 {!postId ? (
@@ -3261,6 +3218,50 @@ export function PostComposer() {
                 </div>
               </>
             )}
+            </div>
+
+            <div className="shrink-0 space-y-2 border-t border-border bg-surface p-4">
+              {dirty && (
+                <p className="text-center text-[11px] text-muted">Есть несохранённые изменения</p>
+              )}
+              <button
+                type="button"
+                disabled={
+                  busy ||
+                  composerLocked ||
+                  (timing !== "schedule" && publishLocked)
+                }
+                onClick={() => void save(timing === "schedule" ? "schedule" : "now")}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-accent px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                title={
+                  publishLocked && timing !== "schedule"
+                    ? currentStatus === "published"
+                      ? "Публикация уже отправлена — создайте новую запись"
+                      : "Публикация уже выполняется"
+                    : timing === "schedule" && !scheduleAt
+                      ? "Укажите дату и время публикации"
+                      : undefined
+                }
+              >
+                {busy ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : timing === "schedule" ? (
+                  <CalendarClock className="h-4 w-4" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+                Публикация
+              </button>
+              <button
+                type="button"
+                disabled={busy || composerLocked}
+                onClick={() => void save("draft")}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-border bg-white px-4 py-2.5 text-sm font-semibold hover:bg-zinc-50 disabled:opacity-50"
+              >
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                Сохранить черновик
+              </button>
+            </div>
           </div>
         </aside>
       </div>
