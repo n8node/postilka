@@ -18,6 +18,11 @@ func extractVideoPreviewJPEG(videoData []byte) ([]byte, error) {
 	if err := os.WriteFile(videoPath, videoData, 0o600); err != nil {
 		return nil, err
 	}
+	return extractVideoPreviewFromPath(videoPath)
+}
+
+func extractVideoPreviewFromPath(videoPath string) ([]byte, error) {
+	dir := filepath.Dir(videoPath)
 	outPath := filepath.Join(dir, "preview.jpg")
 	cmd := exec.Command(
 		"ffmpeg",

@@ -159,6 +159,13 @@ func (r *AIGenerationRepository) SetWorkspaceFileID(ctx context.Context, id, fil
 	return err
 }
 
+func (r *AIGenerationRepository) UpdatePreviewS3Key(ctx context.Context, id, previewS3Key string) error {
+	_, err := r.pool.Exec(ctx, `
+		UPDATE ai_generations SET preview_s3_key = $2 WHERE id = $1
+	`, id, previewS3Key)
+	return err
+}
+
 func emptyStringToNull(s string) any {
 	if strings.TrimSpace(s) == "" {
 		return nil

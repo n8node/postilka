@@ -10,6 +10,7 @@ type ProtectedMediaImageProps = {
   loading?: "lazy" | "eager";
   decoding?: "async" | "sync" | "auto";
   draggable?: boolean;
+  onError?: React.ReactEventHandler<HTMLImageElement>;
 };
 
 /**
@@ -23,6 +24,7 @@ export function ProtectedMediaImage({
   loading,
   decoding,
   draggable,
+  onError,
 }: ProtectedMediaImageProps) {
   if (!url) return null;
 
@@ -38,6 +40,7 @@ export function ProtectedMediaImage({
       loading={loading}
       decoding={decoding}
       draggable={draggable}
+      onError={onError}
     />
   );
 }

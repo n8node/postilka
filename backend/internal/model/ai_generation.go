@@ -66,9 +66,7 @@ func (g AIGeneration) ToViewWithUsage(usedInPost bool) AIGenerationView {
 	if IsVideoGenerationMode(g.Mode) || strings.HasPrefix(g.ResultContentType, "video/") {
 		view.MediaType = "video"
 		view.VideoURL = mediaPath
-		if strings.TrimSpace(g.PreviewS3Key) != "" {
-			view.ThumbURL = AIGenerationPreviewPath(g.ID)
-		}
+		view.ThumbURL = AIGenerationPreviewPath(g.ID)
 	} else {
 		view.MediaType = "image"
 	}

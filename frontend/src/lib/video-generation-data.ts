@@ -136,9 +136,14 @@ export function toVideoHistoryItem(item: {
   video_url?: string;
   image_url?: string;
   thumb_url?: string;
+  media_type?: string;
   created_at: string;
   used_in_post?: boolean;
 }): VideoGenerationHistoryItem {
+  const isVideo =
+    item.media_type === "video" ||
+    Boolean(item.video_url) ||
+    item.mode.includes("video");
   return {
     id: item.id,
     mode: item.mode,
@@ -146,10 +151,21 @@ export function toVideoHistoryItem(item: {
     aspectRatio: item.aspect_ratio,
     videoDurationSeconds: item.video_duration_seconds,
     videoUrl: item.video_url || item.image_url || "",
-    thumbUrl: item.thumb_url,
+    thumbUrl:
+      item.thumb_url ||
+      (isVideo ? videoGenerationPreviewPath(item.id) : undefined),
     createdAt: item.created_at,
     usedInPost: item.used_in_post,
   };
+}
+
+export function videoGenerationPreviewPath(id: string): string {
+  return `/api/v1/media/ai-generations/${encodeURIComponent(id)}/preview`;
+}
+
+export function videoHistoryThumbSrc(item: VideoGenerationHistoryItem): string {
+  if (item.thumbUrl) return item.thumbUrl;
+  return videoGenerationPreviewPath(item.id);
 }
 
 export function exampleToPreset(example: KieVideoExample): {

@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { Check, Play } from "lucide-react";
 import type { VideoGenerationHistoryItem } from "@/lib/video-generation-data";
-import { mediaUrl } from "@/lib/media-display";
+import { videoHistoryThumbSrc } from "@/lib/video-generation-data";
 import { ProtectedMediaImage } from "@/components/media/ProtectedMediaImage";
 import {
   VIDEO_HISTORY_DRAG_MIME,
@@ -38,6 +38,7 @@ export function VideoGenerationHistory({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [thumbErrors, setThumbErrors] = useState<Set<string>>(() => new Set());
 
   const selectableItems = useMemo(
     () => items.filter((item) => !item.usedInPost),
@@ -175,6 +176,8 @@ export function VideoGenerationHistory({
             const posted = Boolean(item.usedInPost);
             const draggable =
               canDragToReferences && !selectMode && !posted;
+            const thumbSrc = videoHistoryThumbSrc(item);
+            const showThumb = !thumbErrors.has(item.id);
 
             return (
               <button
@@ -218,11 +221,16 @@ export function VideoGenerationHistory({
                 }
               >
                 <div className="relative h-full w-full bg-zinc-900/5">
-                  {item.thumbUrl ? (
+                  {showThumb ? (
                     <ProtectedMediaImage
-                      url={mediaUrl(item.thumbUrl)}
+                      url={thumbSrc}
                       alt=""
                       className="h-full w-full object-cover"
+                      loading="lazy"
+                      decoding="async"
+                      onError={() =>
+                        setThumbErrors((prev) => new Set(prev).add(item.id))
+                      }
                     />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center">
@@ -232,7 +240,7 @@ export function VideoGenerationHistory({
                       />
                     </div>
                   )}
-                  {item.thumbUrl ? (
+                  {showThumb ? (
                     <span className="absolute inset-0 flex items-center justify-center bg-black/15 opacity-0 transition-opacity group-hover:opacity-100">
                       <Play size={22} className="text-white drop-shadow" />
                     </span>
@@ -253,9 +261,4 @@ export function VideoGenerationHistory({
       )}
     </div>
   );
-}
-
-export function videoHistoryThumbSrc(item: VideoGenerationHistoryItem): string {
-  if (item.thumbUrl) return mediaUrl(item.thumbUrl);
-  return mediaUrl(item.videoUrl);
 }

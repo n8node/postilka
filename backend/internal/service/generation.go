@@ -10,7 +10,9 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -634,10 +636,74 @@ func (s *GenerationService) ResultPreviewMediaObject(ctx context.Context, id, us
 		return nil, "", err
 	}
 	key := strings.TrimSpace(gen.PreviewS3Key)
+	if key == "" && isVideoGenerationRecord(gen) {
+		var ensureErr error
+		key, ensureErr = s.ensureVideoGenerationPreview(ctx, gen)
+		if ensureErr != nil {
+			return nil, "", ensureErr
+		}
+	}
 	if key == "" {
 		return nil, "", repository.ErrNotFound
 	}
 	return s.objectStore.GetObject(ctx, key)
+}
+
+func isVideoGenerationRecord(gen model.AIGeneration) bool {
+	return model.IsVideoGenerationMode(gen.Mode) ||
+		strings.HasPrefix(strings.ToLower(gen.ResultContentType), "video/")
+}
+
+func (s *GenerationService) ensureVideoGenerationPreview(ctx context.Context, gen model.AIGeneration) (string, error) {
+	if key := strings.TrimSpace(gen.PreviewS3Key); key != "" {
+		return key, nil
+	}
+	videoKey := strings.TrimSpace(gen.ResultS3Key)
+	if videoKey == "" {
+		return "", repository.ErrNotFound
+	}
+
+	body, _, err := s.objectStore.GetObject(ctx, videoKey)
+	if err != nil {
+		return "", err
+	}
+	defer body.Close()
+
+	dir, err := os.MkdirTemp("", "postilka-video-preview-src-*")
+	if err != nil {
+		return "", err
+	}
+	defer os.RemoveAll(dir)
+
+	ext := ".mp4"
+	if strings.Contains(strings.ToLower(gen.ResultContentType), "webm") {
+		ext = ".webm"
+	}
+	videoPath := filepath.Join(dir, "source"+ext)
+	out, err := os.Create(videoPath)
+	if err != nil {
+		return "", err
+	}
+	if _, err := io.Copy(out, body); err != nil {
+		out.Close()
+		return "", err
+	}
+	if err := out.Close(); err != nil {
+		return "", err
+	}
+
+	previewData, err := extractVideoPreviewFromPath(videoPath)
+	if err != nil {
+		return "", err
+	}
+	previewKey := videoGenerationPreviewS3Key(gen.WorkspaceID)
+	if err := s.objectStore.PutObject(ctx, previewKey, "image/jpeg", previewData); err != nil {
+		return "", err
+	}
+	if err := s.genRepo.UpdatePreviewS3Key(ctx, gen.ID, previewKey); err != nil {
+		return "", err
+	}
+	return previewKey, nil
 }
 
 func (s *GenerationService) resultS3Key(ctx context.Context, id, userID string) (string, error) {
