@@ -16,52 +16,13 @@ body {
 .post-composer-layout {
   display: grid;
   grid-template-columns: minmax(560px, 1fr) 12px var(--preview-width, 380px);
-  align-items: stretch;
+  align-items: start;
 }
 
 .post-composer-resizer:hover,
 .post-composer-resizer:focus-visible {
   color: var(--accent);
   outline: none;
-}
-
-@media (min-width: 1280px) {
-  .post-composer-shell {
-    min-height: 0;
-    overflow: hidden;
-  }
-
-  .post-composer-layout {
-    height: 100%;
-    min-height: 0;
-    overflow: hidden;
-  }
-
-  .post-composer-main {
-    min-height: 0;
-    overflow-x: hidden;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-gutter: stable;
-  }
-
-  .post-composer-preview {
-    display: flex;
-    min-height: 0;
-    flex-direction: column;
-  }
-
-  .post-composer-preview-panel {
-    height: 100%;
-    max-height: 100%;
-  }
-
-  .post-composer-resizer {
-    align-self: stretch;
-    min-height: 0;
-    padding-top: 1rem;
-  }
 }
 
 @media (max-width: 1279px) {
@@ -74,14 +35,27 @@ body {
     display: none;
   }
 
+  .post-composer-preview-host {
+    min-height: 0 !important;
+  }
+
   .post-composer-preview-panel {
     max-height: none;
   }
 }
 
+.post-composer-preview-host {
+  min-width: 0;
+  align-self: start;
+}
+
+.post-composer-preview {
+  width: 100%;
+}
+
 .post-composer-preview-panel {
   display: flex;
-  min-height: 0;
+  max-height: calc(100dvh - 3rem);
   flex-direction: column;
   overflow: hidden;
 }
@@ -90,14 +64,16 @@ body {
   min-height: 0;
   flex: 1;
   overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
 }
 
 .post-composer-resizer {
+  align-self: start;
   display: flex;
+  min-height: 4rem;
   cursor: col-resize;
   align-items: flex-start;
   justify-content: center;
+  padding-top: 1rem;
   color: #a1a1aa;
   touch-action: none;
 }

@@ -32,7 +32,6 @@ import {
 import {
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -76,6 +75,7 @@ import {
   type TelegramButton,
   type TelegramRichBlock,
 } from "@/lib/posts-api";
+import { usePinnedElement } from "@/lib/usePinnedElement";
 import { cn } from "@/lib/utils";
 
 const PROVIDER_LABEL: Record<ChannelProvider, string> = {
@@ -986,35 +986,9 @@ export function PostComposer() {
   const [previewWidth, setPreviewWidth] = useState(380);
   const [dirty, setDirty] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const composerShellRef = useRef<HTMLDivElement>(null);
-
-  useLayoutEffect(() => {
-    const shell = composerShellRef.current;
-    if (!shell) return;
-
-    const desktopQuery = window.matchMedia("(min-width: 1280px)");
-
-    const syncShellHeight = () => {
-      if (!desktopQuery.matches) {
-        shell.style.removeProperty("height");
-        return;
-      }
-      const top = shell.getBoundingClientRect().top;
-      const bottomGap = 24;
-      const height = Math.max(400, window.innerHeight - top - bottomGap);
-      shell.style.height = `${height}px`;
-    };
-
-    syncShellHeight();
-    window.addEventListener("resize", syncShellHeight);
-    const observer = new ResizeObserver(syncShellHeight);
-    observer.observe(shell.parentElement ?? shell);
-
-    return () => {
-      window.removeEventListener("resize", syncShellHeight);
-      observer.disconnect();
-    };
-  }, [error, success]);
+  const { hostRef, targetRef, anchorRef, pinnedStyle } = usePinnedElement({
+    enabled: !loading,
+  });
 
   const markDirty = useCallback(() => setDirty(true), []);
 
@@ -1890,7 +1864,7 @@ export function PostComposer() {
   }
 
   return (
-    <div className="post-composer-page">
+    <div>
       <PageHeader
         title={postId ? "Редактирование поста" : "Новый пост"}
         description="Создайте общую публикацию, адаптируйте её для каналов и выберите время отправки."
@@ -1922,12 +1896,11 @@ export function PostComposer() {
         </div>
       )}
 
-      <div ref={composerShellRef} className="post-composer-shell">
-        <div
-          className="post-composer-layout"
-          style={{ "--preview-width": `${previewWidth}px` } as CSSProperties}
-        >
-        <div className="post-composer-main min-w-0 space-y-4">
+      <div
+        className="post-composer-layout"
+        style={{ "--preview-width": `${previewWidth}px` } as CSSProperties}
+      >
+        <div ref={anchorRef} className="min-w-0 space-y-4">
           <div className="inline-flex rounded-lg bg-zinc-200/70 p-1">
             {(
               [
@@ -2965,7 +2938,12 @@ export function PostComposer() {
           <GripVertical className="h-5 w-5" />
         </div>
 
-        <aside className="post-composer-preview min-w-0">
+        <div ref={hostRef} className="post-composer-preview-host">
+        <aside
+          ref={targetRef}
+          className="post-composer-preview min-w-0"
+          style={pinnedStyle}
+        >
           <div className="post-composer-preview-panel rounded-xl border border-border bg-surface shadow-sm">
             <div className="shrink-0 border-b border-border p-4 pb-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
