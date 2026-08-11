@@ -22,8 +22,9 @@ import (
 )
 
 var (
-	ErrInvalidPost = errors.New("invalid post")
-	ErrPostConflict = errors.New("post conflict")
+	ErrInvalidPost   = errors.New("invalid post")
+	ErrPostConflict  = errors.New("post conflict")
+	ErrPublishFailed = errors.New("publish failed")
 )
 
 const (
@@ -288,13 +289,21 @@ func (s *PostService) validateExistingTargets(ctx context.Context, post *model.P
 	return nil
 }
 
+func telegramPlainCaption(text string) string {
+	withoutTags := telegramHTMLTag.ReplaceAllString(text, "")
+	return strings.TrimSpace(html.UnescapeString(withoutTags))
+}
+
 func validateTelegramComposerMedia(
 	content model.PostContent,
 	settings model.PostSettings,
 	mediaCount int,
 	channel *model.Channel,
 ) error {
-	if channel == nil || channel.Provider != model.ChannelProviderTelegram || mediaCount == 0 {
+	if mediaCount == 0 {
+		return nil
+	}
+	if channel != nil && channel.Provider != model.ChannelProviderTelegram {
 		return nil
 	}
 	format := strings.ToLower(strings.TrimSpace(content.Format))
@@ -307,7 +316,10 @@ func validateTelegramComposerMedia(
 	if strings.TrimSpace(settings.TelegramMediaLayout) != model.TelegramMediaLayoutCaption {
 		return nil
 	}
-	if utf8.RuneCountInString(content.Text) > 1024 {
+	if mediaCount > 1 && strings.TrimSpace(settings.TelegramCaptionPosition) == model.TelegramCaptionPositionAbove {
+		return fmt.Errorf("%w: для альбома Telegram подпись можно разместить только под медиа", ErrInvalidPost)
+	}
+	if utf8.RuneCountInString(telegramPlainCaption(content.Text)) > 1024 {
 		return fmt.Errorf("%w: подпись к медиа Telegram не должна превышать 1024 символа", ErrInvalidPost)
 	}
 	return nil
@@ -512,6 +524,9 @@ func ValidatePostForPublication(post model.Post) error {
 			}
 		}
 		if err := ValidatePostContent(content, settings); err != nil {
+			return err
+		}
+		if err := validateTelegramComposerMedia(content, settings, len(post.Media), nil); err != nil {
 			return err
 		}
 	}

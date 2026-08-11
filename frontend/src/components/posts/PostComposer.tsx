@@ -914,6 +914,12 @@ export function PostComposer() {
     if (postId && activePreviewTab === "discussion") void loadApprovalEvents(postId);
   }, [postId, activePreviewTab, loadApprovalEvents]);
 
+  useEffect(() => {
+    if (media.length > 1 && telegramCaptionPosition === "above") {
+      setTelegramCaptionPosition("below");
+    }
+  }, [media.length, telegramCaptionPosition]);
+
   const selectedChannels = useMemo(
     () => channels.filter((channel) => selectedIds.includes(channel.id)),
     [channels, selectedIds],
@@ -1142,7 +1148,9 @@ export function PostComposer() {
         media.length > 0 && telegramChannels.length > 0 ? telegramMediaLayout : undefined,
       telegram_caption_position:
         media.length > 0 && telegramChannels.length > 0 && telegramMediaLayout === "caption"
-          ? telegramCaptionPosition
+          ? media.length > 1
+            ? "below"
+            : telegramCaptionPosition
           : undefined,
       telegram_media_order:
         media.length > 0 && telegramChannels.length > 0 && telegramMediaLayout === "separate"
@@ -1493,6 +1501,12 @@ export function PostComposer() {
         finalPost = await schedulePost(saved.id, new Date(scheduleAt).toISOString());
       } else if (action === "now") {
         finalPost = await publishPost(saved.id);
+        if (finalPost.status === "failed") {
+          throw new ApiError(
+            502,
+            finalPost.last_error || "Не удалось опубликовать во все каналы",
+          );
+        }
       }
       setPostId(finalPost.id);
       setCurrentStatus(finalPost.status);
@@ -2030,6 +2044,12 @@ export function PostComposer() {
                     <div className="flex flex-wrap gap-2">
                       <SmallButton
                         active={telegramCaptionPosition === "above"}
+                        disabled={media.length > 1}
+                        title={
+                          media.length > 1
+                            ? "Для альбома Telegram показывает подпись только под медиа"
+                            : undefined
+                        }
                         onClick={() => {
                           setTelegramCaptionPosition("above");
                           markDirty();
@@ -2047,6 +2067,11 @@ export function PostComposer() {
                         Текст снизу
                       </SmallButton>
                     </div>
+                    {media.length > 1 && (
+                      <p className="mt-1.5 text-xs text-muted">
+                        В альбоме из нескольких файлов Telegram размещает подпись только под медиа.
+                      </p>
+                    )}
                   </div>
                 ) : (
                   <div>

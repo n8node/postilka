@@ -251,8 +251,19 @@ func writePostError(w http.ResponseWriter, err error) {
 	case errors.Is(err, service.ErrInvalidPost):
 		message := strings.TrimPrefix(err.Error(), service.ErrInvalidPost.Error()+": ")
 		writeError(w, http.StatusBadRequest, message)
+	case errors.Is(err, service.ErrPublishFailed):
+		message := strings.TrimPrefix(err.Error(), service.ErrPublishFailed.Error()+": ")
+		if message == "" {
+			message = "Не удалось опубликовать во все каналы"
+		}
+		writeError(w, http.StatusBadGateway, message)
 	default:
 		slog.Error("post operation failed", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось выполнить операцию с публикацией")
+		msg := "Не удалось выполнить операцию с публикацией"
+		if te := strings.TrimPrefix(err.Error(), "telegram api: "); te != err.Error() {
+			writeError(w, http.StatusBadGateway, te)
+			return
+		}
+		writeError(w, http.StatusInternalServerError, msg)
 	}
 }

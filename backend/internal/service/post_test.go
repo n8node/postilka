@@ -161,13 +161,13 @@ func TestDecodePostTargetSettingsAndPlainText(t *testing.T) {
 func TestTelegramMediaPayloadHasNoCaption(t *testing.T) {
 	media := []TelegramMediaInput{
 		{Type: TelegramMediaPhoto, URL: "https://storage.example/photo.jpg?signature=secret"},
-		{Type: TelegramMediaVideo, URL: "https://storage.example/video.mp4?signature=secret"},
+		{Type: TelegramMediaPhoto, URL: "https://storage.example/photo2.jpg?signature=secret"},
 	}
 	if err := validateTelegramMedia(media); err != nil {
 		t.Fatalf("unexpected media validation error: %v", err)
 	}
 	payload := telegramMediaGroupPayload(media, nil)
-	if len(payload) != 2 || payload[0]["type"] != "photo" || payload[1]["type"] != "video" {
+	if len(payload) != 2 || payload[0]["type"] != "photo" || payload[1]["type"] != "photo" {
 		t.Fatalf("unexpected media payload: %#v", payload)
 	}
 	for _, item := range payload {
@@ -184,11 +184,59 @@ func TestTelegramMediaPayloadHasNoCaption(t *testing.T) {
 		t.Fatalf("expected caption on first media item: %#v", captionPayload[0])
 	}
 	if captionPayload[0]["show_caption_above_media"] != true {
-		t.Fatalf("expected show_caption_above_media: %#v", captionPayload[0])
+		t.Fatalf("expected show_caption_above_media on first item: %#v", captionPayload[0])
+	}
+	if captionPayload[1]["show_caption_above_media"] != true {
+		t.Fatalf("expected show_caption_above_media on all album items: %#v", captionPayload[1])
 	}
 	sanitized := safePublishError(errors.New("request failed for " + media[0].URL))
 	if strings.Contains(sanitized, "signature=secret") || !strings.Contains(sanitized, "ссылка скрыта") {
 		t.Fatalf("signed URL was not sanitized: %s", sanitized)
+	}
+}
+
+func TestValidateTelegramMediaRejectsMixedAlbumTypes(t *testing.T) {
+	media := []TelegramMediaInput{
+		{Type: TelegramMediaPhoto, URL: "https://storage.example/photo.jpg"},
+		{Type: TelegramMediaVideo, URL: "https://storage.example/video.mp4"},
+	}
+	if err := validateTelegramMedia(media); !errors.Is(err, ErrInvalidPost) {
+		t.Fatalf("expected mixed album rejection, got %v", err)
+	}
+}
+
+func TestTelegramMediaGroupMessageID(t *testing.T) {
+	id, err := telegramMediaGroupMessageID(json.RawMessage(`[{"message_id":456},{"message_id":457}]`))
+	if err != nil || id != "456" {
+		t.Fatalf("unexpected message id: %q err=%v", id, err)
+	}
+	id, err = telegramMediaGroupMessageID(json.RawMessage(`[]`))
+	if err != nil || id != "" {
+		t.Fatalf("empty album should succeed without id: %q err=%v", id, err)
+	}
+}
+
+func TestValidateTelegramComposerMediaRejectsCaptionAboveAlbum(t *testing.T) {
+	err := validateTelegramComposerMedia(
+		model.PostContent{Format: "message", Text: "Подпись"},
+		model.PostSettings{
+			TelegramMediaLayout:     model.TelegramMediaLayoutCaption,
+			TelegramCaptionPosition: model.TelegramCaptionPositionAbove,
+		},
+		2,
+		nil,
+	)
+	if !errors.Is(err, ErrInvalidPost) {
+		t.Fatalf("expected album caption-above rejection, got %v", err)
+	}
+}
+
+func TestTelegramImageMimeAllowed(t *testing.T) {
+	if !TelegramImageMimeAllowed("image/jpeg") || !TelegramImageMimeAllowed("image/webp") {
+		t.Fatal("expected supported telegram image mime")
+	}
+	if TelegramImageMimeAllowed("image/heic") {
+		t.Fatal("heic should not be supported by telegram")
 	}
 }
 

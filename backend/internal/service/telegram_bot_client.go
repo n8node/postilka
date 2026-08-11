@@ -224,6 +224,38 @@ func telegramMessageID(raw json.RawMessage) (string, error) {
 	return strconv.FormatInt(sent.MessageID, 10), nil
 }
 
+func telegramMediaGroupMessageID(raw json.RawMessage) (string, error) {
+	var sent []telegramSentMessage
+	if err := json.Unmarshal(raw, &sent); err == nil {
+		if len(sent) == 0 || sent[0].MessageID == 0 {
+			return "", nil
+		}
+		return strconv.FormatInt(sent[0].MessageID, 10), nil
+	}
+	var messages []json.RawMessage
+	if err := json.Unmarshal(raw, &messages); err == nil {
+		if len(messages) == 0 {
+			return "", nil
+		}
+		if id, err := telegramMessageID(messages[0]); err == nil {
+			return id, nil
+		}
+	}
+	if len(raw) > 0 && raw[0] == '{' {
+		return telegramMessageID(raw)
+	}
+	return "", errors.New("telegram api: invalid media group result")
+}
+
+func TelegramImageMimeAllowed(mimeType string) bool {
+	switch strings.ToLower(strings.TrimSpace(strings.Split(mimeType, ";")[0])) {
+	case "image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp":
+		return true
+	default:
+		return false
+	}
+}
+
 func (c *TelegramBotClient) SendFormattedMessage(
 	ctx context.Context,
 	token, chatID string,
@@ -273,20 +305,29 @@ func validateTelegramMedia(media []TelegramMediaInput) error {
 			return fmt.Errorf("%w: некорректная ссылка на медиа Telegram", ErrInvalidPost)
 		}
 	}
+	if len(media) > 1 {
+		firstType := media[0].Type
+		for _, item := range media[1:] {
+			if item.Type != firstType {
+				return fmt.Errorf("%w: в альбоме Telegram должны быть только фото или только видео", ErrInvalidPost)
+			}
+		}
+	}
 	return nil
 }
 
 func telegramMediaGroupPayload(media []TelegramMediaInput, opts *TelegramMediaSendOptions) []map[string]any {
 	items := make([]map[string]any, 0, len(media))
+	showAbove := opts != nil && opts.ShowCaptionAboveMedia
 	for i, item := range media {
 		entry := map[string]any{"type": item.Type, "media": item.URL}
+		if showAbove {
+			entry["show_caption_above_media"] = true
+		}
 		if i == 0 && opts != nil && strings.TrimSpace(opts.Caption) != "" {
 			entry["caption"] = opts.Caption
 			if parseMode := strings.TrimSpace(opts.ParseMode); parseMode != "" {
 				entry["parse_mode"] = parseMode
-			}
-			if opts.ShowCaptionAboveMedia {
-				entry["show_caption_above_media"] = true
 			}
 		}
 		items = append(items, entry)
@@ -339,14 +380,7 @@ func (c *TelegramBotClient) SendMedia(
 	if err != nil {
 		return "", sanitizeTelegramError(err)
 	}
-	var sent []telegramSentMessage
-	if err := json.Unmarshal(raw, &sent); err != nil {
-		return "", errors.New("telegram api: invalid media group result")
-	}
-	if len(sent) == 0 || sent[0].MessageID == 0 {
-		return "", nil
-	}
-	return strconv.FormatInt(sent[0].MessageID, 10), nil
+	return telegramMediaGroupMessageID(raw)
 }
 
 func (c *TelegramBotClient) SendRichMessage(

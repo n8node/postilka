@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"html"
 	"io"
@@ -69,6 +70,7 @@ func (s *PublicationService) Publish(ctx context.Context, postID string, allowRe
 	}
 
 	var earliestRetry *time.Time
+	var lastPublishErr error
 	for _, target := range post.Targets {
 		if target.Status == model.PostTargetPublished || target.Status == model.PostTargetCanceled {
 			continue
@@ -84,10 +86,16 @@ func (s *PublicationService) Publish(ctx context.Context, postID string, allowRe
 		providerID, publishErr := s.publishTarget(ctx, post, target)
 		if publishErr == nil {
 			if err := s.posts.CompleteTarget(ctx, target.ID, providerID); err != nil {
-				return err
+				slog.Warn(
+					"post publish: mark target published failed after delivery",
+					"post_id", postID,
+					"target_id", target.ID,
+					"error", err,
+				)
 			}
 			continue
 		}
+		lastPublishErr = publishErr
 
 		var retryAt *time.Time
 		if allowRetry && target.Attempts+1 < maxPublishAttempts {
@@ -108,12 +116,17 @@ func (s *PublicationService) Publish(ctx context.Context, postID string, allowRe
 	if err := s.posts.FinalizePublication(ctx, postID, earliestRetry); err != nil {
 		return err
 	}
-	if !wasPublished && s.quota != nil {
-		updated, err := s.posts.GetByID(ctx, postID)
-		if err != nil {
-			slog.Warn("post publish: reload for post-publish bookkeeping", "post_id", postID, "error", err)
-			return nil
+	updated, err := s.posts.GetByID(ctx, postID)
+	if err != nil {
+		return err
+	}
+	if lastPublishErr != nil && !publicationAnyDelivered(*updated) {
+		if errors.Is(lastPublishErr, ErrInvalidPost) {
+			return lastPublishErr
 		}
+		return fmt.Errorf("%w: %s", ErrPublishFailed, safePublishError(lastPublishErr))
+	}
+	if !wasPublished && s.quota != nil {
 		if updated.Status == model.PostStatusPublished {
 			if err := s.quota.RecordPost(ctx, updated.WorkspaceID); err != nil {
 				slog.Warn(
@@ -181,11 +194,23 @@ func safePublishError(err error) string {
 
 var signedURLPattern = regexp.MustCompile(`https?://[^\s]+`)
 
+func publicationAnyDelivered(post model.Post) bool {
+	for _, target := range post.Targets {
+		if target.Status == model.PostTargetPublished {
+			return true
+		}
+	}
+	return false
+}
+
 func telegramMediaLayoutCombined(settings model.PostSettings) bool {
 	return strings.TrimSpace(settings.TelegramMediaLayout) == model.TelegramMediaLayoutCaption
 }
 
-func telegramCaptionAbove(settings model.PostSettings) bool {
+func telegramCaptionAbove(settings model.PostSettings, mediaCount int) bool {
+	if mediaCount > 1 {
+		return false
+	}
 	return strings.TrimSpace(settings.TelegramCaptionPosition) == model.TelegramCaptionPositionAbove
 }
 
@@ -269,7 +294,7 @@ func (s *PublicationService) publishTarget(
 					opts := &TelegramMediaSendOptions{
 						Caption:               content.Text,
 						ParseMode:             parseMode,
-						ShowCaptionAboveMedia: telegramCaptionAbove(settings),
+						ShowCaptionAboveMedia: telegramCaptionAbove(settings, len(media)),
 					}
 					if len(media) == 1 {
 						opts.Buttons = content.Buttons
@@ -280,7 +305,7 @@ func (s *PublicationService) publishTarget(
 					}
 					if len(media) > 1 && hasTelegramButtons(content.Buttons) {
 						if _, err := s.telegram.SendFormattedMessage(ctx, token, channel.ChatID, TelegramMessageInput{
-							Text:    "\u200b",
+							Text:    "·",
 							Buttons: content.Buttons,
 						}); err != nil {
 							return "", err
@@ -383,13 +408,17 @@ func (s *PublicationService) telegramMedia(
 			return nil, fmt.Errorf("медиафайл не найден или удалён")
 		}
 		mediaType := ""
+		mime := strings.ToLower(strings.TrimSpace(strings.Split(file.MimeType, ";")[0]))
 		switch {
-		case strings.HasPrefix(strings.ToLower(file.MimeType), "image/"):
+		case strings.HasPrefix(mime, "image/"):
+			if !TelegramImageMimeAllowed(mime) {
+				return nil, fmt.Errorf("%w: Telegram не поддерживает формат %s — используйте JPEG, PNG, GIF или WEBP", ErrInvalidPost, file.MimeType)
+			}
 			mediaType = TelegramMediaPhoto
-		case strings.HasPrefix(strings.ToLower(file.MimeType), "video/"):
+		case strings.HasPrefix(mime, "video/"):
 			mediaType = TelegramMediaVideo
 		default:
-			return nil, fmt.Errorf("Telegram поддерживает только изображения и видео")
+			return nil, fmt.Errorf("%w: Telegram поддерживает только изображения и видео", ErrInvalidPost)
 		}
 		signedURL, err := s.storage.PresignGetWithOptions(ctx, file.S3Key, PresignGetOptions{
 			Expires: 30 * time.Minute,
