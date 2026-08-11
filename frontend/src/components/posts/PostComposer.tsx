@@ -1977,7 +1977,9 @@ export function PostComposer() {
                     />
                     {channelDisplayName(channel)}
                     {detached && (
-                      <Layers2 className="h-3.5 w-3.5 shrink-0" title="Своя версия текста" />
+                      <span title="Своя версия текста">
+                        <Layers2 className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                      </span>
                     )}
                   </button>
                 );
