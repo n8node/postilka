@@ -18,6 +18,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/postilka/postilka/internal/model"
+	oauthclient "github.com/postilka/postilka/internal/oauth"
 	"github.com/postilka/postilka/internal/repository"
 )
 
@@ -28,9 +29,12 @@ var (
 )
 
 const (
-	maxPostTargets = 100
-	maxPostMedia = 10
+	maxPostTargets     = 100
+	maxPostMedia       = 10
 	maxTelegramButtons = 100
+	maxMAXButtons      = 210
+	maxMAXButtonRows   = 30
+	maxMAXButtonsPerRow = 3
 	maxPublishAttempts = 5
 )
 
@@ -285,6 +289,26 @@ func (s *PostService) validateExistingTargets(ctx context.Context, post *model.P
 		if err := validateTelegramComposerMedia(content, settings, len(post.Media), channel); err != nil {
 			return err
 		}
+		if channel.Provider == model.ChannelProviderMAX {
+			if err := validateMAXComposerAttachments(len(post.Media), settings.MaxButtons); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func validateMAXComposerAttachments(mediaCount int, buttons [][]model.TelegramInlineButton) error {
+	keyboard := 0
+	if len(buttons) > 0 {
+		keyboard = 1
+	}
+	if mediaCount+keyboard > oauthclient.MaxMAXMediaAttachments {
+		return fmt.Errorf(
+			"%w: MAX принимает не более %d вложений в одном сообщении (медиа + кнопки)",
+			ErrInvalidPost,
+			oauthclient.MaxMAXMediaAttachments,
+		)
 	}
 	return nil
 }
@@ -683,6 +707,47 @@ func validatePostSettings(settings model.PostSettings) error {
 		if settings.Recurrence.EndsAt != nil && settings.Recurrence.EndsAt.Before(time.Now()) {
 			return fmt.Errorf("%w: дата окончания повторов должна быть в будущем", ErrInvalidPost)
 		}
+	}
+	if err := validateMaxButtons(settings.MaxButtons); err != nil {
+		return err
+	}
+	return nil
+}
+
+func validateMaxButtons(rows [][]model.TelegramInlineButton) error {
+	if len(rows) == 0 {
+		return nil
+	}
+	if len(rows) > maxMAXButtonRows {
+		return fmt.Errorf("%w: в MAX можно добавить не более %d строк кнопок", ErrInvalidPost, maxMAXButtonRows)
+	}
+	count := 0
+	for _, row := range rows {
+		if len(row) < 1 || len(row) > maxMAXButtonsPerRow {
+			return fmt.Errorf("%w: в строке MAX должно быть от 1 до %d кнопок-ссылок", ErrInvalidPost, maxMAXButtonsPerRow)
+		}
+		for _, button := range row {
+			count++
+			text := strings.TrimSpace(button.Text)
+			link := strings.TrimSpace(button.URL)
+			if text == "" || link == "" {
+				return fmt.Errorf("%w: у каждой кнопки MAX укажите текст и URL", ErrInvalidPost)
+			}
+			if utf8.RuneCountInString(text) > 128 {
+				return fmt.Errorf("%w: текст кнопки MAX не должен превышать 128 символов", ErrInvalidPost)
+			}
+			if err := validateHTTPURL(link); err != nil {
+				return fmt.Errorf("%w: некорректный URL кнопки MAX", ErrInvalidPost)
+			}
+			if button.CallbackData != "" || button.CopyText != "" || button.WebAppURL != "" ||
+				(button.Style != "" && button.Style != model.TelegramButtonDefault) ||
+				button.IconCustomEmojiID != "" {
+				return fmt.Errorf("%w: MAX поддерживает только кнопки-ссылки", ErrInvalidPost)
+			}
+		}
+	}
+	if count > maxMAXButtons {
+		return fmt.Errorf("%w: можно добавить не более %d кнопок MAX", ErrInvalidPost, maxMAXButtons)
 	}
 	return nil
 }

@@ -193,7 +193,7 @@ func (s *ChannelTestService) publish(
 		if photoURL != "" {
 			if err := s.maxClient.SendChannelMessage(ctx, token, ch.ChatID, text, []oauthclient.MAXOutgoingAttachment{{
 				Type: "image", ImageURL: photoURL,
-			}}); err != nil {
+			}}, nil); err != nil {
 				return "", err
 			}
 			return "", nil
@@ -209,7 +209,7 @@ func (s *ChannelTestService) publish(
 			}
 			if err := s.maxClient.SendChannelMessage(ctx, token, ch.ChatID, text, []oauthclient.MAXOutgoingAttachment{{
 				Type: "video", Token: videoToken,
-			}}); err != nil {
+			}}, nil); err != nil {
 				return "", err
 			}
 			return "", nil

@@ -142,9 +142,10 @@ type PostSettings struct {
 	UTM                     *PostUTMSettings        `json:"utm,omitempty"`
 	ApprovalRequired        bool                    `json:"approval_required,omitempty"`
 	Recurrence              *PostRecurrenceSettings `json:"recurrence,omitempty"`
-	TelegramMediaLayout     string                  `json:"telegram_media_layout,omitempty"`
-	TelegramCaptionPosition string                  `json:"telegram_caption_position,omitempty"`
-	TelegramMediaOrder      string                  `json:"telegram_media_order,omitempty"`
+	TelegramMediaLayout     string                   `json:"telegram_media_layout,omitempty"`
+	TelegramCaptionPosition string                   `json:"telegram_caption_position,omitempty"`
+	TelegramMediaOrder      string                   `json:"telegram_media_order,omitempty"`
+	MaxButtons              [][]TelegramInlineButton `json:"max_buttons,omitempty"`
 }
 
 type PostTarget struct {

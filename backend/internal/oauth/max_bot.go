@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/postilka/postilka/internal/model"
 )
 
 const maxAPIBase = "https://platform-api2.max.ru"
@@ -771,10 +773,47 @@ func buildMAXMessageAttachments(items []MAXOutgoingAttachment) []map[string]any 
 	return out
 }
 
+func appendMAXInlineKeyboard(
+	attachments []map[string]any,
+	buttons [][]model.TelegramInlineButton,
+) []map[string]any {
+	if len(buttons) == 0 {
+		return attachments
+	}
+	rows := make([][]maxInlineButton, 0, len(buttons))
+	for _, row := range buttons {
+		btnRow := make([]maxInlineButton, 0, len(row))
+		for _, button := range row {
+			text := strings.TrimSpace(button.Text)
+			link := strings.TrimSpace(button.URL)
+			if text == "" || link == "" {
+				continue
+			}
+			btnRow = append(btnRow, maxInlineButton{Type: "link", Text: text, URL: link})
+		}
+		if len(btnRow) > 0 {
+			rows = append(rows, btnRow)
+		}
+	}
+	if len(rows) == 0 {
+		return attachments
+	}
+	out := attachments
+	if out == nil {
+		out = make([]map[string]any, 0, 1)
+	}
+	out = append(out, map[string]any{
+		"type":    "inline_keyboard",
+		"payload": maxInlineKeyboard{Buttons: rows},
+	})
+	return out
+}
+
 func (c *MAXBotClient) SendChannelMessage(
 	ctx context.Context,
 	botToken, chatID, text string,
 	attachments []MAXOutgoingAttachment,
+	buttons [][]model.TelegramInlineButton,
 ) error {
 	botToken = strings.TrimSpace(botToken)
 	chatID = strings.TrimSpace(chatID)
@@ -797,7 +836,9 @@ func (c *MAXBotClient) SendChannelMessage(
 	if strings.TrimSpace(text) != "" {
 		body["text"] = text
 	}
-	if atts := buildMAXMessageAttachments(attachments); len(atts) > 0 {
+	atts := buildMAXMessageAttachments(attachments)
+	atts = appendMAXInlineKeyboard(atts, buttons)
+	if len(atts) > 0 {
 		body["attachments"] = atts
 	}
 	payload, err := json.Marshal(body)
@@ -836,7 +877,7 @@ func (c *MAXBotClient) SendChannelMessage(
 }
 
 func (c *MAXBotClient) SendText(ctx context.Context, botToken, chatID, text string) error {
-	return c.SendChannelMessage(ctx, botToken, chatID, text, nil)
+	return c.SendChannelMessage(ctx, botToken, chatID, text, nil, nil)
 }
 
 func (c *MAXBotClient) SendMessageLink(

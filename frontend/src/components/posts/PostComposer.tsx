@@ -11,6 +11,7 @@ import {
   Copy,
   FileImage,
   GripVertical,
+  Layers2,
   Link2,
   Loader2,
   MapPin,
@@ -127,6 +128,30 @@ const emptyButton = (): EditableButton => ({
   action: "url",
   value: "",
 });
+
+const TELEGRAM_CAPTION_LIMIT = 1024;
+const MAX_BUTTONS_PER_ROW = 3;
+const MAX_BUTTON_ROWS = 30;
+const MAX_BUTTONS_TOTAL = 210;
+
+type MaxEditableButton = { text: string; url: string };
+
+const emptyMaxButton = (): MaxEditableButton => ({ text: "", url: "" });
+
+function channelTextLimit(
+  channel: { provider: string; publish_capabilities?: { max_text_length?: number } },
+  mediaCount: number,
+  telegramMediaLayout: "separate" | "caption",
+) {
+  if (
+    channel.provider === "telegram" &&
+    mediaCount > 0 &&
+    telegramMediaLayout === "caption"
+  ) {
+    return TELEGRAM_CAPTION_LIMIT;
+  }
+  return channel.publish_capabilities?.max_text_length || 4096;
+}
 
 function htmlToPlain(html: string) {
   if (typeof document === "undefined") return html.replace(/<[^>]+>/g, "");
@@ -797,6 +822,112 @@ function ButtonBuilder({
   );
 }
 
+function MaxButtonBuilder({
+  rows,
+  maxButtons,
+  onChange,
+}: {
+  rows: MaxEditableButton[][];
+  maxButtons: number;
+  onChange: (rows: MaxEditableButton[][]) => void;
+}) {
+  const count = rows.flat().length;
+
+  function update(rowIndex: number, buttonIndex: number, patch: Partial<MaxEditableButton>) {
+    const next = rows.map((row) => row.map((button) => ({ ...button })));
+    next[rowIndex]![buttonIndex] = { ...next[rowIndex]![buttonIndex]!, ...patch };
+    onChange(next);
+  }
+
+  return (
+    <Card
+      title="Кнопки MAX"
+      action={
+        <SmallButton
+          disabled={count >= maxButtons || rows.length >= MAX_BUTTON_ROWS}
+          onClick={() => onChange([...rows, [emptyMaxButton()]])}
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Строка
+        </SmallButton>
+      }
+    >
+      {rows.length === 0 ? (
+        <p className="text-sm text-muted">
+          Добавьте кнопки-ссылки для MAX. До {MAX_BUTTONS_PER_ROW} кнопок в строке, не более{" "}
+          {maxButtons} всего. Клавиатура считается одним вложением вместе с медиа (лимит 12).
+        </p>
+      ) : (
+        <div className="space-y-3">
+          {rows.map((row, rowIndex) => (
+            <div key={rowIndex} className="rounded-lg border border-border bg-zinc-50 p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-xs font-semibold text-zinc-600">Строка {rowIndex + 1}</span>
+                <button
+                  type="button"
+                  onClick={() => onChange(rows.filter((_, index) => index !== rowIndex))}
+                  className="p-1 text-red-500"
+                  aria-label="Удалить строку"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              <div className="space-y-2">
+                {row.map((button, buttonIndex) => (
+                  <div key={buttonIndex} className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+                    <input
+                      value={button.text}
+                      maxLength={128}
+                      onChange={(event) => update(rowIndex, buttonIndex, { text: event.target.value })}
+                      placeholder="Текст кнопки"
+                      className="min-w-0 rounded-md border border-border bg-white px-2 py-1.5 text-xs"
+                    />
+                    <input
+                      value={button.url}
+                      onChange={(event) => update(rowIndex, buttonIndex, { url: event.target.value })}
+                      placeholder="https://…"
+                      className="min-w-0 rounded-md border border-border bg-white px-2 py-1.5 text-xs"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = rows.map((item) => [...item]);
+                        next[rowIndex] = next[rowIndex]!.filter((_, index) => index !== buttonIndex);
+                        if (next[rowIndex]!.length === 0) next.splice(rowIndex, 1);
+                        onChange(next);
+                      }}
+                      className="p-1.5 text-red-500"
+                      aria-label="Удалить кнопку"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              {row.length < MAX_BUTTONS_PER_ROW && count < maxButtons && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = rows.map((item) => [...item]);
+                    next[rowIndex] = [...next[rowIndex]!, emptyMaxButton()];
+                    onChange(next);
+                  }}
+                  className="mt-2 text-xs font-medium text-accent hover:underline"
+                >
+                  + Кнопка в строку
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="mt-2 text-xs text-muted">
+        {count}/{maxButtons}. MAX поддерживает только кнопки-ссылки.
+      </p>
+    </Card>
+  );
+}
+
 export function PostComposer() {
   const [channels, setChannels] = useState<ChannelListItem[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
@@ -819,6 +950,7 @@ export function PostComposer() {
     { type: "paragraph", text: "" },
   ]);
   const [buttonRows, setButtonRows] = useState<EditableButton[][]>([]);
+  const [maxButtonRows, setMaxButtonRows] = useState<MaxEditableButton[][]>([]);
   const [media, setMedia] = useState<SelectedMedia[]>([]);
   const [mediaPicker, setMediaPicker] = useState(false);
   const [firstComment, setFirstComment] = useState("");
@@ -927,13 +1059,23 @@ export function PostComposer() {
   const activeChannel =
     selectedChannels.find((channel) => channel.id === activeChannelId) ?? selectedChannels[0] ?? null;
   const telegramChannels = selectedChannels.filter((channel) => channel.provider === "telegram");
+  const maxChannels = selectedChannels.filter((channel) => channel.provider === "max");
   const currentOverride = activeChannel ? overrides[activeChannel.id] : undefined;
   const previewHTML = currentOverride?.detached ? currentOverride.html : html;
   const previewPlain = currentOverride?.detached ? currentOverride.plain : plain;
   const editorHTML = activeChannelId && currentOverride?.detached ? currentOverride.html : html;
   const editorPlain = activeChannelId && currentOverride?.detached ? currentOverride.plain : plain;
   const detectedURL = previewPlain.match(/https?:\/\/[^\s<]+/)?.[0] ?? "";
-  const maxText = activeChannel?.publish_capabilities?.max_text_length || 4096;
+  const maxText =
+    activeChannel !== null
+      ? channelTextLimit(activeChannel, media.length, telegramMediaLayout)
+      : selectedChannels.length > 0
+        ? Math.min(
+            ...selectedChannels.map((channel) =>
+              channelTextLimit(channel, media.length, telegramMediaLayout),
+            ),
+          )
+        : 4096;
   const hashtagCount = (previewPlain.match(/#[^\s#]+/g) || []).length;
   const canArticle = telegramChannels.some(
     (channel) => channel.publish_capabilities?.telegram_rich_messages,
@@ -941,13 +1083,24 @@ export function PostComposer() {
   const articleOnlyTelegram =
     format !== "message" &&
     selectedChannels.some((channel) => channel.provider !== "telegram");
-  const canButtons =
+  const canTelegramButtons =
     telegramChannels.length > 0 &&
     telegramChannels.every((channel) => channel.publish_capabilities?.inline_buttons);
-  const maxButtons = Math.min(
-    ...telegramChannels.map((channel) => channel.publish_capabilities?.max_buttons || 100),
-    100,
-  );
+  const canMaxButtons =
+    maxChannels.length > 0 &&
+    maxChannels.every((channel) => channel.publish_capabilities?.inline_buttons);
+  const maxButtons = canTelegramButtons
+    ? Math.min(
+        ...telegramChannels.map((channel) => channel.publish_capabilities?.max_buttons || 100),
+        100,
+      )
+    : 100;
+  const maxMaxButtons = canMaxButtons
+    ? Math.min(
+        ...maxChannels.map((channel) => channel.publish_capabilities?.max_buttons || MAX_BUTTONS_TOTAL),
+        MAX_BUTTONS_TOTAL,
+      )
+    : MAX_BUTTONS_TOTAL;
   const noMediaDelivery = selectedChannels.filter(
     (channel) => !channel.publish_capabilities?.composer_media,
   );
@@ -977,6 +1130,7 @@ export function PostComposer() {
     setArticleTitle("");
     setArticleBlocks([{ type: "paragraph", text: "" }]);
     setButtonRows([]);
+    setMaxButtonRows([]);
     setMedia([]);
     setTelegramMediaLayout("separate");
     setTelegramCaptionPosition("below");
@@ -1016,7 +1170,7 @@ export function PostComposer() {
     for (const target of post.targets) {
       const targetHTML = target.settings?.content?.text ?? post.content.text;
       targetOverrides[target.channel_id] = {
-        detached: Boolean(target.settings?.content?.text),
+        detached: Boolean(target.settings?.detached),
         html: targetHTML,
         plain: htmlToPlain(targetHTML),
       };
@@ -1039,6 +1193,11 @@ export function PostComposer() {
     setButtonRows(
       (post.content.rich_message?.buttons ?? post.content.buttons ?? []).map((row) =>
         row.map(buttonToEditable),
+      ),
+    );
+    setMaxButtonRows(
+      (post.settings.max_buttons ?? []).map((row) =>
+        row.map((button) => ({ text: button.text, url: button.url ?? "" })),
       ),
     );
     setMedia(
@@ -1164,6 +1323,15 @@ export function PostComposer() {
             ends_at: endsAt ? new Date(endsAt).toISOString() : undefined,
           }
         : undefined,
+      max_buttons:
+        canMaxButtons && maxButtonRows.length > 0
+          ? maxButtonRows.map((row) =>
+              row.map((button) => ({
+                text: button.text.trim(),
+                url: button.url.trim(),
+              })),
+            )
+          : undefined,
     };
   }
 
@@ -1183,7 +1351,7 @@ export function PostComposer() {
         format === "message" || format === "story" || format === "short_video" ? html : "",
       parse_mode: "HTML",
       entities: [],
-      buttons: format === "message" ? apiButtons : [],
+      buttons: format === "message" && canTelegramButtons ? apiButtons : [],
       rich_message: richMessage,
     };
     return {
@@ -1362,18 +1530,15 @@ export function PostComposer() {
       if (!channel.publish_capabilities?.text) {
         return `${PROVIDER_LABEL[channel.provider]}: обычные текстовые посты не поддерживаются`;
       }
-      const limit = channel.publish_capabilities?.max_text_length;
-      if (format === "message" && limit && text.length > limit) {
-        return `${PROVIDER_LABEL[channel.provider]}: текст длиннее лимита ${limit}`;
-      }
-      if (
-        action !== "draft" &&
-        media.length > 0 &&
-        channel.provider === "telegram" &&
-        telegramMediaLayout === "caption" &&
-        text.length > 1024
-      ) {
-        return "Подпись к медиа Telegram не должна превышать 1024 символов";
+      const limit = channelTextLimit(channel, media.length, telegramMediaLayout);
+      if (format === "message" && text.length > limit) {
+        const limitHint =
+          channel.provider === "telegram" &&
+          media.length > 0 &&
+          telegramMediaLayout === "caption"
+            ? " (подпись к медиа Telegram)"
+            : "";
+        return `${PROVIDER_LABEL[channel.provider]}: текст длиннее лимита ${limit}${limitHint}`;
       }
       if (action !== "draft" && media.length > 0) {
         if (!channel.publish_capabilities?.composer_media) {
@@ -1385,30 +1550,63 @@ export function PostComposer() {
         }
       }
     }
-    for (const row of buttonRows) {
-      if (row.length < 1 || row.length > 8) return "В строке Telegram должно быть от 1 до 8 кнопок";
-      for (const button of row) {
-        if (!button.text.trim() || !button.value.trim()) return "Заполните текст и действие каждой кнопки";
-        if (button.action.includes("url")) {
-          try {
-            const url = new URL(button.value);
-            if (!["http:", "https:"].includes(url.protocol)) throw new Error();
-          } catch {
-            return "URL и Web App кнопки должны содержать корректную HTTP(S)-ссылку";
+    if (canTelegramButtons) {
+      for (const row of buttonRows) {
+        if (row.length < 1 || row.length > 8) return "В строке Telegram должно быть от 1 до 8 кнопок";
+        for (const button of row) {
+          if (!button.text.trim() || !button.value.trim()) return "Заполните текст и действие каждой кнопки";
+          if (button.action.includes("url")) {
+            try {
+              const url = new URL(button.value);
+              if (!["http:", "https:"].includes(url.protocol)) throw new Error();
+            } catch {
+              return "URL и Web App кнопки должны содержать корректную HTTP(S)-ссылку";
+            }
+          }
+          if (button.action === "callback_data" && new TextEncoder().encode(button.value).length > 64) {
+            return "Callback кнопки не должен превышать 64 байта";
+          }
+          if (button.action === "copy_text" && button.value.length > 256) {
+            return "Текст для копирования не должен превышать 256 символов";
+          }
+          if (
+            button.icon_custom_emoji_id?.trim() &&
+            !/^[1-9]\d*$/.test(button.icon_custom_emoji_id.trim())
+          ) {
+            return "Custom emoji ID кнопки должен быть положительным числом";
           }
         }
-        if (button.action === "callback_data" && new TextEncoder().encode(button.value).length > 64) {
-          return "Callback кнопки не должен превышать 64 байта";
+      }
+    }
+    if (canMaxButtons && maxButtonRows.length > 0) {
+      const flatCount = maxButtonRows.flat().length;
+      if (maxButtonRows.length > MAX_BUTTON_ROWS) {
+        return `В MAX можно добавить не более ${MAX_BUTTON_ROWS} строк кнопок`;
+      }
+      if (flatCount > maxMaxButtons) {
+        return `Можно добавить не более ${maxMaxButtons} кнопок MAX`;
+      }
+      for (const row of maxButtonRows) {
+        if (row.length < 1 || row.length > MAX_BUTTONS_PER_ROW) {
+          return `В строке MAX должно быть от 1 до ${MAX_BUTTONS_PER_ROW} кнопок-ссылок`;
         }
-        if (button.action === "copy_text" && button.value.length > 256) {
-          return "Текст для копирования не должен превышать 256 символов";
+        for (const button of row) {
+          if (!button.text.trim() || !button.url.trim()) {
+            return "Заполните текст и URL каждой кнопки MAX";
+          }
+          try {
+            const url = new URL(button.url);
+            if (!["http:", "https:"].includes(url.protocol)) throw new Error();
+          } catch {
+            return "URL кнопки MAX должен быть корректной HTTP(S)-ссылкой";
+          }
         }
-        if (
-          button.icon_custom_emoji_id?.trim() &&
-          !/^[1-9]\d*$/.test(button.icon_custom_emoji_id.trim())
-        ) {
-          return "Custom emoji ID кнопки должен быть положительным числом";
-        }
+      }
+      if (
+        maxChannels.length > 0 &&
+        media.length + 1 > 12
+      ) {
+        return "MAX: медиа и кнопки вместе — не более 12 вложений в одном сообщении";
       }
     }
     if ((latitude && !longitude) || (!latitude && longitude)) return "Укажите обе координаты";
@@ -1574,11 +1772,7 @@ export function PostComposer() {
     window.addEventListener("pointerup", end);
   }
 
-  const editorChannel = activeChannel
-    ? overrides[activeChannel.id]?.detached
-      ? activeChannel
-      : null
-    : null;
+  const editingSharedText = activeChannelId === null;
 
   if (loading) {
     return (
@@ -1759,13 +1953,14 @@ export function PostComposer() {
                 onClick={() => setActiveChannelId(null)}
                 className={cn(
                   "rounded-full border px-3 py-1.5 text-xs font-semibold",
-                  !editorChannel ? "border-accent bg-accent/10 text-accent" : "border-border",
+                  editingSharedText ? "border-accent bg-accent/10 text-accent" : "border-border",
                 )}
               >
                 Общий текст
               </button>
               {selectedChannels.map((channel) => {
                 const detached = overrides[channel.id]?.detached;
+                const selected = activeChannelId === channel.id;
                 return (
                   <button
                     key={channel.id}
@@ -1773,9 +1968,7 @@ export function PostComposer() {
                     onClick={() => setActiveChannelId(channel.id)}
                     className={cn(
                       "flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold",
-                      activeChannelId === channel.id && detached
-                        ? "border-accent bg-accent/10 text-accent"
-                        : "border-border",
+                      selected ? "border-accent bg-accent/10 text-accent" : "border-border",
                     )}
                   >
                     <span
@@ -1783,7 +1976,9 @@ export function PostComposer() {
                       style={{ background: PROVIDER_COLOR[channel.provider] }}
                     />
                     {channelDisplayName(channel)}
-                    {detached && <span title="Отдельная версия">●</span>}
+                    {detached && (
+                      <Layers2 className="h-3.5 w-3.5 shrink-0" title="Своя версия текста" />
+                    )}
                   </button>
                 );
               })}
@@ -1795,8 +1990,8 @@ export function PostComposer() {
                   <p className="text-sm font-semibold">{channelDisplayName(activeChannel)}</p>
                   <p className="text-xs text-muted">
                     {overrides[activeChannel.id]?.detached
-                      ? "Отдельная версия будет применена при публикации в этот канал"
-                      : "Сейчас канал использует общий текст"}
+                      ? "Своя версия текста будет опубликована только в этот канал"
+                      : "Сейчас канал использует общий текст. Нажмите «Своя версия», чтобы адаптировать."}
                   </p>
                 </div>
                 <div className="flex gap-2">
@@ -1829,7 +2024,7 @@ export function PostComposer() {
                       markDirty();
                     }}
                   >
-                    {overrides[activeChannel.id]?.detached ? "Вернуть общий" : "Отделить версию"}
+                    {overrides[activeChannel.id]?.detached ? "Общий текст" : "Своя версия"}
                   </SmallButton>
                 </div>
               </div>
@@ -1955,7 +2150,7 @@ export function PostComposer() {
                 const channelText = overrides[channel.id]?.detached
                   ? overrides[channel.id]!.plain
                   : plain;
-                const limit = channel.publish_capabilities?.max_text_length || 0;
+                const limit = channelTextLimit(channel, media.length, telegramMediaLayout);
                 const over = limit > 0 && channelText.length > limit;
                 return (
                   <span
@@ -1972,7 +2167,7 @@ export function PostComposer() {
             </div>
           </Card>
 
-          {canButtons && (
+          {canTelegramButtons && (
             <ButtonBuilder
               rows={buttonRows}
               styled={telegramChannels.every((channel) => channel.publish_capabilities?.styled_buttons)}
@@ -1982,6 +2177,17 @@ export function PostComposer() {
               maxButtons={maxButtons}
               onChange={(rows) => {
                 setButtonRows(rows);
+                markDirty();
+              }}
+            />
+          )}
+
+          {canMaxButtons && (
+            <MaxButtonBuilder
+              rows={maxButtonRows}
+              maxButtons={maxMaxButtons}
+              onChange={(rows) => {
+                setMaxButtonRows(rows);
                 markDirty();
               }}
             />
@@ -2830,7 +3036,7 @@ export function PostComposer() {
                           Текст будет отклонён: превышен лимит на {previewPlain.length - maxText} символов.
                         </p>
                       )}
-                      {buttonRows.length > 0 && (
+                      {buttonRows.length > 0 && activeChannel?.provider !== "max" && (
                         <div className="mt-3 space-y-1">
                           {buttonRows.map((row, index) => (
                             <div key={index} className="grid grid-flow-col gap-1">
@@ -2854,6 +3060,23 @@ export function PostComposer() {
                                     </span>
                                   )}
                                   {button.text || "Кнопка"}
+                                </span>
+                              ))}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {maxButtonRows.length > 0 &&
+                        (activeChannel?.provider === "max" || !activeChannel) && (
+                        <div className="mt-3 space-y-1">
+                          {maxButtonRows.map((row, index) => (
+                            <div key={index} className="grid grid-flow-col gap-1">
+                              {row.map((button, buttonIndex) => (
+                                <span
+                                  key={buttonIndex}
+                                  className="truncate rounded-md border border-violet-200 bg-violet-50 px-2 py-1.5 text-center text-[11px] font-semibold text-violet-800"
+                                >
+                                  {button.text || "Ссылка"}
                                 </span>
                               ))}
                             </div>
