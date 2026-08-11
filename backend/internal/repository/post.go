@@ -218,13 +218,20 @@ func (r *PostRepository) Update(
 		SET content = $3, settings = $4, status = 'draft', due_at = NULL,
 		    published_at = NULL, last_error = NULL, updated_at = NOW()
 		WHERE id = $1 AND workspace_id = $2
-		  AND status IN ('draft', 'failed', 'canceled', 'pending_approval')
+		  AND status IN ('draft', 'failed', 'canceled', 'pending_approval', 'scheduled', 'publishing')
 	`, postID, workspaceID, contentRaw, settingsRaw)
 	if err != nil {
 		return nil, err
 	}
 	if tag.RowsAffected() == 0 {
 		return nil, ErrNotFound
+	}
+	if _, err := tx.Exec(ctx, `
+		UPDATE post_targets
+		SET status = 'pending', last_error = NULL, next_attempt_at = NULL, updated_at = NOW()
+		WHERE post_id = $1 AND status = 'publishing'
+	`, postID); err != nil {
+		return nil, err
 	}
 	if err := replacePostRelations(ctx, tx, workspaceID, postID, req); err != nil {
 		return nil, err
@@ -241,13 +248,26 @@ func replacePostRelations(
 	workspaceID, postID string,
 	req model.PostSaveRequest,
 ) error {
-	if _, err := tx.Exec(ctx, `DELETE FROM post_targets WHERE post_id = $1`, postID); err != nil {
+	if _, err := tx.Exec(ctx, `
+		DELETE FROM post_targets WHERE post_id = $1 AND status <> 'published'
+	`, postID); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx, `DELETE FROM post_media WHERE post_id = $1`, postID); err != nil {
 		return err
 	}
 	for _, target := range req.Targets {
+		tag, err := tx.Exec(ctx, `
+			UPDATE post_targets
+			SET settings = $3, updated_at = NOW()
+			WHERE post_id = $1 AND channel_id = $2 AND status = 'published'
+		`, postID, target.ChannelID, normalizeJSON(target.Settings))
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() > 0 {
+			continue
+		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO post_targets (workspace_id, post_id, channel_id, settings)
 			VALUES ($1, $2, $3, $4)

@@ -128,6 +128,16 @@ func (s *PostService) Update(
 	if err := s.validate(ctx, ws.ID, req, false); err != nil {
 		return nil, err
 	}
+	existing, err := s.posts.Get(ctx, ws.ID, postID)
+	if err != nil {
+		return nil, err
+	}
+	if existing.Status == model.PostStatusPublished {
+		return nil, fmt.Errorf(
+			"%w: публикация уже отправлена — создайте новую запись, чтобы отправить в другие каналы",
+			ErrInvalidPost,
+		)
+	}
 	return s.posts.Update(ctx, ws.ID, postID, req)
 }
 

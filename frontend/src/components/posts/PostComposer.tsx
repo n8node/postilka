@@ -56,6 +56,7 @@ import {
   approvePost,
   commentPost,
   createPost,
+  fetchPost,
   fetchPostApprovalEvents,
   fetchPosts,
   publishPost,
@@ -984,6 +985,8 @@ export function PostComposer() {
   const isAdmin = workspaceRole === "owner" || workspaceRole === "admin";
   const isPendingApproval = currentStatus === "pending_approval";
   const composerLocked = isPendingApproval && !isAdmin;
+  const publishLocked =
+    currentStatus === "published" || currentStatus === "publishing";
 
   const loadApprovalEvents = useCallback(async (id: string) => {
     try {
@@ -1691,20 +1694,38 @@ export function PostComposer() {
     setError(null);
     setSuccess(null);
     try {
-      const saved = postId
-        ? await updatePost(postId, buildPayload())
-        : await createPost(buildPayload());
-      let finalPost = saved;
-      if (action === "schedule") {
-        finalPost = await schedulePost(saved.id, new Date(scheduleAt).toISOString());
-      } else if (action === "now") {
-        finalPost = await publishPost(saved.id);
-        if (finalPost.status === "failed") {
-          throw new ApiError(
-            502,
-            finalPost.last_error || "Не удалось опубликовать во все каналы",
-          );
+      const canPublishWithoutSave =
+        action === "now" &&
+        postId &&
+        !dirty &&
+        currentStatus !== null &&
+        (currentStatus === "failed" ||
+          currentStatus === "scheduled" ||
+          currentStatus === "draft");
+
+      let finalPost: Post;
+      if (canPublishWithoutSave) {
+        finalPost = await publishPost(postId);
+      } else {
+        const saved = postId
+          ? await updatePost(postId, buildPayload())
+          : await createPost(buildPayload());
+        finalPost = saved;
+        if (action === "schedule") {
+          finalPost = await schedulePost(saved.id, new Date(scheduleAt).toISOString());
+        } else if (action === "now") {
+          finalPost = await publishPost(saved.id);
         }
+      }
+      if (action === "now" && finalPost.status === "failed") {
+        const targetErrors = finalPost.targets
+          .filter((target) => target.status === "failed" && target.last_error)
+          .map((target) => target.last_error!)
+          .join("; ");
+        throw new ApiError(
+          502,
+          targetErrors || finalPost.last_error || "Не удалось опубликовать во все каналы",
+        );
       }
       setPostId(finalPost.id);
       setCurrentStatus(finalPost.status);
@@ -1724,6 +1745,18 @@ export function PostComposer() {
               : "Публикация передана в очередь",
       );
     } catch (saveError) {
+      if (postId && action === "now") {
+        try {
+          const latest = await fetchPost(postId);
+          setCurrentStatus(latest.status);
+          setPosts((current) => [
+            latest,
+            ...current.filter((item) => item.id !== latest.id),
+          ]);
+        } catch {
+          // ignore sync errors
+        }
+      }
       setError(errorText(saveError, "Не удалось сохранить публикацию"));
     } finally {
       setBusy(false);
@@ -2796,9 +2829,16 @@ export function PostComposer() {
               ) : timing === "now" ? (
                 <button
                   type="button"
-                  disabled={busy || composerLocked}
+                  disabled={busy || composerLocked || publishLocked}
                   onClick={() => void save("now")}
                   className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                  title={
+                    publishLocked
+                      ? currentStatus === "published"
+                        ? "Публикация уже отправлена — создайте новую запись"
+                        : "Публикация уже выполняется"
+                      : undefined
+                  }
                 >
                   <Send className="h-4 w-4" />
                   Опубликовать

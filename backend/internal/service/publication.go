@@ -379,7 +379,7 @@ func (s *PublicationService) publishTarget(
 			}
 			return "", nil
 		}
-		if err := s.maxClient.SendText(ctx, token, channel.ChatID, text); err != nil {
+		if err := s.maxClient.SendChannelMessage(ctx, token, channel.ChatID, text, nil, settings.MaxButtons); err != nil {
 			return "", err
 		}
 		return "", nil
