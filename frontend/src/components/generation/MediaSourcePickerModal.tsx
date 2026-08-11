@@ -48,7 +48,7 @@ export function MediaSourcePickerModal({
         className={cn(
           "flex w-full flex-col overflow-hidden rounded-xl border border-border bg-surface shadow-xl",
           step === "disk"
-            ? "max-h-[min(88vh,720px)] max-w-2xl"
+            ? "h-[min(88vh,720px)] max-w-2xl"
             : "max-w-md",
         )}
         onClick={(e) => e.stopPropagation()}
