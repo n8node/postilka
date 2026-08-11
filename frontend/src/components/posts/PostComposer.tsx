@@ -1131,6 +1131,10 @@ export function PostComposer() {
   );
   const singleVideoAttached =
     media.length === 1 && isVideoMime(media[0]!.file.mime_type);
+  const telegramVideoCircleActive =
+    singleVideoAttached &&
+    (telegramVideoNote || postKind === "short_video" || format === "short_video");
+  const maxGetsRectangularVideo = telegramVideoCircleActive && maxChannels.length > 0;
 
   function resetNew() {
     if (dirty && !window.confirm("Несохранённые изменения будут потеряны. Продолжить?")) return;
@@ -1922,9 +1926,17 @@ export function PostComposer() {
             {postKind === "story"
               ? "История — одно вертикальное фото или видео в Telegram с подписью."
               : postKind === "short_video"
-                ? "Короткое видео отправляется в Telegram как кружок (video note) с подписью отдельным сообщением."
+                ? maxChannels.length > 0
+                  ? "Короткое видео: в Telegram — кружок, в MAX — обычное прямоугольное видео с текстом."
+                  : "Короткое видео отправляется в Telegram как кружок; подпись — отдельным сообщением."
                 : "Обычный пост: текст, медиа и статья Telegram."}
           </p>
+          {maxGetsRectangularVideo && postKind !== "short_video" && (
+            <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              «Отправить в круге» действует только в Telegram. В MAX то же видео уйдёт как обычный
+              прямоугольный ролик.
+            </p>
+          )}
 
           {isPendingApproval && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -2639,40 +2651,17 @@ export function PostComposer() {
                     <Circle className="h-3.5 w-3.5 shrink-0 text-muted" />
                     Отправить в круге
                   </label>
-                  <label
-                    className={cn(
-                      "flex items-center gap-2 text-sm",
-                      !detectedURL && "opacity-60",
-                    )}
-                    title={
-                      !detectedURL
-                        ? "Добавьте ссылку в текст публикации"
-                        : undefined
-                    }
-                  >
-                    <input
-                      type="checkbox"
-                      checked={linkPreview}
-                      disabled={
-                        !detectedURL ||
-                        !telegramChannels.some(
-                          (channel) => channel.publish_capabilities?.composer_link_preview,
-                        ) ||
-                        composerLocked
-                      }
-                      onChange={(event) => {
-                        setLinkPreview(event.target.checked);
-                        markDirty();
-                      }}
-                    />
-                    <Link2 className="h-3.5 w-3.5 shrink-0 text-muted" />
-                    Прикрепить ссылку
-                  </label>
                 </div>
                 <p className="mt-2 text-[11px] text-muted">
-                  «Прикрепить ссылку» включает превью URL из текста. «Отправить в круге» доступно
-                  для одного видео; в режиме «Короткое видео» кружок включается автоматически.
+                  «Отправить в круге» — только Telegram, нужно одно видео. В режиме «Короткое видео»
+                  кружок включается автоматически.
                 </p>
+                {maxGetsRectangularVideo && (
+                  <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900">
+                    Выбраны каналы MAX: кружок будет только в Telegram, в MAX уйдёт прямоугольное
+                    видео.
+                  </p>
+                )}
                 {telegramPin && !canTelegramPin && (
                   <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800">
                     Закрепление пока недоступно для выбранных Telegram-каналов.
@@ -2711,18 +2700,9 @@ export function PostComposer() {
                     Сократить ссылку при публикации
                   </label>
                   <p className="mt-2 text-[11px] text-muted">
-                    UTM и сокращение сохраняются отдельно для каждого выбранного канала. Превью
-                    ссылки настраивается в блоке «Настройки Telegram».
+                    UTM и сокращение сохраняются отдельно для каждого выбранного канала. При
+                    публикации URL заменяются на короткие отслеживаемые ссылки с учётом UTM.
                   </p>
-                  {noLinkPreviewDelivery.length > 0 && (
-                    <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800">
-                      Управление превью ссылки не подключено для{" "}
-                      {noLinkPreviewDelivery
-                        .map((channel) => PROVIDER_LABEL[channel.provider])
-                        .join(", ")}. Оставьте значение по умолчанию; отключение превью
-                      заблокирует публикацию.
-                    </p>
-                  )}
                 </>
               ) : (
                 <p className="flex items-center gap-2 text-sm text-muted">
