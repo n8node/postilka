@@ -32,6 +32,7 @@ import {
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -985,6 +986,35 @@ export function PostComposer() {
   const [previewWidth, setPreviewWidth] = useState(380);
   const [dirty, setDirty] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const composerShellRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const shell = composerShellRef.current;
+    if (!shell) return;
+
+    const desktopQuery = window.matchMedia("(min-width: 1280px)");
+
+    const syncShellHeight = () => {
+      if (!desktopQuery.matches) {
+        shell.style.removeProperty("height");
+        return;
+      }
+      const top = shell.getBoundingClientRect().top;
+      const bottomGap = 24;
+      const height = Math.max(400, window.innerHeight - top - bottomGap);
+      shell.style.height = `${height}px`;
+    };
+
+    syncShellHeight();
+    window.addEventListener("resize", syncShellHeight);
+    const observer = new ResizeObserver(syncShellHeight);
+    observer.observe(shell.parentElement ?? shell);
+
+    return () => {
+      window.removeEventListener("resize", syncShellHeight);
+      observer.disconnect();
+    };
+  }, [error, success]);
 
   const markDirty = useCallback(() => setDirty(true), []);
 
@@ -1860,7 +1890,7 @@ export function PostComposer() {
   }
 
   return (
-    <div>
+    <div className="post-composer-page">
       <PageHeader
         title={postId ? "Редактирование поста" : "Новый пост"}
         description="Создайте общую публикацию, адаптируйте её для каналов и выберите время отправки."
@@ -1892,11 +1922,12 @@ export function PostComposer() {
         </div>
       )}
 
-      <div
-        className="post-composer-layout"
-        style={{ "--preview-width": `${previewWidth}px` } as CSSProperties}
-      >
-        <div className="min-w-0 space-y-4">
+      <div ref={composerShellRef} className="post-composer-shell">
+        <div
+          className="post-composer-layout"
+          style={{ "--preview-width": `${previewWidth}px` } as CSSProperties}
+        >
+        <div className="post-composer-main min-w-0 space-y-4">
           <div className="inline-flex rounded-lg bg-zinc-200/70 p-1">
             {(
               [
@@ -3265,6 +3296,7 @@ export function PostComposer() {
             </div>
           </div>
         </aside>
+        </div>
       </div>
     </div>
   );
