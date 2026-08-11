@@ -96,6 +96,8 @@ export type PostSettings = {
   };
   approval_required?: boolean;
   recurrence?: PostRecurrenceSettings;
+  /** separate = media then text; caption = text on media (Telegram only) */
+  telegram_media_layout?: "separate" | "caption";
 };
 
 export type PostTargetSettings = {

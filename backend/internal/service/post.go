@@ -281,6 +281,34 @@ func (s *PostService) validateExistingTargets(ctx context.Context, post *model.P
 		if err := validateContentForChannel(content, channel); err != nil {
 			return err
 		}
+		if err := validateTelegramComposerMedia(content, settings, len(post.Media), channel); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateTelegramComposerMedia(
+	content model.PostContent,
+	settings model.PostSettings,
+	mediaCount int,
+	channel *model.Channel,
+) error {
+	if channel == nil || channel.Provider != model.ChannelProviderTelegram || mediaCount == 0 {
+		return nil
+	}
+	format := strings.ToLower(strings.TrimSpace(content.Format))
+	if format == "" {
+		format = "message"
+	}
+	if format != "message" {
+		return nil
+	}
+	if strings.TrimSpace(settings.TelegramMediaLayout) != model.TelegramMediaLayoutCaption {
+		return nil
+	}
+	if utf8.RuneCountInString(content.Text) > 1024 {
+		return fmt.Errorf("%w: подпись к медиа Telegram не должна превышать 1024 символа", ErrInvalidPost)
 	}
 	return nil
 }
@@ -589,6 +617,10 @@ func ValidatePostContent(content model.PostContent, settings model.PostSettings)
 }
 
 func validatePostSettings(settings model.PostSettings) error {
+	layout := strings.TrimSpace(settings.TelegramMediaLayout)
+	if layout != "" && layout != model.TelegramMediaLayoutSeparate && layout != model.TelegramMediaLayoutCaption {
+		return fmt.Errorf("%w: некорректный режим доставки медиа в Telegram", ErrInvalidPost)
+	}
 	if utf8.RuneCountInString(settings.FirstComment) > 4096 {
 		return fmt.Errorf("%w: первый комментарий не должен превышать 4096 символов", ErrInvalidPost)
 	}

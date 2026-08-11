@@ -826,6 +826,7 @@ export function PostComposer() {
   const [latitude, setLatitude] = useState("");
   const [longitude, setLongitude] = useState("");
   const [linkPreview, setLinkPreview] = useState(true);
+  const [telegramMediaLayout, setTelegramMediaLayout] = useState<"separate" | "caption">("separate");
   const [utm, setUTM] = useState({ source: "", medium: "social", campaign: "", shorten: false });
   const [approvalRequired, setApprovalRequired] = useState(false);
   const [evergreenEnabled, setEvergreenEnabled] = useState(false);
@@ -969,6 +970,7 @@ export function PostComposer() {
     setArticleBlocks([{ type: "paragraph", text: "" }]);
     setButtonRows([]);
     setMedia([]);
+    setTelegramMediaLayout("separate");
     setFirstComment("");
     setLocationName("");
     setLatitude("");
@@ -1050,6 +1052,7 @@ export function PostComposer() {
     setLatitude(post.settings.location ? String(post.settings.location.latitude) : "");
     setLongitude(post.settings.location ? String(post.settings.location.longitude) : "");
     setLinkPreview(post.settings.link?.preview_enabled ?? true);
+    setTelegramMediaLayout(post.settings.telegram_media_layout === "caption" ? "caption" : "separate");
     const storedUTM = post.targets[0]?.settings?.settings?.utm;
     setUTM({
       source: storedUTM?.source ?? "",
@@ -1125,6 +1128,8 @@ export function PostComposer() {
           }
         : undefined,
       approval_required: approvalRequired || undefined,
+      telegram_media_layout:
+        media.length > 0 && telegramChannels.length > 0 ? telegramMediaLayout : undefined,
       recurrence: evergreenEnabled
         ? {
             enabled: true,
@@ -1334,6 +1339,15 @@ export function PostComposer() {
       const limit = channel.publish_capabilities?.max_text_length;
       if (format === "message" && limit && text.length > limit) {
         return `${PROVIDER_LABEL[channel.provider]}: текст длиннее лимита ${limit}`;
+      }
+      if (
+        action !== "draft" &&
+        media.length > 0 &&
+        channel.provider === "telegram" &&
+        telegramMediaLayout === "caption" &&
+        text.length > 1024
+      ) {
+        return "Подпись к медиа Telegram не должна превышать 1024 символов";
       }
       if (action !== "draft" && media.length > 0) {
         if (!channel.publish_capabilities?.composer_media) {
@@ -1968,9 +1982,44 @@ export function PostComposer() {
               </div>
             )}
             {media.length > 0 && telegramChannels.length > 0 && (
-              <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
-                В Telegram вложения отправляются первым сообщением, затем текст и кнопки — вторым.
-                Это две отдельные записи в канале.
+              <div className="mt-3 space-y-2">
+                <div>
+                  <p className="mb-1.5 text-xs font-semibold text-zinc-700">Доставка в Telegram</p>
+                  <div className="flex flex-wrap gap-2">
+                    <SmallButton
+                      active={telegramMediaLayout === "separate"}
+                      onClick={() => {
+                        setTelegramMediaLayout("separate");
+                        markDirty();
+                      }}
+                    >
+                      Медиа и текст отдельно
+                    </SmallButton>
+                    <SmallButton
+                      active={telegramMediaLayout === "caption"}
+                      onClick={() => {
+                        setTelegramMediaLayout("caption");
+                        markDirty();
+                      }}
+                    >
+                      Одним сообщением
+                    </SmallButton>
+                  </div>
+                </div>
+                <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+                  {telegramMediaLayout === "caption" ? (
+                    <>
+                      Текст уйдёт подписью к медиа (лимит 1024 символа). При одном файле кнопки
+                      прикрепятся к тому же сообщению; при альбоме — отдельным сообщением с
+                      кнопками.
+                    </>
+                  ) : (
+                    <>
+                      В Telegram вложения отправляются первым сообщением, затем текст и кнопки —
+                      вторым. Это две отдельные записи в канале.
+                    </>
+                  )}
+                </div>
               </div>
             )}
             {mediaPicker && (

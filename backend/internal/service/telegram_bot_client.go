@@ -153,6 +153,7 @@ type TelegramMediaInput struct {
 type TelegramMediaSendOptions struct {
 	Caption   string
 	ParseMode string
+	Buttons   [][]model.TelegramInlineButton
 }
 
 type telegramSentMessage struct {
@@ -274,10 +275,17 @@ func validateTelegramMedia(media []TelegramMediaInput) error {
 	return nil
 }
 
-func telegramMediaGroupPayload(media []TelegramMediaInput) []map[string]string {
-	items := make([]map[string]string, 0, len(media))
-	for _, item := range media {
-		items = append(items, map[string]string{"type": item.Type, "media": item.URL})
+func telegramMediaGroupPayload(media []TelegramMediaInput, opts *TelegramMediaSendOptions) []map[string]any {
+	items := make([]map[string]any, 0, len(media))
+	for i, item := range media {
+		entry := map[string]any{"type": item.Type, "media": item.URL}
+		if i == 0 && opts != nil && strings.TrimSpace(opts.Caption) != "" {
+			entry["caption"] = opts.Caption
+			if parseMode := strings.TrimSpace(opts.ParseMode); parseMode != "" {
+				entry["parse_mode"] = parseMode
+			}
+		}
+		items = append(items, entry)
 	}
 	return items
 }
@@ -306,6 +314,11 @@ func (c *TelegramBotClient) SendMedia(
 				payload["parse_mode"] = parseMode
 			}
 		}
+		if opts != nil {
+			if markup := telegramReplyMarkup(opts.Buttons); markup != nil {
+				payload["reply_markup"] = markup
+			}
+		}
 		raw, err := c.api(ctx, token, method, payload)
 		if err != nil {
 			return "", sanitizeTelegramError(err)
@@ -314,7 +327,7 @@ func (c *TelegramBotClient) SendMedia(
 	}
 	raw, err := c.api(ctx, token, "sendMediaGroup", map[string]any{
 		"chat_id": telegramChatIDParam(chatID),
-		"media":   telegramMediaGroupPayload(media),
+		"media":   telegramMediaGroupPayload(media, opts),
 	})
 	if err != nil {
 		return "", sanitizeTelegramError(err)

@@ -124,13 +124,19 @@ type PostRecurrenceSettings struct {
 	RunNumber    int        `json:"run_number,omitempty"`
 }
 
+const (
+	TelegramMediaLayoutSeparate = "separate"
+	TelegramMediaLayoutCaption  = "caption"
+)
+
 type PostSettings struct {
-	FirstComment     string                  `json:"first_comment,omitempty"`
-	Location         *PostLocation           `json:"location,omitempty"`
-	Link             *PostLinkSettings       `json:"link,omitempty"`
-	UTM              *PostUTMSettings        `json:"utm,omitempty"`
-	ApprovalRequired bool                    `json:"approval_required,omitempty"`
-	Recurrence       *PostRecurrenceSettings `json:"recurrence,omitempty"`
+	FirstComment        string                  `json:"first_comment,omitempty"`
+	Location            *PostLocation           `json:"location,omitempty"`
+	Link                *PostLinkSettings       `json:"link,omitempty"`
+	UTM                 *PostUTMSettings        `json:"utm,omitempty"`
+	ApprovalRequired    bool                    `json:"approval_required,omitempty"`
+	Recurrence          *PostRecurrenceSettings `json:"recurrence,omitempty"`
+	TelegramMediaLayout string                  `json:"telegram_media_layout,omitempty"`
 }
 
 type PostTarget struct {

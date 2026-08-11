@@ -181,6 +181,14 @@ func safePublishError(err error) string {
 
 var signedURLPattern = regexp.MustCompile(`https?://[^\s]+`)
 
+func telegramMediaLayoutCombined(settings model.PostSettings) bool {
+	return strings.TrimSpace(settings.TelegramMediaLayout) == model.TelegramMediaLayoutCaption
+}
+
+func hasTelegramButtons(buttons [][]model.TelegramInlineButton) bool {
+	return len(buttons) > 0 && len(buttons[0]) > 0
+}
+
 func (s *PublicationService) publishTarget(
 	ctx context.Context,
 	post *model.Post,
@@ -244,12 +252,35 @@ func (s *PublicationService) publishTarget(
 			})
 		case "message":
 			if len(post.Media) > 0 {
-				// Composer media is intentionally a separate Telegram message/group.
-				// Text and buttons follow in their normal message to avoid duplicate captions.
 				media, err := s.telegramMedia(ctx, post)
 				if err != nil {
 					return "", err
 				}
+				parseMode := strings.ToUpper(strings.TrimSpace(content.ParseMode))
+				if telegramMediaLayoutCombined(settings) {
+					opts := &TelegramMediaSendOptions{
+						Caption:   content.Text,
+						ParseMode: parseMode,
+					}
+					if len(media) == 1 {
+						opts.Buttons = content.Buttons
+					}
+					msgID, err := s.telegram.SendMedia(ctx, token, channel.ChatID, media, opts)
+					if err != nil {
+						return "", err
+					}
+					if len(media) > 1 && hasTelegramButtons(content.Buttons) {
+						if _, err := s.telegram.SendFormattedMessage(ctx, token, channel.ChatID, TelegramMessageInput{
+							Text:    "\u200b",
+							Buttons: content.Buttons,
+						}); err != nil {
+							return "", err
+						}
+					}
+					return msgID, nil
+				}
+				// Composer media is intentionally a separate Telegram message/group.
+				// Text and buttons follow in their normal message to avoid duplicate captions.
 				if _, err := s.telegram.SendMedia(ctx, token, channel.ChatID, media, nil); err != nil {
 					return "", err
 				}

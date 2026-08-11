@@ -166,7 +166,7 @@ func TestTelegramMediaPayloadHasNoCaption(t *testing.T) {
 	if err := validateTelegramMedia(media); err != nil {
 		t.Fatalf("unexpected media validation error: %v", err)
 	}
-	payload := telegramMediaGroupPayload(media)
+	payload := telegramMediaGroupPayload(media, nil)
 	if len(payload) != 2 || payload[0]["type"] != "photo" || payload[1]["type"] != "video" {
 		t.Fatalf("unexpected media payload: %#v", payload)
 	}
@@ -174,6 +174,13 @@ func TestTelegramMediaPayloadHasNoCaption(t *testing.T) {
 		if _, exists := item["caption"]; exists {
 			t.Fatalf("media payload must not duplicate post text as caption")
 		}
+	}
+	captionPayload := telegramMediaGroupPayload(media, &TelegramMediaSendOptions{
+		Caption:   "Подпись",
+		ParseMode: "HTML",
+	})
+	if captionPayload[0]["caption"] != "Подпись" {
+		t.Fatalf("expected caption on first media item: %#v", captionPayload[0])
 	}
 	sanitized := safePublishError(errors.New("request failed for " + media[0].URL))
 	if strings.Contains(sanitized, "signature=secret") || !strings.Contains(sanitized, "ссылка скрыта") {
