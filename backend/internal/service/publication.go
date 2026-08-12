@@ -495,7 +495,7 @@ func (s *PublicationService) publishTarget(
 				}
 				return s.telegramFinishPublish(ctx, token, channel.ChatID, settings, msgID)
 			}
-			msgID, err := s.telegram.SendMedia(ctx, token, channel.ChatID, media, &TelegramMediaSendOptions{
+			msgID, _, err := s.telegram.SendMedia(ctx, token, channel.ChatID, media, &TelegramMediaSendOptions{
 				Caption: content.Text, ParseMode: parseMode, DisableNotification: silent,
 			})
 			if err != nil {
@@ -547,7 +547,7 @@ func (s *PublicationService) publishTarget(
 					if len(media) == 1 {
 						opts.Buttons = content.Buttons
 					}
-					msgID, err := s.telegram.SendMedia(ctx, token, channel.ChatID, media, opts)
+					msgID, mediaMsgIDs, err := s.telegram.SendMedia(ctx, token, channel.ChatID, media, opts)
 					if err != nil {
 						return "", err
 					}
@@ -557,6 +557,7 @@ func (s *PublicationService) publishTarget(
 							Buttons: content.Buttons, LinkPreviewEnabled: preview, DisableNotification: silent,
 						})
 						if err != nil {
+							s.telegram.DeleteMessages(ctx, token, channel.ChatID, mediaMsgIDs)
 							return "", err
 						}
 						if settings.TelegramPin {
@@ -565,11 +566,11 @@ func (s *PublicationService) publishTarget(
 					}
 					return s.telegramFinishPublish(ctx, token, channel.ChatID, settings, msgID)
 				}
-				sendTelegramMedia := func() error {
-					_, err := s.telegram.SendMedia(ctx, token, channel.ChatID, media, &TelegramMediaSendOptions{
+				sendTelegramMedia := func() ([]string, error) {
+					_, mediaMsgIDs, err := s.telegram.SendMedia(ctx, token, channel.ChatID, media, &TelegramMediaSendOptions{
 						DisableNotification: silent,
 					})
-					return err
+					return mediaMsgIDs, err
 				}
 				sendTelegramText := func() (string, error) {
 					return s.telegram.SendFormattedMessage(ctx, token, channel.ChatID, TelegramMessageInput{
@@ -582,16 +583,18 @@ func (s *PublicationService) publishTarget(
 					if err != nil {
 						return "", err
 					}
-					if err := sendTelegramMedia(); err != nil {
+					if _, err := sendTelegramMedia(); err != nil {
 						return "", err
 					}
 					return s.telegramFinishPublish(ctx, token, channel.ChatID, settings, msgID)
 				}
-				if err := sendTelegramMedia(); err != nil {
+				mediaMsgIDs, err := sendTelegramMedia()
+				if err != nil {
 					return "", err
 				}
 				msgID, err := sendTelegramText()
 				if err != nil {
+					s.telegram.DeleteMessages(ctx, token, channel.ChatID, mediaMsgIDs)
 					return "", err
 				}
 				return s.telegramFinishPublish(ctx, token, channel.ChatID, settings, msgID)

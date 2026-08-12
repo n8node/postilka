@@ -3332,12 +3332,12 @@ export function PostComposer() {
                 disabled={
                   busy ||
                   composerLocked ||
-                  (timing !== "schedule" && publishLocked)
+                  (timing === "now" && publishLocked)
                 }
-                onClick={() => void save(timing === "schedule" ? "schedule" : "now")}
+                onClick={() => void save(timing)}
                 className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-accent px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
                 title={
-                  publishLocked && timing !== "schedule"
+                  timing === "now" && publishLocked
                     ? currentStatus === "published"
                       ? "Публикация уже отправлена — создайте новую запись"
                       : "Публикация уже выполняется"
@@ -3350,10 +3350,16 @@ export function PostComposer() {
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : timing === "schedule" ? (
                   <CalendarClock className="h-4 w-4" />
+                ) : timing === "draft" ? (
+                  <Save className="h-4 w-4" />
                 ) : (
                   <Send className="h-4 w-4" />
                 )}
-                Публикация
+                {timing === "schedule"
+                  ? "Запланировать"
+                  : timing === "draft"
+                    ? "Сохранить"
+                    : "Опубликовать"}
               </button>
               <button
                 type="button"

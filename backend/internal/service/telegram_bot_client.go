@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
@@ -334,27 +335,61 @@ func telegramMessageID(raw json.RawMessage) (string, error) {
 	return strconv.FormatInt(sent.MessageID, 10), nil
 }
 
-func telegramMediaGroupMessageID(raw json.RawMessage) (string, error) {
+func telegramMediaGroupMessageIDs(raw json.RawMessage) ([]string, error) {
 	var sent []telegramSentMessage
 	if err := json.Unmarshal(raw, &sent); err == nil {
-		if len(sent) == 0 || sent[0].MessageID == 0 {
-			return "", nil
+		if len(sent) == 0 {
+			return nil, nil
 		}
-		return strconv.FormatInt(sent[0].MessageID, 10), nil
+		ids := make([]string, 0, len(sent))
+		for _, msg := range sent {
+			if msg.MessageID != 0 {
+				ids = append(ids, strconv.FormatInt(msg.MessageID, 10))
+			}
+		}
+		if len(ids) > 0 {
+			return ids, nil
+		}
+		return nil, nil
 	}
 	var messages []json.RawMessage
-	if err := json.Unmarshal(raw, &messages); err == nil {
-		if len(messages) == 0 {
-			return "", nil
+	if err := json.Unmarshal(raw, &messages); err == nil && len(messages) > 0 {
+		ids := make([]string, 0, len(messages))
+		for _, message := range messages {
+			id, err := telegramMessageID(message)
+			if err != nil {
+				return nil, err
+			}
+			if id != "" {
+				ids = append(ids, id)
+			}
 		}
-		if id, err := telegramMessageID(messages[0]); err == nil {
-			return id, nil
+		if len(ids) > 0 {
+			return ids, nil
 		}
 	}
 	if len(raw) > 0 && raw[0] == '{' {
-		return telegramMessageID(raw)
+		id, err := telegramMessageID(raw)
+		if err != nil {
+			return nil, err
+		}
+		if id == "" {
+			return nil, nil
+		}
+		return []string{id}, nil
 	}
-	return "", errors.New("telegram api: invalid media group result")
+	return nil, errors.New("telegram api: invalid media group result")
+}
+
+func telegramMediaGroupMessageID(raw json.RawMessage) (string, error) {
+	ids, err := telegramMediaGroupMessageIDs(raw)
+	if err != nil {
+		return "", err
+	}
+	if len(ids) == 0 {
+		return "", nil
+	}
+	return ids[0], nil
 }
 
 func TelegramImageMimeAllowed(mimeType string) bool {
@@ -507,22 +542,48 @@ func telegramMediaGroupPayload(media []TelegramMediaInput, opts *TelegramMediaSe
 	return items
 }
 
+func (c *TelegramBotClient) DeleteMessage(ctx context.Context, token, chatID, messageID string) error {
+	messageID = strings.TrimSpace(messageID)
+	if messageID == "" {
+		return nil
+	}
+	_, err := c.api(ctx, token, "deleteMessage", map[string]any{
+		"chat_id":    telegramChatIDParam(chatID),
+		"message_id": messageID,
+	})
+	return sanitizeTelegramError(err)
+}
+
+func (c *TelegramBotClient) DeleteMessages(ctx context.Context, token, chatID string, messageIDs []string) {
+	for _, messageID := range messageIDs {
+		if err := c.DeleteMessage(ctx, token, chatID, messageID); err != nil {
+			slog.Warn(
+				"telegram publish: rollback delete message failed",
+				"chat_id", chatID,
+				"message_id", messageID,
+				"error", err,
+			)
+		}
+	}
+}
+
 func (c *TelegramBotClient) SendMedia(
 	ctx context.Context,
 	token, chatID string,
 	media []TelegramMediaInput,
 	opts *TelegramMediaSendOptions,
-) (string, error) {
+) (string, []string, error) {
 	if len(media) == 0 {
-		return "", fmt.Errorf("%w: Telegram принимает от 1 до 10 медиафайлов", ErrInvalidPost)
+		return "", nil, fmt.Errorf("%w: Telegram принимает от 1 до 10 медиафайлов", ErrInvalidPost)
 	}
 	for _, item := range media {
 		if err := validateTelegramMediaItem(item); err != nil {
-			return "", err
+			return "", nil, err
 		}
 	}
 	batches := splitTelegramMediaBatches(media)
 	var msgID string
+	var allIDs []string
 	for i, batch := range batches {
 		batchOpts := opts
 		if i > 0 && opts != nil {
@@ -530,15 +591,16 @@ func (c *TelegramBotClient) SendMedia(
 				DisableNotification: opts.DisableNotification,
 			}
 		}
-		id, err := c.sendMediaBatch(ctx, token, chatID, batch, batchOpts)
+		id, ids, err := c.sendMediaBatch(ctx, token, chatID, batch, batchOpts)
 		if err != nil {
-			return "", err
+			return "", allIDs, err
 		}
+		allIDs = append(allIDs, ids...)
 		if msgID == "" {
 			msgID = id
 		}
 	}
-	return msgID, nil
+	return msgID, allIDs, nil
 }
 
 func (c *TelegramBotClient) sendMediaBatch(
@@ -546,69 +608,57 @@ func (c *TelegramBotClient) sendMediaBatch(
 	token, chatID string,
 	media []TelegramMediaInput,
 	opts *TelegramMediaSendOptions,
-) (string, error) {
+) (string, []string, error) {
 	if err := validateTelegramMediaBatch(media); err != nil {
-		return "", err
+		return "", nil, err
 	}
 	upload := telegramMediaUsesUpload(media)
 	if len(media) == 1 {
+		var raw json.RawMessage
+		var err error
 		if upload {
-			return c.sendSingleTelegramMediaUpload(ctx, token, chatID, media[0], opts)
+			raw, err = c.sendSingleTelegramMediaUploadRaw(ctx, token, chatID, media[0], opts)
+		} else {
+			raw, err = c.sendSingleTelegramMediaURLRaw(ctx, token, chatID, media[0], opts)
 		}
-		method, field := "sendPhoto", "photo"
-		if media[0].Type == TelegramMediaVideo {
-			method, field = "sendVideo", "video"
-		}
-		payload := map[string]any{
-			"chat_id": telegramChatIDParam(chatID),
-			field:     media[0].URL,
-		}
-		if opts != nil && strings.TrimSpace(opts.Caption) != "" {
-			payload["caption"] = telegramMediaCaption(opts.Caption, opts.ParseMode)
-			if parseMode := strings.TrimSpace(opts.ParseMode); parseMode != "" {
-				payload["parse_mode"] = parseMode
-			}
-			if opts.ShowCaptionAboveMedia {
-				payload["show_caption_above_media"] = true
-			}
-		}
-		if opts != nil {
-			if markup := telegramReplyMarkup(opts.Buttons); markup != nil {
-				payload["reply_markup"] = markup
-			}
-			if opts.DisableNotification {
-				payload["disable_notification"] = true
-			}
-		}
-		raw, err := c.api(ctx, token, method, payload)
 		if err != nil {
-			return "", sanitizeTelegramError(err)
+			return "", nil, sanitizeTelegramError(err)
 		}
-		return telegramMessageID(raw)
+		id, err := telegramMessageID(raw)
+		if err != nil {
+			return "", nil, err
+		}
+		if id == "" {
+			return "", nil, nil
+		}
+		return id, []string{id}, nil
 	}
+	var raw json.RawMessage
+	var err error
 	if upload {
-		return c.sendTelegramMediaGroupUpload(ctx, token, chatID, media, opts)
+		raw, err = c.sendTelegramMediaGroupUploadRaw(ctx, token, chatID, media, opts)
+	} else {
+		raw, err = c.sendTelegramMediaGroupURLRaw(ctx, token, chatID, media, opts)
 	}
-	groupPayload := map[string]any{
-		"chat_id": telegramChatIDParam(chatID),
-		"media":   telegramMediaGroupPayload(media, opts),
-	}
-	if opts != nil && opts.DisableNotification {
-		groupPayload["disable_notification"] = true
-	}
-	raw, err := c.api(ctx, token, "sendMediaGroup", groupPayload)
 	if err != nil {
-		return "", sanitizeTelegramError(err)
+		return "", nil, sanitizeTelegramError(err)
 	}
-	return telegramMediaGroupMessageID(raw)
+	ids, err := telegramMediaGroupMessageIDs(raw)
+	if err != nil {
+		return "", nil, err
+	}
+	if len(ids) == 0 {
+		return "", nil, nil
+	}
+	return ids[0], ids, nil
 }
 
-func (c *TelegramBotClient) sendSingleTelegramMediaUpload(
+func (c *TelegramBotClient) sendSingleTelegramMediaUploadRaw(
 	ctx context.Context,
 	token, chatID string,
 	item TelegramMediaInput,
 	opts *TelegramMediaSendOptions,
-) (string, error) {
+) (json.RawMessage, error) {
 	method, field := "sendPhoto", "photo"
 	if item.Type == TelegramMediaVideo {
 		method, field = "sendVideo", "video"
@@ -632,7 +682,7 @@ func (c *TelegramBotClient) sendSingleTelegramMediaUpload(
 		if markup := telegramReplyMarkup(opts.Buttons); markup != nil {
 			markupJSON, err := json.Marshal(markup)
 			if err != nil {
-				return "", err
+				return nil, err
 			}
 			fields["reply_markup"] = string(markupJSON)
 		}
@@ -648,21 +698,55 @@ func (c *TelegramBotClient) sendSingleTelegramMediaUpload(
 		item.ContentType,
 	)
 	if err != nil {
-		return "", sanitizeTelegramError(err)
+		return nil, err
 	}
-	return telegramMessageID(raw)
+	return raw, nil
 }
 
-func (c *TelegramBotClient) sendTelegramMediaGroupUpload(
+func (c *TelegramBotClient) sendSingleTelegramMediaURLRaw(
+	ctx context.Context,
+	token, chatID string,
+	item TelegramMediaInput,
+	opts *TelegramMediaSendOptions,
+) (json.RawMessage, error) {
+	method, field := "sendPhoto", "photo"
+	if item.Type == TelegramMediaVideo {
+		method, field = "sendVideo", "video"
+	}
+	payload := map[string]any{
+		"chat_id": telegramChatIDParam(chatID),
+		field:     item.URL,
+	}
+	if opts != nil && strings.TrimSpace(opts.Caption) != "" {
+		payload["caption"] = telegramMediaCaption(opts.Caption, opts.ParseMode)
+		if parseMode := strings.TrimSpace(opts.ParseMode); parseMode != "" {
+			payload["parse_mode"] = parseMode
+		}
+		if opts.ShowCaptionAboveMedia {
+			payload["show_caption_above_media"] = true
+		}
+	}
+	if opts != nil {
+		if markup := telegramReplyMarkup(opts.Buttons); markup != nil {
+			payload["reply_markup"] = markup
+		}
+		if opts.DisableNotification {
+			payload["disable_notification"] = true
+		}
+	}
+	return c.api(ctx, token, method, payload)
+}
+
+func (c *TelegramBotClient) sendTelegramMediaGroupUploadRaw(
 	ctx context.Context,
 	token, chatID string,
 	media []TelegramMediaInput,
 	opts *TelegramMediaSendOptions,
-) (string, error) {
+) (json.RawMessage, error) {
 	items := telegramMediaGroupPayload(media, opts)
 	mediaJSON, err := json.Marshal(items)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	fields := map[string]string{
 		"chat_id": fmt.Sprint(telegramChatIDParam(chatID)),
@@ -683,7 +767,45 @@ func (c *TelegramBotClient) sendTelegramMediaGroupUpload(
 			Data:        item.Data,
 		})
 	}
-	raw, err := c.apiMultipartForm(ctx, token, "sendMediaGroup", fields, files)
+	return c.apiMultipartForm(ctx, token, "sendMediaGroup", fields, files)
+}
+
+func (c *TelegramBotClient) sendTelegramMediaGroupURLRaw(
+	ctx context.Context,
+	token, chatID string,
+	media []TelegramMediaInput,
+	opts *TelegramMediaSendOptions,
+) (json.RawMessage, error) {
+	groupPayload := map[string]any{
+		"chat_id": telegramChatIDParam(chatID),
+		"media":   telegramMediaGroupPayload(media, opts),
+	}
+	if opts != nil && opts.DisableNotification {
+		groupPayload["disable_notification"] = true
+	}
+	return c.api(ctx, token, "sendMediaGroup", groupPayload)
+}
+
+func (c *TelegramBotClient) sendSingleTelegramMediaUpload(
+	ctx context.Context,
+	token, chatID string,
+	item TelegramMediaInput,
+	opts *TelegramMediaSendOptions,
+) (string, error) {
+	raw, err := c.sendSingleTelegramMediaUploadRaw(ctx, token, chatID, item, opts)
+	if err != nil {
+		return "", sanitizeTelegramError(err)
+	}
+	return telegramMessageID(raw)
+}
+
+func (c *TelegramBotClient) sendTelegramMediaGroupUpload(
+	ctx context.Context,
+	token, chatID string,
+	media []TelegramMediaInput,
+	opts *TelegramMediaSendOptions,
+) (string, error) {
+	raw, err := c.sendTelegramMediaGroupUploadRaw(ctx, token, chatID, media, opts)
 	if err != nil {
 		return "", sanitizeTelegramError(err)
 	}
