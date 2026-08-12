@@ -133,7 +133,51 @@ const (
 
 	TelegramMediaOrderMediaFirst = "media_first"
 	TelegramMediaOrderTextFirst  = "text_first"
+
+	TelegramStoryPeriod6h  = 21600
+	TelegramStoryPeriod12h = 43200
+	TelegramStoryPeriod24h = 86400
+	TelegramStoryPeriod48h = 172800
 )
+
+type TelegramStoryAreaPosition struct {
+	XPercentage            float64 `json:"x_percentage"`
+	YPercentage            float64 `json:"y_percentage"`
+	WidthPercentage        float64 `json:"width_percentage"`
+	HeightPercentage       float64 `json:"height_percentage"`
+	RotationAngle          float64 `json:"rotation_angle"`
+	CornerRadiusPercentage float64 `json:"corner_radius_percentage"`
+}
+
+type TelegramStoryLocationAddress struct {
+	CountryCode string `json:"country_code,omitempty"`
+	State       string `json:"state,omitempty"`
+	City        string `json:"city,omitempty"`
+	Street      string `json:"street,omitempty"`
+}
+
+type TelegramStoryArea struct {
+	ID              string                        `json:"id,omitempty"`
+	Kind            string                        `json:"kind"`
+	Position        TelegramStoryAreaPosition     `json:"position"`
+	URL             string                        `json:"url,omitempty"`
+	Latitude        float64                       `json:"latitude,omitempty"`
+	Longitude       float64                       `json:"longitude,omitempty"`
+	Address         *TelegramStoryLocationAddress `json:"address,omitempty"`
+	ReactionEmoji   string                        `json:"reaction_emoji,omitempty"`
+	ReactionDark    bool                          `json:"reaction_dark,omitempty"`
+	ReactionFlipped bool                          `json:"reaction_flipped,omitempty"`
+	Temperature     float64                       `json:"temperature,omitempty"`
+	WeatherEmoji    string                        `json:"weather_emoji,omitempty"`
+	BackgroundColor int64                         `json:"background_color,omitempty"`
+}
+
+type TelegramStorySettings struct {
+	ActivePeriod   int                 `json:"active_period,omitempty"`
+	PostToChatPage bool                `json:"post_to_chat_page,omitempty"`
+	ProtectContent bool                `json:"protect_content,omitempty"`
+	Areas          []TelegramStoryArea `json:"areas,omitempty"`
+}
 
 type PostSettings struct {
 	FirstComment            string                  `json:"first_comment,omitempty"`
@@ -148,6 +192,7 @@ type PostSettings struct {
 	TelegramPin             bool                     `json:"telegram_pin,omitempty"`
 	TelegramSilent          bool                     `json:"telegram_silent,omitempty"`
 	TelegramVideoNote       bool                     `json:"telegram_video_note,omitempty"`
+	TelegramStory           *TelegramStorySettings   `json:"telegram_story,omitempty"`
 	MaxButtons              [][]TelegramInlineButton `json:"max_buttons,omitempty"`
 }
 

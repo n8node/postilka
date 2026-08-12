@@ -1238,6 +1238,9 @@ type TelegramPostStoryOptions struct {
 	MediaBytes           []byte
 	MediaFilename        string
 	MediaContentType     string
+	AreasJSON            string
+	PostToChatPage       bool
+	ProtectContent       bool
 }
 
 func (c *TelegramBotClient) PostStory(ctx context.Context, token string, opts TelegramPostStoryOptions) (string, error) {
@@ -1282,6 +1285,15 @@ func (c *TelegramBotClient) PostStory(ctx context.Context, token string, opts Te
 			fields["parse_mode"] = parseMode
 		}
 	}
+	if strings.TrimSpace(opts.AreasJSON) != "" {
+		fields["areas"] = opts.AreasJSON
+	}
+	if opts.PostToChatPage {
+		fields["post_to_chat_page"] = "true"
+	}
+	if opts.ProtectContent {
+		fields["protect_content"] = "true"
+	}
 	if contentType == "" {
 		contentType = "application/octet-stream"
 	}
@@ -1309,6 +1321,85 @@ func (c *TelegramBotClient) PostStory(ctx context.Context, token string, opts Te
 		return "", nil
 	}
 	return strconv.Itoa(story.ID), nil
+}
+
+type TelegramEditStoryOptions struct {
+	BusinessConnectionID string
+	StoryID              int
+	MediaType            string
+	MediaBytes           []byte
+	MediaFilename        string
+	MediaContentType     string
+	Caption              string
+	ParseMode            string
+	AreasJSON            string
+}
+
+func (c *TelegramBotClient) EditStory(ctx context.Context, token string, opts TelegramEditStoryOptions) error {
+	if opts.StoryID <= 0 {
+		return fmt.Errorf("%w: не указан story_id", ErrInvalidPost)
+	}
+	if strings.TrimSpace(opts.BusinessConnectionID) == "" {
+		return fmt.Errorf("%w: не указан business_connection_id", ErrInvalidPost)
+	}
+	if len(opts.MediaBytes) == 0 {
+		return fmt.Errorf("%w: пустой медиафайл", ErrInvalidPost)
+	}
+	contentJSON := `{"type":"photo","photo":"attach://story_media"}`
+	if opts.MediaType == TelegramMediaVideo {
+		contentJSON = `{"type":"video","video":"attach://story_media"}`
+	}
+	fields := map[string]string{
+		"business_connection_id": opts.BusinessConnectionID,
+		"story_id":               strconv.Itoa(opts.StoryID),
+		"content":                contentJSON,
+	}
+	if caption := strings.TrimSpace(opts.Caption); caption != "" {
+		fields["caption"] = caption
+		if parseMode := strings.TrimSpace(opts.ParseMode); parseMode != "" {
+			fields["parse_mode"] = parseMode
+		}
+	}
+	if strings.TrimSpace(opts.AreasJSON) != "" {
+		fields["areas"] = opts.AreasJSON
+	}
+	filename := strings.TrimSpace(opts.MediaFilename)
+	contentType := strings.TrimSpace(opts.MediaContentType)
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	if filename == "" {
+		switch {
+		case strings.HasPrefix(strings.ToLower(contentType), "video/"):
+			filename = "story.mp4"
+		case strings.HasPrefix(strings.ToLower(contentType), "image/"):
+			filename = "story.jpg"
+		default:
+			filename = "story.bin"
+		}
+	}
+	_, err := c.apiMultipartTyped(ctx, token, "editStory", fields, "story_media", filename, opts.MediaBytes, contentType)
+	if err != nil {
+		return sanitizeTelegramError(err)
+	}
+	return nil
+}
+
+func (c *TelegramBotClient) DeleteStory(ctx context.Context, token, businessConnectionID string, storyID int) error {
+	if storyID <= 0 {
+		return fmt.Errorf("%w: не указан story_id", ErrInvalidPost)
+	}
+	if strings.TrimSpace(businessConnectionID) == "" {
+		return fmt.Errorf("%w: не указан business_connection_id", ErrInvalidPost)
+	}
+	_, err := c.api(ctx, token, "deleteStory", map[string]any{
+		"business_connection_id": businessConnectionID,
+		"story_id":               storyID,
+	})
+	if err != nil {
+		return sanitizeTelegramError(err)
+	}
+	return nil
 }
 
 func fetchURLBytes(ctx context.Context, client *http.Client, rawURL string) ([]byte, string, string, error) {

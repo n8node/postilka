@@ -41,6 +41,7 @@ import { ChannelAvatar } from "@/components/channels/ChannelAvatar";
 import { FileThumbnail } from "@/components/files/FileThumbnail";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { RichTextEditor } from "@/components/posts/RichTextEditor";
+import { StoryAreaEditor } from "@/components/posts/StoryAreaEditor";
 import {
   ApiError,
   fetchChannels,
@@ -54,18 +55,21 @@ import { composePostText } from "@/lib/generation-api";
 import {
   listFiles,
   uploadFile,
+  downloadFile,
   type WorkspaceFile,
 } from "@/lib/files-api";
 import {
   approvePost,
   commentPost,
   createPost,
+  deleteTelegramStory,
   fetchPost,
   fetchPostApprovalEvents,
   fetchPosts,
   publishPost,
   rejectPost,
   schedulePost,
+  syncTelegramStory,
   updatePost,
   type Post,
   type PostApprovalEvent,
@@ -76,6 +80,7 @@ import {
   type TelegramButton,
   type TelegramRichBlock,
 } from "@/lib/posts-api";
+import { normalizeStorySettings, type TelegramStorySettings } from "@/lib/telegram-story";
 import { usePinnedElement } from "@/lib/usePinnedElement";
 import { cn } from "@/lib/utils";
 
@@ -1009,6 +1014,10 @@ export function PostComposer() {
   const [device, setDevice] = useState<"mobile" | "desktop">("mobile");
   const [previewWidth, setPreviewWidth] = useState(380);
   const [dirty, setDirty] = useState(false);
+  const [telegramStory, setTelegramStory] = useState<TelegramStorySettings>(() =>
+    normalizeStorySettings(),
+  );
+  const [storyMediaPreviewUrl, setStoryMediaPreviewUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { hostRef, targetRef, anchorRef, pinnedStyle } = usePinnedElement({
     enabled: !loading,
@@ -1018,9 +1027,12 @@ export function PostComposer() {
 
   const isAdmin = workspaceRole === "owner" || workspaceRole === "admin";
   const isPendingApproval = currentStatus === "pending_approval";
+  const isPublishedStory =
+    currentStatus === "published" && (postKind === "story" || format === "story");
   const composerLocked = isPendingApproval && !isAdmin;
   const publishLocked =
-    currentStatus === "published" || currentStatus === "publishing";
+    currentStatus === "publishing" ||
+    (currentStatus === "published" && !isPublishedStory);
 
   const loadApprovalEvents = useCallback(async (id: string) => {
     try {
@@ -1088,6 +1100,29 @@ export function PostComposer() {
       setTelegramCaptionPosition("below");
     }
   }, [media.length, telegramCaptionPosition]);
+
+  useEffect(() => {
+    if (postKind !== "story" && format !== "story") {
+      setStoryMediaPreviewUrl(null);
+      return;
+    }
+    const file = media[0]?.file;
+    if (!file || !file.mime_type.startsWith("image/")) {
+      setStoryMediaPreviewUrl(null);
+      return;
+    }
+    let cancelled = false;
+    void downloadFile(file.id, "inline")
+      .then((data) => {
+        if (!cancelled) setStoryMediaPreviewUrl(data.url);
+      })
+      .catch(() => {
+        if (!cancelled) setStoryMediaPreviewUrl(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [postKind, format, media]);
 
   const selectedChannels = useMemo(
     () => channels.filter((channel) => selectedIds.includes(channel.id)),
@@ -1284,6 +1319,7 @@ export function PostComposer() {
     setTelegramMediaOrder(
       post.settings.telegram_media_order === "text_first" ? "text_first" : "media_first",
     );
+    setTelegramStory(normalizeStorySettings(post.settings.telegram_story));
     const storedUTM = post.targets[0]?.settings?.settings?.utm;
     setUTM({
       source: storedUTM?.source ?? "",
@@ -1395,6 +1431,15 @@ export function PostComposer() {
               })),
             )
           : undefined,
+      telegram_story:
+        format === "story" || postKind === "story"
+          ? {
+              active_period: telegramStory.active_period,
+              post_to_chat_page: telegramStory.post_to_chat_page || undefined,
+              protect_content: telegramStory.protect_content || undefined,
+              areas: (telegramStory.areas ?? []).map(({ id, ...area }) => area),
+            }
+          : undefined,
     };
   }
 
@@ -1459,6 +1504,9 @@ export function PostComposer() {
     if (kind === "story") {
       setFormat("story");
       setMedia((current) => current.slice(0, 1));
+      setTelegramStory((current) =>
+        current.areas?.length ? current : normalizeStorySettings(current),
+      );
       setSelectedIds((ids) =>
         ids.filter((id) => {
           const channel = channels.find((item) => item.id === id);
@@ -1840,6 +1888,51 @@ export function PostComposer() {
         }
       }
       setError(errorText(saveError, "Не удалось сохранить публикацию"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleSyncTelegramStory() {
+    const validation = validate("now");
+    if (validation) {
+      setError(validation);
+      return;
+    }
+    if (!postId) {
+      setError("Сначала сохраните историю");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      await updatePost(postId, buildPayload());
+      const finalPost = await syncTelegramStory(postId);
+      setCurrentStatus(finalPost.status);
+      setPosts((current) => [finalPost, ...current.filter((item) => item.id !== finalPost.id)]);
+      setDirty(false);
+      setSuccess("История обновлена в Telegram");
+    } catch (syncError) {
+      setError(errorText(syncError, "Не удалось обновить историю в Telegram"));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDeleteTelegramStory() {
+    if (!postId) return;
+    if (!window.confirm("Удалить историю из Telegram? Запись в Postilka останется.")) return;
+    setBusy(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const finalPost = await deleteTelegramStory(postId);
+      setCurrentStatus(finalPost.status);
+      setPosts((current) => [finalPost, ...current.filter((item) => item.id !== finalPost.id)]);
+      setSuccess("История удалена из Telegram");
+    } catch (deleteError) {
+      setError(errorText(deleteError, "Не удалось удалить историю в Telegram"));
     } finally {
       setBusy(false);
     }
@@ -2561,7 +2654,22 @@ export function PostComposer() {
             )}
           </Card>
 
+          {(postKind === "story" || format === "story") && (
+            <Card title="Настройки истории Telegram">
+              <StoryAreaEditor
+                settings={telegramStory}
+                mediaPreviewUrl={storyMediaPreviewUrl}
+                disabled={composerLocked}
+                onChange={(next) => {
+                  setTelegramStory(next);
+                  markDirty();
+                }}
+              />
+            </Card>
+          )}
+
           <div className="grid gap-4 lg:grid-cols-2">
+            {postKind !== "story" && format !== "story" && (
             <Card title="Дополнения">
               <label className="block">
                 <span className="mb-1 flex items-center gap-1 text-xs font-medium text-zinc-600">
@@ -2636,8 +2744,9 @@ export function PostComposer() {
                   )}
               </div>
             </Card>
+            )}
 
-            {telegramChannels.length > 0 && (
+            {telegramChannels.length > 0 && postKind !== "story" && format !== "story" && (
               <Card title="Настройки Telegram">
                 <div className="grid gap-2 sm:grid-cols-2">
                   <label className="flex items-center gap-2 text-sm">
@@ -3276,6 +3385,38 @@ export function PostComposer() {
               {dirty && (
                 <p className="text-center text-[11px] text-muted">Есть несохранённые изменения</p>
               )}
+              {isPublishedStory ? (
+                <>
+                  <button
+                    type="button"
+                    disabled={busy || composerLocked}
+                    onClick={() => void handleSyncTelegramStory()}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-accent px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                  >
+                    {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                    Обновить в Telegram
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy || composerLocked}
+                    onClick={() => void save("draft")}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-border bg-white px-4 py-2.5 text-sm font-semibold hover:bg-zinc-50 disabled:opacity-50"
+                  >
+                    {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    Сохранить изменения
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy || composerLocked}
+                    onClick={() => void handleDeleteTelegramStory()}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50"
+                  >
+                    {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                    Удалить из Telegram
+                  </button>
+                </>
+              ) : (
+                <>
               <button
                 type="button"
                 disabled={
@@ -3313,6 +3454,8 @@ export function PostComposer() {
                 {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                 Сохранить черновик
               </button>
+                </>
+              )}
             </div>
           </div>
         </aside>

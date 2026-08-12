@@ -133,10 +133,13 @@ func (s *PostService) Update(
 		return nil, err
 	}
 	if existing.Status == model.PostStatusPublished {
-		return nil, fmt.Errorf(
-			"%w: публикация уже отправлена — создайте новую запись, чтобы отправить в другие каналы",
-			ErrInvalidPost,
-		)
+		format := strings.ToLower(strings.TrimSpace(existing.Content.Format))
+		if format != "story" {
+			return nil, fmt.Errorf(
+				"%w: публикация уже отправлена — создайте новую запись, чтобы отправить в другие каналы",
+				ErrInvalidPost,
+			)
+		}
 	}
 	return s.posts.Update(ctx, ws.ID, postID, req)
 }
@@ -744,7 +747,7 @@ func validatePostSettings(settings model.PostSettings) error {
 	if err := validateMaxButtons(settings.MaxButtons); err != nil {
 		return err
 	}
-	return nil
+	return validateTelegramStorySettings(settings.TelegramStory)
 }
 
 func validateMaxButtons(rows [][]model.TelegramInlineButton) error {

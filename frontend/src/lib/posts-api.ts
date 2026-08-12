@@ -1,4 +1,5 @@
 import { apiFetch } from "@/lib/api";
+import type { TelegramStorySettings } from "@/lib/telegram-story";
 
 export type TelegramEntity = {
   type: string;
@@ -108,6 +109,7 @@ export type PostSettings = {
   telegram_silent?: boolean;
   /** Send single video as video note (circle) in Telegram */
   telegram_video_note?: boolean;
+  telegram_story?: TelegramStorySettings;
   /** MAX-only inline link buttons */
   max_buttons?: TelegramButton[][];
 };
@@ -205,6 +207,14 @@ export function schedulePost(id: string, dueAt: string) {
 
 export function publishPost(id: string) {
   return apiFetch<Post>(`/posts/${encodeURIComponent(id)}/publish`, { method: "POST" });
+}
+
+export function syncTelegramStory(id: string) {
+  return apiFetch<Post>(`/posts/${encodeURIComponent(id)}/story/sync`, { method: "POST" });
+}
+
+export function deleteTelegramStory(id: string) {
+  return apiFetch<Post>(`/posts/${encodeURIComponent(id)}/story/delete`, { method: "POST" });
 }
 
 export function cancelPost(id: string) {

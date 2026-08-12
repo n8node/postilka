@@ -304,6 +304,8 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Delete("/posts/{id}", postHandler.Delete)
 			r.Post("/posts/{id}/schedule", postHandler.Schedule)
 			r.Post("/posts/{id}/publish", postHandler.Publish)
+			r.Post("/posts/{id}/story/sync", postHandler.SyncTelegramStory)
+			r.Post("/posts/{id}/story/delete", postHandler.DeleteTelegramStory)
 			r.Post("/posts/{id}/cancel", postHandler.Cancel)
 			r.Post("/posts/{id}/submit-approval", postHandler.SubmitApproval)
 			r.Post("/posts/{id}/approve", postHandler.Approve)

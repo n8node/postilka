@@ -151,6 +151,32 @@ func (h *PostHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, post)
 }
 
+func (h *PostHandler) SyncTelegramStory(w http.ResponseWriter, r *http.Request) {
+	userID, ok := postUserID(w, r)
+	if !ok {
+		return
+	}
+	post, err := h.posts.SyncTelegramStory(r.Context(), userID, r, chi.URLParam(r, "id"))
+	if err != nil {
+		writePostError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, post)
+}
+
+func (h *PostHandler) DeleteTelegramStory(w http.ResponseWriter, r *http.Request) {
+	userID, ok := postUserID(w, r)
+	if !ok {
+		return
+	}
+	post, err := h.posts.DeleteTelegramStory(r.Context(), userID, r, chi.URLParam(r, "id"))
+	if err != nil {
+		writePostError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, post)
+}
+
 func (h *PostHandler) SubmitApproval(w http.ResponseWriter, r *http.Request) {
 	userID, ok := postUserID(w, r)
 	if !ok {

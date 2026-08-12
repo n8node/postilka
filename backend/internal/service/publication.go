@@ -444,17 +444,14 @@ func (s *PublicationService) publishTarget(
 			if err != nil {
 				return "", err
 			}
-			parseMode := strings.ToUpper(strings.TrimSpace(content.ParseMode))
-			storyID, err := s.telegram.PostStory(ctx, token, TelegramPostStoryOptions{
-				BusinessConnectionID: channel.ChatID,
-				Caption:              content.Text,
-				ParseMode:            parseMode,
-				ActivePeriod:         86400,
-				MediaType:            mediaType,
-				MediaBytes:           mediaBytes,
-				MediaFilename:        filename,
-				MediaContentType:     contentType,
-			})
+			storyOpts, err := s.buildTelegramStoryOptions(
+				ctx, post, target, channel, content, settings,
+				mediaBytes, filename, contentType, mediaType,
+			)
+			if err != nil {
+				return "", err
+			}
+			storyID, err := s.telegram.PostStory(ctx, token, storyOpts)
 			if err != nil {
 				return "", err
 			}
