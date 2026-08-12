@@ -140,6 +140,7 @@ func (s *PostService) Update(
 				ErrInvalidPost,
 			)
 		}
+		return s.posts.UpdatePublishedStory(ctx, ws.ID, postID, req)
 	}
 	return s.posts.Update(ctx, ws.ID, postID, req)
 }

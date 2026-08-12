@@ -121,6 +121,44 @@ func TestBuildTelegramStoryAreasJSONIncludesReactionAndLink(t *testing.T) {
 	}
 }
 
+func TestPostSettingsTelegramStoryLinkRoundTrip(t *testing.T) {
+	settings := model.PostSettings{
+		TelegramStory: &model.TelegramStorySettings{
+			ActivePeriod: model.TelegramStoryPeriod24h,
+			Areas: []model.TelegramStoryArea{
+				{
+					Kind: "link",
+					URL:  "https://erman.ai",
+					Position: model.TelegramStoryAreaPosition{
+						XPercentage:      18,
+						YPercentage:      78,
+						WidthPercentage:  64,
+						HeightPercentage: 10,
+					},
+				},
+			},
+		},
+	}
+	raw, err := json.Marshal(settings)
+	if err != nil {
+		t.Fatalf("marshal settings: %v", err)
+	}
+	var decoded model.PostSettings
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		t.Fatalf("unmarshal settings: %v", err)
+	}
+	if decoded.TelegramStory == nil || len(decoded.TelegramStory.Areas) != 1 {
+		t.Fatalf("telegram_story areas lost in round trip: %+v", decoded.TelegramStory)
+	}
+	areasJSON, err := buildTelegramStoryAreasJSON(decoded.TelegramStory.Areas)
+	if err != nil {
+		t.Fatalf("build json: %v", err)
+	}
+	if !strings.Contains(areasJSON, `"type":"link"`) || !strings.Contains(areasJSON, "https://erman.ai") {
+		t.Fatalf("unexpected areas json: %s", areasJSON)
+	}
+}
+
 func TestStoryAreaPositionForAPIClampsLinkArea(t *testing.T) {
 	got := storyAreaPositionForAPI(model.TelegramStoryAreaPosition{
 		XPercentage:            85,

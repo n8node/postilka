@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"html"
 	"net/url"
+	"sort"
 	"strings"
 
 	"github.com/postilka/postilka/internal/model"
@@ -255,10 +256,32 @@ type telegramStoryAreaAPI struct {
 	Type     any                             `json:"type"`
 }
 
+type telegramStoryAreaTypeLink struct {
+	Type string `json:"type"`
+	URL  string `json:"url"`
+}
+
+func sortTelegramStoryAreasForAPI(areas []model.TelegramStoryArea) []model.TelegramStoryArea {
+	if len(areas) < 2 {
+		return areas
+	}
+	sorted := append([]model.TelegramStoryArea{}, areas...)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		li := strings.ToLower(strings.TrimSpace(sorted[i].Kind)) == "link"
+		lj := strings.ToLower(strings.TrimSpace(sorted[j].Kind)) == "link"
+		if li != lj {
+			return li
+		}
+		return i < j
+	})
+	return sorted
+}
+
 func buildTelegramStoryAreasJSON(areas []model.TelegramStoryArea) (string, error) {
 	if len(areas) == 0 {
 		return "", nil
 	}
+	areas = sortTelegramStoryAreasForAPI(areas)
 	out := make([]telegramStoryAreaAPI, 0, len(areas))
 	for _, area := range areas {
 		kind := strings.ToLower(strings.TrimSpace(area.Kind))
@@ -273,9 +296,9 @@ func buildTelegramStoryAreasJSON(areas []model.TelegramStoryArea) (string, error
 			if err != nil {
 				return "", err
 			}
-			areaType = map[string]string{
-				"type": "link",
-				"url":  linkURL,
+			areaType = telegramStoryAreaTypeLink{
+				Type: "link",
+				URL:  linkURL,
 			}
 		case "location":
 			payload := map[string]any{

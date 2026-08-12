@@ -250,6 +250,27 @@ export function StoryAreaEditor({
         ))}
       </div>
 
+      {areas.some((area) => area.kind === "link") && (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-950">
+          <p className="font-semibold">
+            Link-sticker в Telegram ({areas.filter((area) => area.kind === "link").length})
+          </p>
+          <ul className="mt-1 space-y-0.5">
+            {areas
+              .filter((area) => area.kind === "link")
+              .map((area) => (
+                <li key={area.id} className="truncate font-mono text-[11px]">
+                  {area.url?.trim() || "— укажите URL ниже —"}
+                </li>
+              ))}
+          </ul>
+          <p className="mt-1.5 text-[11px] leading-snug text-emerald-900">
+            Отправляются только URL из зон «Ссылка». Текст подписи или ссылка в тексте не создают
+            стикер с доменом в истории.
+          </p>
+        </div>
+      )}
+
       <div className="grid gap-4 lg:grid-cols-[minmax(0,280px)_1fr]">
         <div
           ref={canvasRef}
@@ -375,6 +396,12 @@ export function StoryAreaEditor({
                       value={area.url ?? ""}
                       disabled={disabled}
                       onChange={(event) => patchArea(area.id, { url: event.target.value })}
+                      onBlur={(event) => {
+                        const trimmed = event.target.value.trim();
+                        if (trimmed !== event.target.value) {
+                          patchArea(area.id, { url: trimmed });
+                        }
+                      }}
                       placeholder="https://example.com"
                       className="w-full rounded border border-border px-2 py-1.5 text-xs"
                     />

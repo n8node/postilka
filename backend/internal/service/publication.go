@@ -451,7 +451,10 @@ func (s *PublicationService) publishTarget(
 			if err != nil {
 				return "", err
 			}
-			storyID, err := s.telegram.PostStory(ctx, token, storyOpts)
+			storyID, err := s.publishTelegramStory(
+				ctx, token, storyOpts,
+				mediaBytes, filename, contentType, mediaType,
+			)
 			if err != nil {
 				return "", err
 			}

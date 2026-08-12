@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 
@@ -52,6 +53,14 @@ func (s *PublicationService) buildTelegramStoryOptions(
 			)
 		}
 	}
+	slog.Info(
+		"telegram story: prepared areas",
+		"post_id", post.ID,
+		"target_id", target.ID,
+		"areas_total", len(areas),
+		"link_areas", expectedLinks,
+		"areas_json_len", len(areasJSON),
+	)
 
 	opts := TelegramPostStoryOptions{
 		BusinessConnectionID: channel.ChatID,
@@ -69,6 +78,45 @@ func (s *PublicationService) buildTelegramStoryOptions(
 		opts.ProtectContent = storySettings.ProtectContent
 	}
 	return opts, nil
+}
+
+func (s *PublicationService) publishTelegramStory(
+	ctx context.Context,
+	token string,
+	storyOpts TelegramPostStoryOptions,
+	mediaBytes []byte,
+	filename, contentType, mediaType string,
+) (string, error) {
+	storyID, err := s.telegram.PostStory(ctx, token, storyOpts)
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(storyOpts.AreasJSON) == "" {
+		return storyID, nil
+	}
+	parsedID, err := parseTelegramStoryID(storyID)
+	if err != nil {
+		return storyID, nil
+	}
+	if err := s.telegram.EditStory(ctx, token, TelegramEditStoryOptions{
+		BusinessConnectionID: storyOpts.BusinessConnectionID,
+		StoryID:              parsedID,
+		MediaType:            mediaType,
+		MediaBytes:           mediaBytes,
+		MediaFilename:        filename,
+		MediaContentType:     contentType,
+		Caption:              storyOpts.Caption,
+		ParseMode:            storyOpts.ParseMode,
+		AreasJSON:            storyOpts.AreasJSON,
+	}); err != nil {
+		return "", fmt.Errorf("история опубликована (id %s), но Telegram не применил интерактивные зоны: %w", storyID, err)
+	}
+	slog.Info(
+		"telegram story: areas reapplied via editStory",
+		"story_id", storyID,
+		"areas_json_len", len(storyOpts.AreasJSON),
+	)
+	return storyID, nil
 }
 
 func parseTelegramStoryID(raw string) (int, error) {

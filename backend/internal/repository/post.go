@@ -242,6 +242,47 @@ func (r *PostRepository) Update(
 	return r.Get(ctx, workspaceID, postID)
 }
 
+func (r *PostRepository) UpdatePublishedStory(
+	ctx context.Context,
+	workspaceID, postID string,
+	req model.PostSaveRequest,
+) (*model.Post, error) {
+	contentRaw, err := json.Marshal(req.Content)
+	if err != nil {
+		return nil, err
+	}
+	settingsRaw, err := json.Marshal(req.Settings)
+	if err != nil {
+		return nil, err
+	}
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	tag, err := tx.Exec(ctx, `
+		UPDATE posts
+		SET content = $3, settings = $4, updated_at = NOW()
+		WHERE id = $1 AND workspace_id = $2
+		  AND status = 'published'
+		  AND lower(content->>'format') = 'story'
+	`, postID, workspaceID, contentRaw, settingsRaw)
+	if err != nil {
+		return nil, err
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, ErrNotFound
+	}
+	if err := replacePostRelations(ctx, tx, workspaceID, postID, req); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return r.Get(ctx, workspaceID, postID)
+}
+
 func replacePostRelations(
 	ctx context.Context,
 	tx pgx.Tx,

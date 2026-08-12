@@ -1017,6 +1017,7 @@ export function PostComposer() {
   const [telegramStory, setTelegramStory] = useState<TelegramStorySettings>(() =>
     normalizeStorySettings(),
   );
+  const telegramStoryRef = useRef(telegramStory);
   const [storyMediaPreviewUrl, setStoryMediaPreviewUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { hostRef, targetRef, anchorRef, pinnedStyle } = usePinnedElement({
@@ -1024,6 +1025,10 @@ export function PostComposer() {
   });
 
   const markDirty = useCallback(() => setDirty(true), []);
+
+  useEffect(() => {
+    telegramStoryRef.current = telegramStory;
+  }, [telegramStory]);
 
   const isAdmin = workspaceRole === "owner" || workspaceRole === "admin";
   const isPendingApproval = currentStatus === "pending_approval";
@@ -1375,6 +1380,7 @@ export function PostComposer() {
 
   function buildSettings(): PostSettings {
     const hasCoordinates = latitude.trim() !== "" && longitude.trim() !== "";
+    const storySettings = telegramStoryRef.current;
     return {
       first_comment: firstComment.trim() || undefined,
       location: hasCoordinates
@@ -1434,10 +1440,10 @@ export function PostComposer() {
       telegram_story:
         format === "story" || postKind === "story"
           ? {
-              active_period: telegramStory.active_period,
-              post_to_chat_page: telegramStory.post_to_chat_page || undefined,
-              protect_content: telegramStory.protect_content || undefined,
-              areas: (telegramStory.areas ?? []).map(({ id, ...area }) => ({
+              active_period: storySettings.active_period,
+              post_to_chat_page: storySettings.post_to_chat_page || undefined,
+              protect_content: storySettings.protect_content || undefined,
+              areas: (storySettings.areas ?? []).map(({ id, ...area }) => ({
                 ...area,
                 url: area.kind === "link" ? area.url?.trim() || undefined : area.url,
               })),
@@ -1584,7 +1590,7 @@ export function PostComposer() {
         if (area.kind !== "link") continue;
         const raw = area.url?.trim() ?? "";
         if (action !== "draft" && !raw) {
-          return "Укажите URL для зоны ссылки на истории";
+          return "Укажите URL в зоне «Ссылка» (кнопка + Ссылка в настройках истории). URL в тексте подписи не создаёт link-sticker.";
         }
         if (raw) {
           try {
