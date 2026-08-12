@@ -36,7 +36,7 @@ func (p ChannelProvider) PublishCapabilities() PublishCapabilities {
 	case ChannelProviderTelegram:
 		return PublishCapabilities{
 			Text: true, Photo: true, Video: true,
-			Formats: []string{"message", "rich_message", "article", "story", "short_video"},
+			Formats: []string{"message", "rich_message", "article", "short_video"},
 			RichText: true, Entities: true, TelegramRich: true,
 			InlineButtons: true, StyledButtons: true, CustomEmoji: true,
 			LinkPreview: true, ComposerMedia: true, ComposerLinkPreview: true,
@@ -92,4 +92,18 @@ func (p ChannelProvider) PublishCapabilities() PublishCapabilities {
 
 func (p SocialProvider) PublishCapabilities() PublishCapabilities {
 	return ChannelProvider(p).PublishCapabilities()
+}
+
+func PublishCapabilitiesForChannel(ch Channel) PublishCapabilities {
+	if ch.Provider == ChannelProviderTelegram && ch.ChatType == TelegramChatTypeBusiness {
+		return PublishCapabilities{
+			Text: true, Photo: true, Video: true,
+			Formats:          []string{"story"},
+			ComposerMedia:    true,
+			MediaAlbum:       false,
+			MaxMedia:         1,
+			MaxTextLength:    2048,
+		}
+	}
+	return ch.Provider.PublishCapabilities()
 }

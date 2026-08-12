@@ -152,6 +152,10 @@ func (s *ChannelTestService) publish(
 		return "", fmt.Errorf("Дзен не поддерживает видео в этой публикации — используйте текст, бриф с картинкой или статью")
 	}
 
+	if ch.Provider == model.ChannelProviderTelegram && ch.ChatType == model.TelegramChatTypeBusiness {
+		return "", fmt.Errorf("для Telegram Business используйте публикацию истории в композере — тестовое сообщение недоступно")
+	}
+
 	switch ch.Provider {
 	case model.ChannelProviderTelegram:
 		if err := s.botClient.SendMessage(ctx, token, ch.ChatID, text); err != nil {

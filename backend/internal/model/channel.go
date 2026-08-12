@@ -67,7 +67,12 @@ type ChannelMetadata struct {
 	IsAdmin           *bool      `json:"is_admin,omitempty"`
 	BotPermissions    []string   `json:"bot_permissions,omitempty"`
 	ParticipantsCount *int       `json:"participants_count,omitempty"`
+	BusinessUserID              string `json:"business_user_id,omitempty"`
+	CanManageStories            *bool  `json:"can_manage_stories,omitempty"`
+	BusinessConnectionEnabled   *bool  `json:"business_connection_enabled,omitempty"`
 }
+
+const TelegramChatTypeBusiness = "business"
 
 type Channel struct {
 	ID                  string          `json:"id"`
@@ -135,6 +140,21 @@ type TelegramConnectRequest struct {
 type TelegramConnectResult struct {
 	Connected []ChannelListItem `json:"connected"`
 	Skipped   []string        `json:"skipped,omitempty"`
+}
+
+type TelegramBusinessConnectRequest struct {
+	BotToken string `json:"bot_token"`
+}
+
+type TelegramBusinessConnectResult struct {
+	RegistrationID string            `json:"registration_id"`
+	BotUsername    string            `json:"bot_username"`
+	Connected      []ChannelListItem `json:"connected"`
+	Hint           string            `json:"hint,omitempty"`
+}
+
+type TelegramBusinessSyncRequest struct {
+	RegistrationID string `json:"registration_id"`
 }
 
 type TelegramDiscoverRequest struct {

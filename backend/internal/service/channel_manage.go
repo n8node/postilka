@@ -24,9 +24,12 @@ func channelPostModeLabel(ch model.Channel) string {
 		return "Своё приложение Google"
 	}
 	if ch.Provider != model.ChannelProviderMAX {
-		if ch.Provider == model.ChannelProviderTelegram {
-			return "Свой бот"
+	if ch.Provider == model.ChannelProviderTelegram {
+		if ch.ChatType == model.TelegramChatTypeBusiness {
+			return "Telegram Business"
 		}
+		return "Свой бот"
+	}
 		return "OAuth"
 	}
 	if ch.MaxPostMode == model.MAXPostModePlatform {
@@ -43,7 +46,7 @@ func buildChannelListItem(ch model.Channel, tokenEnc string, cipher *SecretCiphe
 	item := model.ChannelListItem{
 		Channel:             ch,
 		PostModeLabel:       channelPostModeLabel(ch),
-		PublishCapabilities: ch.Provider.PublishCapabilities(),
+		PublishCapabilities: model.PublishCapabilitiesForChannel(ch),
 		OAuthReconnectBy:    youtubeOAuthReconnectBy(ch),
 	}
 	if ch.Provider == model.ChannelProviderMAX && ch.MaxPostMode == model.MAXPostModePlatform {
@@ -298,6 +301,30 @@ func (s *ChannelService) VerifyAndRefresh(
 		token, err := resolveChannelPublishToken(ctx, &ch, s.channels, s.cipher, s.socialSettings)
 		if err != nil {
 			return nil, err
+		}
+		if ch.ChatType == model.TelegramChatTypeBusiness {
+			conn, verr := s.botClient.GetBusinessConnection(ctx, token, ch.ChatID)
+			if verr != nil {
+				verifyErr = verr
+				break
+			}
+			canManage := conn.Rights.CanManageStories
+			enabled := conn.IsEnabled
+			meta = model.ChannelMetadata{
+				ProviderTitle:             businessConnectionDisplayName(conn.User),
+				BusinessUserID:            fmt.Sprintf("%d", conn.User.ID),
+				CanManageStories:          &canManage,
+				BusinessConnectionEnabled: &enabled,
+			}
+			if username := strings.TrimSpace(conn.User.Username); username != "" {
+				meta.PublicURL = "https://t.me/" + username
+				meta.AvatarURL = "https://t.me/i/userpic/320/" + username + ".jpg"
+			}
+			ch.Name = meta.ProviderTitle
+			if !conn.IsEnabled || !conn.Rights.CanManageStories {
+				verifyErr = fmt.Errorf("business-подключение неактивно или нет права на Stories")
+			}
+			break
 		}
 		chat, member, verr := s.botClient.VerifyBotInChat(ctx, token, ch.ChatID)
 		if verr != nil {

@@ -63,6 +63,10 @@ func (c *Config) MAXOAuthWebhookURL() string {
 	return strings.TrimSuffix(c.PublicAppURL, "/") + "/api/v1/auth/oauth/max/webhook"
 }
 
+func (c *Config) TelegramBusinessWebhookURL(registrationID string) string {
+	return c.PublicAppURLNormalized() + "/api/v1/webhooks/telegram/business/" + registrationID
+}
+
 func (c *Config) PublicAppURLNormalized() string {
 	return strings.TrimSuffix(c.PublicAppURL, "/")
 }

@@ -106,8 +106,10 @@ func (s *TelegramProviderSettingsService) ChannelProviderInfo(ctx context.Contex
 	}
 	def := model.DefaultTelegramProviderSettings()
 	info := model.ChannelProviderInfo{
-		TelegramEnabled:         cfg.Enabled,
-		ConnectHelpText:         strings.TrimSpace(cfg.ConnectHelpText),
+		TelegramEnabled:                cfg.Enabled,
+		TelegramBusinessStoriesEnabled: cfg.Enabled && cfg.BusinessStoriesEnabled,
+		BusinessConnectHelpText:        strings.TrimSpace(cfg.BusinessConnectHelpText),
+		ConnectHelpText:                strings.TrimSpace(cfg.ConnectHelpText),
 		ConnectHelpURL:          fallbackString(cfg.ConnectHelpURL, def.ConnectHelpURL),
 		DocsURL:                 fallbackString(cfg.DocsURL, def.DocsURL),
 		SupportTelegramUsername: fallbackString(cfg.SupportTelegramUsername, def.SupportTelegramUsername),

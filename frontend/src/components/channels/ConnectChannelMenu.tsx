@@ -15,6 +15,7 @@ import { ConnectVKDialog } from "./ConnectVKDialog";
 import { ConnectMAXDialog } from "./ConnectMAXDialog";
 import { ConnectDzenDialog } from "./ConnectDzenDialog";
 import { ConnectYouTubeDialog } from "./ConnectYouTubeDialog";
+import { ConnectTelegramBusinessDialog } from "./ConnectTelegramBusinessDialog";
 
 const PROVIDER_LABELS: Partial<Record<ChannelProvider, string>> = {
   telegram: "Telegram",
@@ -25,6 +26,11 @@ const PROVIDER_LABELS: Partial<Record<ChannelProvider, string>> = {
   youtube: "YouTube",
 };
 
+type ConnectMenuItem = {
+  key: ChannelProvider | "telegram_business";
+  label: string;
+};
+
 type ConnectChannelMenuProps = {
   onConnected: (connected?: ChannelListItem[]) => void;
 };
@@ -32,7 +38,9 @@ type ConnectChannelMenuProps = {
 export function ConnectChannelMenu({ onConnected }: ConnectChannelMenuProps) {
   const [open, setOpen] = useState(false);
   const [providerInfo, setProviderInfo] = useState<ChannelProviderInfo | null>(null);
-  const [activeProvider, setActiveProvider] = useState<ChannelProvider | null>(null);
+  const [activeProvider, setActiveProvider] = useState<ChannelProvider | "telegram_business" | null>(
+    null,
+  );
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -51,9 +59,15 @@ export function ConnectChannelMenu({ onConnected }: ConnectChannelMenuProps) {
     return () => document.removeEventListener("mousedown", onDocClick);
   }, []);
 
-  const enabledProviders: { key: ChannelProvider; label: string }[] = [];
+  const enabledProviders: ConnectMenuItem[] = [];
   if (providerInfo?.telegram_enabled) {
     enabledProviders.push({ key: "telegram", label: "Telegram" });
+  }
+  if (providerInfo?.telegram_business_stories_enabled) {
+    enabledProviders.push({
+      key: "telegram_business",
+      label: "Telegram Business (Stories)",
+    });
   }
   for (const p of providerInfo?.providers ?? []) {
     if (p.enabled) {
@@ -64,7 +78,7 @@ export function ConnectChannelMenu({ onConnected }: ConnectChannelMenuProps) {
     }
   }
 
-  function pickProvider(key: ChannelProvider) {
+  function pickProvider(key: ChannelProvider | "telegram_business") {
     setOpen(false);
     setActiveProvider(key);
   }
@@ -106,6 +120,12 @@ export function ConnectChannelMenu({ onConnected }: ConnectChannelMenuProps) {
 
       <ConnectTelegramDialog
         open={activeProvider === "telegram"}
+        onClose={() => setActiveProvider(null)}
+        onConnected={handleConnected}
+      />
+
+      <ConnectTelegramBusinessDialog
+        open={activeProvider === "telegram_business"}
         onClose={() => setActiveProvider(null)}
         onConnected={handleConnected}
       />

@@ -1476,11 +1476,13 @@ export function retryAdminTelegramQueueItem(id: string) {
 
 export type TelegramProviderSettings = {
   enabled: boolean;
+  business_stories_enabled: boolean;
   proxy_enabled: boolean;
   proxy_active_url: string;
   proxy_auto_failover: boolean;
   proxy_urls: string[];
   connect_help_text: string;
+  business_connect_help_text: string;
   connect_help_url: string;
   docs_url: string;
   support_telegram_username: string;
@@ -1607,6 +1609,9 @@ export type ChannelMetadata = {
   is_admin?: boolean;
   bot_permissions?: string[];
   participants_count?: number;
+  business_user_id?: string;
+  can_manage_stories?: boolean;
+  business_connection_enabled?: boolean;
 };
 
 export type Channel = {
@@ -1716,6 +1721,8 @@ export type SocialProviderPublicInfo = {
 
 export type ChannelProviderInfo = {
   telegram_enabled: boolean;
+  telegram_business_stories_enabled: boolean;
+  business_connect_help_text?: string;
   connect_help_text: string;
   connect_help_url: string;
   docs_url: string;
@@ -1784,6 +1791,27 @@ export function connectTelegramChannels(payload: {
       body: JSON.stringify(payload),
     },
   );
+}
+
+export type TelegramBusinessConnectResult = {
+  registration_id: string;
+  bot_username: string;
+  connected: ChannelListItem[];
+  hint?: string;
+};
+
+export function connectTelegramBusiness(payload: { bot_token: string }) {
+  return apiFetch<TelegramBusinessConnectResult>("/channels/telegram/business/connect", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function syncTelegramBusiness(payload: { registration_id: string }) {
+  return apiFetch<TelegramBusinessConnectResult>("/channels/telegram/business/sync", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
 }
 
 export function verifyChannel(id: string) {

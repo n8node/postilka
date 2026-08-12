@@ -1013,3 +1013,230 @@ func canPostInChat(chatType string, member telegramChatMember) bool {
 		return false
 	}
 }
+
+type TelegramBusinessConnectionRights struct {
+	CanManageStories bool `json:"can_manage_stories"`
+}
+
+type TelegramBusinessConnection struct {
+	ID        string                           `json:"id"`
+	User      telegramUser                     `json:"user"`
+	IsEnabled bool                             `json:"is_enabled"`
+	Rights    TelegramBusinessConnectionRights `json:"rights"`
+}
+
+type telegramBusinessUpdate struct {
+	UpdateID           int64                       `json:"update_id"`
+	BusinessConnection *TelegramBusinessConnection `json:"business_connection"`
+}
+
+func (c *TelegramBotClient) SetBusinessWebhook(ctx context.Context, token, webhookURL, secretToken string) error {
+	payload := map[string]any{
+		"url":                  strings.TrimSpace(webhookURL),
+		"secret_token":         strings.TrimSpace(secretToken),
+		"allowed_updates":      []string{"business_connection"},
+		"drop_pending_updates": false,
+	}
+	_, err := c.api(ctx, token, "setWebhook", payload)
+	return sanitizeTelegramError(err)
+}
+
+func (c *TelegramBotClient) PollBusinessConnections(ctx context.Context, token string) ([]TelegramBusinessConnection, error) {
+	_ = c.DeleteWebhook(ctx, token)
+	raw, err := c.api(ctx, token, "getUpdates", map[string]any{
+		"limit":           100,
+		"timeout":         0,
+		"allowed_updates": []string{"business_connection"},
+	})
+	if err != nil {
+		return nil, err
+	}
+	var updates []telegramBusinessUpdate
+	if err := json.Unmarshal(raw, &updates); err != nil {
+		return nil, fmt.Errorf("telegram api: invalid getUpdates result")
+	}
+	out := make([]TelegramBusinessConnection, 0)
+	seen := map[string]struct{}{}
+	for _, upd := range updates {
+		if upd.BusinessConnection == nil {
+			continue
+		}
+		conn := *upd.BusinessConnection
+		if conn.ID == "" {
+			continue
+		}
+		if _, ok := seen[conn.ID]; ok {
+			continue
+		}
+		seen[conn.ID] = struct{}{}
+		out = append(out, conn)
+	}
+	return out, nil
+}
+
+func (c *TelegramBotClient) GetBusinessConnection(
+	ctx context.Context,
+	token, businessConnectionID string,
+) (*TelegramBusinessConnection, error) {
+	raw, err := c.api(ctx, token, "getBusinessConnection", map[string]string{
+		"business_connection_id": strings.TrimSpace(businessConnectionID),
+	})
+	if err != nil {
+		return nil, sanitizeTelegramError(err)
+	}
+	var conn TelegramBusinessConnection
+	if err := json.Unmarshal(raw, &conn); err != nil {
+		return nil, errors.New("telegram api: invalid getBusinessConnection result")
+	}
+	return &conn, nil
+}
+
+type TelegramPostStoryOptions struct {
+	BusinessConnectionID string
+	Caption              string
+	ParseMode            string
+	ActivePeriod         int
+	MediaType            string
+	MediaURL             string
+}
+
+func (c *TelegramBotClient) PostStory(ctx context.Context, token string, opts TelegramPostStoryOptions) (string, error) {
+	if strings.TrimSpace(opts.BusinessConnectionID) == "" {
+		return "", fmt.Errorf("%w: не указан business_connection_id", ErrInvalidPost)
+	}
+	period := opts.ActivePeriod
+	if period <= 0 {
+		period = 86400
+	}
+	mediaBytes, filename, contentType, err := fetchURLBytes(ctx, c.client, opts.MediaURL)
+	if err != nil {
+		return "", err
+	}
+	contentJSON := `{"type":"photo","photo":"attach://story_media"}`
+	if opts.MediaType == TelegramMediaVideo {
+		contentJSON = `{"type":"video","video":"attach://story_media"}`
+	}
+	fields := map[string]string{
+		"business_connection_id": opts.BusinessConnectionID,
+		"content":                contentJSON,
+		"active_period":          strconv.Itoa(period),
+	}
+	if caption := strings.TrimSpace(opts.Caption); caption != "" {
+		fields["caption"] = caption
+		if parseMode := strings.TrimSpace(opts.ParseMode); parseMode != "" {
+			fields["parse_mode"] = parseMode
+		}
+	}
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	raw, err := c.apiMultipartTyped(ctx, token, "postStory", fields, "story_media", filename, mediaBytes, contentType)
+	if err != nil {
+		return "", sanitizeTelegramError(err)
+	}
+	var story struct {
+		ID int `json:"id"`
+	}
+	if err := json.Unmarshal(raw, &story); err != nil {
+		return "", errors.New("telegram api: invalid postStory result")
+	}
+	if story.ID == 0 {
+		return "", nil
+	}
+	return strconv.Itoa(story.ID), nil
+}
+
+func fetchURLBytes(ctx context.Context, client *http.Client, rawURL string) ([]byte, string, string, error) {
+	rawURL = strings.TrimSpace(rawURL)
+	if err := validateHTTPURL(rawURL); err != nil {
+		return nil, "", "", fmt.Errorf("%w: некорректная ссылка на медиа", ErrInvalidPost)
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		return nil, "", "", err
+	}
+	httpClient := client
+	if httpClient == nil {
+		httpClient = http.DefaultClient
+	}
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, "", "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, "", "", fmt.Errorf("download media: HTTP %d", resp.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 50<<20))
+	if err != nil {
+		return nil, "", "", err
+	}
+	if len(body) == 0 {
+		return nil, "", "", fmt.Errorf("%w: пустой медиафайл", ErrInvalidPost)
+	}
+	filename := "story.bin"
+	if parts := strings.Split(resp.Header.Get("Content-Type"), ";"); len(parts) > 0 {
+		switch strings.TrimSpace(strings.ToLower(parts[0])) {
+		case "image/jpeg", "image/jpg":
+			filename = "story.jpg"
+		case "image/png":
+			filename = "story.png"
+		case "video/mp4":
+			filename = "story.mp4"
+		}
+	}
+	return body, filename, resp.Header.Get("Content-Type"), nil
+}
+
+func (c *TelegramBotClient) apiMultipartTyped(
+	ctx context.Context,
+	token, method string,
+	fields map[string]string,
+	fileField, filename string,
+	fileData []byte,
+	fileContentType string,
+) (json.RawMessage, error) {
+	endpoint := fmt.Sprintf("https://api.telegram.org/bot%s/%s", strings.TrimSpace(token), method)
+	var buf bytes.Buffer
+	writer := multipart.NewWriter(&buf)
+	for key, value := range fields {
+		if err := writer.WriteField(key, value); err != nil {
+			return nil, err
+		}
+	}
+	if fileContentType == "" {
+		fileContentType = "application/octet-stream"
+	}
+	fileHeader := make(textproto.MIMEHeader)
+	fileHeader.Set("Content-Disposition", fmt.Sprintf(`form-data; name="%s"; filename="%s"`, fileField, filename))
+	fileHeader.Set("Content-Type", fileContentType)
+	part, err := writer.CreatePart(fileHeader)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := part.Write(fileData); err != nil {
+		return nil, err
+	}
+	contentType := writer.FormDataContentType()
+	if err := writer.Close(); err != nil {
+		return nil, err
+	}
+	uploadClient := &http.Client{Timeout: 5 * time.Minute, Transport: c.client.Transport}
+	resp, err := c.doRequestWithClient(ctx, uploadClient, http.MethodPost, endpoint, contentType, buf.Bytes())
+	if err != nil {
+		return nil, sanitizeTelegramError(err)
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	var parsed telegramAPIResponse
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return nil, fmt.Errorf("telegram api: invalid response")
+	}
+	if !parsed.OK {
+		if parsed.Description != "" {
+			return nil, fmt.Errorf("telegram api: %s", parsed.Description)
+		}
+		return nil, fmt.Errorf("telegram api: request failed")
+	}
+	return parsed.Result, nil
+}

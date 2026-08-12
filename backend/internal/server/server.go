@@ -76,6 +76,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	subscriptionRepo := repository.NewSubscriptionRepository(db.Pool)
 	subscriptionSvc := service.NewSubscriptionService(subscriptionRepo, planRepo, wsRepo)
 	channelRepo := repository.NewChannelRepository(db.Pool)
+	telegramBusinessRegRepo := repository.NewTelegramBusinessRegistrationRepository(db.Pool)
 	quotaSvc := service.NewQuotaService(planRepo, wsRepo, subscriptionRepo, usageRepo, channelRepo)
 	telegramSettingsRepo := repository.NewTelegramSettingsRepository(db.Pool)
 	telegramQueueRepo := repository.NewTelegramNotificationQueueRepository(db.Pool)
@@ -96,6 +97,9 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	}
 	secretCipher, _ := service.NewSecretCipher(encKey)
 	channelSvc := service.NewChannelService(channelRepo, telegramProviderSettingsSvc, socialProviderSettingsSvc, telegramBotClient, wsSvc, quotaSvc, secretCipher)
+	telegramBusinessSvc := service.NewTelegramBusinessService(
+		telegramBusinessRegRepo, channelRepo, telegramProviderSettingsSvc, telegramBotClient, wsSvc, quotaSvc, secretCipher, cfg,
+	)
 	channelConnectSvc := service.NewChannelConnectService(
 		channelRepo, channelOAuthSessionRepo, socialProviderSettingsSvc,
 		telegramProviderSettingsSvc, youtubeAPIClient, wsSvc, quotaSvc, secretCipher, cfg,
@@ -163,6 +167,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	kieConfigHandler := handler.NewKieConfigHandler(kieConfigSvc)
 	kieVideoConfigHandler := handler.NewKieVideoConfigHandler(kieVideoConfigSvc, kieVideoExampleSvc)
 	channelHandler := handler.NewChannelHandler(channelSvc, channelConnectSvc, channelTestSvc)
+	telegramBusinessHandler := handler.NewTelegramBusinessHandler(telegramBusinessSvc)
 	channelConnectHandler := handler.NewChannelConnectHandler(channelConnectSvc, cfg)
 	postHandler := handler.NewPostHandler(postSvc)
 	linkRedirectHandler := handler.NewLinkRedirectHandler(linkShortener)
@@ -231,6 +236,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Get("/robokassa/result", paymentWebhookHandler.RobokassaResult)
 			r.Post("/robokassa/result", paymentWebhookHandler.RobokassaResult)
 			r.Post("/robokassa/result2", paymentWebhookHandler.RobokassaResult2)
+			r.Post("/telegram/business/{registrationID}", telegramBusinessHandler.Webhook)
 		})
 
 		r.With(authMW.Required).Get("/user/invites", inviteHandler.UserInvites)
@@ -267,6 +273,8 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Get("/channels/provider-info", channelHandler.ProviderInfo)
 			r.Post("/channels/telegram/discover", channelHandler.DiscoverTelegram)
 			r.Post("/channels/telegram/connect", channelHandler.ConnectTelegram)
+			r.Post("/channels/telegram/business/connect", telegramBusinessHandler.Connect)
+			r.Post("/channels/telegram/business/sync", telegramBusinessHandler.Sync)
 			r.Post("/channels/max/discover", channelConnectHandler.DiscoverMAX)
 			r.Post("/channels/max/connect", channelConnectHandler.ConnectMAX)
 			r.Get("/channels/oauth/{provider}/start", channelConnectHandler.OAuthStart)

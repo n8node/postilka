@@ -47,6 +47,7 @@ import {
   fetchMe,
   type ChannelListItem,
   type ChannelProvider,
+  type PublishCapabilities,
 } from "@/lib/api";
 import { channelDisplayName } from "@/lib/channelPresentation";
 import { composePostText } from "@/lib/generation-api";
@@ -183,6 +184,29 @@ function plainToEditorHTML(text: string) {
 
 function isVideoMime(mime: string) {
   return mime.toLowerCase().startsWith("video/");
+}
+
+function isTelegramBusinessChannel(channel: { provider: string; chat_type?: string }) {
+  return channel.provider === "telegram" && channel.chat_type === "business";
+}
+
+function channelSupportsPostKind(
+  channel: { status: string; publish_capabilities?: PublishCapabilities },
+  kind: PostKind,
+): boolean {
+  if (channel.status !== "active") return false;
+  const caps = channel.publish_capabilities;
+  const formats = caps?.formats ?? [];
+  if (kind === "story") {
+    return formats.includes("story") && Boolean(caps?.text);
+  }
+  if (kind === "short_video") {
+    return formats.includes("short_video");
+  }
+  if (formats.length === 1 && formats[0] === "story") {
+    return false;
+  }
+  return Boolean(caps?.text);
 }
 
 function buttonToEditable(button: TelegramButton): EditableButton {
@@ -1021,8 +1045,8 @@ export function PostComposer() {
       setPosts(postData.items);
       setRecentFiles(fileData.files);
       setWorkspaceRole(meData.active_workspace?.role ?? meData.workspace?.role ?? null);
-      const activeChannels = channelData.items.filter(
-        (channel) => channel.status === "active" && channel.publish_capabilities?.text,
+      const activeChannels = channelData.items.filter((channel) =>
+        channelSupportsPostKind(channel, "post"),
       );
       setSelectedIds(activeChannels.map((channel) => channel.id));
       setActiveChannelId(activeChannels[0]?.id ?? null);
@@ -1068,6 +1092,10 @@ export function PostComposer() {
   const selectedChannels = useMemo(
     () => channels.filter((channel) => selectedIds.includes(channel.id)),
     [channels, selectedIds],
+  );
+  const hasStoryChannels = useMemo(
+    () => channels.some((channel) => channelSupportsPostKind(channel, "story")),
+    [channels],
   );
   const activeChannel =
     selectedChannels.find((channel) => channel.id === activeChannelId) ?? selectedChannels[0] ?? null;
@@ -1139,9 +1167,7 @@ export function PostComposer() {
 
   function resetNew() {
     if (dirty && !window.confirm("Несохранённые изменения будут потеряны. Продолжить?")) return;
-    const active = channels.filter(
-      (channel) => channel.status === "active" && channel.publish_capabilities?.text,
-    );
+    const active = channels.filter((channel) => channelSupportsPostKind(channel, "post"));
     setPostId(null);
     setSelectedIds(active.map((channel) => channel.id));
     setActiveChannelId(active[0]?.id ?? null);
@@ -1433,6 +1459,12 @@ export function PostComposer() {
     if (kind === "story") {
       setFormat("story");
       setMedia((current) => current.slice(0, 1));
+      setSelectedIds((ids) =>
+        ids.filter((id) => {
+          const channel = channels.find((item) => item.id === id);
+          return channel ? channelSupportsPostKind(channel, "story") : false;
+        }),
+      );
       return;
     }
     if (kind === "short_video") {
@@ -1488,8 +1520,11 @@ export function PostComposer() {
   function validate(action: Timing) {
     if (selectedChannels.length === 0) return "Выберите хотя бы один активный канал";
     if (postKind === "story" || format === "story") {
-      if (action !== "draft" && selectedChannels.some((channel) => channel.provider !== "telegram")) {
-        return "История поддерживается только для Telegram";
+      if (
+        action !== "draft" &&
+        selectedChannels.some((channel) => !channelSupportsPostKind(channel, "story"))
+      ) {
+        return "История публикуется только в Telegram Business — выберите соответствующий профиль";
       }
       if (action !== "draft" && media.length !== 1) {
         return "Для истории прикрепите ровно одно фото или видео";
@@ -1905,15 +1940,20 @@ export function PostComposer() {
             {(
               [
                 { id: "post" as const, label: "Пост" },
-                { id: "story" as const, label: "История" },
+                { id: "story" as const, label: "История", disabled: !hasStoryChannels },
                 { id: "short_video" as const, label: "Короткое видео" },
               ] as const
-            ).map(({ id, label }) => (
+            ).map(({ id, label, disabled }) => (
               <button
                 key={id}
                 type="button"
                 onClick={() => switchPostKind(id)}
-                disabled={composerLocked}
+                disabled={composerLocked || disabled}
+                title={
+                  disabled
+                    ? "Подключите Telegram Business на странице «Каналы»"
+                    : undefined
+                }
                 className={cn(
                   "rounded-md px-4 py-2 text-sm font-semibold",
                   postKind === id ? "bg-white shadow-sm" : "text-muted hover:text-text",
@@ -1925,7 +1965,7 @@ export function PostComposer() {
           </div>
           <p className="-mt-2 text-xs text-muted">
             {postKind === "story"
-              ? "История — одно вертикальное фото или видео в Telegram с подписью."
+              ? "История — одно фото или видео в Telegram Stories через Business-подключение."
               : postKind === "short_video"
                 ? maxChannels.length > 0
                   ? "Короткое видео: в Telegram — кружок, в MAX — обычное прямоугольное видео с текстом."
@@ -1956,9 +1996,8 @@ export function PostComposer() {
               <button
                 type="button"
                 onClick={() => {
-                  const active = channels.filter(
-                    (channel) =>
-                      channel.status === "active" && channel.publish_capabilities?.text,
+                  const active = channels.filter((channel) =>
+                    channelSupportsPostKind(channel, postKind),
                   );
                   setSelectedIds(
                     selectedIds.length === active.length ? [] : active.map((channel) => channel.id),
@@ -1978,8 +2017,7 @@ export function PostComposer() {
               <div className="grid gap-2 md:grid-cols-2">
                 {channels.map((channel) => {
                   const selected = selectedIds.includes(channel.id);
-                  const supportsPost =
-                    channel.status === "active" && Boolean(channel.publish_capabilities?.text);
+                  const supportsPost = channelSupportsPostKind(channel, postKind);
                   return (
                     <button
                       key={channel.id}
@@ -1989,9 +2027,13 @@ export function PostComposer() {
                       title={
                         channel.status !== "active"
                           ? "Канал недоступен"
-                          : !channel.publish_capabilities?.text
-                            ? "Канал не поддерживает обычный текстовый пост"
-                            : undefined
+                          : !supportsPost && postKind === "story"
+                            ? "Профиль не поддерживает Stories — подключите Telegram Business"
+                            : !supportsPost && isTelegramBusinessChannel(channel)
+                              ? "Business-профиль поддерживает только Stories"
+                              : !supportsPost
+                                ? "Канал не поддерживает этот тип публикации"
+                                : undefined
                       }
                       className={cn(
                         "flex min-w-0 items-center gap-3 rounded-lg border p-3 text-left transition-colors",

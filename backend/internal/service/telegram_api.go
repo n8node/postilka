@@ -13,9 +13,11 @@ import (
 )
 
 type telegramUser struct {
-	ID       int64  `json:"id"`
-	IsBot    bool   `json:"is_bot"`
-	Username string `json:"username"`
+	ID        int64  `json:"id"`
+	IsBot     bool   `json:"is_bot"`
+	Username  string `json:"username"`
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
 }
 
 type telegramAPIResponse struct {

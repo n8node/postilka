@@ -50,11 +50,13 @@ function connectFlowLabel(flow: string): string {
 
 const DEFAULT_TELEGRAM: TelegramProviderSettings = {
   enabled: true,
+  business_stories_enabled: true,
   proxy_enabled: false,
   proxy_active_url: "",
   proxy_auto_failover: true,
   proxy_urls: [],
   connect_help_text: "",
+  business_connect_help_text: "",
   connect_help_url: "https://postilka.ru/docs/telegram",
   docs_url: "https://postilka.ru/docs",
   support_telegram_username: "postilka_support",
@@ -421,6 +423,15 @@ function TelegramSettingsForm({
           />
           Разрешить пользователям подключать Telegram-каналы
         </label>
+        <label className="mt-3 flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={settings.business_stories_enabled}
+            onChange={(e) => onPatch({ business_stories_enabled: e.target.checked })}
+            className="rounded border-slate-300"
+          />
+          Разрешить подключение Telegram Business для Stories
+        </label>
       </Section>
 
       <Section title="Прокси для Telegram Bot API">
@@ -483,9 +494,22 @@ function TelegramSettingsForm({
       />
 
       <Section title="Инструкция для пользователей">
+        <p className="mb-2 text-xs text-slate-500">Подключение каналов и групп через BotFather.</p>
         <textarea
           value={settings.connect_help_text}
           onChange={(e) => onPatch({ connect_help_text: e.target.value })}
+          rows={6}
+          className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+        />
+      </Section>
+
+      <Section title="Инструкция: Telegram Business Stories">
+        <p className="mb-2 text-xs text-slate-500">
+          Показывается при подключении личного/business-профиля для публикации историй.
+        </p>
+        <textarea
+          value={settings.business_connect_help_text}
+          onChange={(e) => onPatch({ business_connect_help_text: e.target.value })}
           rows={6}
           className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
         />

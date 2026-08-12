@@ -536,7 +536,16 @@ func validateContentForChannel(content model.PostContent, channel *model.Channel
 		return fmt.Errorf("%w: текст Telegram не должен превышать 4096 символов", ErrInvalidPost)
 	}
 	if channel.Provider == model.ChannelProviderTelegram &&
-		(format == "story" || format == "short_video") && textLength > 1024 {
+		format == "story" && channel.ChatType != model.TelegramChatTypeBusiness {
+		return fmt.Errorf("%w: формат story доступен только для Telegram Business", ErrInvalidPost)
+	}
+	if channel.Provider == model.ChannelProviderTelegram &&
+		format == "story" && channel.ChatType == model.TelegramChatTypeBusiness &&
+		textLength > 2048 {
+		return fmt.Errorf("%w: подпись к истории Telegram не должна превышать 2048 символов", ErrInvalidPost)
+	}
+	if channel.Provider == model.ChannelProviderTelegram &&
+		format == "short_video" && textLength > 1024 {
 		return fmt.Errorf("%w: подпись к медиа Telegram не должна превышать 1024 символа", ErrInvalidPost)
 	}
 	if channel.Provider == model.ChannelProviderMAX && textLength > 4000 {
@@ -660,8 +669,12 @@ func ValidatePostContent(content model.PostContent, settings model.PostSettings)
 		}
 	case "story", "short_video":
 		text := strings.TrimSpace(content.Text)
-		if utf8.RuneCountInString(text) > 1024 {
-			return fmt.Errorf("%w: подпись к медиа не должна превышать 1024 символа", ErrInvalidPost)
+		limit := 1024
+		if format == "story" {
+			limit = 2048
+		}
+		if utf8.RuneCountInString(text) > limit {
+			return fmt.Errorf("%w: подпись к медиа не должна превышать %d символов", ErrInvalidPost, limit)
 		}
 		parseMode := strings.ToUpper(strings.TrimSpace(content.ParseMode))
 		if parseMode == "HTML" && text != "" {

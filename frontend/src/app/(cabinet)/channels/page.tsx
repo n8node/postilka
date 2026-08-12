@@ -48,7 +48,8 @@ const providerLabel: Partial<Record<ChannelProvider, string>> = {
   youtube: "YouTube",
 };
 
-function formatProviderLabel(provider: ChannelProvider): string {
+function formatProviderLabel(provider: ChannelProvider, chatType?: string): string {
+  if (provider === "telegram" && chatType === "business") return "Telegram Business";
   if (provider === "ok") return "Не поддерживается";
   return providerLabel[provider] ?? provider;
 }
@@ -62,6 +63,8 @@ const chatTypeLabel = (type: string) => {
       return "Группа";
     case "chat":
       return "Чат";
+    case "business":
+      return "Telegram Business";
     default:
       return type || "—";
   }
@@ -80,10 +83,16 @@ function StatusBadge({ status }: { status: ChannelListItem["status"] }) {
   );
 }
 
-function ProviderBadge({ provider }: { provider: ChannelProvider }) {
+function ProviderBadge({
+  provider,
+  chatType,
+}: {
+  provider: ChannelProvider;
+  chatType?: string;
+}) {
   return (
     <span className="inline-flex rounded-full border border-border bg-zinc-50 px-2 py-0.5 text-xs font-medium text-zinc-700">
-      {formatProviderLabel(provider)}
+      {formatProviderLabel(provider, chatType)}
     </span>
   );
 }
@@ -300,12 +309,14 @@ export default function ChannelsPage() {
                 />
                 <div className="min-w-0">
                   <p className="truncate font-semibold">{displayName}</p>
-                  <p className="text-xs text-muted">{formatProviderLabel(selected.provider)}</p>
+                  <p className="text-xs text-muted">
+                    {formatProviderLabel(selected.provider, selected.chat_type)}
+                  </p>
                 </div>
               </div>
 
               <div className="flex flex-wrap gap-2">
-                <ProviderBadge provider={selected.provider} />
+                <ProviderBadge provider={selected.provider} chatType={selected.chat_type} />
                 <StatusBadge status={selected.status} />
                 {selected.post_mode_label && (
                   <span className="inline-flex rounded-full border border-border bg-zinc-50 px-2 py-0.5 text-xs text-zinc-600">
@@ -552,16 +563,18 @@ export default function ChannelsPage() {
                   <RefreshCw className={cn("h-4 w-4", actionLoading && "animate-spin")} />
                   {actionLoading ? "Проверка…" : "Обновить данные"}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => void handleTestMessage()}
-                  disabled={actionLoading}
-                  className="w-full rounded-md bg-accent px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
-                >
-                  {actionLoading ? "Отправка…" : selected.provider === "rutube" && rutubeTestType === "video"
-                    ? "Отправить тестовое видео"
-                    : "Отправить тестовое сообщение"}
-                </button>
+                {selected.chat_type !== "business" && (
+                  <button
+                    type="button"
+                    onClick={() => void handleTestMessage()}
+                    disabled={actionLoading}
+                    className="w-full rounded-md bg-accent px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+                  >
+                    {actionLoading ? "Отправка…" : selected.provider === "rutube" && rutubeTestType === "video"
+                      ? "Отправить тестовое видео"
+                      : "Отправить тестовое сообщение"}
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => void handleDelete()}
@@ -628,7 +641,7 @@ export default function ChannelsPage() {
                         </div>
                       </td>
                       <td className="px-4 py-3">
-                        <ProviderBadge provider={ch.provider} />
+                        <ProviderBadge provider={ch.provider} chatType={ch.chat_type} />
                       </td>
                       <td className="px-4 py-3 text-muted">{ch.post_mode_label || "—"}</td>
                       <td className="px-4 py-3">

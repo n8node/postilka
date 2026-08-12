@@ -381,7 +381,31 @@ func (s *PublicationService) publishTarget(
 		silent := settings.TelegramSilent
 		preview := telegramLinkPreview(settings)
 		switch format {
-		case "story", "short_video":
+		case "story":
+			if channel.ChatType != model.TelegramChatTypeBusiness {
+				return "", fmt.Errorf("истории Telegram Business доступны только для business-аккаунтов")
+			}
+			if len(post.Media) != 1 {
+				return "", fmt.Errorf("для формата story нужен ровно один медиафайл")
+			}
+			media, err := s.telegramMedia(ctx, post)
+			if err != nil {
+				return "", err
+			}
+			parseMode := strings.ToUpper(strings.TrimSpace(content.ParseMode))
+			storyID, err := s.telegram.PostStory(ctx, token, TelegramPostStoryOptions{
+				BusinessConnectionID: channel.ChatID,
+				Caption:              content.Text,
+				ParseMode:            parseMode,
+				ActivePeriod:         86400,
+				MediaType:            media[0].Type,
+				MediaURL:             media[0].URL,
+			})
+			if err != nil {
+				return "", err
+			}
+			return storyID, nil
+		case "short_video":
 			if len(post.Media) != 1 {
 				return "", fmt.Errorf("для формата %s нужен ровно один медиафайл", format)
 			}
@@ -389,7 +413,7 @@ func (s *PublicationService) publishTarget(
 			if err != nil {
 				return "", err
 			}
-			if format == "short_video" && media[0].Type != TelegramMediaVideo {
+			if media[0].Type != TelegramMediaVideo {
 				return "", fmt.Errorf("короткое видео должно быть файлом video/*")
 			}
 			parseMode := strings.ToUpper(strings.TrimSpace(content.ParseMode))
