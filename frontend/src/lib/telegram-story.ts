@@ -143,12 +143,12 @@ export function defaultStoryAreaPosition(
 ): TelegramStoryAreaPosition {
   if (kind === "link" && index === 0) {
     return {
-      x_percentage: 18,
-      y_percentage: 78,
-      width_percentage: 64,
-      height_percentage: 10,
+      x_percentage: 34,
+      y_percentage: 82,
+      width_percentage: 32,
+      height_percentage: 8,
       rotation_angle: 0,
-      corner_radius_percentage: 14,
+      corner_radius_percentage: 8,
     };
   }
   const row = index % 3;
@@ -156,7 +156,7 @@ export function defaultStoryAreaPosition(
   const baseY = 12 + col * 22;
   const baseX = 8 + row * 28;
   const sizes: Record<TelegramStoryAreaKind, { w: number; h: number }> = {
-    link: { w: 64, h: 10 },
+    link: { w: 32, h: 8 },
     location: { w: 40, h: 14 },
     suggested_reaction: { w: 16, h: 16 },
     weather: { w: 32, h: 14 },

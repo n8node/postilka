@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"html"
 	"net/url"
-	"sort"
 	"strings"
 
 	"github.com/postilka/postilka/internal/model"
@@ -38,10 +37,6 @@ const (
 	telegramStoryMaxLocations = 10
 	telegramStoryMaxReactions = 5
 	telegramStoryMaxWeather   = 3
-
-	telegramStoryLinkMinWidthPct  = 30.0
-	telegramStoryLinkMinHeightPct = 10.0
-	telegramStoryLinkDefaultRadiusPct = 14.0
 )
 
 func telegramStoryActivePeriod(settings *model.TelegramStorySettings) int {
@@ -88,6 +83,9 @@ func validateTelegramStorySettings(story *model.TelegramStorySettings) error {
 			}
 			if area.Latitude < -90 || area.Latitude > 90 || area.Longitude < -180 || area.Longitude > 180 {
 				return fmt.Errorf("%w: некорректные координаты геометки #%d", ErrInvalidPost, i+1)
+			}
+			if area.Address == nil || strings.TrimSpace(area.Address.CountryCode) == "" {
+				return fmt.Errorf("%w: у геометки #%d укажите страну (country_code, например RU)", ErrInvalidPost, i+1)
 			}
 		case "suggested_reaction", "reaction":
 			reactions++
@@ -158,20 +156,6 @@ func normalizeTelegramStoryLinkURL(raw string) (string, error) {
 	return parsed.String(), nil
 }
 
-func storyLinkCornerRadius(pos model.TelegramStoryAreaPosition) float64 {
-	pill := pos.HeightPercentage * (16.0 / 9.0) / 2.0
-	if pill < telegramStoryLinkDefaultRadiusPct {
-		pill = telegramStoryLinkDefaultRadiusPct
-	}
-	if pill > 25 {
-		pill = 25
-	}
-	if pos.CornerRadiusPercentage > pill {
-		return pos.CornerRadiusPercentage
-	}
-	return pill
-}
-
 func countTelegramStoryLinkAreas(areas []model.TelegramStoryArea) int {
 	count := 0
 	for _, area := range areas {
@@ -207,17 +191,8 @@ func countTelegramStoryLinkAreasJSON(raw string) (int, error) {
 // storyAreaPositionForAPI converts top-left rectangle coordinates (UI/editor)
 // to center-based coordinates required by Telegram StoryAreaPosition and clamps
 // the rectangle inside the media bounds.
-func storyAreaPositionForAPI(pos model.TelegramStoryAreaPosition, kind string) model.TelegramStoryAreaPosition {
+func storyAreaPositionForAPI(pos model.TelegramStoryAreaPosition, _ string) model.TelegramStoryAreaPosition {
 	pos = normalizeStoryAreaPosition(pos)
-	if strings.ToLower(strings.TrimSpace(kind)) == "link" {
-		if pos.WidthPercentage < telegramStoryLinkMinWidthPct {
-			pos.WidthPercentage = telegramStoryLinkMinWidthPct
-		}
-		if pos.HeightPercentage < telegramStoryLinkMinHeightPct {
-			pos.HeightPercentage = telegramStoryLinkMinHeightPct
-		}
-		pos.CornerRadiusPercentage = storyLinkCornerRadius(pos)
-	}
 	if pos.XPercentage+pos.WidthPercentage > 100 {
 		pos.XPercentage = 100 - pos.WidthPercentage
 	}
@@ -261,27 +236,58 @@ type telegramStoryAreaTypeLink struct {
 	URL  string `json:"url"`
 }
 
-func sortTelegramStoryAreasForAPI(areas []model.TelegramStoryArea) []model.TelegramStoryArea {
-	if len(areas) < 2 {
-		return areas
-	}
-	sorted := append([]model.TelegramStoryArea{}, areas...)
-	sort.SliceStable(sorted, func(i, j int) bool {
-		li := strings.ToLower(strings.TrimSpace(sorted[i].Kind)) == "link"
-		lj := strings.ToLower(strings.TrimSpace(sorted[j].Kind)) == "link"
-		if li != lj {
-			return li
+type telegramStoryLocationAddress struct {
+	CountryCode string `json:"country_code"`
+	State       string `json:"state,omitempty"`
+	City        string `json:"city,omitempty"`
+	Street      string `json:"street,omitempty"`
+}
+
+type telegramStoryAreaTypeLocation struct {
+	Type      string                        `json:"type"`
+	Latitude  float64                       `json:"latitude"`
+	Longitude float64                       `json:"longitude"`
+	Address   telegramStoryLocationAddress  `json:"address"`
+}
+
+func telegramStoryLocationAddressForAPI(area model.TelegramStoryArea) telegramStoryLocationAddress {
+	addr := telegramStoryLocationAddress{CountryCode: "RU"}
+	if area.Address != nil {
+		if cc := strings.TrimSpace(area.Address.CountryCode); cc != "" {
+			addr.CountryCode = cc
 		}
-		return i < j
-	})
-	return sorted
+		if v := strings.TrimSpace(area.Address.State); v != "" {
+			addr.State = v
+		}
+		if v := strings.TrimSpace(area.Address.City); v != "" {
+			addr.City = v
+		}
+		if v := strings.TrimSpace(area.Address.Street); v != "" {
+			addr.Street = v
+		}
+	}
+	return addr
+}
+
+func countTelegramStoryAreasByKind(areas []model.TelegramStoryArea) map[string]int {
+	counts := map[string]int{}
+	for _, area := range areas {
+		kind := strings.ToLower(strings.TrimSpace(area.Kind))
+		if kind == "reaction" {
+			kind = "suggested_reaction"
+		}
+		if kind == "" {
+			continue
+		}
+		counts[kind]++
+	}
+	return counts
 }
 
 func buildTelegramStoryAreasJSON(areas []model.TelegramStoryArea) (string, error) {
 	if len(areas) == 0 {
 		return "", nil
 	}
-	areas = sortTelegramStoryAreasForAPI(areas)
 	out := make([]telegramStoryAreaAPI, 0, len(areas))
 	for _, area := range areas {
 		kind := strings.ToLower(strings.TrimSpace(area.Kind))
@@ -301,33 +307,12 @@ func buildTelegramStoryAreasJSON(areas []model.TelegramStoryArea) (string, error
 				URL:  linkURL,
 			}
 		case "location":
-			payload := map[string]any{
-				"type":      "location",
-				"latitude":  area.Latitude,
-				"longitude": area.Longitude,
+			areaType = telegramStoryAreaTypeLocation{
+				Type:      "location",
+				Latitude:  area.Latitude,
+				Longitude: area.Longitude,
+				Address:   telegramStoryLocationAddressForAPI(area),
 			}
-			if area.Address != nil {
-				addr := map[string]string{}
-				if cc := strings.TrimSpace(area.Address.CountryCode); cc != "" {
-					addr["country_code"] = cc
-				}
-				if v := strings.TrimSpace(area.Address.State); v != "" {
-					addr["state"] = v
-				}
-				if v := strings.TrimSpace(area.Address.City); v != "" {
-					addr["city"] = v
-				}
-				if v := strings.TrimSpace(area.Address.Street); v != "" {
-					addr["street"] = v
-				}
-				if len(addr) > 0 {
-					if _, ok := addr["country_code"]; !ok {
-						addr["country_code"] = "RU"
-					}
-					payload["address"] = addr
-				}
-			}
-			areaType = payload
 		case "suggested_reaction":
 			reactionType := map[string]string{
 				"type":  "emoji",

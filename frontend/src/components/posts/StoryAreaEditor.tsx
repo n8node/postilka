@@ -407,7 +407,9 @@ export function StoryAreaEditor({
                     />
                     <p className="mt-1 text-[11px] text-muted">
                       Telegram сам рисует «стикер ссылки» с доменом — как в приложении. Через API
-                      можно передать только URL и позицию, без кастомного оформления.
+                      можно передать только URL и позицию, без кастомного оформления. Если стикер не
+                      появился, проверьте, что сайт открывается публично (Telegram загружает его
+                      со своих серверов).
                     </p>
                   </>
                 )}
@@ -459,6 +461,9 @@ export function StoryAreaEditor({
                       placeholder="Улица"
                       className="rounded border border-border px-2 py-1.5 text-xs"
                     />
+                    <p className="text-[11px] text-muted">
+                      Для отображения геометки Telegram нужны координаты и адрес с кодом страны (RU).
+                    </p>
                   </div>
                 )}
                 {area.kind === "suggested_reaction" && (

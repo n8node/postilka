@@ -1587,19 +1587,34 @@ export function PostComposer() {
         return "Для истории прикрепите ровно одно фото или видео";
       }
       for (const area of telegramStory.areas ?? []) {
-        if (area.kind !== "link") continue;
-        const raw = area.url?.trim() ?? "";
-        if (action !== "draft" && !raw) {
-          return "Укажите URL в зоне «Ссылка» (кнопка + Ссылка в настройках истории). URL в тексте подписи не создаёт link-sticker.";
-        }
-        if (raw) {
-          try {
-            const parsed = new URL(raw.includes("://") ? raw : `https://${raw}`);
-            if (!parsed.hostname) {
-              return "URL зоны ссылки должен содержать домен, например https://example.com";
+        if (area.kind === "link") {
+          const raw = area.url?.trim() ?? "";
+          if (action !== "draft" && !raw) {
+            return "Укажите URL в зоне «Ссылка» (кнопка + Ссылка в настройках истории). URL в тексте подписи не создаёт link-sticker.";
+          }
+          if (raw) {
+            try {
+              const parsed = new URL(raw.includes("://") ? raw : `https://${raw}`);
+              if (!parsed.hostname) {
+                return "URL зоны ссылки должен содержать домен, например https://example.com";
+              }
+            } catch {
+              return "Некорректный URL зоны ссылки на истории";
             }
-          } catch {
-            return "Некорректный URL зоны ссылки на истории";
+          }
+          continue;
+        }
+        if (area.kind === "location" && action !== "draft") {
+          if (
+            area.latitude == null ||
+            area.longitude == null ||
+            Number.isNaN(area.latitude) ||
+            Number.isNaN(area.longitude)
+          ) {
+            return "Укажите широту и долготу в зоне «Геометка»";
+          }
+          if (!area.address?.country_code?.trim()) {
+            return "У геометки укажите код страны (например RU)";
           }
         }
       }

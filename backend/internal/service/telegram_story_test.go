@@ -46,9 +46,6 @@ func TestBuildTelegramStoryAreasJSONLinkUsesCenterPosition(t *testing.T) {
 	if got.YPercentage != 29 {
 		t.Fatalf("expected center y 29, got %v", got.YPercentage)
 	}
-	if got.CornerRadiusPercentage < telegramStoryLinkDefaultRadiusPct {
-		t.Fatalf("expected pill corner radius, got %v", got.CornerRadiusPercentage)
-	}
 	if areas[0].Type.Type != "link" || areas[0].Type.URL != "https://postilka.ru" {
 		t.Fatalf("unexpected link payload: %+v", areas[0].Type)
 	}
@@ -159,7 +156,32 @@ func TestPostSettingsTelegramStoryLinkRoundTrip(t *testing.T) {
 	}
 }
 
-func TestStoryAreaPositionForAPIClampsLinkArea(t *testing.T) {
+func TestBuildTelegramStoryAreasJSONLocationIncludesAddress(t *testing.T) {
+	raw, err := buildTelegramStoryAreasJSON([]model.TelegramStoryArea{
+		{
+			Kind:      "location",
+			Latitude:  55.7558,
+			Longitude: 37.6173,
+			Position: model.TelegramStoryAreaPosition{
+				XPercentage: 8, YPercentage: 12, WidthPercentage: 40, HeightPercentage: 14,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("build json: %v", err)
+	}
+	if !strings.Contains(raw, `"type":"location"`) {
+		t.Fatalf("expected location type, got %s", raw)
+	}
+	if !strings.Contains(raw, `"country_code":"RU"`) {
+		t.Fatalf("expected default country_code RU, got %s", raw)
+	}
+	if !strings.Contains(raw, `"latitude":55.7558`) {
+		t.Fatalf("expected latitude in json, got %s", raw)
+	}
+}
+
+func TestStoryAreaPositionForAPIClampsArea(t *testing.T) {
 	got := storyAreaPositionForAPI(model.TelegramStoryAreaPosition{
 		XPercentage:            85,
 		YPercentage:            5,
@@ -168,8 +190,8 @@ func TestStoryAreaPositionForAPIClampsLinkArea(t *testing.T) {
 		RotationAngle:          0,
 		CornerRadiusPercentage: 8,
 	}, "link")
-	if got.WidthPercentage < telegramStoryLinkMinWidthPct {
-		t.Fatalf("expected min link width, got %v", got.WidthPercentage)
+	if got.WidthPercentage != 40 {
+		t.Fatalf("expected width unchanged, got %v", got.WidthPercentage)
 	}
 	if got.XPercentage > 100-got.WidthPercentage/2 {
 		t.Fatalf("center x out of bounds: %v width %v", got.XPercentage, got.WidthPercentage)

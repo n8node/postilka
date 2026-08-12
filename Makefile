@@ -1,4 +1,4 @@
-.PHONY: up down prod prod-backend prod-backend-nocache prod-frontend prod-nginx verify-release migrate test lint logs setup psql wp-cli status create-superadmin
+.PHONY: up down prod prod-backend prod-backend-nocache prod-frontend prod-nginx verify-release migrate test lint logs logs-prod logs-prod-backend setup psql wp-cli status create-superadmin
 
 COMPOSE := docker compose --env-file .env
 COMPOSE_PROD := $(COMPOSE) -f docker-compose.yml -f docker-compose.prod.yml
@@ -53,6 +53,12 @@ lint:
 
 logs:
 	$(COMPOSE) logs -f
+
+logs-prod:
+	$(COMPOSE_PROD) logs -f backend worker
+
+logs-prod-backend:
+	$(COMPOSE_PROD) logs --tail=100 backend
 
 psql:
 	$(COMPOSE) exec postgres psql -U postilka postilka

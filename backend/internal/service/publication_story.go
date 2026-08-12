@@ -58,6 +58,7 @@ func (s *PublicationService) buildTelegramStoryOptions(
 		"post_id", post.ID,
 		"target_id", target.ID,
 		"areas_total", len(areas),
+		"area_kinds", countTelegramStoryAreasByKind(areas),
 		"link_areas", expectedLinks,
 		"areas_json_len", len(areasJSON),
 	)
@@ -87,7 +88,11 @@ func (s *PublicationService) publishTelegramStory(
 	mediaBytes []byte,
 	filename, contentType, mediaType string,
 ) (string, error) {
-	storyID, err := s.telegram.PostStory(ctx, token, storyOpts)
+	// Telegram often applies link/location stickers only after the story exists.
+	// Post media first, then attach interactive areas via editStory.
+	postOpts := storyOpts
+	postOpts.AreasJSON = ""
+	storyID, err := s.telegram.PostStory(ctx, token, postOpts)
 	if err != nil {
 		return "", err
 	}
@@ -112,7 +117,7 @@ func (s *PublicationService) publishTelegramStory(
 		return "", fmt.Errorf("история опубликована (id %s), но Telegram не применил интерактивные зоны: %w", storyID, err)
 	}
 	slog.Info(
-		"telegram story: areas reapplied via editStory",
+		"telegram story: areas applied via editStory",
 		"story_id", storyID,
 		"areas_json_len", len(storyOpts.AreasJSON),
 	)
