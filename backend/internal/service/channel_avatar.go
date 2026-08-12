@@ -75,11 +75,9 @@ func (s *ChannelService) FetchAvatar(
 			if userID := parseTelegramBusinessUserID(ch.Metadata.BusinessUserID); userID > 0 {
 				if body, contentType, err := s.botClient.FetchUserProfilePhoto(ctx, token, userID); err == nil && len(body) > 0 {
 					return body, contentType, nil
-				} else if err != nil {
-					return nil, "", err
 				}
 			}
-			if url := strings.TrimSpace(ch.Metadata.AvatarURL); strings.HasPrefix(url, "https://t.me/i/userpic/") {
+			if url := strings.TrimSpace(ch.Metadata.AvatarURL); url != "" {
 				if body, ct, err := fetchRemoteAvatar(ctx, url); err == nil && len(body) > 0 {
 					return body, ct, nil
 				}

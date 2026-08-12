@@ -738,13 +738,25 @@ func (c *TelegramBotClient) ChatPhotoDataURI(ctx context.Context, token, chatID 
 	if err != nil {
 		return "", err
 	}
+	return bytesToDataURI(body, contentType), nil
+}
+
+func (c *TelegramBotClient) UserProfilePhotoDataURI(ctx context.Context, token string, userID int64) (string, error) {
+	body, contentType, err := c.FetchUserProfilePhoto(ctx, token, userID)
+	if err != nil {
+		return "", err
+	}
+	return bytesToDataURI(body, contentType), nil
+}
+
+func bytesToDataURI(body []byte, contentType string) string {
 	if len(body) == 0 {
-		return "", nil
+		return ""
 	}
 	if contentType == "" {
 		contentType = "image/jpeg"
 	}
-	return fmt.Sprintf("data:%s;base64,%s", contentType, base64.StdEncoding.EncodeToString(body)), nil
+	return fmt.Sprintf("data:%s;base64,%s", contentType, base64.StdEncoding.EncodeToString(body))
 }
 
 func (c *TelegramBotClient) GetChat(ctx context.Context, token, chatID string) (telegramChat, error) {

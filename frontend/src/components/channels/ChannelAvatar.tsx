@@ -44,7 +44,9 @@ export function ChannelAvatar({
   const isBusinessTelegram =
     provider === "telegram" && Boolean(metadata?.business_user_id?.trim());
   const publicDirectUrl =
-    !isBusinessTelegram && directUrl && isPublicChannelAvatarURL(directUrl, provider)
+    directUrl &&
+    (directUrl.startsWith("data:") ||
+      (!isBusinessTelegram && isPublicChannelAvatarURL(directUrl, provider)))
       ? directUrl
       : null;
   const proxyUrl = channelId ? channelProxyAvatarURL(channelId) : null;

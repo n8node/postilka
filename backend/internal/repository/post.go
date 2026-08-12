@@ -435,11 +435,11 @@ func (r *PostRepository) FinalizePublication(ctx context.Context, postID string,
 	}
 	_, err = r.pool.Exec(ctx, `
 		UPDATE posts
-		SET status = $2, due_at = $3,
-		    published_at = CASE WHEN $2 = 'published' THEN NOW() ELSE published_at END,
+		SET status = $2::varchar, due_at = $3,
+		    published_at = CASE WHEN $2::varchar = 'published' THEN NOW() ELSE published_at END,
 		    last_error = NULLIF($4, ''), updated_at = NOW()
 		WHERE id = $1
-	`, postID, status, dueAt, lastError)
+	`, postID, string(status), dueAt, lastError)
 	return err
 }
 
