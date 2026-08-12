@@ -12,11 +12,13 @@ import {
 
 const DEFAULT_SETTINGS: TelegramProviderSettings = {
   enabled: true,
+  business_stories_enabled: true,
   proxy_enabled: false,
   proxy_active_url: "",
   proxy_auto_failover: true,
   proxy_urls: [],
   connect_help_text: "",
+  business_connect_help_text: "",
   connect_help_url: "https://postilka.ru/docs/telegram",
   docs_url: "https://postilka.ru/docs",
   support_telegram_username: "postilka_support",
@@ -113,6 +115,15 @@ export function AdminTelegramProviderPage() {
             className="rounded border-slate-300"
           />
           Разрешить пользователям подключать Telegram-каналы
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={settings.business_stories_enabled}
+            onChange={(e) => patch({ business_stories_enabled: e.target.checked })}
+            className="rounded border-slate-300"
+          />
+          Разрешить подключение Telegram Business для Stories
         </label>
       </section>
 
@@ -259,6 +270,19 @@ export function AdminTelegramProviderPage() {
         <textarea
           value={settings.connect_help_text}
           onChange={(e) => patch({ connect_help_text: e.target.value })}
+          rows={8}
+          className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+        />
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
+        <h2 className="font-medium text-slate-900">Инструкция: Telegram Business Stories</h2>
+        <p className="text-xs text-slate-500">
+          Показывается при подключении личного/business-профиля для публикации историй.
+        </p>
+        <textarea
+          value={settings.business_connect_help_text}
+          onChange={(e) => patch({ business_connect_help_text: e.target.value })}
           rows={8}
           className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
         />
