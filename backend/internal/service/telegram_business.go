@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/postilka/postilka/internal/config"
@@ -27,6 +28,7 @@ type TelegramBusinessService struct {
 	quota         *QuotaService
 	cipher        *SecretCipher
 	cfg           *config.Config
+	botSyncLocks  sync.Map
 }
 
 func NewTelegramBusinessService(
@@ -157,12 +159,14 @@ func (s *TelegramBusinessService) Sync(
 	if rec.WorkspaceID != ws.ID {
 		return nil, repository.ErrNotFound
 	}
+	unlock := s.acquireBotSync(rec.BotUserID)
+	defer unlock()
+
 	token, err := s.cipher.Decrypt(rec.BotTokenEncrypted)
 	if err != nil {
 		return nil, err
 	}
 	expectedWebhookURL := s.cfg.TelegramBusinessWebhookURL(rec.ID)
-	webhookInfo, _ := s.botClient.GetWebhookInfo(ctx, token)
 
 	connected := s.listExistingBusinessChannels(ctx, ws.ID, rec.BotUsername)
 	seenConnected := map[string]struct{}{}
@@ -170,33 +174,45 @@ func (s *TelegramBusinessService) Sync(
 		seenConnected[item.ID] = struct{}{}
 	}
 
-	connections, err := s.botClient.PollBusinessConnections(ctx, token)
-	if err != nil {
-		return nil, formatTelegramBusinessProxyError(sanitizeTelegramError(err))
-	}
 	issues := make([]string, 0)
-	for _, conn := range connections {
-		conn = s.enrichBusinessConnection(ctx, token, conn)
-		item, upsertErr := s.upsertBusinessChannel(ctx, ws.ID, rec, token, conn)
-		if upsertErr != nil {
-			issues = append(issues, upsertErr.Error())
-			continue
+	foundConnections := 0
+	if len(connected) == 0 {
+		connections, pollErr := s.botClient.PollBusinessConnectionsOnce(ctx, token)
+		if pollErr != nil {
+			if isTelegramGetUpdatesConflict(pollErr) {
+				issues = append(issues, "Telegram обрабатывает предыдущий запрос — подождите 5 секунд и нажмите «Проверить» один раз, не несколько подряд.")
+			} else {
+				return nil, formatTelegramBusinessProxyError(sanitizeTelegramError(pollErr))
+			}
+		} else {
+			foundConnections = len(connections)
+			for _, conn := range connections {
+				conn = s.enrichBusinessConnection(ctx, token, conn)
+				item, upsertErr := s.upsertBusinessChannel(ctx, ws.ID, rec, token, conn)
+				if upsertErr != nil {
+					issues = append(issues, upsertErr.Error())
+					continue
+				}
+				if _, ok := seenConnected[item.ID]; ok {
+					continue
+				}
+				seenConnected[item.ID] = struct{}{}
+				connected = append(connected, item)
+			}
 		}
-		if _, ok := seenConnected[item.ID]; ok {
-			continue
-		}
-		seenConnected[item.ID] = struct{}{}
-		connected = append(connected, item)
 	}
+
 	if err := s.botClient.SetBusinessWebhook(ctx, token, expectedWebhookURL, rec.WebhookSecret); err != nil {
 		return nil, sanitizeTelegramError(err)
 	}
+	webhookInfo, _ := s.botClient.GetWebhookInfo(ctx, token)
+
 	status := "pending"
 	lastErr := ""
 	if len(connected) > 0 {
 		status = "active"
 	} else {
-		lastErr, issues = s.buildBusinessSyncFailureMessage(ctx, rec, webhookInfo, expectedWebhookURL, len(connections), issues)
+		lastErr, issues = s.buildBusinessSyncFailureMessage(ctx, rec, webhookInfo, expectedWebhookURL, foundConnections, issues)
 	}
 	_ = s.registrations.UpdateStatus(ctx, rec.ID, status, lastErr)
 	return &model.TelegramBusinessConnectResult{
@@ -249,12 +265,27 @@ func (s *TelegramBusinessService) buildBusinessSyncFailureMessage(
 		}
 	}
 	proxyNote := s.telegramProxyHint(ctx)
-	base := "Business-подключение не найдено. В Telegram Business отключите и снова подключите @" + rec.BotUsername +
-		" с правом «Управление историями», затем сразу нажмите «Проверить подключение»."
+	base := "Webhook настроен. Переподключите @" + rec.BotUsername +
+		" в Telegram Business (с «Управление историями»), подождите 5–10 секунд — профиль появится автоматически. Нажимайте «Проверить» один раз, не подряд."
 	if proxyNote != "" {
 		base += " " + proxyNote
 	}
 	return base, issues
+}
+
+func (s *TelegramBusinessService) acquireBotSync(botUserID int64) func() {
+	v, _ := s.botSyncLocks.LoadOrStore(botUserID, &sync.Mutex{})
+	mu := v.(*sync.Mutex)
+	mu.Lock()
+	return mu.Unlock
+}
+
+func isTelegramGetUpdatesConflict(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "conflict") && strings.Contains(msg, "getupdates")
 }
 
 func (s *TelegramBusinessService) RestoreWebhookForWorkspaceBot(

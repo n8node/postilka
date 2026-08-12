@@ -1063,48 +1063,38 @@ func (c *TelegramBotClient) GetWebhookInfo(ctx context.Context, token string) (*
 	return &info, nil
 }
 
-func (c *TelegramBotClient) PollBusinessConnections(ctx context.Context, token string) ([]TelegramBusinessConnection, error) {
+func (c *TelegramBotClient) PollBusinessConnectionsOnce(ctx context.Context, token string) ([]TelegramBusinessConnection, error) {
 	if err := c.DeleteWebhook(ctx, token); err != nil {
 		return nil, fmt.Errorf("deleteWebhook: %w", sanitizeTelegramError(err))
 	}
+	time.Sleep(400 * time.Millisecond)
 
-	out := make([]TelegramBusinessConnection, 0)
-	seen := map[string]struct{}{}
-	collect := func(raw json.RawMessage) error {
-		var updates []telegramBusinessUpdate
-		if err := json.Unmarshal(raw, &updates); err != nil {
-			return fmt.Errorf("telegram api: invalid getUpdates result")
-		}
-		for _, upd := range updates {
-			if upd.BusinessConnection == nil {
-				continue
-			}
-			conn := *upd.BusinessConnection
-			if conn.ID == "" {
-				continue
-			}
-			if _, ok := seen[conn.ID]; ok {
-				continue
-			}
-			seen[conn.ID] = struct{}{}
-			out = append(out, conn)
-		}
-		return nil
+	raw, err := c.api(ctx, token, "getUpdates", map[string]any{
+		"limit":           100,
+		"timeout":         0,
+		"offset":          -100,
+		"allowed_updates": []string{"business_connection"},
+	})
+	if err != nil {
+		return nil, err
 	}
 
-	// Negative offset pulls recent queue tail; empty allowed_updates catches all pending types.
-	for _, spec := range []map[string]any{
-		{"limit": 100, "timeout": 0, "offset": -100, "allowed_updates": []string{"business_connection"}},
-		{"limit": 100, "timeout": 0, "allowed_updates": []string{"business_connection"}},
-		{"limit": 100, "timeout": 0, "offset": -100},
-	} {
-		raw, err := c.api(ctx, token, "getUpdates", spec)
-		if err != nil {
-			return nil, err
+	var updates []telegramBusinessUpdate
+	if err := json.Unmarshal(raw, &updates); err != nil {
+		return nil, fmt.Errorf("telegram api: invalid getUpdates result")
+	}
+	out := make([]TelegramBusinessConnection, 0, len(updates))
+	seen := map[string]struct{}{}
+	for _, upd := range updates {
+		if upd.BusinessConnection == nil || upd.BusinessConnection.ID == "" {
+			continue
 		}
-		if err := collect(raw); err != nil {
-			return nil, err
+		conn := *upd.BusinessConnection
+		if _, ok := seen[conn.ID]; ok {
+			continue
 		}
+		seen[conn.ID] = struct{}{}
+		out = append(out, conn)
 	}
 	return out, nil
 }

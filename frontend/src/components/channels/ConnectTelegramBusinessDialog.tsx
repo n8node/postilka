@@ -81,7 +81,7 @@ export function ConnectTelegramBusinessDialog({
   }
 
   async function handleSync() {
-    if (!registrationId) return;
+    if (!registrationId || syncing) return;
     setSyncing(true);
     setError(null);
     try {
@@ -90,7 +90,7 @@ export function ConnectTelegramBusinessDialog({
       if (result.connected?.length) {
         onConnected(result.connected);
         setError(null);
-        setHint(null);
+        setHint("Профиль подключён. Можно закрыть окно и публиковать истории.");
       } else if (result.issues?.length) {
         setError(result.issues.join(" "));
         setHint(null);
