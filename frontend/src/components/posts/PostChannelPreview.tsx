@@ -21,6 +21,8 @@ const PROVIDER_LABEL: Record<ChannelProvider, string> = {
   youtube: "YouTube",
 };
 
+const TELEGRAM_PREVIEW_BG = "/app/telegram-chat-bg.png";
+
 export type PreviewMediaItem = {
   fileId: string;
   name: string;
@@ -688,7 +690,7 @@ export function PostChannelPreview({
   return (
     <div
       className={cn(
-        "mx-auto overflow-hidden border border-border bg-[#dfe6ec]",
+        "mx-auto overflow-hidden border border-border bg-white",
         device === "mobile" ? "max-w-[300px]" : "max-w-full",
       )}
     >
@@ -705,9 +707,18 @@ export function PostChannelPreview({
           <p className="text-[10px] text-muted">{PROVIDER_LABEL[channel.provider]}</p>
         </div>
       </div>
-      <div className="p-[2px]">{body}</div>
+      <div
+        className={cn("min-h-[280px] bg-cover bg-center p-2", !isTelegram && "bg-[#dfe6ec]")}
+        style={
+          isTelegram
+            ? { backgroundImage: `url('${TELEGRAM_PREVIEW_BG}')` }
+            : undefined
+        }
+      >
+        {body}
+      </div>
       {firstComment && canComment && (
-        <div className="mx-[2px] mb-[2px] border-t border-dashed border-zinc-300 bg-white/80 px-3 py-2 text-xs text-muted">
+        <div className="border-t border-dashed border-zinc-300 bg-white/80 px-3 py-2 text-xs text-muted">
           Первый комментарий: {firstComment}
         </div>
       )}
