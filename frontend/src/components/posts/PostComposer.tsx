@@ -1939,10 +1939,10 @@ export function PostComposer() {
           <div className="inline-flex rounded-lg bg-zinc-200/70 p-1">
             {(
               [
-                { id: "post" as const, label: "Пост" },
+                { id: "post" as const, label: "Пост", disabled: false },
                 { id: "story" as const, label: "История", disabled: !hasStoryChannels },
-                { id: "short_video" as const, label: "Короткое видео" },
-              ] as const
+                { id: "short_video" as const, label: "Короткое видео", disabled: false },
+              ] satisfies ReadonlyArray<{ id: PostKind; label: string; disabled: boolean }>
             ).map(({ id, label, disabled }) => (
               <button
                 key={id}
