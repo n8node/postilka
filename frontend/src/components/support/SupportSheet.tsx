@@ -26,6 +26,7 @@ type SupportSheetProps = {
 
 const DEFAULT_INFO: ChannelProviderInfo = {
   telegram_enabled: true,
+  telegram_business_stories_enabled: true,
   connect_help_text: "",
   connect_help_url: "https://postilka.ru/docs/telegram",
   docs_url: "https://postilka.ru/docs",
