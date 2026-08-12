@@ -1018,10 +1018,14 @@ type TelegramBusinessConnectionRights struct {
 }
 
 type TelegramBusinessConnection struct {
-	ID        string                           `json:"id"`
-	User      telegramUser                     `json:"user"`
-	IsEnabled bool                             `json:"is_enabled"`
-	Rights    TelegramBusinessConnectionRights `json:"rights"`
+	ID        string                            `json:"id"`
+	User      telegramUser                      `json:"user"`
+	IsEnabled bool                              `json:"is_enabled"`
+	Rights    *TelegramBusinessConnectionRights `json:"rights"`
+}
+
+func (c TelegramBusinessConnection) CanManageStories() bool {
+	return c.Rights != nil && c.Rights.CanManageStories
 }
 
 type telegramBusinessUpdate struct {

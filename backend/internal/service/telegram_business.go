@@ -308,7 +308,7 @@ func (s *TelegramBusinessService) enrichBusinessConnection(
 	token string,
 	conn TelegramBusinessConnection,
 ) TelegramBusinessConnection {
-	if conn.ID == "" || conn.Rights.CanManageStories {
+	if conn.ID == "" {
 		return conn
 	}
 	full, err := s.botClient.GetBusinessConnection(ctx, token, conn.ID)
@@ -389,12 +389,12 @@ func (s *TelegramBusinessService) upsertBusinessChannel(
 	if conn.ID == "" {
 		return model.ChannelListItem{}, fmt.Errorf("empty business connection id")
 	}
-	if !conn.Rights.CanManageStories {
-		return model.ChannelListItem{}, fmt.Errorf("бот подключён, но без права «Управление историями» — включите его в Telegram Business")
+	if !conn.IsEnabled {
+		return model.ChannelListItem{}, fmt.Errorf("business-подключение отключено в Telegram — включите бота в Telegram Business")
 	}
 	name := businessConnectionDisplayName(conn.User)
 	now := time.Now()
-	canManage := conn.Rights.CanManageStories
+	canManage := conn.CanManageStories()
 	enabled := conn.IsEnabled
 	meta := model.ChannelMetadata{
 		ProviderTitle:             name,
@@ -408,9 +408,8 @@ func (s *TelegramBusinessService) upsertBusinessChannel(
 	}
 	status := model.ChannelStatusActive
 	lastError := ""
-	if !conn.IsEnabled {
-		status = model.ChannelStatusNeedsReconnect
-		lastError = "Business-подключение отключено в Telegram"
+	if !canManage {
+		lastError = "Telegram API не подтвердил право «Управление историями» — проверьте настройки бота; публикация истории может не пройти"
 	}
 	encrypted, err := s.cipher.Encrypt(botToken)
 	if err != nil {
@@ -449,16 +448,17 @@ func (s *TelegramBusinessService) upsertBusinessChannel(
 			return model.ChannelListItem{}, err
 		}
 		created, err := s.channels.Create(ctx, repository.ChannelCreateParams{
-			WorkspaceID:         workspaceID,
-			Provider:            model.ChannelProviderTelegram,
-			Name:                name,
-			ChatID:              conn.ID,
-			ChatType:            model.TelegramChatTypeBusiness,
-			BotUsername:         rec.BotUsername,
-			BotTokenEncrypted:   encrypted,
-			Status:              status,
-			Metadata:            meta,
-			MetadataRefreshedAt: &now,
+			WorkspaceID:           workspaceID,
+			Provider:              model.ChannelProviderTelegram,
+			Name:                  name,
+			ChatID:                conn.ID,
+			ChatType:              model.TelegramChatTypeBusiness,
+			BotUsername:           rec.BotUsername,
+			BotTokenEncrypted:       encrypted,
+			RefreshTokenEncrypted: "",
+			Status:                status,
+			Metadata:              meta,
+			MetadataRefreshedAt:   &now,
 		})
 		if err != nil {
 			return model.ChannelListItem{}, err

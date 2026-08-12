@@ -308,7 +308,7 @@ func (s *ChannelService) VerifyAndRefresh(
 				verifyErr = verr
 				break
 			}
-			canManage := conn.Rights.CanManageStories
+			canManage := conn.CanManageStories()
 			enabled := conn.IsEnabled
 			meta = model.ChannelMetadata{
 				ProviderTitle:             businessConnectionDisplayName(conn.User),
@@ -321,8 +321,10 @@ func (s *ChannelService) VerifyAndRefresh(
 				meta.AvatarURL = "https://t.me/i/userpic/320/" + username + ".jpg"
 			}
 			ch.Name = meta.ProviderTitle
-			if !conn.IsEnabled || !conn.Rights.CanManageStories {
-				verifyErr = fmt.Errorf("business-подключение неактивно или нет права на Stories")
+			if !conn.IsEnabled {
+				verifyErr = fmt.Errorf("business-подключение отключено в Telegram")
+			} else if !canManage {
+				verifyErr = fmt.Errorf("Telegram API не подтвердил право «Управление историями»")
 			}
 			break
 		}
