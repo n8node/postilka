@@ -88,40 +88,7 @@ func (s *PublicationService) publishTelegramStory(
 	mediaBytes []byte,
 	filename, contentType, mediaType string,
 ) (string, error) {
-	// Telegram often applies link/location stickers only after the story exists.
-	// Post media first, then attach interactive areas via editStory.
-	postOpts := storyOpts
-	postOpts.AreasJSON = ""
-	storyID, err := s.telegram.PostStory(ctx, token, postOpts)
-	if err != nil {
-		return "", err
-	}
-	if strings.TrimSpace(storyOpts.AreasJSON) == "" {
-		return storyID, nil
-	}
-	parsedID, err := parseTelegramStoryID(storyID)
-	if err != nil {
-		return storyID, nil
-	}
-	if err := s.telegram.EditStory(ctx, token, TelegramEditStoryOptions{
-		BusinessConnectionID: storyOpts.BusinessConnectionID,
-		StoryID:              parsedID,
-		MediaType:            mediaType,
-		MediaBytes:           mediaBytes,
-		MediaFilename:        filename,
-		MediaContentType:     contentType,
-		Caption:              storyOpts.Caption,
-		ParseMode:            storyOpts.ParseMode,
-		AreasJSON:            storyOpts.AreasJSON,
-	}); err != nil {
-		return "", fmt.Errorf("история опубликована (id %s), но Telegram не применил интерактивные зоны: %w", storyID, err)
-	}
-	slog.Info(
-		"telegram story: areas applied via editStory",
-		"story_id", storyID,
-		"areas_json_len", len(storyOpts.AreasJSON),
-	)
-	return storyID, nil
+	return s.telegram.PostStory(ctx, token, storyOpts)
 }
 
 func parseTelegramStoryID(raw string) (int, error) {

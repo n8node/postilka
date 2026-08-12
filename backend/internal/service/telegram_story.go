@@ -84,9 +84,6 @@ func validateTelegramStorySettings(story *model.TelegramStorySettings) error {
 			if area.Latitude < -90 || area.Latitude > 90 || area.Longitude < -180 || area.Longitude > 180 {
 				return fmt.Errorf("%w: некорректные координаты геометки #%d", ErrInvalidPost, i+1)
 			}
-			if area.Address == nil || strings.TrimSpace(area.Address.CountryCode) == "" {
-				return fmt.Errorf("%w: у геометки #%d укажите страну (country_code, например RU)", ErrInvalidPost, i+1)
-			}
 		case "suggested_reaction", "reaction":
 			reactions++
 			if reactions > telegramStoryMaxReactions {
