@@ -146,15 +146,15 @@ export function defaultStoryAreaPosition(
   const baseY = 12 + col * 22;
   const baseX = 8 + row * 28;
   const sizes: Record<TelegramStoryAreaKind, { w: number; h: number }> = {
-    link: { w: 36, h: 10 },
-    location: { w: 40, h: 12 },
-    suggested_reaction: { w: 14, h: 14 },
-    weather: { w: 28, h: 12 },
+    link: { w: 40, h: 18 },
+    location: { w: 40, h: 14 },
+    suggested_reaction: { w: 16, h: 16 },
+    weather: { w: 32, h: 14 },
   };
   const { w, h } = sizes[kind];
   return {
-    x_percentage: Math.min(baseX, 100 - w - 2),
-    y_percentage: Math.min(baseY, 100 - h - 2),
+    x_percentage: Math.min(Math.max(baseX, 2), 100 - w - 2),
+    y_percentage: Math.min(Math.max(baseY, 2), 100 - h - 2),
     width_percentage: w,
     height_percentage: h,
     rotation_angle: 0,
@@ -170,7 +170,7 @@ export function createDefaultStoryArea(kind: TelegramStoryAreaKind, index: numbe
   };
   switch (kind) {
     case "link":
-      return { ...base, url: "https://" };
+      return { ...base, url: "" };
     case "location":
       return {
         ...base,

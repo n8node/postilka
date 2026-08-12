@@ -1577,6 +1577,23 @@ export function PostComposer() {
       if (action !== "draft" && media.length !== 1) {
         return "Для истории прикрепите ровно одно фото или видео";
       }
+      for (const area of telegramStory.areas ?? []) {
+        if (area.kind !== "link") continue;
+        const raw = area.url?.trim() ?? "";
+        if (action !== "draft" && !raw) {
+          return "Укажите URL для зоны ссылки на истории";
+        }
+        if (raw) {
+          try {
+            const parsed = new URL(raw);
+            if (!parsed.hostname) {
+              return "URL зоны ссылки должен содержать домен, например https://example.com";
+            }
+          } catch {
+            return "Некорректный URL зоны ссылки на истории";
+          }
+        }
+      }
     }
     if (postKind === "short_video" || format === "short_video") {
       if (action !== "draft" && selectedChannels.some((channel) => channel.provider !== "telegram")) {

@@ -72,6 +72,9 @@ func validateTelegramStorySettings(story *model.TelegramStorySettings) error {
 			if err != nil || parsed.Scheme != "http" && parsed.Scheme != "https" && parsed.Scheme != "tg" {
 				return fmt.Errorf("%w: некорректный URL зоны ссылки #%d", ErrInvalidPost, i+1)
 			}
+			if parsed.Host == "" {
+				return fmt.Errorf("%w: у зоны ссылки #%d укажите полный URL с доменом", ErrInvalidPost, i+1)
+			}
 		case "location":
 			locations++
 			if locations > telegramStoryMaxLocations {
@@ -127,6 +130,15 @@ func normalizeStoryAreaPosition(pos model.TelegramStoryAreaPosition) model.Teleg
 	return pos
 }
 
+// storyAreaPositionForAPI converts top-left rectangle coordinates (UI/editor)
+// to center-based coordinates required by Telegram StoryAreaPosition.
+func storyAreaPositionForAPI(pos model.TelegramStoryAreaPosition) model.TelegramStoryAreaPosition {
+	pos = normalizeStoryAreaPosition(pos)
+	pos.XPercentage += pos.WidthPercentage / 2
+	pos.YPercentage += pos.HeightPercentage / 2
+	return pos
+}
+
 type telegramStoryAreaAPI struct {
 	Position model.TelegramStoryAreaPosition `json:"position"`
 	Type     any                             `json:"type"`
@@ -138,7 +150,7 @@ func buildTelegramStoryAreasJSON(areas []model.TelegramStoryArea) (string, error
 	}
 	out := make([]telegramStoryAreaAPI, 0, len(areas))
 	for _, area := range areas {
-		pos := normalizeStoryAreaPosition(area.Position)
+		pos := storyAreaPositionForAPI(area.Position)
 		kind := strings.ToLower(strings.TrimSpace(area.Kind))
 		if kind == "reaction" {
 			kind = "suggested_reaction"
