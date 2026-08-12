@@ -151,6 +151,7 @@ type TelegramBusinessConnectResult struct {
 	BotUsername    string            `json:"bot_username"`
 	Connected      []ChannelListItem `json:"connected"`
 	Hint           string            `json:"hint,omitempty"`
+	Issues         []string          `json:"issues,omitempty"`
 }
 
 type TelegramBusinessSyncRequest struct {

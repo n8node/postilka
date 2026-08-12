@@ -1798,6 +1798,7 @@ export type TelegramBusinessConnectResult = {
   bot_username: string;
   connected: ChannelListItem[];
   hint?: string;
+  issues?: string[];
 };
 
 export function connectTelegramBusiness(payload: { bot_token: string }) {

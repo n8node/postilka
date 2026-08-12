@@ -1041,35 +1041,71 @@ func (c *TelegramBotClient) SetBusinessWebhook(ctx context.Context, token, webho
 	return sanitizeTelegramError(err)
 }
 
-func (c *TelegramBotClient) PollBusinessConnections(ctx context.Context, token string) ([]TelegramBusinessConnection, error) {
-	_ = c.DeleteWebhook(ctx, token)
-	raw, err := c.api(ctx, token, "getUpdates", map[string]any{
-		"limit":           100,
-		"timeout":         0,
-		"allowed_updates": []string{"business_connection"},
-	})
+type TelegramWebhookInfo struct {
+	URL                string `json:"url"`
+	PendingUpdateCount int    `json:"pending_update_count"`
+	LastErrorDate      int    `json:"last_error_date"`
+	LastErrorMessage   string `json:"last_error_message"`
+}
+
+func (c *TelegramBotClient) GetWebhookInfo(ctx context.Context, token string) (*TelegramWebhookInfo, error) {
+	raw, err := c.api(ctx, token, "getWebhookInfo", nil)
 	if err != nil {
-		return nil, err
+		return nil, sanitizeTelegramError(err)
 	}
-	var updates []telegramBusinessUpdate
-	if err := json.Unmarshal(raw, &updates); err != nil {
-		return nil, fmt.Errorf("telegram api: invalid getUpdates result")
+	var info TelegramWebhookInfo
+	if err := json.Unmarshal(raw, &info); err != nil {
+		return nil, errors.New("telegram api: invalid getWebhookInfo result")
 	}
+	return &info, nil
+}
+
+func (c *TelegramBotClient) PollBusinessConnections(ctx context.Context, token string) ([]TelegramBusinessConnection, error) {
+	if err := c.DeleteWebhook(ctx, token); err != nil {
+		return nil, fmt.Errorf("deleteWebhook: %w", sanitizeTelegramError(err))
+	}
+
 	out := make([]TelegramBusinessConnection, 0)
 	seen := map[string]struct{}{}
-	for _, upd := range updates {
-		if upd.BusinessConnection == nil {
-			continue
+	collect := func(raw json.RawMessage) error {
+		var updates []telegramBusinessUpdate
+		if err := json.Unmarshal(raw, &updates); err != nil {
+			return fmt.Errorf("telegram api: invalid getUpdates result")
 		}
-		conn := *upd.BusinessConnection
-		if conn.ID == "" {
-			continue
+		for _, upd := range updates {
+			if upd.BusinessConnection == nil {
+				continue
+			}
+			conn := *upd.BusinessConnection
+			if conn.ID == "" {
+				continue
+			}
+			if _, ok := seen[conn.ID]; ok {
+				continue
+			}
+			seen[conn.ID] = struct{}{}
+			out = append(out, conn)
 		}
-		if _, ok := seen[conn.ID]; ok {
-			continue
+		return nil
+	}
+
+	// Negative offset pulls recent queue tail; helps when webhook was active or connect happened earlier.
+	for _, offset := range []any{-100, nil} {
+		params := map[string]any{
+			"limit":           100,
+			"timeout":         0,
+			"allowed_updates": []string{"business_connection"},
 		}
-		seen[conn.ID] = struct{}{}
-		out = append(out, conn)
+		if offset != nil {
+			params["offset"] = offset
+		}
+		raw, err := c.api(ctx, token, "getUpdates", params)
+		if err != nil {
+			return nil, err
+		}
+		if err := collect(raw); err != nil {
+			return nil, err
+		}
 	}
 	return out, nil
 }

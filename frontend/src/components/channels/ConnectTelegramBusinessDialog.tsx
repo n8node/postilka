@@ -87,11 +87,19 @@ export function ConnectTelegramBusinessDialog({
     try {
       const result = await syncTelegramBusiness({ registration_id: registrationId });
       setConnected(result.connected ?? []);
-      setHint(result.hint || null);
       if (result.connected?.length) {
         onConnected(result.connected);
-      } else if (!result.hint) {
+        setError(null);
+        setHint(null);
+      } else if (result.issues?.length) {
+        setError(result.issues.join(" "));
+        setHint(null);
+      } else if (result.hint) {
+        setError(result.hint);
+        setHint(null);
+      } else {
         setError("Business-подключение не найдено. Проверьте права бота в Telegram Business.");
+        setHint(null);
       }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Не удалось проверить подключение");

@@ -161,14 +161,17 @@ func (s *TelegramBusinessService) Sync(
 	if err != nil {
 		return nil, err
 	}
+	webhookInfo, _ := s.botClient.GetWebhookInfo(ctx, token)
 	connections, err := s.botClient.PollBusinessConnections(ctx, token)
 	if err != nil {
 		return nil, sanitizeTelegramError(err)
 	}
 	connected := make([]model.ChannelListItem, 0)
+	issues := make([]string, 0)
 	for _, conn := range connections {
 		item, upsertErr := s.upsertBusinessChannel(ctx, ws.ID, rec, token, conn)
 		if upsertErr != nil {
+			issues = append(issues, upsertErr.Error())
 			continue
 		}
 		connected = append(connected, item)
@@ -182,7 +185,7 @@ func (s *TelegramBusinessService) Sync(
 	if len(connected) > 0 {
 		status = "active"
 	} else {
-		lastErr = "Business-подключение не найдено. Подключите бота в Telegram Business."
+		lastErr, issues = s.buildBusinessSyncFailureMessage(ctx, rec, webhookInfo, len(connections), issues)
 	}
 	_ = s.registrations.UpdateStatus(ctx, rec.ID, status, lastErr)
 	return &model.TelegramBusinessConnectResult{
@@ -190,7 +193,58 @@ func (s *TelegramBusinessService) Sync(
 		BotUsername:    rec.BotUsername,
 		Connected:      connected,
 		Hint:           lastErr,
+		Issues:         issues,
 	}, nil
+}
+
+func (s *TelegramBusinessService) buildBusinessSyncFailureMessage(
+	ctx context.Context,
+	rec *repository.TelegramBusinessRegistration,
+	webhookInfo *TelegramWebhookInfo,
+	foundConnections int,
+	issues []string,
+) (string, []string) {
+	if len(issues) > 0 {
+		return strings.Join(issues, " "), issues
+	}
+	if msg := strings.TrimSpace(rec.LastError); msg != "" {
+		return msg, issues
+	}
+	if webhookInfo != nil {
+		if msg := strings.TrimSpace(webhookInfo.LastErrorMessage); msg != "" {
+			issue := "Telegram не доставляет webhook: " + msg
+			return issue, append(issues, issue)
+		}
+		if webhookInfo.PendingUpdateCount > 0 && foundConnections == 0 {
+			issue := fmt.Sprintf(
+				"У Telegram %d необработанных обновлений, но business-подключение не найдено — проверьте, что в Telegram Business добавлен именно @%s",
+				webhookInfo.PendingUpdateCount,
+				rec.BotUsername,
+			)
+			return issue, append(issues, issue)
+		}
+	}
+	proxyNote := s.telegramProxyHint(ctx)
+	base := "Business-подключение не найдено. В Telegram Business добавьте именно @" + rec.BotUsername +
+		" и включите право «Управление историями», затем нажмите «Проверить подключение» ещё раз."
+	if proxyNote != "" {
+		base += " " + proxyNote
+	}
+	return base, issues
+}
+
+func (s *TelegramBusinessService) telegramProxyHint(ctx context.Context) string {
+	cfg, err := s.provider.GetEffective(ctx)
+	if err != nil {
+		return ""
+	}
+	if !cfg.ProxyEnabled || len(cfg.ProxyURLs) == 0 {
+		return "Запросы к Telegram API идут напрямую (прокси выключен в админке) — при блокировках включите прокси."
+	}
+	if hop := strings.TrimSpace(s.cfg.TelegramLocalProxy); hop != "" {
+		return "Запросы к Telegram API идут через прокси."
+	}
+	return "Запросы к Telegram API идут через прокси из настроек Telegram."
 }
 
 func (s *TelegramBusinessService) HandleWebhook(
@@ -236,7 +290,7 @@ func (s *TelegramBusinessService) upsertBusinessChannel(
 		return model.ChannelListItem{}, fmt.Errorf("empty business connection id")
 	}
 	if !conn.Rights.CanManageStories {
-		return model.ChannelListItem{}, fmt.Errorf("бот не имеет права can_manage_stories")
+		return model.ChannelListItem{}, fmt.Errorf("бот подключён, но без права «Управление историями» — включите его в Telegram Business")
 	}
 	name := businessConnectionDisplayName(conn.User)
 	now := time.Now()
