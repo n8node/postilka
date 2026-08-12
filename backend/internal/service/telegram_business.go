@@ -180,6 +180,17 @@ func (s *TelegramBusinessService) Sync(
 	webhookInfo, _ := s.botClient.GetWebhookInfo(ctx, token)
 
 	issues := make([]string, 0)
+	usedFallback := false
+	if len(connected) == 0 && shouldPollBusinessConnectionsFallback(webhookInfo) {
+		usedFallback = true
+		var pollIssues []string
+		connected, pollIssues = s.recoverBusinessConnectionsViaPolling(
+			ctx, ws.ID, rec, token, expectedWebhookURL, connected,
+		)
+		issues = append(issues, pollIssues...)
+		webhookInfo, _ = s.botClient.GetWebhookInfo(ctx, token)
+	}
+
 	foundConnections := 0
 	if len(connected) > 0 {
 		foundConnections = len(connected)
@@ -191,6 +202,9 @@ func (s *TelegramBusinessService) Sync(
 	lastErr := ""
 	if len(connected) > 0 {
 		status = "active"
+		if usedFallback {
+			lastErr = "Профиль подключён через резервную синхронизацию (getUpdates по прокси). Webhook восстановлен."
+		}
 	} else {
 		lastErr, issues = s.buildBusinessSyncFailureMessage(ctx, rec, webhookInfo, expectedWebhookURL, foundConnections, issues)
 	}
@@ -202,6 +216,64 @@ func (s *TelegramBusinessService) Sync(
 		Hint:           lastErr,
 		Issues:         issues,
 	}, nil
+}
+
+func shouldPollBusinessConnectionsFallback(info *TelegramWebhookInfo) bool {
+	if info == nil {
+		return true
+	}
+	if strings.TrimSpace(info.LastErrorMessage) != "" {
+		return true
+	}
+	return info.PendingUpdateCount > 0
+}
+
+func (s *TelegramBusinessService) recoverBusinessConnectionsViaPolling(
+	ctx context.Context,
+	workspaceID string,
+	rec *repository.TelegramBusinessRegistration,
+	token, expectedWebhookURL string,
+	connected []model.ChannelListItem,
+) ([]model.ChannelListItem, []string) {
+	issues := make([]string, 0)
+	connections, pollErr := s.botClient.PollBusinessConnectionsOnce(ctx, token)
+	if pollErr != nil {
+		_ = s.botClient.SetBusinessWebhook(ctx, token, expectedWebhookURL, rec.WebhookSecret)
+		if isTelegramGetUpdatesConflict(pollErr) {
+			return connected, append(issues,
+				"Telegram обрабатывает предыдущий запрос — подождите 5 секунд и нажмите «Проверить» один раз, не несколько подряд.",
+			)
+		}
+		if err := formatTelegramBusinessProxyError(sanitizeTelegramError(pollErr)); err != nil {
+			return connected, append(issues, err.Error())
+		}
+		return connected, issues
+	}
+
+	seen := map[string]struct{}{}
+	for _, item := range connected {
+		seen[item.ID] = struct{}{}
+	}
+	for _, conn := range connections {
+		item, upsertErr := s.upsertBusinessChannel(ctx, workspaceID, rec, token, conn)
+		if errors.Is(upsertErr, errSkipDisabledBusinessConnection) {
+			continue
+		}
+		if upsertErr != nil {
+			issues = append(issues, upsertErr.Error())
+			continue
+		}
+		if _, ok := seen[item.ID]; ok {
+			continue
+		}
+		seen[item.ID] = struct{}{}
+		connected = append(connected, item)
+	}
+
+	if err := s.botClient.SetBusinessWebhook(ctx, token, expectedWebhookURL, rec.WebhookSecret); err != nil {
+		issues = append(issues, "Не удалось восстановить webhook: "+sanitizeTelegramError(err).Error())
+	}
+	return connected, issues
 }
 
 func (s *TelegramBusinessService) waitForBusinessChannels(
@@ -255,7 +327,8 @@ func (s *TelegramBusinessService) buildBusinessSyncFailureMessage(
 			return issue, append(issues, issue)
 		}
 		if msg := strings.TrimSpace(webhookInfo.LastErrorMessage); msg != "" {
-			issue := "Telegram не доставляет webhook: " + msg
+			issue := "Telegram не доставляет webhook: " + msg +
+				". Нажмите «Проверить подключение» — Postilka заберёт события через getUpdates по прокси."
 			return issue, append(issues, issue)
 		}
 		if webhookInfo.PendingUpdateCount > 0 && foundConnections == 0 {
