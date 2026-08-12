@@ -39,6 +39,19 @@ func (s *PublicationService) buildTelegramStoryOptions(
 	if err != nil {
 		return TelegramPostStoryOptions{}, err
 	}
+	expectedLinks := countTelegramStoryLinkAreas(areas)
+	if expectedLinks > 0 {
+		actualLinks, err := countTelegramStoryLinkAreasJSON(areasJSON)
+		if err != nil {
+			return TelegramPostStoryOptions{}, fmt.Errorf("%w: не удалось подготовить зоны ссылки", ErrInvalidPost)
+		}
+		if actualLinks != expectedLinks {
+			return TelegramPostStoryOptions{}, fmt.Errorf(
+				"%w: зона ссылки не попала в запрос к Telegram — проверьте URL (нужен полный адрес, например https://example.com)",
+				ErrInvalidPost,
+			)
+		}
+	}
 
 	opts := TelegramPostStoryOptions{
 		BusinessConnectionID: channel.ChatID,

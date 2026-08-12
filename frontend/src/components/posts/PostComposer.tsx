@@ -1437,7 +1437,10 @@ export function PostComposer() {
               active_period: telegramStory.active_period,
               post_to_chat_page: telegramStory.post_to_chat_page || undefined,
               protect_content: telegramStory.protect_content || undefined,
-              areas: (telegramStory.areas ?? []).map(({ id, ...area }) => area),
+              areas: (telegramStory.areas ?? []).map(({ id, ...area }) => ({
+                ...area,
+                url: area.kind === "link" ? area.url?.trim() || undefined : area.url,
+              })),
             }
           : undefined,
     };
@@ -1585,7 +1588,7 @@ export function PostComposer() {
         }
         if (raw) {
           try {
-            const parsed = new URL(raw);
+            const parsed = new URL(raw.includes("://") ? raw : `https://${raw}`);
             if (!parsed.hostname) {
               return "URL зоны ссылки должен содержать домен, например https://example.com";
             }

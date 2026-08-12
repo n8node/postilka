@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"net/url"
 	"strings"
 
@@ -38,7 +39,8 @@ const (
 	telegramStoryMaxWeather   = 3
 
 	telegramStoryLinkMinWidthPct  = 30.0
-	telegramStoryLinkMinHeightPct = 14.0
+	telegramStoryLinkMinHeightPct = 10.0
+	telegramStoryLinkDefaultRadiusPct = 14.0
 )
 
 func telegramStoryActivePeriod(settings *model.TelegramStorySettings) int {
@@ -136,6 +138,71 @@ func normalizeStoryAreaPosition(pos model.TelegramStoryAreaPosition) model.Teleg
 	return pos
 }
 
+func normalizeTelegramStoryLinkURL(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", fmt.Errorf("%w: у зоны ссылки не указан URL", ErrInvalidPost)
+	}
+	candidate := html.UnescapeString(raw)
+	if !strings.Contains(candidate, "://") {
+		candidate = "https://" + strings.TrimPrefix(candidate, "//")
+	}
+	parsed, err := url.Parse(candidate)
+	if err != nil || parsed.Scheme != "http" && parsed.Scheme != "https" && parsed.Scheme != "tg" {
+		return "", fmt.Errorf("%w: некорректный URL зоны ссылки", ErrInvalidPost)
+	}
+	if parsed.Host == "" {
+		return "", fmt.Errorf("%w: у зоны ссылки укажите полный URL с доменом", ErrInvalidPost)
+	}
+	return parsed.String(), nil
+}
+
+func storyLinkCornerRadius(pos model.TelegramStoryAreaPosition) float64 {
+	pill := pos.HeightPercentage * (16.0 / 9.0) / 2.0
+	if pill < telegramStoryLinkDefaultRadiusPct {
+		pill = telegramStoryLinkDefaultRadiusPct
+	}
+	if pill > 25 {
+		pill = 25
+	}
+	if pos.CornerRadiusPercentage > pill {
+		return pos.CornerRadiusPercentage
+	}
+	return pill
+}
+
+func countTelegramStoryLinkAreas(areas []model.TelegramStoryArea) int {
+	count := 0
+	for _, area := range areas {
+		if strings.ToLower(strings.TrimSpace(area.Kind)) == "link" {
+			count++
+		}
+	}
+	return count
+}
+
+func countTelegramStoryLinkAreasJSON(raw string) (int, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0, nil
+	}
+	var areas []struct {
+		Type struct {
+			Type string `json:"type"`
+		} `json:"type"`
+	}
+	if err := json.Unmarshal([]byte(raw), &areas); err != nil {
+		return 0, err
+	}
+	count := 0
+	for _, area := range areas {
+		if strings.ToLower(strings.TrimSpace(area.Type.Type)) == "link" {
+			count++
+		}
+	}
+	return count, nil
+}
+
 // storyAreaPositionForAPI converts top-left rectangle coordinates (UI/editor)
 // to center-based coordinates required by Telegram StoryAreaPosition and clamps
 // the rectangle inside the media bounds.
@@ -148,6 +215,7 @@ func storyAreaPositionForAPI(pos model.TelegramStoryAreaPosition, kind string) m
 		if pos.HeightPercentage < telegramStoryLinkMinHeightPct {
 			pos.HeightPercentage = telegramStoryLinkMinHeightPct
 		}
+		pos.CornerRadiusPercentage = storyLinkCornerRadius(pos)
 	}
 	if pos.XPercentage+pos.WidthPercentage > 100 {
 		pos.XPercentage = 100 - pos.WidthPercentage
@@ -201,9 +269,13 @@ func buildTelegramStoryAreasJSON(areas []model.TelegramStoryArea) (string, error
 		var areaType any
 		switch kind {
 		case "link":
+			linkURL, err := normalizeTelegramStoryLinkURL(area.URL)
+			if err != nil {
+				return "", err
+			}
 			areaType = map[string]string{
 				"type": "link",
-				"url":  strings.TrimSpace(area.URL),
+				"url":  linkURL,
 			}
 		case "location":
 			payload := map[string]any{
@@ -297,34 +369,17 @@ func shortenTelegramStoryAreas(
 	workspaceID, postID, targetID, channelID string,
 	utm *model.PostUTMSettings,
 ) ([]model.TelegramStoryArea, error) {
-	if shortener == nil || utm == nil || !utm.Shorten || len(areas) == 0 {
-		return areas, nil
-	}
-	lctx := linkShortenContext{
-		workspaceID: workspaceID,
-		postID:      postID,
-		targetID:    targetID,
-		channelID:   channelID,
-		shortener:   shortener,
-		cache:       map[string]string{},
-	}
-	out := make([]model.TelegramStoryArea, len(areas))
-	copy(out, areas)
-	for i := range out {
-		if strings.ToLower(strings.TrimSpace(out[i].Kind)) != "link" {
-			continue
-		}
-		raw := strings.TrimSpace(out[i].URL)
-		if raw == "" {
-			continue
-		}
-		rewritten, err := shortenAbsoluteURL(ctx, raw, utm, lctx)
-		if err != nil {
-			return nil, err
-		}
-		out[i].URL = rewritten
-	}
-	return out, nil
+	// Telegram renders link stickers by fetching the target URL server-side.
+	// Short redirect URLs (e.g. postilka.ru/go/...) often break sticker rendering,
+	// so keep the direct destination URL for story link areas.
+	_ = ctx
+	_ = shortener
+	_ = workspaceID
+	_ = postID
+	_ = targetID
+	_ = channelID
+	_ = utm
+	return areas, nil
 }
 
 func mergeTargetUTM(base *model.PostUTMSettings, target *model.PostTargetSettings) *model.PostUTMSettings {

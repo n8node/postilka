@@ -2,6 +2,7 @@ package service
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/postilka/postilka/internal/model"
@@ -45,8 +46,78 @@ func TestBuildTelegramStoryAreasJSONLinkUsesCenterPosition(t *testing.T) {
 	if got.YPercentage != 29 {
 		t.Fatalf("expected center y 29, got %v", got.YPercentage)
 	}
+	if got.CornerRadiusPercentage < telegramStoryLinkDefaultRadiusPct {
+		t.Fatalf("expected pill corner radius, got %v", got.CornerRadiusPercentage)
+	}
 	if areas[0].Type.Type != "link" || areas[0].Type.URL != "https://postilka.ru" {
 		t.Fatalf("unexpected link payload: %+v", areas[0].Type)
+	}
+}
+
+func TestBuildTelegramStoryAreasJSONRejectsEmptyLinkURL(t *testing.T) {
+	_, err := buildTelegramStoryAreasJSON([]model.TelegramStoryArea{
+		{
+			Kind: "link",
+			Position: model.TelegramStoryAreaPosition{
+				XPercentage:      10,
+				YPercentage:      20,
+				WidthPercentage:  40,
+				HeightPercentage: 18,
+			},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected error for empty link url")
+	}
+}
+
+func TestBuildTelegramStoryAreasJSONNormalizesLinkURL(t *testing.T) {
+	raw, err := buildTelegramStoryAreasJSON([]model.TelegramStoryArea{
+		{
+			Kind: "link",
+			URL:  "example.com/page",
+			Position: model.TelegramStoryAreaPosition{
+				XPercentage:      18,
+				YPercentage:      78,
+				WidthPercentage:  64,
+				HeightPercentage: 10,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("build json: %v", err)
+	}
+	if !strings.Contains(raw, `"url":"https://example.com/page"`) {
+		t.Fatalf("expected normalized https url, got %s", raw)
+	}
+}
+
+func TestBuildTelegramStoryAreasJSONIncludesReactionAndLink(t *testing.T) {
+	raw, err := buildTelegramStoryAreasJSON([]model.TelegramStoryArea{
+		{
+			Kind:          "suggested_reaction",
+			ReactionEmoji: "❤",
+			Position: model.TelegramStoryAreaPosition{
+				XPercentage: 8, YPercentage: 12, WidthPercentage: 16, HeightPercentage: 16,
+			},
+		},
+		{
+			Kind: "link",
+			URL:  "https://google.com",
+			Position: model.TelegramStoryAreaPosition{
+				XPercentage: 18, YPercentage: 78, WidthPercentage: 64, HeightPercentage: 10,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("build json: %v", err)
+	}
+	links, err := countTelegramStoryLinkAreasJSON(raw)
+	if err != nil {
+		t.Fatalf("count links: %v", err)
+	}
+	if links != 1 {
+		t.Fatalf("expected 1 link area in json, got %d: %s", links, raw)
 	}
 }
 
