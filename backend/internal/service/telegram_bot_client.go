@@ -22,6 +22,25 @@ import (
 
 const maxTelegramVideoNoteBytes = 50 << 20
 
+const telegramProxyHopTimeout = 22 * time.Second
+
+func isProxyRetryableError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		return true
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "deadline exceeded") ||
+		strings.Contains(msg, "timeout") ||
+		strings.Contains(msg, "503") ||
+		strings.Contains(msg, "connection refused") ||
+		strings.Contains(msg, "connection reset") ||
+		strings.Contains(msg, "no such host") ||
+		strings.Contains(msg, "i/o timeout")
+}
+
 type TelegramBotClient struct {
 	providerSettings *TelegramProviderSettingsService
 	localProxy       string
@@ -161,8 +180,8 @@ func (c *TelegramBotClient) doRequestWithClient(
 	if reqBody == nil {
 		reqBody = []byte{}
 	}
-	makeRequest := func(client *http.Client) (*http.Response, error) {
-		req, err := http.NewRequestWithContext(ctx, method, endpoint, bytes.NewReader(reqBody))
+	makeRequest := func(reqCtx context.Context, client *http.Client) (*http.Response, error) {
+		req, err := http.NewRequestWithContext(reqCtx, method, endpoint, bytes.NewReader(reqBody))
 		if err != nil {
 			return nil, err
 		}
@@ -174,13 +193,13 @@ func (c *TelegramBotClient) doRequestWithClient(
 
 	cfg, err := c.providerSettings.GetEffective(ctx)
 	if err != nil || !cfg.ProxyEnabled || len(cfg.ProxyURLs) == 0 {
-		return makeRequest(client)
+		return makeRequest(ctx, client)
 	}
 
 	var proxies []string
 	proxies = buildProxyChain(c.localProxy, cfg.ProxyActiveURL, cfg.ProxyURLs)
 	if len(proxies) == 0 {
-		return makeRequest(client)
+		return makeRequest(ctx, client)
 	}
 	var lastErr error
 	for idx, proxyURL := range proxies {
@@ -192,12 +211,18 @@ func (c *TelegramBotClient) doRequestWithClient(
 			}
 			continue
 		}
-		resp, reqErr := makeRequest(proxyClient)
+		hopTimeout := telegramProxyHopTimeout
+		if len(proxies) == 1 {
+			hopTimeout = 45 * time.Second
+		}
+		hopCtx, cancel := context.WithTimeout(ctx, hopTimeout)
+		resp, reqErr := makeRequest(hopCtx, proxyClient)
+		cancel()
 		if reqErr == nil {
 			return resp, nil
 		}
 		lastErr = fmt.Errorf("proxy %s: %w", maskProxyURLForError(proxyURL), sanitizeTelegramError(reqErr))
-		if !cfg.ProxyAutoFailover || idx == len(proxies)-1 {
+		if !cfg.ProxyAutoFailover || idx == len(proxies)-1 || !isProxyRetryableError(reqErr) {
 			return nil, lastErr
 		}
 	}
@@ -664,6 +689,34 @@ func (c *TelegramBotClient) DeleteWebhook(ctx context.Context, token string) err
 	return sanitizeTelegramError(err)
 }
 
+func (c *TelegramBotClient) clearWebhookForPolling(ctx context.Context, token string) error {
+	var lastErr error
+	for attempt := 0; attempt < 2; attempt++ {
+		if err := c.DeleteWebhook(ctx, token); err == nil {
+			return nil
+		} else {
+			lastErr = err
+			if !isProxyRetryableError(err) {
+				break
+			}
+		}
+		if attempt == 0 {
+			time.Sleep(300 * time.Millisecond)
+		}
+	}
+	if lastErr == nil {
+		return errors.New("telegram api: deleteWebhook failed")
+	}
+	if !isProxyRetryableError(lastErr) {
+		return lastErr
+	}
+	_, err := c.api(ctx, token, "setWebhook", map[string]any{"url": ""})
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("%w; fallback setWebhook: %s", lastErr, sanitizeTelegramError(err).Error())
+}
+
 func telegramPublicAvatarURL(chat telegramChat) string {
 	username := strings.TrimPrefix(strings.TrimSpace(chat.Username), "@")
 	if username == "" {
@@ -1064,7 +1117,7 @@ func (c *TelegramBotClient) GetWebhookInfo(ctx context.Context, token string) (*
 }
 
 func (c *TelegramBotClient) PollBusinessConnectionsOnce(ctx context.Context, token string) ([]TelegramBusinessConnection, error) {
-	if err := c.DeleteWebhook(ctx, token); err != nil {
+	if err := c.clearWebhookForPolling(ctx, token); err != nil {
 		return nil, fmt.Errorf("deleteWebhook: %w", sanitizeTelegramError(err))
 	}
 	time.Sleep(400 * time.Millisecond)

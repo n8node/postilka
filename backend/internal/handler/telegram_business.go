@@ -42,7 +42,7 @@ func (h *TelegramBusinessHandler) Connect(w http.ResponseWriter, r *http.Request
 }
 
 func (h *TelegramBusinessHandler) Sync(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 120*time.Second)
 	defer cancel()
 
 	userID, ok := middleware.UserIDFromContext(ctx)

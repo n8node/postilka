@@ -436,6 +436,12 @@ func formatTelegramBusinessProxyError(err error) error {
 			err,
 		)
 	}
+	if strings.Contains(msg, "deleteWebhook") && (strings.Contains(msg, "deadline exceeded") || strings.Contains(msg, "timeout")) {
+		return fmt.Errorf(
+			"%w: прокси Telegram не ответил вовремя — проверьте telegram-proxy (:8889) и upstream в .env, затем нажмите «Проверить» ещё раз",
+			err,
+		)
+	}
 	return err
 }
 
