@@ -54,11 +54,9 @@ func (s *TelegramService) doTelegramRequest(
 		return makeRequest(client)
 	}
 
-	var proxies []string
-	if hop := strings.TrimSpace(s.localProxy); hop != "" {
-		proxies = []string{hop}
-	} else {
-		proxies = proxyOrder(cfg.ProxyActiveURL, normalizeProxyURLs(cfg.ProxyURLs))
+	proxies := buildProxyChain(s.localProxy, cfg.ProxyActiveURL, cfg.ProxyURLs)
+	if len(proxies) == 0 {
+		return makeRequest(client)
 	}
 	var lastErr error
 	for idx, proxyURL := range proxies {

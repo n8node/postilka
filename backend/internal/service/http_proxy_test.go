@@ -36,3 +36,24 @@ func TestHTTPClientForProxyPercentInPassword(t *testing.T) {
 		t.Fatalf("httpClientForProxy: %v", err)
 	}
 }
+
+func TestBuildProxyChainPrefersLocalHopThenAdminURLs(t *testing.T) {
+	got := buildProxyChain(
+		"http://host.docker.internal:8889",
+		"http://root:pass@5.35.83.120:3128",
+		[]string{"http://root:pass@5.35.83.120:3128", "http://backup:3128"},
+	)
+	want := []string{
+		"http://host.docker.internal:8889",
+		"http://root:pass@5.35.83.120:3128",
+		"http://backup:3128",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("got %v want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("got %v want %v", got, want)
+		}
+	}
+}

@@ -114,11 +114,9 @@ func (c *YouTubeAPIClient) doRequest(
 		return makeRequest(c.client)
 	}
 
-	var proxies []string
-	if hop := strings.TrimSpace(c.localProxy); hop != "" {
-		proxies = []string{hop}
-	} else {
-		proxies = proxyOrder(cfg.ProxyActiveURL, normalizeProxyURLs(cfg.ProxyURLs))
+	proxies := buildProxyChain(c.localProxy, cfg.ProxyActiveURL, cfg.ProxyURLs)
+	if len(proxies) == 0 {
+		return makeRequest(c.client)
 	}
 	var lastErr error
 	for idx, proxyURL := range proxies {

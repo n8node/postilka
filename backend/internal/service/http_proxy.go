@@ -129,6 +129,29 @@ func proxyOrder(activeURL string, urls []string) []string {
 	return out
 }
 
+// buildProxyChain prefers the local Docker hop (gost on host), then admin-configured upstreams.
+func buildProxyChain(localHop, activeURL string, urls []string) []string {
+	ordered := proxyOrder(activeURL, normalizeProxyURLs(urls))
+	capacity := len(ordered)
+	if hop := strings.TrimSpace(localHop); hop != "" {
+		capacity++
+	}
+	if capacity == 0 {
+		return nil
+	}
+	out := make([]string, 0, capacity)
+	if hop := strings.TrimSpace(localHop); hop != "" {
+		out = append(out, hop)
+	}
+	for _, item := range ordered {
+		if containsProxyURL(out, item) {
+			continue
+		}
+		out = append(out, item)
+	}
+	return out
+}
+
 func transportViaHTTPConnectProxy(proxyURL *url.URL) *http.Transport {
 	proxy := cloneProxyURL(proxyURL)
 	t := directHTTPTransport()

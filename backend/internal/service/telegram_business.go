@@ -164,7 +164,7 @@ func (s *TelegramBusinessService) Sync(
 	webhookInfo, _ := s.botClient.GetWebhookInfo(ctx, token)
 	connections, err := s.botClient.PollBusinessConnections(ctx, token)
 	if err != nil {
-		return nil, sanitizeTelegramError(err)
+		return nil, formatTelegramBusinessProxyError(sanitizeTelegramError(err))
 	}
 	connected := make([]model.ChannelListItem, 0)
 	issues := make([]string, 0)
@@ -225,12 +225,26 @@ func (s *TelegramBusinessService) buildBusinessSyncFailureMessage(
 		}
 	}
 	proxyNote := s.telegramProxyHint(ctx)
-	base := "Business-подключение не найдено. В Telegram Business добавьте именно @" + rec.BotUsername +
-		" и включите право «Управление историями», затем нажмите «Проверить подключение» ещё раз."
+	base := "Business-подключение не найдено. В Telegram Business отключите и снова подключите @" + rec.BotUsername +
+		" с правом «Управление историями», затем сразу нажмите «Проверить подключение»."
 	if proxyNote != "" {
 		base += " " + proxyNote
 	}
 	return base, issues
+}
+
+func formatTelegramBusinessProxyError(err error) error {
+	if err == nil {
+		return nil
+	}
+	msg := err.Error()
+	if strings.Contains(msg, "503") && strings.Contains(msg, "8889") {
+		return fmt.Errorf(
+			"%w: локальный telegram-proxy (:8889) недоступен — на сервере выполните «docker compose ... up -d --force-recreate telegram-proxy» и проверьте TELEGRAM_UPSTREAM_* в .env",
+			err,
+		)
+	}
+	return err
 }
 
 func (s *TelegramBusinessService) telegramProxyHint(ctx context.Context) string {
@@ -242,7 +256,7 @@ func (s *TelegramBusinessService) telegramProxyHint(ctx context.Context) string 
 		return "Запросы к Telegram API идут напрямую (прокси выключен в админке) — при блокировках включите прокси."
 	}
 	if hop := strings.TrimSpace(s.cfg.TelegramLocalProxy); hop != "" {
-		return "Запросы к Telegram API идут через прокси."
+		return "Запросы к Telegram API идут через локальный прокси " + maskProxyURLForError(hop) + ", затем upstream из .env."
 	}
 	return "Запросы к Telegram API идут через прокси из настроек Telegram."
 }
