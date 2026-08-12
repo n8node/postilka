@@ -252,8 +252,11 @@ const (
 )
 
 type TelegramMediaInput struct {
-	Type string
-	URL  string
+	Type        string
+	URL         string
+	Data        []byte
+	Filename    string
+	ContentType string
 }
 
 type TelegramMediaSendOptions struct {
@@ -411,8 +414,11 @@ func validateTelegramMedia(media []TelegramMediaInput) error {
 		if item.Type != TelegramMediaPhoto && item.Type != TelegramMediaVideo {
 			return fmt.Errorf("%w: неподдерживаемый тип медиа Telegram", ErrInvalidPost)
 		}
-		if validateHTTPURL(item.URL) != nil {
+		if len(item.Data) == 0 && validateHTTPURL(item.URL) != nil {
 			return fmt.Errorf("%w: некорректная ссылка на медиа Telegram", ErrInvalidPost)
+		}
+		if len(item.Data) == 0 && strings.TrimSpace(item.URL) == "" {
+			return fmt.Errorf("%w: медиафайл Telegram пуст", ErrInvalidPost)
 		}
 	}
 	if len(media) > 1 {
@@ -426,11 +432,27 @@ func validateTelegramMedia(media []TelegramMediaInput) error {
 	return nil
 }
 
+func telegramMediaAttachRef(item TelegramMediaInput, index int) string {
+	if len(item.Data) > 0 {
+		return fmt.Sprintf("attach://file%d", index)
+	}
+	return item.URL
+}
+
+func telegramMediaUsesUpload(media []TelegramMediaInput) bool {
+	for _, item := range media {
+		if len(item.Data) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
 func telegramMediaGroupPayload(media []TelegramMediaInput, opts *TelegramMediaSendOptions) []map[string]any {
 	items := make([]map[string]any, 0, len(media))
 	showAbove := opts != nil && opts.ShowCaptionAboveMedia
 	for i, item := range media {
-		entry := map[string]any{"type": item.Type, "media": item.URL}
+		entry := map[string]any{"type": item.Type, "media": telegramMediaAttachRef(item, i)}
 		if showAbove {
 			entry["show_caption_above_media"] = true
 		}
@@ -454,7 +476,11 @@ func (c *TelegramBotClient) SendMedia(
 	if err := validateTelegramMedia(media); err != nil {
 		return "", err
 	}
+	upload := telegramMediaUsesUpload(media)
 	if len(media) == 1 {
+		if upload {
+			return c.sendSingleTelegramMediaUpload(ctx, token, chatID, media[0], opts)
+		}
 		method, field := "sendPhoto", "photo"
 		if media[0].Type == TelegramMediaVideo {
 			method, field = "sendVideo", "video"
@@ -486,6 +512,9 @@ func (c *TelegramBotClient) SendMedia(
 		}
 		return telegramMessageID(raw)
 	}
+	if upload {
+		return c.sendTelegramMediaGroupUpload(ctx, token, chatID, media, opts)
+	}
 	groupPayload := map[string]any{
 		"chat_id": telegramChatIDParam(chatID),
 		"media":   telegramMediaGroupPayload(media, opts),
@@ -498,6 +527,157 @@ func (c *TelegramBotClient) SendMedia(
 		return "", sanitizeTelegramError(err)
 	}
 	return telegramMediaGroupMessageID(raw)
+}
+
+func (c *TelegramBotClient) sendSingleTelegramMediaUpload(
+	ctx context.Context,
+	token, chatID string,
+	item TelegramMediaInput,
+	opts *TelegramMediaSendOptions,
+) (string, error) {
+	method, field := "sendPhoto", "photo"
+	if item.Type == TelegramMediaVideo {
+		method, field = "sendVideo", "video"
+	}
+	fields := map[string]string{
+		"chat_id": fmt.Sprint(telegramChatIDParam(chatID)),
+	}
+	if opts != nil && strings.TrimSpace(opts.Caption) != "" {
+		fields["caption"] = opts.Caption
+		if parseMode := strings.TrimSpace(opts.ParseMode); parseMode != "" {
+			fields["parse_mode"] = parseMode
+		}
+		if opts.ShowCaptionAboveMedia {
+			fields["show_caption_above_media"] = "true"
+		}
+	}
+	if opts != nil && opts.DisableNotification {
+		fields["disable_notification"] = "true"
+	}
+	if opts != nil {
+		if markup := telegramReplyMarkup(opts.Buttons); markup != nil {
+			markupJSON, err := json.Marshal(markup)
+			if err != nil {
+				return "", err
+			}
+			fields["reply_markup"] = string(markupJSON)
+		}
+	}
+	raw, err := c.apiMultipartTyped(
+		ctx,
+		token,
+		method,
+		fields,
+		field,
+		item.Filename,
+		item.Data,
+		item.ContentType,
+	)
+	if err != nil {
+		return "", sanitizeTelegramError(err)
+	}
+	return telegramMessageID(raw)
+}
+
+func (c *TelegramBotClient) sendTelegramMediaGroupUpload(
+	ctx context.Context,
+	token, chatID string,
+	media []TelegramMediaInput,
+	opts *TelegramMediaSendOptions,
+) (string, error) {
+	items := telegramMediaGroupPayload(media, opts)
+	mediaJSON, err := json.Marshal(items)
+	if err != nil {
+		return "", err
+	}
+	fields := map[string]string{
+		"chat_id": fmt.Sprint(telegramChatIDParam(chatID)),
+		"media":   string(mediaJSON),
+	}
+	if opts != nil && opts.DisableNotification {
+		fields["disable_notification"] = "true"
+	}
+	files := make([]telegramMultipartFile, 0, len(media))
+	for i, item := range media {
+		if len(item.Data) == 0 {
+			continue
+		}
+		files = append(files, telegramMultipartFile{
+			FieldName:   fmt.Sprintf("file%d", i),
+			Filename:    item.Filename,
+			ContentType: item.ContentType,
+			Data:        item.Data,
+		})
+	}
+	raw, err := c.apiMultipartForm(ctx, token, "sendMediaGroup", fields, files)
+	if err != nil {
+		return "", sanitizeTelegramError(err)
+	}
+	return telegramMediaGroupMessageID(raw)
+}
+
+type telegramMultipartFile struct {
+	FieldName   string
+	Filename    string
+	ContentType string
+	Data        []byte
+}
+
+func (c *TelegramBotClient) apiMultipartForm(
+	ctx context.Context,
+	token, method string,
+	fields map[string]string,
+	files []telegramMultipartFile,
+) (json.RawMessage, error) {
+	endpoint := fmt.Sprintf("https://api.telegram.org/bot%s/%s", strings.TrimSpace(token), method)
+	var buf bytes.Buffer
+	writer := multipart.NewWriter(&buf)
+	for key, value := range fields {
+		if err := writer.WriteField(key, value); err != nil {
+			return nil, err
+		}
+	}
+	for _, file := range files {
+		contentType := strings.TrimSpace(file.ContentType)
+		if contentType == "" {
+			contentType = "application/octet-stream"
+		}
+		fileHeader := make(textproto.MIMEHeader)
+		fileHeader.Set(
+			"Content-Disposition",
+			fmt.Sprintf(`form-data; name="%s"; filename="%s"`, file.FieldName, file.Filename),
+		)
+		fileHeader.Set("Content-Type", contentType)
+		part, err := writer.CreatePart(fileHeader)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := part.Write(file.Data); err != nil {
+			return nil, err
+		}
+	}
+	contentType := writer.FormDataContentType()
+	if err := writer.Close(); err != nil {
+		return nil, err
+	}
+	uploadClient := &http.Client{Timeout: 5 * time.Minute, Transport: c.client.Transport}
+	resp, err := c.doRequestWithClient(ctx, uploadClient, http.MethodPost, endpoint, contentType, buf.Bytes())
+	if err != nil {
+		return nil, sanitizeTelegramError(err)
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	var parsed telegramAPIResponse
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return nil, fmt.Errorf("telegram api: invalid response")
+	}
+	if !parsed.OK {
+		if parsed.Description != "" {
+			return nil, fmt.Errorf("telegram api: %s", parsed.Description)
+		}
+		return nil, fmt.Errorf("telegram api: request failed")
+	}
+	return parsed.Result, nil
 }
 
 func (c *TelegramBotClient) SendVideoNote(

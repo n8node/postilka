@@ -227,10 +227,11 @@ func hasTelegramButtons(buttons [][]model.TelegramInlineButton) bool {
 }
 
 func telegramLinkPreview(settings model.PostSettings) *bool {
-	if settings.Link != nil {
+	if settings.Link != nil && settings.Link.PreviewEnabled != nil {
 		return settings.Link.PreviewEnabled
 	}
-	return nil
+	disabled := false
+	return &disabled
 }
 
 func (s *PublicationService) telegramFinishPublish(
@@ -548,8 +549,10 @@ func (s *PublicationService) publishTarget(
 						return "", err
 					}
 					if len(media) > 1 && hasTelegramButtons(content.Buttons) {
+						linkPreviewOff := false
 						if _, err := s.telegram.SendFormattedMessage(ctx, token, channel.ChatID, TelegramMessageInput{
 							Text: "·", Buttons: content.Buttons, DisableNotification: silent,
+							LinkPreviewEnabled: &linkPreviewOff,
 						}); err != nil {
 							return "", err
 						}
@@ -651,6 +654,7 @@ func (s *PublicationService) telegramMedia(
 	if s.files == nil || s.storage == nil {
 		return nil, fmt.Errorf("хранилище медиа недоступно")
 	}
+	const maxTelegramMediaBytes = 50 << 20
 	media := make([]TelegramMediaInput, 0, len(post.Media))
 	for _, attached := range post.Media {
 		file, err := s.files.GetByID(ctx, post.WorkspaceID, attached.FileID, false)
@@ -670,16 +674,52 @@ func (s *PublicationService) telegramMedia(
 		default:
 			return nil, fmt.Errorf("%w: Telegram поддерживает только изображения и видео", ErrInvalidPost)
 		}
-		signedURL, err := s.storage.PresignGetWithOptions(ctx, file.S3Key, PresignGetOptions{
-			Expires: 30 * time.Minute,
-			Inline:  true,
-		})
+		body, contentType, err := s.storage.GetObject(ctx, file.S3Key)
 		if err != nil {
-			return nil, fmt.Errorf("не удалось подготовить медиафайл для публикации")
+			return nil, fmt.Errorf("не удалось прочитать медиафайл для публикации")
 		}
-		media = append(media, TelegramMediaInput{Type: mediaType, URL: signedURL})
+		data, err := io.ReadAll(io.LimitReader(body, maxTelegramMediaBytes+1))
+		body.Close()
+		if err != nil {
+			return nil, fmt.Errorf("не удалось прочитать медиафайл для публикации")
+		}
+		if len(data) == 0 {
+			return nil, fmt.Errorf("%w: пустой медиафайл", ErrInvalidPost)
+		}
+		if len(data) > maxTelegramMediaBytes {
+			return nil, fmt.Errorf("%w: медиафайл Telegram не должен превышать %d МБ", ErrInvalidPost, maxTelegramMediaBytes>>20)
+		}
+		if contentType == "" {
+			contentType = file.MimeType
+		}
+		media = append(media, TelegramMediaInput{
+			Type:        mediaType,
+			Data:        data,
+			Filename:    telegramMediaFilename(file.Name, contentType, mediaType),
+			ContentType: contentType,
+		})
 	}
 	return media, nil
+}
+
+func telegramMediaFilename(name, contentType, mediaType string) string {
+	name = strings.TrimSpace(name)
+	if name != "" {
+		return name
+	}
+	if mediaType == TelegramMediaVideo {
+		return "video.mp4"
+	}
+	switch strings.ToLower(strings.TrimSpace(strings.Split(contentType, ";")[0])) {
+	case "image/png":
+		return "photo.png"
+	case "image/webp":
+		return "photo.webp"
+	case "image/gif":
+		return "photo.gif"
+	default:
+		return "photo.jpg"
+	}
 }
 
 func (s *PublicationService) maxMedia(
