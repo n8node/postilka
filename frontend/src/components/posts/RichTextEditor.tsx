@@ -81,6 +81,14 @@ export function toTelegramHTML(element: HTMLElement) {
     .trim();
 }
 
+/** Converts editor-only tags (e.g. line breaks) into Telegram-safe HTML text. */
+export function normalizeTelegramHTMLString(html: string) {
+  return html
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 type Props = {
   html: string;
   onChange: (html: string, plainText: string) => void;

@@ -535,11 +535,14 @@ func (s *PublicationService) publishTarget(
 					return s.telegramFinishPublish(ctx, token, channel.ChatID, settings, msgID)
 				}
 				if telegramMediaLayoutCombined(settings) {
+					albumWithButtons := len(media) > 1 && hasTelegramButtons(content.Buttons)
 					opts := &TelegramMediaSendOptions{
-						Caption:               content.Text,
-						ParseMode:             parseMode,
-						ShowCaptionAboveMedia: telegramCaptionAbove(settings, len(media)),
-						DisableNotification:   silent,
+						DisableNotification: silent,
+					}
+					if !albumWithButtons {
+						opts.Caption = content.Text
+						opts.ParseMode = parseMode
+						opts.ShowCaptionAboveMedia = telegramCaptionAbove(settings, len(media))
 					}
 					if len(media) == 1 {
 						opts.Buttons = content.Buttons
@@ -548,13 +551,16 @@ func (s *PublicationService) publishTarget(
 					if err != nil {
 						return "", err
 					}
-					if len(media) > 1 && hasTelegramButtons(content.Buttons) {
-						linkPreviewOff := false
-						if _, err := s.telegram.SendFormattedMessage(ctx, token, channel.ChatID, TelegramMessageInput{
-							Text: "·", Buttons: content.Buttons, DisableNotification: silent,
-							LinkPreviewEnabled: &linkPreviewOff,
-						}); err != nil {
+					if albumWithButtons {
+						textID, err := s.telegram.SendFormattedMessage(ctx, token, channel.ChatID, TelegramMessageInput{
+							Text: content.Text, ParseMode: parseMode, Entities: content.Entities,
+							Buttons: content.Buttons, LinkPreviewEnabled: preview, DisableNotification: silent,
+						})
+						if err != nil {
 							return "", err
+						}
+						if settings.TelegramPin {
+							msgID = textID
 						}
 					}
 					return s.telegramFinishPublish(ctx, token, channel.ChatID, settings, msgID)

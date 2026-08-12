@@ -42,7 +42,7 @@ import { ChannelAvatar } from "@/components/channels/ChannelAvatar";
 import { FileThumbnail } from "@/components/files/FileThumbnail";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { PostChannelPreview } from "@/components/posts/PostChannelPreview";
-import { RichTextEditor } from "@/components/posts/RichTextEditor";
+import { RichTextEditor, normalizeTelegramHTMLString } from "@/components/posts/RichTextEditor";
 import { StoryAreaEditor } from "@/components/posts/StoryAreaEditor";
 import {
   ApiError,
@@ -1412,8 +1412,11 @@ export function PostComposer() {
   }
 
   function appendHashtags(value: string) {
-    const separator = editorPlain.trim() ? "<br><br>" : "";
-    updateCurrentText(`${editorHTML}${separator}${value}`, `${editorPlain}\n\n${value}`.trim());
+    const separator = editorPlain.trim() ? "\n\n" : "";
+    updateCurrentText(
+      `${editorHTML}${separator}${value}`,
+      `${editorPlain}${separator}${value}`.trim(),
+    );
   }
 
   function buildSettings(): PostSettings {
@@ -1495,7 +1498,9 @@ export function PostComposer() {
     const content: PostContent = {
       format,
       text:
-        format === "message" || format === "story" || format === "short_video" ? html : "",
+        format === "message" || format === "story" || format === "short_video"
+          ? normalizeTelegramHTMLString(html)
+          : "",
       parse_mode: "HTML",
       entities: [],
       buttons: format === "message" && canTelegramButtons ? apiButtons : [],
@@ -1526,7 +1531,11 @@ export function PostComposer() {
             : undefined,
         };
         if (override?.detached) {
-          settings.content = { text: override.html, parse_mode: "HTML", entities: [] };
+          settings.content = {
+            text: normalizeTelegramHTMLString(override.html),
+            parse_mode: "HTML",
+            entities: [],
+          };
         }
         return { channel_id: channel.id, settings };
       }),
@@ -2614,6 +2623,14 @@ export function PostComposer() {
                         В альбоме из нескольких файлов Telegram размещает подпись только под медиа.
                       </p>
                     )}
+                    {media.length > 1 &&
+                      canTelegramButtons &&
+                      buttonRows.some((row) => row.length > 0) && (
+                        <p className="mt-1.5 text-xs text-amber-700">
+                          Telegram не прикрепляет кнопки к альбому: медиа отправится первым, текст и
+                          кнопки — следующим сообщением.
+                        </p>
+                      )}
                   </div>
                 ) : (
                   <div>

@@ -108,6 +108,7 @@ func (s *PostService) Create(
 	if err != nil {
 		return nil, err
 	}
+	sanitizePostSaveRequest(&req)
 	if err := s.validate(ctx, ws.ID, req, false); err != nil {
 		return nil, err
 	}
@@ -125,6 +126,7 @@ func (s *PostService) Update(
 	if err != nil {
 		return nil, err
 	}
+	sanitizePostSaveRequest(&req)
 	if err := s.validate(ctx, ws.ID, req, false); err != nil {
 		return nil, err
 	}
@@ -597,13 +599,44 @@ var telegramEmojiTag = regexp.MustCompile(`(?i)^<\s*tg-emoji\s+emoji-id="[1-9][0
 var telegramSpoilerTag = regexp.MustCompile(`(?i)^<\s*span\s+class="tg-spoiler"\s*>$`)
 var telegramExpandableQuoteTag = regexp.MustCompile(`(?i)^<blockquote expandable>$`)
 var telegramCustomEmojiID = regexp.MustCompile(`^[1-9][0-9]*$`)
+var telegramBreakTag = regexp.MustCompile(`(?i)<br\s*/?>`)
 var telegramAllowedHTMLTags = map[string]bool{
 	"b": true, "strong": true, "i": true, "em": true, "u": true, "ins": true,
 	"s": true, "strike": true, "del": true, "span": true, "tg-spoiler": true,
 	"a": true, "code": true, "pre": true, "blockquote": true, "tg-emoji": true,
 }
 
+func normalizeTelegramHTML(text string) string {
+	return telegramBreakTag.ReplaceAllString(text, "\n")
+}
+
+func sanitizePostContent(content *model.PostContent) {
+	if content == nil {
+		return
+	}
+	if strings.ToUpper(strings.TrimSpace(content.ParseMode)) == "HTML" {
+		content.Text = normalizeTelegramHTML(content.Text)
+	}
+}
+
+func sanitizePostSaveRequest(req *model.PostSaveRequest) {
+	sanitizePostContent(&req.Content)
+	for i := range req.Targets {
+		settings, err := DecodePostTargetSettings(req.Targets[i].Settings)
+		if err != nil || settings.Content == nil {
+			continue
+		}
+		sanitizePostContent(settings.Content)
+		encoded, err := json.Marshal(settings)
+		if err != nil {
+			continue
+		}
+		req.Targets[i].Settings = encoded
+	}
+}
+
 func validateTelegramHTML(text string) error {
+	text = normalizeTelegramHTML(text)
 	for _, match := range telegramHTMLTag.FindAllStringSubmatch(text, -1) {
 		if len(match) < 2 || !telegramAllowedHTMLTags[strings.ToLower(match[1])] {
 			return fmt.Errorf("%w: HTML-тег <%s> не поддерживается Telegram", ErrInvalidPost, match[1])

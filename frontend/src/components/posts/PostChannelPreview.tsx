@@ -513,6 +513,12 @@ function renderChannelBody(props: {
   } = props;
 
   const hasText = Boolean(textPlain.trim() || format === "article" || format === "rich_message");
+  const hasButtons = buttonRows.some((row) => row.length > 0);
+  const albumButtonsSeparate =
+    effectiveLayout === "caption" &&
+    channel.provider === "telegram" &&
+    media.length > 1 &&
+    hasButtons;
   const showMedia = media.length > 0 && canMedia;
 
   const mediaBlock = showMedia
@@ -560,7 +566,10 @@ function renderChannelBody(props: {
     <p className="px-3 pb-2 text-right text-[10px] text-muted">{timingLabel ?? "сейчас"}</p>
   );
 
-  if (effectiveLayout === "separate" && channel.provider === "telegram") {
+  if (
+    (effectiveLayout === "separate" && channel.provider === "telegram") ||
+    albumButtonsSeparate
+  ) {
     const mediaBubble = mediaBlock ? (
       <MessageBubble pinned={pinned} silent={silent} className="mb-[2px]">
         {mediaBlock}
@@ -575,7 +584,8 @@ function renderChannelBody(props: {
       </MessageBubble>
     ) : null;
 
-    return mediaOrder === "text_first" ? (
+    const order = albumButtonsSeparate ? "media_first" : mediaOrder;
+    return order === "text_first" ? (
       <>
         {textBubble}
         {mediaBubble}

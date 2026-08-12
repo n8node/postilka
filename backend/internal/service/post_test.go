@@ -163,7 +163,7 @@ func TestTelegramMediaPayloadHasNoCaption(t *testing.T) {
 		{Type: TelegramMediaPhoto, URL: "https://storage.example/photo.jpg?signature=secret"},
 		{Type: TelegramMediaPhoto, URL: "https://storage.example/photo2.jpg?signature=secret"},
 	}
-	if err := validateTelegramMedia(media); err != nil {
+	if err := validateTelegramMediaBatch(media); err != nil {
 		t.Fatalf("unexpected media validation error: %v", err)
 	}
 	payload := telegramMediaGroupPayload(media, nil)
@@ -195,13 +195,37 @@ func TestTelegramMediaPayloadHasNoCaption(t *testing.T) {
 	}
 }
 
-func TestValidateTelegramMediaRejectsMixedAlbumTypes(t *testing.T) {
+func TestSplitTelegramMediaBatchesMixedTypes(t *testing.T) {
 	media := []TelegramMediaInput{
 		{Type: TelegramMediaPhoto, URL: "https://storage.example/photo.jpg"},
 		{Type: TelegramMediaVideo, URL: "https://storage.example/video.mp4"},
+		{Type: TelegramMediaPhoto, URL: "https://storage.example/photo2.jpg"},
 	}
-	if err := validateTelegramMedia(media); !errors.Is(err, ErrInvalidPost) {
-		t.Fatalf("expected mixed album rejection, got %v", err)
+	batches := splitTelegramMediaBatches(media)
+	if len(batches) != 2 {
+		t.Fatalf("expected 2 batches, got %d", len(batches))
+	}
+	if len(batches[0]) != 2 || batches[0][0].Type != TelegramMediaPhoto {
+		t.Fatalf("expected photo batch first: %#v", batches[0])
+	}
+	if len(batches[1]) != 1 || batches[1][0].Type != TelegramMediaVideo {
+		t.Fatalf("expected single video batch: %#v", batches[1])
+	}
+	for i, batch := range batches {
+		if err := validateTelegramMediaBatch(batch); err != nil {
+			t.Fatalf("batch %d should be valid: %v", i, err)
+		}
+	}
+}
+
+func TestNormalizeTelegramHTMLStripsBreakTags(t *testing.T) {
+	text := "Привет<br><br>#тег1 #тег2"
+	normalized := normalizeTelegramHTML(text)
+	if strings.Contains(normalized, "<br") {
+		t.Fatalf("expected br tags removed: %q", normalized)
+	}
+	if err := validateTelegramHTML(text); err != nil {
+		t.Fatalf("validateTelegramHTML should accept br after normalization: %v", err)
 	}
 }
 

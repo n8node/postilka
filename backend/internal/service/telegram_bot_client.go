@@ -380,9 +380,13 @@ func (c *TelegramBotClient) SendFormattedMessage(
 	}, model.PostSettings{}); err != nil {
 		return "", err
 	}
+	text := input.Text
+	if strings.ToUpper(strings.TrimSpace(input.ParseMode)) == "HTML" {
+		text = normalizeTelegramHTML(text)
+	}
 	payload := map[string]any{
 		"chat_id": telegramChatIDParam(chatID),
-		"text":    input.Text,
+		"text":    text,
 	}
 	if input.ParseMode != "" {
 		payload["parse_mode"] = input.ParseMode
@@ -406,19 +410,26 @@ func (c *TelegramBotClient) SendFormattedMessage(
 	return telegramMessageID(raw)
 }
 
-func validateTelegramMedia(media []TelegramMediaInput) error {
+func validateTelegramMediaItem(item TelegramMediaInput) error {
+	if item.Type != TelegramMediaPhoto && item.Type != TelegramMediaVideo {
+		return fmt.Errorf("%w: неподдерживаемый тип медиа Telegram", ErrInvalidPost)
+	}
+	if len(item.Data) == 0 && validateHTTPURL(item.URL) != nil {
+		return fmt.Errorf("%w: некорректная ссылка на медиа Telegram", ErrInvalidPost)
+	}
+	if len(item.Data) == 0 && strings.TrimSpace(item.URL) == "" {
+		return fmt.Errorf("%w: медиафайл Telegram пуст", ErrInvalidPost)
+	}
+	return nil
+}
+
+func validateTelegramMediaBatch(media []TelegramMediaInput) error {
 	if len(media) == 0 || len(media) > 10 {
 		return fmt.Errorf("%w: Telegram принимает от 1 до 10 медиафайлов", ErrInvalidPost)
 	}
 	for _, item := range media {
-		if item.Type != TelegramMediaPhoto && item.Type != TelegramMediaVideo {
-			return fmt.Errorf("%w: неподдерживаемый тип медиа Telegram", ErrInvalidPost)
-		}
-		if len(item.Data) == 0 && validateHTTPURL(item.URL) != nil {
-			return fmt.Errorf("%w: некорректная ссылка на медиа Telegram", ErrInvalidPost)
-		}
-		if len(item.Data) == 0 && strings.TrimSpace(item.URL) == "" {
-			return fmt.Errorf("%w: медиафайл Telegram пуст", ErrInvalidPost)
+		if err := validateTelegramMediaItem(item); err != nil {
+			return err
 		}
 	}
 	if len(media) > 1 {
@@ -430,6 +441,28 @@ func validateTelegramMedia(media []TelegramMediaInput) error {
 		}
 	}
 	return nil
+}
+
+func splitTelegramMediaBatches(media []TelegramMediaInput) [][]TelegramMediaInput {
+	var photos, videos []TelegramMediaInput
+	for _, item := range media {
+		if item.Type == TelegramMediaVideo {
+			videos = append(videos, item)
+		} else {
+			photos = append(photos, item)
+		}
+	}
+	var batches [][]TelegramMediaInput
+	for _, group := range [][]TelegramMediaInput{photos, videos} {
+		for i := 0; i < len(group); i += 10 {
+			end := i + 10
+			if end > len(group) {
+				end = len(group)
+			}
+			batches = append(batches, group[i:end])
+		}
+	}
+	return batches
 }
 
 func telegramMediaAttachRef(item TelegramMediaInput, index int) string {
@@ -448,6 +481,13 @@ func telegramMediaUsesUpload(media []TelegramMediaInput) bool {
 	return false
 }
 
+func telegramMediaCaption(text, parseMode string) string {
+	if strings.ToUpper(strings.TrimSpace(parseMode)) == "HTML" {
+		return normalizeTelegramHTML(text)
+	}
+	return text
+}
+
 func telegramMediaGroupPayload(media []TelegramMediaInput, opts *TelegramMediaSendOptions) []map[string]any {
 	items := make([]map[string]any, 0, len(media))
 	showAbove := opts != nil && opts.ShowCaptionAboveMedia
@@ -457,7 +497,7 @@ func telegramMediaGroupPayload(media []TelegramMediaInput, opts *TelegramMediaSe
 			entry["show_caption_above_media"] = true
 		}
 		if i == 0 && opts != nil && strings.TrimSpace(opts.Caption) != "" {
-			entry["caption"] = opts.Caption
+			entry["caption"] = telegramMediaCaption(opts.Caption, opts.ParseMode)
 			if parseMode := strings.TrimSpace(opts.ParseMode); parseMode != "" {
 				entry["parse_mode"] = parseMode
 			}
@@ -473,7 +513,41 @@ func (c *TelegramBotClient) SendMedia(
 	media []TelegramMediaInput,
 	opts *TelegramMediaSendOptions,
 ) (string, error) {
-	if err := validateTelegramMedia(media); err != nil {
+	if len(media) == 0 {
+		return "", fmt.Errorf("%w: Telegram принимает от 1 до 10 медиафайлов", ErrInvalidPost)
+	}
+	for _, item := range media {
+		if err := validateTelegramMediaItem(item); err != nil {
+			return "", err
+		}
+	}
+	batches := splitTelegramMediaBatches(media)
+	var msgID string
+	for i, batch := range batches {
+		batchOpts := opts
+		if i > 0 && opts != nil {
+			batchOpts = &TelegramMediaSendOptions{
+				DisableNotification: opts.DisableNotification,
+			}
+		}
+		id, err := c.sendMediaBatch(ctx, token, chatID, batch, batchOpts)
+		if err != nil {
+			return "", err
+		}
+		if msgID == "" {
+			msgID = id
+		}
+	}
+	return msgID, nil
+}
+
+func (c *TelegramBotClient) sendMediaBatch(
+	ctx context.Context,
+	token, chatID string,
+	media []TelegramMediaInput,
+	opts *TelegramMediaSendOptions,
+) (string, error) {
+	if err := validateTelegramMediaBatch(media); err != nil {
 		return "", err
 	}
 	upload := telegramMediaUsesUpload(media)
@@ -490,7 +564,7 @@ func (c *TelegramBotClient) SendMedia(
 			field:     media[0].URL,
 		}
 		if opts != nil && strings.TrimSpace(opts.Caption) != "" {
-			payload["caption"] = opts.Caption
+			payload["caption"] = telegramMediaCaption(opts.Caption, opts.ParseMode)
 			if parseMode := strings.TrimSpace(opts.ParseMode); parseMode != "" {
 				payload["parse_mode"] = parseMode
 			}
@@ -543,7 +617,7 @@ func (c *TelegramBotClient) sendSingleTelegramMediaUpload(
 		"chat_id": fmt.Sprint(telegramChatIDParam(chatID)),
 	}
 	if opts != nil && strings.TrimSpace(opts.Caption) != "" {
-		fields["caption"] = opts.Caption
+		fields["caption"] = telegramMediaCaption(opts.Caption, opts.ParseMode)
 		if parseMode := strings.TrimSpace(opts.ParseMode); parseMode != "" {
 			fields["parse_mode"] = parseMode
 		}
