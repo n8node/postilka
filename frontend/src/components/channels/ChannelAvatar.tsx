@@ -50,8 +50,12 @@ export function ChannelAvatar({
       ? directUrl
       : null;
   const proxyUrl = channelId ? channelProxyAvatarURL(channelId) : null;
+  const hasCachedBusinessAvatar = Boolean(isBusinessTelegram && directUrl?.startsWith("data:"));
   const canProxy = Boolean(
-    channelId && (provider === "telegram" || provider === "max" || provider === "youtube") && proxyUrl,
+    channelId &&
+      (provider === "telegram" || provider === "max" || provider === "youtube") &&
+      proxyUrl &&
+      (!isBusinessTelegram || hasCachedBusinessAvatar),
   );
 
   const src = useMemo(() => {

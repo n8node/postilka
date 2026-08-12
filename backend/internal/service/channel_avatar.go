@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/postilka/postilka/internal/model"
 	oauthclient "github.com/postilka/postilka/internal/oauth"
@@ -72,8 +73,10 @@ func (s *ChannelService) FetchAvatar(
 			if body, ct, ok := avatarBytesFromMetadata(ch.Metadata.AvatarURL); ok {
 				return body, ct, nil
 			}
+			avatarCtx, cancel := context.WithTimeout(ctx, 12*time.Second)
+			defer cancel()
 			if userID := parseTelegramBusinessUserID(ch.Metadata.BusinessUserID); userID > 0 {
-				if body, contentType, err := s.botClient.FetchUserProfilePhoto(ctx, token, userID); err == nil && len(body) > 0 {
+				if body, contentType, err := s.botClient.FetchUserProfilePhoto(avatarCtx, token, userID); err == nil && len(body) > 0 {
 					return body, contentType, nil
 				}
 			}

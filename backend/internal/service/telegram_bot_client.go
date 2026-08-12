@@ -1235,6 +1235,9 @@ type TelegramPostStoryOptions struct {
 	ActivePeriod         int
 	MediaType            string
 	MediaURL             string
+	MediaBytes           []byte
+	MediaFilename        string
+	MediaContentType     string
 }
 
 func (c *TelegramBotClient) PostStory(ctx context.Context, token string, opts TelegramPostStoryOptions) (string, error) {
@@ -1245,9 +1248,24 @@ func (c *TelegramBotClient) PostStory(ctx context.Context, token string, opts Te
 	if period <= 0 {
 		period = 86400
 	}
-	mediaBytes, filename, contentType, err := fetchURLBytes(ctx, c.client, opts.MediaURL)
-	if err != nil {
-		return "", err
+	var (
+		mediaBytes  []byte
+		filename    string
+		contentType string
+		err         error
+	)
+	if len(opts.MediaBytes) > 0 {
+		mediaBytes = opts.MediaBytes
+		filename = strings.TrimSpace(opts.MediaFilename)
+		contentType = strings.TrimSpace(opts.MediaContentType)
+	} else {
+		mediaBytes, filename, contentType, err = fetchURLBytes(ctx, c.client, opts.MediaURL)
+		if err != nil {
+			return "", err
+		}
+	}
+	if len(mediaBytes) == 0 {
+		return "", fmt.Errorf("%w: пустой медиафайл", ErrInvalidPost)
 	}
 	contentJSON := `{"type":"photo","photo":"attach://story_media"}`
 	if opts.MediaType == TelegramMediaVideo {
@@ -1266,6 +1284,16 @@ func (c *TelegramBotClient) PostStory(ctx context.Context, token string, opts Te
 	}
 	if contentType == "" {
 		contentType = "application/octet-stream"
+	}
+	if filename == "" {
+		switch {
+		case strings.HasPrefix(strings.ToLower(contentType), "video/"):
+			filename = "story.mp4"
+		case strings.HasPrefix(strings.ToLower(contentType), "image/"):
+			filename = "story.jpg"
+		default:
+			filename = "story.bin"
+		}
 	}
 	raw, err := c.apiMultipartTyped(ctx, token, "postStory", fields, "story_media", filename, mediaBytes, contentType)
 	if err != nil {

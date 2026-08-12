@@ -252,6 +252,58 @@ func (s *PublicationService) telegramFinishPublish(
 	return messageID, nil
 }
 
+func (s *PublicationService) telegramStoryMediaFile(
+	ctx context.Context,
+	post *model.Post,
+) ([]byte, string, string, string, error) {
+	if s.files == nil || s.storage == nil {
+		return nil, "", "", "", fmt.Errorf("хранилище медиа недоступно")
+	}
+	if len(post.Media) != 1 {
+		return nil, "", "", "", fmt.Errorf("%w: для формата story нужен ровно один медиафайл", ErrInvalidPost)
+	}
+	file, err := s.files.GetByID(ctx, post.WorkspaceID, post.Media[0].FileID, false)
+	if err != nil {
+		return nil, "", "", "", fmt.Errorf("медиафайл не найден или удалён")
+	}
+	mime := strings.ToLower(strings.TrimSpace(strings.Split(file.MimeType, ";")[0]))
+	mediaType := TelegramMediaPhoto
+	switch {
+	case strings.HasPrefix(mime, "image/"):
+		if !TelegramImageMimeAllowed(mime) {
+			return nil, "", "", "", fmt.Errorf(
+				"%w: Telegram не поддерживает формат %s — используйте JPEG, PNG, GIF или WEBP",
+				ErrInvalidPost,
+				file.MimeType,
+			)
+		}
+	case strings.HasPrefix(mime, "video/"):
+		mediaType = TelegramMediaVideo
+	default:
+		return nil, "", "", "", fmt.Errorf("%w: история Telegram поддерживает только изображения и видео", ErrInvalidPost)
+	}
+	body, contentType, err := s.storage.GetObject(ctx, file.S3Key)
+	if err != nil {
+		return nil, "", "", "", fmt.Errorf("не удалось прочитать медиафайл для публикации")
+	}
+	defer body.Close()
+	data, err := io.ReadAll(io.LimitReader(body, 50<<20))
+	if err != nil {
+		return nil, "", "", "", fmt.Errorf("не удалось прочитать медиафайл для публикации")
+	}
+	if len(data) == 0 {
+		return nil, "", "", "", fmt.Errorf("%w: пустой медиафайл", ErrInvalidPost)
+	}
+	filename := strings.TrimSpace(file.Name)
+	if filename == "" {
+		filename = "story.bin"
+	}
+	if contentType == "" {
+		contentType = file.MimeType
+	}
+	return data, filename, contentType, mediaType, nil
+}
+
 func (s *PublicationService) telegramVideoNoteFile(ctx context.Context, post *model.Post) ([]byte, string, error) {
 	if s.files == nil || s.storage == nil {
 		return nil, "", fmt.Errorf("хранилище медиа недоступно")
@@ -388,7 +440,7 @@ func (s *PublicationService) publishTarget(
 			if len(post.Media) != 1 {
 				return "", fmt.Errorf("для формата story нужен ровно один медиафайл")
 			}
-			media, err := s.telegramMedia(ctx, post)
+			mediaBytes, filename, contentType, mediaType, err := s.telegramStoryMediaFile(ctx, post)
 			if err != nil {
 				return "", err
 			}
@@ -398,8 +450,10 @@ func (s *PublicationService) publishTarget(
 				Caption:              content.Text,
 				ParseMode:            parseMode,
 				ActivePeriod:         86400,
-				MediaType:            media[0].Type,
-				MediaURL:             media[0].URL,
+				MediaType:            mediaType,
+				MediaBytes:           mediaBytes,
+				MediaFilename:        filename,
+				MediaContentType:     contentType,
 			})
 			if err != nil {
 				return "", err
