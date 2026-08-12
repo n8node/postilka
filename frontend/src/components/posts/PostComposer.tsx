@@ -41,6 +41,7 @@ import {
 import { ChannelAvatar } from "@/components/channels/ChannelAvatar";
 import { FileThumbnail } from "@/components/files/FileThumbnail";
 import { PageHeader } from "@/components/layout/PageHeader";
+import { PostChannelPreview } from "@/components/posts/PostChannelPreview";
 import { RichTextEditor } from "@/components/posts/RichTextEditor";
 import { StoryAreaEditor } from "@/components/posts/StoryAreaEditor";
 import {
@@ -3158,148 +3159,53 @@ export function PostComposer() {
                     </button>
                   ))}
                 </div>
-                <div
-                  className={cn(
-                    "mx-auto overflow-hidden rounded-2xl border border-border bg-zinc-100 transition-all",
-                    device === "mobile" ? "max-w-[300px]" : "max-w-full",
+                <PostChannelPreview
+                  channel={activeChannel}
+                  media={media.map((item) => ({
+                    fileId: item.file.id,
+                    name: item.file.name,
+                    mimeType: item.file.mime_type,
+                    durationSeconds: item.file.media_metadata?.duration_seconds,
+                  }))}
+                  textHtml={previewHTML}
+                  textPlain={previewPlain}
+                  format={format}
+                  device={device}
+                  mediaLayout={telegramMediaLayout}
+                  captionPosition={telegramCaptionPosition}
+                  mediaOrder={telegramMediaOrder}
+                  videoCircle={
+                    (telegramVideoNote || format === "short_video") &&
+                    media.length === 1 &&
+                    isVideoMime(media[0]!.file.mime_type)
+                  }
+                  pinned={Boolean(
+                    activeChannel.provider === "telegram" && telegramPin && canTelegramPin,
                   )}
-                >
-                  <div className="flex items-center gap-2 border-b border-border bg-white p-3">
-                    {activeChannel && (
-                      <ChannelAvatar
-                        name={activeChannel.name}
-                        metadata={activeChannel.metadata}
-                        channelId={activeChannel.id}
-                        provider={activeChannel.provider}
-                        size="sm"
-                      />
-                    )}
-                    <div className="min-w-0">
-                      <p className="truncate text-xs font-bold">
-                        {activeChannel ? channelDisplayName(activeChannel) : "Канал"}
-                      </p>
-                      <p className="text-[10px] text-muted">
-                        {activeChannel ? PROVIDER_LABEL[activeChannel.provider] : ""}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="p-3">
-                    {media.length > 0 &&
-                    activeChannel?.publish_capabilities?.composer_media ? (
-                      <div className="mb-2 grid grid-cols-2 gap-1 overflow-hidden rounded-lg">
-                        {media.slice(0, 4).map((item) => (
-                          <FileThumbnail
-                            key={item.file.id}
-                            fileId={item.file.id}
-                            name={item.file.name}
-                            mimeType={item.file.mime_type}
-                            size="sm"
-                            className={media.length === 1 ? "col-span-2 aspect-video" : ""}
-                          />
-                        ))}
-                      </div>
-                    ) : media.length > 0 ? (
-                      <div className="mb-2 rounded-lg border border-red-200 bg-red-50 p-2 text-[10px] font-medium text-red-700">
-                        Медиа прикреплено к черновику, но не доставляется этим каналом.
-                      </div>
-                    ) : null}
-                    <div className="rounded-xl border border-border bg-white p-3 text-[13px] leading-5">
-                      {format === "message" ? (
-                        previewHTML ? (
-                          <div
-                            className="break-words whitespace-pre-wrap [&_blockquote]:border-l-2 [&_blockquote]:border-blue-300 [&_blockquote]:pl-2 [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-zinc-100 [&_pre]:p-2"
-                            dangerouslySetInnerHTML={{ __html: previewHTML }}
-                          />
-                        ) : (
-                          <span className="text-muted">Текст поста появится здесь…</span>
-                        )
-                      ) : (
-                        <article>
-                          {articleTitle && <h3 className="mb-2 text-base font-bold">{articleTitle}</h3>}
-                          {articleBlocks.map((block, index) => (
-                            <ArticleBlockPreview key={index} block={block} />
-                          ))}
-                        </article>
-                      )}
-                      {previewPlain.length > maxText && (
-                        <p className="mt-2 text-xs font-semibold text-red-600">
-                          Текст будет отклонён: превышен лимит на {previewPlain.length - maxText} символов.
-                        </p>
-                      )}
-                      {buttonRows.length > 0 && activeChannel?.provider !== "max" && (
-                        <div className="mt-3 space-y-1">
-                          {buttonRows.map((row, index) => (
-                            <div key={index} className="grid grid-flow-col gap-1">
-                              {row.map((button, buttonIndex) => (
-                                <span
-                                  key={buttonIndex}
-                                  className={cn(
-                                    "truncate rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1.5 text-center text-[11px] font-semibold text-zinc-700",
-                                    button.style === "primary" &&
-                                      "border-blue-200 bg-blue-50 text-accent",
-                                    button.style === "success" && "border-emerald-200 bg-emerald-50 text-emerald-700",
-                                    button.style === "danger" && "border-red-200 bg-red-50 text-red-700",
-                                  )}
-                                >
-                                  {button.icon_custom_emoji_id && (
-                                    <span
-                                      className="mr-1"
-                                      title={`Custom emoji ID: ${button.icon_custom_emoji_id}`}
-                                    >
-                                      ◈
-                                    </span>
-                                  )}
-                                  {button.text || "Кнопка"}
-                                </span>
-                              ))}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      {maxButtonRows.length > 0 &&
-                        (activeChannel?.provider === "max" || !activeChannel) && (
-                        <div className="mt-3 space-y-1">
-                          {maxButtonRows.map((row, index) => (
-                            <div key={index} className="grid grid-flow-col gap-1">
-                              {row.map((button, buttonIndex) => (
-                                <span
-                                  key={buttonIndex}
-                                  className="truncate rounded-md border border-violet-200 bg-violet-50 px-2 py-1.5 text-center text-[11px] font-semibold text-violet-800"
-                                >
-                                  {button.text || "Ссылка"}
-                                </span>
-                              ))}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      {locationName &&
-                      activeChannel?.publish_capabilities?.composer_location ? (
-                        <p className="mt-2 flex items-center gap-1 text-[11px] text-muted">
-                          <MapPin className="h-3 w-3" />
-                          {locationName}
-                        </p>
-                      ) : locationName ? (
-                        <p className="mt-2 text-[10px] font-medium text-red-600">
-                          Геопозиция сохранена, но не будет доставлена.
-                        </p>
-                      ) : null}
-                      {firstComment &&
-                      activeChannel?.publish_capabilities?.composer_first_comment ? (
-                        <div className="mt-2 border-t border-dashed border-border pt-2 text-xs text-muted">
-                          Первый комментарий: {firstComment}
-                        </div>
-                      ) : firstComment ? (
-                        <p className="mt-2 text-[10px] font-medium text-red-600">
-                          Первый комментарий сохранён, но не будет доставлен.
-                        </p>
-                      ) : null}
-                    </div>
-                    <p className="mt-2 text-right text-[10px] text-muted">
-                      {timing === "schedule" ? "по расписанию" : timing === "draft" ? "черновик" : "сейчас"}
-                    </p>
-                  </div>
-                </div>
+                  silent={Boolean(
+                    activeChannel.provider === "telegram" && telegramSilent && canTelegramSilent,
+                  )}
+                  detectedUrl={detectedURL}
+                  buttonRows={buttonRows.map((row) => row.map(buttonToAPI))}
+                  maxButtonRows={maxButtonRows}
+                  firstComment={firstComment}
+                  locationName={locationName}
+                  articleTitle={articleTitle}
+                  articleBlocks={articleBlocks}
+                  storyMediaPreviewUrl={storyMediaPreviewUrl}
+                  timingLabel={
+                    timing === "schedule"
+                      ? "по расписанию"
+                      : timing === "draft"
+                        ? "черновик"
+                        : "сейчас"
+                  }
+                />
+                {previewPlain.length > maxText && (
+                  <p className="mt-2 text-xs font-semibold text-red-600">
+                    Текст будет отклонён: превышен лимит на {previewPlain.length - maxText} символов.
+                  </p>
+                )}
               </>
             )}
             </div>
@@ -3345,62 +3251,65 @@ export function PostComposer() {
                 </>
               ) : (
                 <>
-              <div className="rounded-lg border border-border bg-zinc-50 p-3">
-                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted">
-                  Когда опубликовать
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  {(
-                    [
-                      ["draft", "Черновик"],
-                      ["now", "Сейчас"],
-                      ["schedule", "По расписанию"],
-                    ] as [Timing, string][]
-                  ).map(([value, label]) => (
-                    <SmallButton
-                      key={value}
-                      active={timing === value}
-                      onClick={() => {
-                        setTiming(value);
-                        markDirty();
-                      }}
-                    >
-                      {label}
-                    </SmallButton>
-                  ))}
-                </div>
-                {timing === "schedule" && (
-                  <div className="mt-3 space-y-2">
-                    <input
-                      type="datetime-local"
-                      value={scheduleAt}
-                      onChange={(event) => {
-                        setScheduleAt(event.target.value);
-                        markDirty();
-                      }}
-                      className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm"
-                    />
-                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-violet-200 bg-violet-50 p-2 text-[11px] text-violet-800">
-                      <span>Рекомендация: будний день, 10:00.</span>
-                      <SmallButton
-                        onClick={() => {
-                          const next = new Date();
-                          next.setDate(next.getDate() + 1);
-                          next.setHours(10, 0, 0, 0);
-                          setScheduleAt(
-                            new Date(next.getTime() - next.getTimezoneOffset() * 60000)
-                              .toISOString()
-                              .slice(0, 16),
-                          );
-                          markDirty();
-                        }}
-                      >
-                        Использовать
-                      </SmallButton>
-                    </div>
-                  </div>
-                )}
+              <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
+                Когда опубликовать
+              </p>
+              <div className="grid grid-cols-3 gap-1">
+                {(
+                  [
+                    ["draft", "Черновик"],
+                    ["now", "Сейчас"],
+                    ["schedule", "Расписание"],
+                  ] as [Timing, string][]
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => {
+                      setTiming(value);
+                      markDirty();
+                    }}
+                    className={cn(
+                      "truncate rounded-md border px-1 py-1.5 text-[11px] font-semibold leading-tight transition-colors",
+                      timing === value
+                        ? "border-accent bg-accent/10 text-accent"
+                        : "border-border bg-white text-zinc-700 hover:bg-zinc-50",
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
+              {timing === "schedule" && (
+                <div className="space-y-1.5">
+                  <input
+                    type="datetime-local"
+                    value={scheduleAt}
+                    onChange={(event) => {
+                      setScheduleAt(event.target.value);
+                      markDirty();
+                    }}
+                    className="w-full rounded-md border border-border px-2 py-1.5 text-xs"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = new Date();
+                      next.setDate(next.getDate() + 1);
+                      next.setHours(10, 0, 0, 0);
+                      setScheduleAt(
+                        new Date(next.getTime() - next.getTimezoneOffset() * 60000)
+                          .toISOString()
+                          .slice(0, 16),
+                      );
+                      markDirty();
+                    }}
+                    className="w-full rounded-md border border-violet-200 bg-violet-50 px-2 py-1 text-[10px] font-medium text-violet-800 hover:bg-violet-100"
+                  >
+                    Завтра 10:00
+                  </button>
+                </div>
+              )}
               <button
                 type="button"
                 disabled={
