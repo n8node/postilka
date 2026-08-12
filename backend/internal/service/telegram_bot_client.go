@@ -1083,17 +1083,15 @@ func (c *TelegramBotClient) PollBusinessConnectionsOnce(ctx context.Context, tok
 	if err := json.Unmarshal(raw, &updates); err != nil {
 		return nil, fmt.Errorf("telegram api: invalid getUpdates result")
 	}
-	out := make([]TelegramBusinessConnection, 0, len(updates))
-	seen := map[string]struct{}{}
+	latest := map[string]TelegramBusinessConnection{}
 	for _, upd := range updates {
 		if upd.BusinessConnection == nil || upd.BusinessConnection.ID == "" {
 			continue
 		}
-		conn := *upd.BusinessConnection
-		if _, ok := seen[conn.ID]; ok {
-			continue
-		}
-		seen[conn.ID] = struct{}{}
+		latest[upd.BusinessConnection.ID] = *upd.BusinessConnection
+	}
+	out := make([]TelegramBusinessConnection, 0, len(latest))
+	for _, conn := range latest {
 		out = append(out, conn)
 	}
 	return out, nil

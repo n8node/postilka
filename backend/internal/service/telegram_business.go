@@ -19,6 +19,8 @@ import (
 
 var ErrTelegramBusinessDisabled = errors.New("telegram business stories disabled")
 
+var errSkipDisabledBusinessConnection = errors.New("skip disabled business connection")
+
 type TelegramBusinessService struct {
 	registrations *repository.TelegramBusinessRegistrationRepository
 	channels      *repository.ChannelRepository
@@ -169,43 +171,21 @@ func (s *TelegramBusinessService) Sync(
 	expectedWebhookURL := s.cfg.TelegramBusinessWebhookURL(rec.ID)
 
 	connected := s.listExistingBusinessChannels(ctx, ws.ID, rec.BotUsername)
-	seenConnected := map[string]struct{}{}
-	for _, item := range connected {
-		seenConnected[item.ID] = struct{}{}
-	}
-
-	issues := make([]string, 0)
-	foundConnections := 0
-	if len(connected) == 0 {
-		connections, pollErr := s.botClient.PollBusinessConnectionsOnce(ctx, token)
-		if pollErr != nil {
-			if isTelegramGetUpdatesConflict(pollErr) {
-				issues = append(issues, "Telegram обрабатывает предыдущий запрос — подождите 5 секунд и нажмите «Проверить» один раз, не несколько подряд.")
-			} else {
-				return nil, formatTelegramBusinessProxyError(sanitizeTelegramError(pollErr))
-			}
-		} else {
-			foundConnections = len(connections)
-			for _, conn := range connections {
-				conn = s.enrichBusinessConnection(ctx, token, conn)
-				item, upsertErr := s.upsertBusinessChannel(ctx, ws.ID, rec, token, conn)
-				if upsertErr != nil {
-					issues = append(issues, upsertErr.Error())
-					continue
-				}
-				if _, ok := seenConnected[item.ID]; ok {
-					continue
-				}
-				seenConnected[item.ID] = struct{}{}
-				connected = append(connected, item)
-			}
-		}
-	}
 
 	if err := s.botClient.SetBusinessWebhook(ctx, token, expectedWebhookURL, rec.WebhookSecret); err != nil {
 		return nil, sanitizeTelegramError(err)
 	}
+	connected = s.waitForBusinessChannels(ctx, ws.ID, rec.BotUsername, connected)
+
 	webhookInfo, _ := s.botClient.GetWebhookInfo(ctx, token)
+
+	issues := make([]string, 0)
+	foundConnections := 0
+	if len(connected) > 0 {
+		foundConnections = len(connected)
+	} else if webhookInfo != nil && webhookInfo.PendingUpdateCount > 0 {
+		foundConnections = webhookInfo.PendingUpdateCount
+	}
 
 	status := "pending"
 	lastErr := ""
@@ -222,6 +202,29 @@ func (s *TelegramBusinessService) Sync(
 		Hint:           lastErr,
 		Issues:         issues,
 	}, nil
+}
+
+func (s *TelegramBusinessService) waitForBusinessChannels(
+	ctx context.Context,
+	workspaceID, botUsername string,
+	initial []model.ChannelListItem,
+) []model.ChannelListItem {
+	if len(initial) > 0 {
+		return initial
+	}
+	delays := []time.Duration{400 * time.Millisecond, 600 * time.Millisecond, 1 * time.Second, 1500 * time.Millisecond}
+	for _, delay := range delays {
+		select {
+		case <-ctx.Done():
+			return initial
+		case <-time.After(delay):
+		}
+		found := s.listExistingBusinessChannels(ctx, workspaceID, botUsername)
+		if len(found) > 0 {
+			return found
+		}
+	}
+	return initial
 }
 
 func (s *TelegramBusinessService) buildBusinessSyncFailureMessage(
@@ -402,6 +405,9 @@ func (s *TelegramBusinessService) HandleWebhook(
 	}
 	conn := s.enrichBusinessConnection(ctx, token, *update.BusinessConnection)
 	_, err = s.upsertBusinessChannel(ctx, rec.WorkspaceID, rec, token, conn)
+	if errors.Is(err, errSkipDisabledBusinessConnection) {
+		return nil
+	}
 	if err != nil {
 		_ = s.registrations.UpdateStatus(ctx, rec.ID, "pending", err.Error())
 		return err
@@ -420,8 +426,13 @@ func (s *TelegramBusinessService) upsertBusinessChannel(
 	if conn.ID == "" {
 		return model.ChannelListItem{}, fmt.Errorf("empty business connection id")
 	}
+	conn = s.enrichBusinessConnection(ctx, botToken, conn)
 	if !conn.IsEnabled {
-		return model.ChannelListItem{}, fmt.Errorf("business-подключение отключено в Telegram — включите бота в Telegram Business")
+		existing, err := s.channels.GetByChat(ctx, workspaceID, string(model.ChannelProviderTelegram), conn.ID)
+		if err == nil && existing != nil && existing.ChatType == model.TelegramChatTypeBusiness {
+			_ = s.channels.UpdateStatus(ctx, workspaceID, existing.ID, model.ChannelStatusNeedsReconnect, "Business-подключение отключено в Telegram")
+		}
+		return model.ChannelListItem{}, errSkipDisabledBusinessConnection
 	}
 	name := businessConnectionDisplayName(conn.User)
 	now := time.Now()

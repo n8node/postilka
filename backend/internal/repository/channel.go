@@ -221,7 +221,7 @@ func (r *ChannelRepository) Create(ctx context.Context, p ChannelCreateParams) (
 			bot_token_encrypted, refresh_token_encrypted, token_expires_at,
 			max_post_mode, vk_oauth_mode, oauth_client_id, oauth_client_secret_encrypted,
 			status, metadata, metadata_refreshed_at
-		) VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, ''), COALESCE(NULLIF($8, ''), ''), $9, $10, $11, NULLIF($12, ''), NULLIF($13, ''), $14, $15, $16)
+		) VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, ''), COALESCE(NULLIF($8, ''), ''), $9, $10, $11, COALESCE(NULLIF($12, ''), ''), COALESCE(NULLIF($13, ''), ''), $14, $15, $16)
 		RETURNING ` + channelSelectSQL
 	var ch model.Channel
 	err = r.scanChannel(r.pool.QueryRow(ctx, q,

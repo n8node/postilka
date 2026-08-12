@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/postilka/postilka/internal/middleware"
@@ -40,7 +42,10 @@ func (h *TelegramBusinessHandler) Connect(w http.ResponseWriter, r *http.Request
 }
 
 func (h *TelegramBusinessHandler) Sync(w http.ResponseWriter, r *http.Request) {
-	userID, ok := middleware.UserIDFromContext(r.Context())
+	ctx, cancel := context.WithTimeout(r.Context(), 45*time.Second)
+	defer cancel()
+
+	userID, ok := middleware.UserIDFromContext(ctx)
 	if !ok {
 		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
 		return
@@ -50,8 +55,12 @@ func (h *TelegramBusinessHandler) Sync(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Некорректное тело запроса")
 		return
 	}
-	result, err := h.business.Sync(r.Context(), userID, r, req.RegistrationID)
+	result, err := h.business.Sync(ctx, userID, r, req.RegistrationID)
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) {
+			writeError(w, http.StatusGatewayTimeout, "Проверка подключения заняла слишком много времени — попробуйте ещё раз через несколько секунд")
+			return
+		}
 		writeTelegramBusinessError(w, err)
 		return
 	}

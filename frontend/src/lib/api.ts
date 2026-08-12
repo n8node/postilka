@@ -256,14 +256,22 @@ export async function apiFetch<T>(
   path: string,
   init: RequestInit = {},
 ): Promise<T> {
-  const res = await fetch(`${clientBase()}${path}`, {
-    ...init,
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(init.headers || {}),
-    },
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${clientBase()}${path}`, {
+      ...init,
+      credentials: "include",
+      headers: {
+        "Content-Type": "application/json",
+        ...(init.headers || {}),
+      },
+    });
+  } catch {
+    throw new ApiError(
+      0,
+      "Сервер не ответил — соединение прервано. Подождите несколько секунд и повторите.",
+    );
+  }
 
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
