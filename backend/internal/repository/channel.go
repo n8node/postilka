@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -215,21 +216,42 @@ func (r *ChannelRepository) Create(ctx context.Context, p ChannelCreateParams) (
 	if err != nil {
 		return nil, err
 	}
-	const q = `
+	oauthClientID := strings.TrimSpace(p.OAuthClientID)
+	oauthClientSecret := strings.TrimSpace(p.OAuthClientSecretEncrypted)
+	hasOAuthCreds := oauthClientID != "" || oauthClientSecret != ""
+
+	var ch model.Channel
+	if hasOAuthCreds {
+		const q = `
 		INSERT INTO channels (
 			workspace_id, provider, name, chat_id, chat_type, bot_username,
 			bot_token_encrypted, refresh_token_encrypted, token_expires_at,
 			max_post_mode, vk_oauth_mode, oauth_client_id, oauth_client_secret_encrypted,
 			status, metadata, metadata_refreshed_at
-		) VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, ''), COALESCE(NULLIF($8, ''), ''), $9, $10, $11, COALESCE(NULLIF($12, ''), ''), COALESCE(NULLIF($13, ''), ''), $14, $15, $16)
+		) VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, ''), COALESCE(NULLIF($8, ''), ''), $9, $10, $11, $12, $13, $14, $15, $16)
 		RETURNING ` + channelSelectSQL
-	var ch model.Channel
-	err = r.scanChannel(r.pool.QueryRow(ctx, q,
-		p.WorkspaceID, p.Provider, p.Name, p.ChatID, p.ChatType, p.BotUsername,
-		p.BotTokenEncrypted, p.RefreshTokenEncrypted, p.TokenExpiresAt,
-		maxPostMode, vkOAuthMode, p.OAuthClientID, p.OAuthClientSecretEncrypted,
-		p.Status, metaRaw, p.MetadataRefreshedAt,
-	), &ch)
+		err = r.scanChannel(r.pool.QueryRow(ctx, q,
+			p.WorkspaceID, p.Provider, p.Name, p.ChatID, p.ChatType, p.BotUsername,
+			p.BotTokenEncrypted, p.RefreshTokenEncrypted, p.TokenExpiresAt,
+			maxPostMode, vkOAuthMode, oauthClientID, oauthClientSecret,
+			p.Status, metaRaw, p.MetadataRefreshedAt,
+		), &ch)
+	} else {
+		const q = `
+		INSERT INTO channels (
+			workspace_id, provider, name, chat_id, chat_type, bot_username,
+			bot_token_encrypted, refresh_token_encrypted, token_expires_at,
+			max_post_mode, vk_oauth_mode,
+			status, metadata, metadata_refreshed_at
+		) VALUES ($1, $2, $3, $4, $5, $6, NULLIF($7, ''), COALESCE(NULLIF($8, ''), ''), $9, $10, $11, $12, $13, $14)
+		RETURNING ` + channelSelectSQL
+		err = r.scanChannel(r.pool.QueryRow(ctx, q,
+			p.WorkspaceID, p.Provider, p.Name, p.ChatID, p.ChatType, p.BotUsername,
+			p.BotTokenEncrypted, p.RefreshTokenEncrypted, p.TokenExpiresAt,
+			maxPostMode, vkOAuthMode,
+			p.Status, metaRaw, p.MetadataRefreshedAt,
+		), &ch)
+	}
 	if err != nil {
 		return nil, err
 	}
