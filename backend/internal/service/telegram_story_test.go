@@ -49,3 +49,23 @@ func TestBuildTelegramStoryAreasJSONLinkUsesCenterPosition(t *testing.T) {
 		t.Fatalf("unexpected link payload: %+v", areas[0].Type)
 	}
 }
+
+func TestStoryAreaPositionForAPIClampsLinkArea(t *testing.T) {
+	got := storyAreaPositionForAPI(model.TelegramStoryAreaPosition{
+		XPercentage:            85,
+		YPercentage:            5,
+		WidthPercentage:        40,
+		HeightPercentage:       18,
+		RotationAngle:          0,
+		CornerRadiusPercentage: 8,
+	}, "link")
+	if got.WidthPercentage < telegramStoryLinkMinWidthPct {
+		t.Fatalf("expected min link width, got %v", got.WidthPercentage)
+	}
+	if got.XPercentage > 100-got.WidthPercentage/2 {
+		t.Fatalf("center x out of bounds: %v width %v", got.XPercentage, got.WidthPercentage)
+	}
+	if got.YPercentage < got.HeightPercentage/2 {
+		t.Fatalf("center y out of bounds: %v height %v", got.YPercentage, got.HeightPercentage)
+	}
+}

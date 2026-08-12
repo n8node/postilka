@@ -141,12 +141,22 @@ export function defaultStoryAreaPosition(
   kind: TelegramStoryAreaKind,
   index: number,
 ): TelegramStoryAreaPosition {
+  if (kind === "link" && index === 0) {
+    return {
+      x_percentage: 22,
+      y_percentage: 70,
+      width_percentage: 56,
+      height_percentage: 16,
+      rotation_angle: 0,
+      corner_radius_percentage: 8,
+    };
+  }
   const row = index % 3;
   const col = Math.floor(index / 3);
   const baseY = 12 + col * 22;
   const baseX = 8 + row * 28;
   const sizes: Record<TelegramStoryAreaKind, { w: number; h: number }> = {
-    link: { w: 40, h: 18 },
+    link: { w: 56, h: 16 },
     location: { w: 40, h: 14 },
     suggested_reaction: { w: 16, h: 16 },
     weather: { w: 32, h: 14 },

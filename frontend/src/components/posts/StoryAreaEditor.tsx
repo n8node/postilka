@@ -38,7 +38,7 @@ type DragState = {
 };
 
 const AREA_COLORS: Record<TelegramStoryAreaKind, string> = {
-  link: "border-sky-400 bg-sky-500/25",
+  link: "border-white/80 bg-black/55 backdrop-blur-sm",
   location: "border-emerald-400 bg-emerald-500/25",
   suggested_reaction: "border-rose-400 bg-rose-500/25",
   weather: "border-amber-400 bg-amber-500/25",
@@ -297,7 +297,13 @@ export function StoryAreaEditor({
                 onPointerDown={(event) => startDrag(event, area, "move")}
               >
                 <div className="flex h-full items-center justify-center overflow-hidden px-1 text-center text-[10px] font-semibold text-white drop-shadow">
-                  {areaSummary(area)}
+                  {area.kind === "link" ? (
+                    <span className="truncate rounded-full bg-black/70 px-2 py-1">
+                      🔗 {areaSummary(area)}
+                    </span>
+                  ) : (
+                    areaSummary(area)
+                  )}
                 </div>
                 {isSelected && !disabled && (
                   <>
@@ -364,13 +370,19 @@ export function StoryAreaEditor({
                   </button>
                 </div>
                 {area.kind === "link" && (
-                  <input
-                    value={area.url ?? ""}
-                    disabled={disabled}
-                    onChange={(event) => patchArea(area.id, { url: event.target.value })}
-                    placeholder="https://example.com"
-                    className="w-full rounded border border-border px-2 py-1.5 text-xs"
-                  />
+                  <>
+                    <input
+                      value={area.url ?? ""}
+                      disabled={disabled}
+                      onChange={(event) => patchArea(area.id, { url: event.target.value })}
+                      placeholder="https://example.com"
+                      className="w-full rounded border border-border px-2 py-1.5 text-xs"
+                    />
+                    <p className="mt-1 text-[11px] text-muted">
+                      Telegram сам рисует «стикер ссылки» с доменом — как в приложении. Через API
+                      можно передать только URL и позицию, без кастомного оформления.
+                    </p>
+                  </>
                 )}
                 {area.kind === "location" && (
                   <div className="grid gap-2">

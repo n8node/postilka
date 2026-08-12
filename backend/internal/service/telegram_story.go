@@ -36,6 +36,9 @@ const (
 	telegramStoryMaxLocations = 10
 	telegramStoryMaxReactions = 5
 	telegramStoryMaxWeather   = 3
+
+	telegramStoryLinkMinWidthPct  = 30.0
+	telegramStoryLinkMinHeightPct = 14.0
 )
 
 func telegramStoryActivePeriod(settings *model.TelegramStorySettings) int {
@@ -114,7 +117,10 @@ func validateStoryAreaPosition(pos model.TelegramStoryAreaPosition) error {
 	if pos.WidthPercentage <= 0 || pos.HeightPercentage <= 0 {
 		return fmt.Errorf("%w: размер зоны на истории должен быть больше нуля", ErrInvalidPost)
 	}
-	if pos.XPercentage < 0 || pos.XPercentage > 100 || pos.YPercentage < 0 || pos.YPercentage > 100 {
+	if pos.XPercentage < 0 || pos.YPercentage < 0 {
+		return fmt.Errorf("%w: зона истории выходит за пределы медиа", ErrInvalidPost)
+	}
+	if pos.XPercentage+pos.WidthPercentage > 100.01 || pos.YPercentage+pos.HeightPercentage > 100.01 {
 		return fmt.Errorf("%w: зона истории выходит за пределы медиа", ErrInvalidPost)
 	}
 	if pos.RotationAngle < 0 || pos.RotationAngle > 360 {
@@ -131,11 +137,48 @@ func normalizeStoryAreaPosition(pos model.TelegramStoryAreaPosition) model.Teleg
 }
 
 // storyAreaPositionForAPI converts top-left rectangle coordinates (UI/editor)
-// to center-based coordinates required by Telegram StoryAreaPosition.
-func storyAreaPositionForAPI(pos model.TelegramStoryAreaPosition) model.TelegramStoryAreaPosition {
+// to center-based coordinates required by Telegram StoryAreaPosition and clamps
+// the rectangle inside the media bounds.
+func storyAreaPositionForAPI(pos model.TelegramStoryAreaPosition, kind string) model.TelegramStoryAreaPosition {
 	pos = normalizeStoryAreaPosition(pos)
+	if strings.ToLower(strings.TrimSpace(kind)) == "link" {
+		if pos.WidthPercentage < telegramStoryLinkMinWidthPct {
+			pos.WidthPercentage = telegramStoryLinkMinWidthPct
+		}
+		if pos.HeightPercentage < telegramStoryLinkMinHeightPct {
+			pos.HeightPercentage = telegramStoryLinkMinHeightPct
+		}
+	}
+	if pos.XPercentage+pos.WidthPercentage > 100 {
+		pos.XPercentage = 100 - pos.WidthPercentage
+	}
+	if pos.YPercentage+pos.HeightPercentage > 100 {
+		pos.YPercentage = 100 - pos.HeightPercentage
+	}
+	if pos.XPercentage < 0 {
+		pos.XPercentage = 0
+	}
+	if pos.YPercentage < 0 {
+		pos.YPercentage = 0
+	}
+
 	pos.XPercentage += pos.WidthPercentage / 2
 	pos.YPercentage += pos.HeightPercentage / 2
+
+	halfW := pos.WidthPercentage / 2
+	halfH := pos.HeightPercentage / 2
+	if pos.XPercentage < halfW {
+		pos.XPercentage = halfW
+	}
+	if pos.XPercentage > 100-halfW {
+		pos.XPercentage = 100 - halfW
+	}
+	if pos.YPercentage < halfH {
+		pos.YPercentage = halfH
+	}
+	if pos.YPercentage > 100-halfH {
+		pos.YPercentage = 100 - halfH
+	}
 	return pos
 }
 
@@ -150,11 +193,11 @@ func buildTelegramStoryAreasJSON(areas []model.TelegramStoryArea) (string, error
 	}
 	out := make([]telegramStoryAreaAPI, 0, len(areas))
 	for _, area := range areas {
-		pos := storyAreaPositionForAPI(area.Position)
 		kind := strings.ToLower(strings.TrimSpace(area.Kind))
 		if kind == "reaction" {
 			kind = "suggested_reaction"
 		}
+		pos := storyAreaPositionForAPI(area.Position, kind)
 		var areaType any
 		switch kind {
 		case "link":
