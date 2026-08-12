@@ -10,3 +10,12 @@ type Workspace struct {
 	Role      string    `json:"role,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 }
+
+type WorkspaceMember struct {
+	UserID          string    `json:"user_id"`
+	Email           string    `json:"email"`
+	Name            string    `json:"name"`
+	Role            string    `json:"role"`
+	JoinedAt        time.Time `json:"joined_at"`
+	JoinedViaInvite bool      `json:"joined_via_invite"`
+}

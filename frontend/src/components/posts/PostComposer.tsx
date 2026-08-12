@@ -14,7 +14,6 @@ import {
   FileImage,
   GripVertical,
   Layers2,
-  Link2,
   Loader2,
   MapPin,
   MessageCircle,
@@ -27,8 +26,10 @@ import {
   Sparkles,
   Trash2,
   Upload,
+  Users,
   X,
 } from "lucide-react";
+import Link from "next/link";
 import {
   useCallback,
   useEffect,
@@ -46,7 +47,9 @@ import {
   ApiError,
   fetchChannels,
   fetchMe,
+  fetchWorkspaceMembers,
   type ChannelListItem,
+  type WorkspaceMember,
   type ChannelProvider,
   type PublishCapabilities,
 } from "@/lib/api";
@@ -195,6 +198,20 @@ function isTelegramBusinessChannel(channel: { provider: string; chat_type?: stri
   return channel.provider === "telegram" && channel.chat_type === "business";
 }
 
+function channelProviderSubtitle(
+  channel: ChannelListItem,
+  postKind: PostKind,
+): string {
+  if (postKind === "story" && isTelegramBusinessChannel(channel)) {
+    const bot = channel.bot_username?.trim();
+    const botLabel = bot ? (bot.startsWith("@") ? bot : `@${bot}`) : null;
+    return botLabel
+      ? `Telegram — бизнес аккаунт (${botLabel})`
+      : "Telegram — бизнес аккаунт";
+  }
+  return PROVIDER_LABEL[channel.provider];
+}
+
 function channelSupportsPostKind(
   channel: { status: string; publish_capabilities?: PublishCapabilities },
   kind: PostKind,
@@ -252,16 +269,33 @@ function Card({
   action,
   children,
   className,
+  accent,
 }: {
   title: string;
   action?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
+  accent?: boolean;
 }) {
   return (
-    <section className={cn("rounded-xl border border-border bg-surface p-4 shadow-sm", className)}>
+    <section
+      className={cn(
+        "rounded-xl border bg-surface p-4 shadow-sm",
+        accent
+          ? "border-2 border-accent/30 bg-gradient-to-br from-accent/[0.07] via-surface to-violet-50/50 shadow-md ring-1 ring-accent/10"
+          : "border-border",
+        className,
+      )}
+    >
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-xs font-semibold uppercase tracking-[0.08em] text-muted">{title}</h2>
+        <h2
+          className={cn(
+            "text-xs font-semibold uppercase tracking-[0.08em]",
+            accent ? "text-accent" : "text-muted",
+          )}
+        >
+          {title}
+        </h2>
         {action}
       </div>
       {children}
@@ -1000,10 +1034,9 @@ export function PostComposer() {
   const [telegramMediaOrder, setTelegramMediaOrder] = useState<"media_first" | "text_first">("media_first");
   const [utm, setUTM] = useState({ source: "", medium: "social", campaign: "", shorten: false });
   const [approvalRequired, setApprovalRequired] = useState(false);
-  const [evergreenEnabled, setEvergreenEnabled] = useState(false);
-  const [intervalDays, setIntervalDays] = useState(7);
-  const [maxRuns, setMaxRuns] = useState("");
-  const [endsAt, setEndsAt] = useState("");
+  const [approvalModalOpen, setApprovalModalOpen] = useState(false);
+  const [workspaceMembers, setWorkspaceMembers] = useState<WorkspaceMember[]>([]);
+  const [membersLoading, setMembersLoading] = useState(false);
   const [workspaceRole, setWorkspaceRole] = useState<string | null>(null);
   const [currentStatus, setCurrentStatus] = useState<Post["status"] | null>(null);
   const [approvalEvents, setApprovalEvents] = useState<PostApprovalEvent[]>([]);
@@ -1048,6 +1081,23 @@ export function PostComposer() {
     }
   }, []);
 
+  const loadWorkspaceMembers = useCallback(async () => {
+    setMembersLoading(true);
+    try {
+      const data = await fetchWorkspaceMembers();
+      setWorkspaceMembers(data.members);
+    } catch {
+      setWorkspaceMembers([]);
+    } finally {
+      setMembersLoading(false);
+    }
+  }, []);
+
+  const invitedMembers = useMemo(
+    () => workspaceMembers.filter((member) => member.joined_via_invite),
+    [workspaceMembers],
+  );
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -1062,11 +1112,8 @@ export function PostComposer() {
       setPosts(postData.items);
       setRecentFiles(fileData.files);
       setWorkspaceRole(meData.active_workspace?.role ?? meData.workspace?.role ?? null);
-      const activeChannels = channelData.items.filter((channel) =>
-        channelSupportsPostKind(channel, "post"),
-      );
-      setSelectedIds(activeChannels.map((channel) => channel.id));
-      setActiveChannelId(activeChannels[0]?.id ?? null);
+      setSelectedIds([]);
+      setActiveChannelId(null);
     } catch (loadError) {
       setError(errorText(loadError, "Не удалось загрузить композер"));
     } finally {
@@ -1207,10 +1254,9 @@ export function PostComposer() {
 
   function resetNew() {
     if (dirty && !window.confirm("Несохранённые изменения будут потеряны. Продолжить?")) return;
-    const active = channels.filter((channel) => channelSupportsPostKind(channel, "post"));
     setPostId(null);
-    setSelectedIds(active.map((channel) => channel.id));
-    setActiveChannelId(active[0]?.id ?? null);
+    setSelectedIds([]);
+    setActiveChannelId(null);
     setHTML("");
     setPlain("");
     setOverrides({});
@@ -1234,10 +1280,7 @@ export function PostComposer() {
     setLongitude("");
     setUTM({ source: "", medium: "social", campaign: "", shorten: false });
     setApprovalRequired(false);
-    setEvergreenEnabled(false);
-    setIntervalDays(7);
-    setMaxRuns("");
-    setEndsAt("");
+    setApprovalModalOpen(false);
     setCurrentStatus(null);
     setApprovalEvents([]);
     setDiscussionComment("");
@@ -1333,12 +1376,6 @@ export function PostComposer() {
       shorten: storedUTM?.shorten ?? false,
     });
     setApprovalRequired(Boolean(post.settings.approval_required));
-    setEvergreenEnabled(Boolean(post.settings.recurrence?.enabled));
-    setIntervalDays(post.settings.recurrence?.interval_days ?? 7);
-    setMaxRuns(
-      post.settings.recurrence?.max_runs != null ? String(post.settings.recurrence.max_runs) : "",
-    );
-    setEndsAt(post.settings.recurrence?.ends_at ? post.settings.recurrence.ends_at.slice(0, 16) : "");
     setCurrentStatus(post.status);
     void loadApprovalEvents(post.id);
     setTiming("draft");
@@ -1420,14 +1457,6 @@ export function PostComposer() {
         telegramChannels.length > 0 && telegramVideoNote && singleVideoAttached
           ? true
           : undefined,
-      recurrence: evergreenEnabled
-        ? {
-            enabled: true,
-            interval_days: intervalDays,
-            max_runs: maxRuns.trim() ? Number(maxRuns) : undefined,
-            ends_at: endsAt ? new Date(endsAt).toISOString() : undefined,
-          }
-        : undefined,
       max_buttons:
         canMaxButtons && maxButtonRows.length > 0
           ? maxButtonRows.map((row) =>
@@ -1510,17 +1539,13 @@ export function PostComposer() {
   function switchPostKind(kind: PostKind) {
     markDirty();
     setPostKind(kind);
+    setSelectedIds([]);
+    setActiveChannelId(null);
     if (kind === "story") {
       setFormat("story");
       setMedia((current) => current.slice(0, 1));
       setTelegramStory((current) =>
         current.areas?.length ? current : normalizeStorySettings(current),
-      );
-      setSelectedIds((ids) =>
-        ids.filter((id) => {
-          const channel = channels.find((item) => item.id === id);
-          return channel ? channelSupportsPostKind(channel, "story") : false;
-        }),
       );
       return;
     }
@@ -1796,12 +1821,6 @@ export function PostComposer() {
     }
     if (action === "schedule" && (!scheduleAt || new Date(scheduleAt) <= new Date())) {
       return "Выберите дату и время в будущем";
-    }
-    if (evergreenEnabled && intervalDays < 1) {
-      return "Интервал evergreen-повтора должен быть не меньше 1 дня";
-    }
-    if (maxRuns.trim() && Number(maxRuns) < 1) {
-      return "Лимит повторов должен быть не меньше 1";
     }
     return null;
   }
@@ -2136,7 +2155,7 @@ export function PostComposer() {
                   setSelectedIds(
                     selectedIds.length === active.length ? [] : active.map((channel) => channel.id),
                   );
-                  setActiveChannelId(active[0]?.id ?? null);
+                  setActiveChannelId(selectedIds.length === active.length ? null : active[0]?.id ?? null);
                   markDirty();
                 }}
                 className="text-xs font-medium text-accent hover:underline"
@@ -2195,7 +2214,7 @@ export function PostComposer() {
                           {channelDisplayName(channel)}
                         </span>
                         <span className="block text-xs text-muted">
-                          {PROVIDER_LABEL[channel.provider]}
+                          {channelProviderSubtitle(channel, postKind)}
                           {channel.status !== "active"
                             ? " · недоступен"
                             : !channel.publish_capabilities?.text
@@ -2433,6 +2452,41 @@ export function PostComposer() {
             </div>
           </Card>
 
+          {detectedURL && (
+            <Card title="Ссылка и UTM">
+              <p className="truncate text-sm font-medium text-accent">{detectedURL}</p>
+              <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                {(["source", "medium", "campaign"] as const).map((key) => (
+                  <input
+                    key={key}
+                    value={utm[key]}
+                    onChange={(event) => {
+                      setUTM((current) => ({ ...current, [key]: event.target.value }));
+                      markDirty();
+                    }}
+                    placeholder={`utm_${key}`}
+                    className="min-w-0 rounded-md border border-border px-2 py-1.5 text-xs"
+                  />
+                ))}
+              </div>
+              <label className="mt-2 flex items-center gap-2 text-xs">
+                <input
+                  type="checkbox"
+                  checked={utm.shorten}
+                  onChange={(event) => {
+                    setUTM((current) => ({ ...current, shorten: event.target.checked }));
+                    markDirty();
+                  }}
+                />
+                Сократить ссылку при публикации
+              </label>
+              <p className="mt-2 text-[11px] text-muted">
+                UTM и сокращение сохраняются отдельно для каждого выбранного канала. При
+                публикации URL заменяются на короткие отслеживаемые ссылки с учётом UTM.
+              </p>
+            </Card>
+          )}
+
           {canTelegramButtons && (
             <ButtonBuilder
               rows={buttonRows}
@@ -2459,7 +2513,17 @@ export function PostComposer() {
             />
           )}
 
-          <Card title="Медиа">
+          <Card
+            title="Медиа"
+            accent
+            action={
+              media.length > 0 ? (
+                <span className="rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-semibold text-accent">
+                  {media.length} файл{media.length === 1 ? "" : media.length < 5 ? "а" : "ов"}
+                </span>
+              ) : undefined
+            }
+          >
             <input
               ref={fileInputRef}
               type="file"
@@ -2477,6 +2541,11 @@ export function PostComposer() {
                 Недавние файлы
               </SmallButton>
             </div>
+            {media.length === 0 && (
+              <p className="mt-3 rounded-lg border border-dashed border-accent/25 bg-white/70 px-3 py-4 text-center text-sm text-muted">
+                Прикрепите фото или видео — это ключевой блок публикации.
+              </p>
+            )}
             {media.length > 0 && noMediaDelivery.length > 0 && (
               <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
                 Медиа сохранится в черновике, но сейчас не будет доставлено в{" "}
@@ -2862,194 +2931,7 @@ export function PostComposer() {
                 )}
               </Card>
             )}
-
-            <Card title="Ссылка и UTM">
-              {detectedURL ? (
-                <>
-                  <p className="truncate text-sm font-medium text-accent">{detectedURL}</p>
-                  <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                    {(["source", "medium", "campaign"] as const).map((key) => (
-                      <input
-                        key={key}
-                        value={utm[key]}
-                        onChange={(event) => {
-                          setUTM((current) => ({ ...current, [key]: event.target.value }));
-                          markDirty();
-                        }}
-                        placeholder={`utm_${key}`}
-                        className="min-w-0 rounded-md border border-border px-2 py-1.5 text-xs"
-                      />
-                    ))}
-                  </div>
-                  <label className="mt-2 flex items-center gap-2 text-xs">
-                    <input
-                      type="checkbox"
-                      checked={utm.shorten}
-                      onChange={(event) => {
-                        setUTM((current) => ({ ...current, shorten: event.target.checked }));
-                        markDirty();
-                      }}
-                    />
-                    Сократить ссылку при публикации
-                  </label>
-                  <p className="mt-2 text-[11px] text-muted">
-                    UTM и сокращение сохраняются отдельно для каждого выбранного канала. При
-                    публикации URL заменяются на короткие отслеживаемые ссылки с учётом UTM.
-                  </p>
-                </>
-              ) : (
-                <p className="flex items-center gap-2 text-sm text-muted">
-                  <Link2 className="h-4 w-4" />
-                  Добавьте HTTP(S)-ссылку в текст — здесь появятся настройки.
-                </p>
-              )}
-            </Card>
           </div>
-
-          <Card title="Когда опубликовать">
-            <div className="flex flex-wrap gap-2">
-              {(
-                [
-                  ["draft", "Черновик"],
-                  ["now", "Сейчас"],
-                  ["schedule", "По расписанию"],
-                ] as [Timing, string][]
-              ).map(([value, label]) => (
-                <SmallButton
-                  key={value}
-                  active={timing === value}
-                  onClick={() => {
-                    setTiming(value);
-                    markDirty();
-                  }}
-                >
-                  {label}
-                </SmallButton>
-              ))}
-            </div>
-            {timing === "schedule" && (
-              <div className="mt-3 space-y-3">
-                <input
-                  type="datetime-local"
-                  value={scheduleAt}
-                  onChange={(event) => {
-                    setScheduleAt(event.target.value);
-                    markDirty();
-                  }}
-                  className="rounded-lg border border-border px-3 py-2 text-sm"
-                />
-                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-violet-200 bg-violet-50 p-3 text-xs text-violet-800">
-                  <span>
-                    Рекомендация: будний день, 10:00. Это общий ориентир, не персональный AI-прогноз.
-                  </span>
-                  <SmallButton
-                    onClick={() => {
-                      const next = new Date();
-                      next.setDate(next.getDate() + 1);
-                      next.setHours(10, 0, 0, 0);
-                      setScheduleAt(
-                        new Date(next.getTime() - next.getTimezoneOffset() * 60000)
-                          .toISOString()
-                          .slice(0, 16),
-                      );
-                      markDirty();
-                    }}
-                  >
-                    Использовать
-                  </SmallButton>
-                </div>
-              </div>
-            )}
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              <label className="flex items-start gap-2 rounded-lg border border-border p-3 text-xs">
-                <input
-                  type="checkbox"
-                  checked={evergreenEnabled}
-                  disabled={composerLocked}
-                  onChange={(event) => {
-                    setEvergreenEnabled(event.target.checked);
-                    markDirty();
-                  }}
-                  className="mt-0.5"
-                />
-                <span>
-                  <span className="font-semibold">Evergreen-повторы</span>
-                  <span className="mt-1 block text-muted">
-                    После успешной публикации создаётся новая запланированная копия.
-                  </span>
-                </span>
-              </label>
-              <label className="flex items-start gap-2 rounded-lg border border-border p-3 text-xs">
-                <input
-                  type="checkbox"
-                  checked={approvalRequired}
-                  disabled={composerLocked}
-                  onChange={(event) => {
-                    setApprovalRequired(event.target.checked);
-                    markDirty();
-                  }}
-                  className="mt-0.5"
-                />
-                <span>
-                  <span className="font-semibold">Согласование</span>
-                  <span className="mt-1 block text-muted">
-                    Редакторы отправляют пост администратору перед публикацией.
-                  </span>
-                </span>
-              </label>
-            </div>
-            {evergreenEnabled && (
-              <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                <label className="text-xs">
-                  <span className="mb-1 block text-muted">Интервал, дней</span>
-                  <input
-                    type="number"
-                    min={1}
-                    value={intervalDays}
-                    disabled={composerLocked}
-                    onChange={(event) => {
-                      setIntervalDays(Number(event.target.value) || 1);
-                      markDirty();
-                    }}
-                    className="w-full rounded-md border border-border px-2 py-1.5"
-                  />
-                </label>
-                <label className="text-xs">
-                  <span className="mb-1 block text-muted">Макс. повторов</span>
-                  <input
-                    type="number"
-                    min={1}
-                    value={maxRuns}
-                    disabled={composerLocked}
-                    onChange={(event) => {
-                      setMaxRuns(event.target.value);
-                      markDirty();
-                    }}
-                    placeholder="Без лимита"
-                    className="w-full rounded-md border border-border px-2 py-1.5"
-                  />
-                </label>
-                <label className="text-xs">
-                  <span className="mb-1 block text-muted">Завершить после</span>
-                  <input
-                    type="datetime-local"
-                    value={endsAt}
-                    disabled={composerLocked}
-                    onChange={(event) => {
-                      setEndsAt(event.target.value);
-                      markDirty();
-                    }}
-                    className="w-full rounded-md border border-border px-2 py-1.5"
-                  />
-                </label>
-              </div>
-            )}
-            {isPendingApproval && (
-              <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                Публикация ожидает согласования администратора workspace.
-              </p>
-            )}
-          </Card>
 
           <Card
             title="Черновики и публикации"
@@ -3272,7 +3154,7 @@ export function PostComposer() {
                           : "border-transparent text-muted",
                       )}
                     >
-                      {PROVIDER_LABEL[channel.provider]}
+                      {channelProviderSubtitle(channel, postKind)}
                     </button>
                   ))}
                 </div>
@@ -3422,9 +3304,14 @@ export function PostComposer() {
             )}
             </div>
 
-            <div className="shrink-0 space-y-2 border-t border-border bg-surface p-4">
+            <div className="shrink-0 space-y-3 border-t border-border bg-surface p-4">
               {dirty && (
                 <p className="text-center text-[11px] text-muted">Есть несохранённые изменения</p>
+              )}
+              {isPendingApproval && (
+                <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  Публикация ожидает согласования администратора workspace.
+                </p>
               )}
               {isPublishedStory ? (
                 <>
@@ -3458,6 +3345,62 @@ export function PostComposer() {
                 </>
               ) : (
                 <>
+              <div className="rounded-lg border border-border bg-zinc-50 p-3">
+                <p className="mb-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted">
+                  Когда опубликовать
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {(
+                    [
+                      ["draft", "Черновик"],
+                      ["now", "Сейчас"],
+                      ["schedule", "По расписанию"],
+                    ] as [Timing, string][]
+                  ).map(([value, label]) => (
+                    <SmallButton
+                      key={value}
+                      active={timing === value}
+                      onClick={() => {
+                        setTiming(value);
+                        markDirty();
+                      }}
+                    >
+                      {label}
+                    </SmallButton>
+                  ))}
+                </div>
+                {timing === "schedule" && (
+                  <div className="mt-3 space-y-2">
+                    <input
+                      type="datetime-local"
+                      value={scheduleAt}
+                      onChange={(event) => {
+                        setScheduleAt(event.target.value);
+                        markDirty();
+                      }}
+                      className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm"
+                    />
+                    <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-violet-200 bg-violet-50 p-2 text-[11px] text-violet-800">
+                      <span>Рекомендация: будний день, 10:00.</span>
+                      <SmallButton
+                        onClick={() => {
+                          const next = new Date();
+                          next.setDate(next.getDate() + 1);
+                          next.setHours(10, 0, 0, 0);
+                          setScheduleAt(
+                            new Date(next.getTime() - next.getTimezoneOffset() * 60000)
+                              .toISOString()
+                              .slice(0, 16),
+                          );
+                          markDirty();
+                        }}
+                      >
+                        Использовать
+                      </SmallButton>
+                    </div>
+                  </div>
+                )}
+              </div>
               <button
                 type="button"
                 disabled={
@@ -3495,6 +3438,28 @@ export function PostComposer() {
                 {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                 Сохранить черновик
               </button>
+              <button
+                type="button"
+                disabled={composerLocked}
+                onClick={() => {
+                  setApprovalModalOpen(true);
+                  void loadWorkspaceMembers();
+                }}
+                className={cn(
+                  "inline-flex w-full items-center justify-center gap-2 rounded-md border px-4 py-2.5 text-sm font-semibold hover:bg-zinc-50 disabled:opacity-50",
+                  approvalRequired
+                    ? "border-amber-300 bg-amber-50 text-amber-900"
+                    : "border-border bg-white text-zinc-800",
+                )}
+              >
+                <Users className="h-4 w-4" />
+                Согласование
+                {approvalRequired && (
+                  <span className="rounded-full bg-amber-200 px-1.5 py-0.5 text-[10px] font-bold uppercase">
+                    вкл
+                  </span>
+                )}
+              </button>
                 </>
               )}
             </div>
@@ -3502,6 +3467,100 @@ export function PostComposer() {
         </aside>
         </div>
       </div>
+
+      {approvalModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => setApprovalModalOpen(false)}
+        >
+          <div
+            className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-xl border border-border bg-surface p-5 shadow-xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold">Согласование</h3>
+                <p className="mt-1 text-xs text-muted">
+                  Перед публикацией пост может пройти проверку участниками workspace.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setApprovalModalOpen(false)}
+                className="rounded-md p-1 text-muted hover:bg-zinc-100"
+                aria-label="Закрыть"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <label className="mb-4 flex items-start gap-2 rounded-lg border border-border p-3 text-sm">
+              <input
+                type="checkbox"
+                checked={approvalRequired}
+                disabled={composerLocked}
+                onChange={(event) => {
+                  setApprovalRequired(event.target.checked);
+                  markDirty();
+                }}
+                className="mt-0.5"
+              />
+              <span>
+                <span className="font-semibold">Требовать согласование</span>
+                <span className="mt-1 block text-xs text-muted">
+                  Редакторы отправляют пост администратору перед публикацией.
+                </span>
+              </span>
+            </label>
+
+            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted">
+              Участники по приглашению
+            </p>
+            {membersLoading ? (
+              <div className="flex items-center gap-2 py-6 text-sm text-muted">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Загружаем участников…
+              </div>
+            ) : invitedMembers.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-border bg-zinc-50 px-4 py-5 text-center">
+                <Users className="mx-auto mb-2 h-8 w-8 text-zinc-300" />
+                <p className="text-sm font-semibold">Нет принявших приглашение</p>
+                <p className="mt-1 text-xs text-muted">
+                  Пригласите коллег в workspace — они смогут участвовать в согласовании.
+                </p>
+                <Link
+                  href="/team"
+                  className="mt-3 inline-flex rounded-md bg-accent px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700"
+                  onClick={() => setApprovalModalOpen(false)}
+                >
+                  Перейти в «Команда»
+                </Link>
+              </div>
+            ) : (
+              <ul className="space-y-2">
+                {invitedMembers.map((member) => (
+                  <li
+                    key={member.user_id}
+                    className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium">
+                        {member.name?.trim() || member.email}
+                      </span>
+                      {member.name?.trim() && (
+                        <span className="block truncate text-xs text-muted">{member.email}</span>
+                      )}
+                    </span>
+                    <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-muted">
+                      {member.role}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

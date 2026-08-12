@@ -266,3 +266,40 @@ func (h *WorkspaceHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		"active_workspace": active,
 	})
 }
+
+// Members returns workspace members for the active or requested workspace.
+func (h *WorkspaceHandler) Members(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Не авторизован")
+		return
+	}
+
+	workspaceID := strings.TrimSpace(r.URL.Query().Get("workspace_id"))
+	if workspaceID == "" {
+		active, _, err := h.workspaces.ResolveActive(r.Context(), userID, r)
+		if err != nil || active == nil {
+			writeError(w, http.StatusBadRequest, "Workspace не найден")
+			return
+		}
+		workspaceID = active.ID
+	}
+
+	members, err := h.workspaces.ListMembers(r.Context(), userID, workspaceID)
+	if errors.Is(err, service.ErrNotWorkspaceMember) {
+		writeError(w, http.StatusForbidden, "Нет доступа к workspace")
+		return
+	}
+	if errors.Is(err, service.ErrForbidden) {
+		writeError(w, http.StatusForbidden, "Недостаточно прав")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Внутренняя ошибка")
+		return
+	}
+	if members == nil {
+		members = []model.WorkspaceMember{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"members": members})
+}

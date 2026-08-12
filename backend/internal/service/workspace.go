@@ -223,6 +223,13 @@ func (s *WorkspaceService) Delete(ctx context.Context, userID, workspaceID strin
 	return s.workspaces.ListForUser(ctx, userID)
 }
 
+func (s *WorkspaceService) ListMembers(ctx context.Context, userID, workspaceID string) ([]model.WorkspaceMember, error) {
+	if _, err := s.RequireMembership(ctx, userID, workspaceID, model.RoleViewer); err != nil {
+		return nil, err
+	}
+	return s.workspaces.ListMembers(ctx, workspaceID)
+}
+
 func SetActiveWorkspaceCookie(w http.ResponseWriter, workspaceID string, secure bool) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     ActiveWorkspaceCookie,

@@ -276,6 +276,47 @@ func (r *WorkspaceRepository) ListEditorMemberEmails(ctx context.Context, worksp
 	return items, rows.Err()
 }
 
+func (r *WorkspaceRepository) ListMembers(ctx context.Context, workspaceID string) ([]model.WorkspaceMember, error) {
+	const q = `
+		SELECT
+			u.id, u.email, u.name, wm.role, wm.created_at,
+			EXISTS (
+				SELECT 1 FROM workspace_invites wi
+				WHERE wi.workspace_id = wm.workspace_id
+				  AND wi.status = 'accepted'
+				  AND lower(wi.email) = lower(u.email)
+			)
+		FROM workspace_members wm
+		JOIN users u ON u.id = wm.user_id
+		WHERE wm.workspace_id = $1::uuid
+		ORDER BY
+			CASE wm.role
+				WHEN 'owner' THEN 0
+				WHEN 'admin' THEN 1
+				WHEN 'editor' THEN 2
+				ELSE 3
+			END,
+			wm.created_at ASC
+	`
+	rows, err := r.pool.Query(ctx, q, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]model.WorkspaceMember, 0)
+	for rows.Next() {
+		var m model.WorkspaceMember
+		if err := rows.Scan(
+			&m.UserID, &m.Email, &m.Name, &m.Role, &m.JoinedAt, &m.JoinedViaInvite,
+		); err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
 func scanWorkspace(row pgx.Row) (*model.Workspace, error) {
 	var ws model.Workspace
 	var createdAt time.Time

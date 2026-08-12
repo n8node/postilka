@@ -385,9 +385,23 @@ export type WorkspaceInvite = {
   created_at: string;
 };
 
+export type WorkspaceMember = {
+  user_id: string;
+  email: string;
+  name: string;
+  role: string;
+  joined_at: string;
+  joined_via_invite: boolean;
+};
+
 export function fetchWorkspaceInvites(workspaceId?: string) {
   const q = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : "";
   return apiFetch<{ invites: WorkspaceInvite[] }>(`/workspaces/invites${q}`);
+}
+
+export function fetchWorkspaceMembers(workspaceId?: string) {
+  const q = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : "";
+  return apiFetch<{ members: WorkspaceMember[] }>(`/workspaces/members${q}`);
 }
 
 export function createWorkspaceInvite(
