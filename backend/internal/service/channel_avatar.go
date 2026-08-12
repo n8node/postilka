@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/postilka/postilka/internal/model"
@@ -19,6 +20,18 @@ func mergeChannelAvatar(meta model.ChannelMetadata, avatarURL string) model.Chan
 		meta.AvatarURL = avatarURL
 	}
 	return meta
+}
+
+func parseTelegramBusinessUserID(raw string) int64 {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0
+	}
+	id, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil {
+		return 0
+	}
+	return id
 }
 
 func (s *ChannelService) FetchAvatar(
@@ -55,6 +68,24 @@ func (s *ChannelService) FetchAvatar(
 
 	switch ch.Provider {
 	case model.ChannelProviderTelegram:
+		if ch.ChatType == model.TelegramChatTypeBusiness {
+			if body, ct, ok := avatarBytesFromMetadata(ch.Metadata.AvatarURL); ok {
+				return body, ct, nil
+			}
+			if userID := parseTelegramBusinessUserID(ch.Metadata.BusinessUserID); userID > 0 {
+				if body, contentType, err := s.botClient.FetchUserProfilePhoto(ctx, token, userID); err == nil && len(body) > 0 {
+					return body, contentType, nil
+				} else if err != nil {
+					return nil, "", err
+				}
+			}
+			if url := strings.TrimSpace(ch.Metadata.AvatarURL); strings.HasPrefix(url, "https://t.me/i/userpic/") {
+				if body, ct, err := fetchRemoteAvatar(ctx, url); err == nil && len(body) > 0 {
+					return body, ct, nil
+				}
+			}
+			return nil, "", repository.ErrNotFound
+		}
 		if body, ct, ok := avatarBytesFromMetadata(ch.Metadata.AvatarURL); ok {
 			return body, ct, nil
 		}

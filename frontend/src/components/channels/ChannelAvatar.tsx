@@ -41,8 +41,12 @@ export function ChannelAvatar({
   const initials = channelInitials(displayName);
 
   const directUrl = (avatarUrl?.trim() || metadata?.avatar_url?.trim() || "") || null;
+  const isBusinessTelegram =
+    provider === "telegram" && Boolean(metadata?.business_user_id?.trim());
   const publicDirectUrl =
-    directUrl && isPublicChannelAvatarURL(directUrl, provider) ? directUrl : null;
+    !isBusinessTelegram && directUrl && isPublicChannelAvatarURL(directUrl, provider)
+      ? directUrl
+      : null;
   const proxyUrl = channelId ? channelProxyAvatarURL(channelId) : null;
   const canProxy = Boolean(
     channelId && (provider === "telegram" || provider === "max" || provider === "youtube") && proxyUrl,

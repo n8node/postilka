@@ -818,6 +818,55 @@ func (c *TelegramBotClient) FetchChatPhoto(ctx context.Context, token, chatID st
 	return nil, "", nil
 }
 
+type telegramPhotoSize struct {
+	FileID string `json:"file_id"`
+	Width  int    `json:"width"`
+	Height int    `json:"height"`
+}
+
+type telegramUserProfilePhotos struct {
+	TotalCount int                   `json:"total_count"`
+	Photos     [][]telegramPhotoSize `json:"photos"`
+}
+
+func (c *TelegramBotClient) FetchUserProfilePhoto(ctx context.Context, token string, userID int64) ([]byte, string, error) {
+	if userID == 0 {
+		return nil, "", nil
+	}
+	raw, err := c.api(ctx, token, "getUserProfilePhotos", map[string]any{
+		"user_id": userID,
+		"limit":   1,
+	})
+	if err != nil {
+		return nil, "", sanitizeTelegramError(err)
+	}
+	var photos telegramUserProfilePhotos
+	if err := json.Unmarshal(raw, &photos); err != nil {
+		return nil, "", errors.New("telegram api: invalid getUserProfilePhotos result")
+	}
+	if photos.TotalCount == 0 || len(photos.Photos) == 0 || len(photos.Photos[0]) == 0 {
+		return nil, "", nil
+	}
+	sizes := photos.Photos[0]
+	fileID := strings.TrimSpace(sizes[len(sizes)-1].FileID)
+	if fileID == "" {
+		return nil, "", nil
+	}
+	fileRaw, err := c.api(ctx, token, "getFile", map[string]string{"file_id": fileID})
+	if err != nil {
+		return nil, "", sanitizeTelegramError(err)
+	}
+	var file telegramFile
+	if err := json.Unmarshal(fileRaw, &file); err != nil {
+		return nil, "", errors.New("telegram api: invalid getFile result")
+	}
+	path := strings.TrimSpace(file.FilePath)
+	if path == "" {
+		return nil, "", nil
+	}
+	return c.fetchTelegramFile(ctx, token, path)
+}
+
 func (c *TelegramBotClient) fetchTelegramFile(ctx context.Context, token, path string) ([]byte, string, error) {
 	fileURL := fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", strings.TrimSpace(token), path)
 	resp, err := c.doRequest(ctx, http.MethodGet, fileURL, "", nil)
