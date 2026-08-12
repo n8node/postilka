@@ -124,3 +124,30 @@ func (r *TelegramBusinessRegistrationRepository) UpdateStatus(
 	`, id, status, lastError)
 	return err
 }
+
+func (r *TelegramBusinessRegistrationRepository) ListByWorkspace(
+	ctx context.Context,
+	workspaceID string,
+) ([]*TelegramBusinessRegistration, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT id, workspace_id, bot_user_id, bot_username, bot_token_encrypted,
+		       webhook_secret, status, COALESCE(last_error, ''), created_at, updated_at
+		FROM telegram_business_registrations
+		WHERE workspace_id = $1
+		ORDER BY updated_at DESC
+	`, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]*TelegramBusinessRegistration, 0)
+	for rows.Next() {
+		rec, err := scanTelegramBusinessRegistration(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, rec)
+	}
+	return out, rows.Err()
+}

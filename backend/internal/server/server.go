@@ -100,6 +100,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	telegramBusinessSvc := service.NewTelegramBusinessService(
 		telegramBusinessRegRepo, channelRepo, telegramProviderSettingsSvc, telegramBotClient, wsSvc, quotaSvc, secretCipher, cfg,
 	)
+	channelSvc.SetTelegramBusinessService(telegramBusinessSvc)
 	channelConnectSvc := service.NewChannelConnectService(
 		channelRepo, channelOAuthSessionRepo, socialProviderSettingsSvc,
 		telegramProviderSettingsSvc, youtubeAPIClient, wsSvc, quotaSvc, secretCipher, cfg,

@@ -1088,17 +1088,13 @@ func (c *TelegramBotClient) PollBusinessConnections(ctx context.Context, token s
 		return nil
 	}
 
-	// Negative offset pulls recent queue tail; helps when webhook was active or connect happened earlier.
-	for _, offset := range []any{-100, nil} {
-		params := map[string]any{
-			"limit":           100,
-			"timeout":         0,
-			"allowed_updates": []string{"business_connection"},
-		}
-		if offset != nil {
-			params["offset"] = offset
-		}
-		raw, err := c.api(ctx, token, "getUpdates", params)
+	// Negative offset pulls recent queue tail; empty allowed_updates catches all pending types.
+	for _, spec := range []map[string]any{
+		{"limit": 100, "timeout": 0, "offset": -100, "allowed_updates": []string{"business_connection"}},
+		{"limit": 100, "timeout": 0, "allowed_updates": []string{"business_connection"}},
+		{"limit": 100, "timeout": 0, "offset": -100},
+	} {
+		raw, err := c.api(ctx, token, "getUpdates", spec)
 		if err != nil {
 			return nil, err
 		}

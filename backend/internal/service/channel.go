@@ -28,6 +28,7 @@ type ChannelService struct {
 	wsSvc          *WorkspaceService
 	quota          *QuotaService
 	cipher         *SecretCipher
+	business       *TelegramBusinessService
 }
 
 func NewChannelService(
@@ -49,6 +50,10 @@ func NewChannelService(
 		quota:          quota,
 		cipher:         cipher,
 	}
+}
+
+func (s *ChannelService) SetTelegramBusinessService(business *TelegramBusinessService) {
+	s.business = business
 }
 
 func (s *ChannelService) ensureProviderEnabled(ctx context.Context) error {
@@ -104,14 +109,22 @@ func (s *ChannelService) DiscoverTelegram(ctx context.Context, userID string, r 
 	if err := s.ensureProviderEnabled(ctx); err != nil {
 		return nil, err
 	}
-	if _, err := s.requireEditor(ctx, userID, r); err != nil {
+	ws, err := s.requireEditor(ctx, userID, r)
+	if err != nil {
 		return nil, err
 	}
 	botToken = strings.TrimSpace(botToken)
 	if botToken == "" {
 		return nil, ErrInvalidBotToken
 	}
-	return s.botClient.DiscoverAdminChats(ctx, botToken)
+	result, err := s.botClient.DiscoverAdminChats(ctx, botToken)
+	if err != nil {
+		return nil, err
+	}
+	if s.business != nil && result.Bot.ID != 0 {
+		_ = s.business.RestoreWebhookForWorkspaceBot(ctx, ws.ID, result.Bot.ID)
+	}
+	return result, nil
 }
 
 func (s *ChannelService) ConnectTelegram(ctx context.Context, userID string, r *http.Request, req model.TelegramConnectRequest) (*model.TelegramConnectResult, error) {

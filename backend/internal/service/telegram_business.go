@@ -161,23 +161,34 @@ func (s *TelegramBusinessService) Sync(
 	if err != nil {
 		return nil, err
 	}
+	expectedWebhookURL := s.cfg.TelegramBusinessWebhookURL(rec.ID)
 	webhookInfo, _ := s.botClient.GetWebhookInfo(ctx, token)
+
+	connected := s.listExistingBusinessChannels(ctx, ws.ID, rec.BotUsername)
+	seenConnected := map[string]struct{}{}
+	for _, item := range connected {
+		seenConnected[item.ID] = struct{}{}
+	}
+
 	connections, err := s.botClient.PollBusinessConnections(ctx, token)
 	if err != nil {
 		return nil, formatTelegramBusinessProxyError(sanitizeTelegramError(err))
 	}
-	connected := make([]model.ChannelListItem, 0)
 	issues := make([]string, 0)
 	for _, conn := range connections {
+		conn = s.enrichBusinessConnection(ctx, token, conn)
 		item, upsertErr := s.upsertBusinessChannel(ctx, ws.ID, rec, token, conn)
 		if upsertErr != nil {
 			issues = append(issues, upsertErr.Error())
 			continue
 		}
+		if _, ok := seenConnected[item.ID]; ok {
+			continue
+		}
+		seenConnected[item.ID] = struct{}{}
 		connected = append(connected, item)
 	}
-	webhookURL := s.cfg.TelegramBusinessWebhookURL(rec.ID)
-	if err := s.botClient.SetBusinessWebhook(ctx, token, webhookURL, rec.WebhookSecret); err != nil {
+	if err := s.botClient.SetBusinessWebhook(ctx, token, expectedWebhookURL, rec.WebhookSecret); err != nil {
 		return nil, sanitizeTelegramError(err)
 	}
 	status := "pending"
@@ -185,7 +196,7 @@ func (s *TelegramBusinessService) Sync(
 	if len(connected) > 0 {
 		status = "active"
 	} else {
-		lastErr, issues = s.buildBusinessSyncFailureMessage(ctx, rec, webhookInfo, len(connections), issues)
+		lastErr, issues = s.buildBusinessSyncFailureMessage(ctx, rec, webhookInfo, expectedWebhookURL, len(connections), issues)
 	}
 	_ = s.registrations.UpdateStatus(ctx, rec.ID, status, lastErr)
 	return &model.TelegramBusinessConnectResult{
@@ -201,6 +212,7 @@ func (s *TelegramBusinessService) buildBusinessSyncFailureMessage(
 	ctx context.Context,
 	rec *repository.TelegramBusinessRegistration,
 	webhookInfo *TelegramWebhookInfo,
+	expectedWebhookURL string,
 	foundConnections int,
 	issues []string,
 ) (string, []string) {
@@ -211,6 +223,18 @@ func (s *TelegramBusinessService) buildBusinessSyncFailureMessage(
 		return msg, issues
 	}
 	if webhookInfo != nil {
+		actualURL := strings.TrimSpace(webhookInfo.URL)
+		if actualURL != "" && actualURL != expectedWebhookURL {
+			issue := fmt.Sprintf(
+				"Webhook бота указывает на другой URL (%s). Если вы искали обычные Telegram-каналы тем же ботом, повторите «Подключить бота» в Business.",
+				actualURL,
+			)
+			return issue, append(issues, issue)
+		}
+		if actualURL == "" {
+			issue := "Webhook бота не установлен — нажмите «Подключить бота» в Business, затем переподключите @" + rec.BotUsername + " в Telegram Business."
+			return issue, append(issues, issue)
+		}
 		if msg := strings.TrimSpace(webhookInfo.LastErrorMessage); msg != "" {
 			issue := "Telegram не доставляет webhook: " + msg
 			return issue, append(issues, issue)
@@ -231,6 +255,67 @@ func (s *TelegramBusinessService) buildBusinessSyncFailureMessage(
 		base += " " + proxyNote
 	}
 	return base, issues
+}
+
+func (s *TelegramBusinessService) RestoreWebhookForWorkspaceBot(
+	ctx context.Context,
+	workspaceID string,
+	botUserID int64,
+) error {
+	rec, err := s.registrations.GetByWorkspaceBot(ctx, workspaceID, botUserID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil
+		}
+		return err
+	}
+	token, err := s.cipher.Decrypt(rec.BotTokenEncrypted)
+	if err != nil {
+		return err
+	}
+	webhookURL := s.cfg.TelegramBusinessWebhookURL(rec.ID)
+	return s.botClient.SetBusinessWebhook(ctx, token, webhookURL, rec.WebhookSecret)
+}
+
+func (s *TelegramBusinessService) listExistingBusinessChannels(
+	ctx context.Context,
+	workspaceID, botUsername string,
+) []model.ChannelListItem {
+	items, err := s.channels.ListByWorkspace(ctx, workspaceID)
+	if err != nil {
+		return nil
+	}
+	botUsername = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(botUsername), "@"))
+	out := make([]model.ChannelListItem, 0)
+	for _, ch := range items {
+		if ch.Provider != model.ChannelProviderTelegram || ch.ChatType != model.TelegramChatTypeBusiness {
+			continue
+		}
+		if botUsername != "" && strings.ToLower(strings.TrimSpace(ch.BotUsername)) != botUsername {
+			continue
+		}
+		row, err := s.channels.GetRowByID(ctx, workspaceID, ch.ID)
+		if err != nil {
+			continue
+		}
+		out = append(out, buildChannelListItem(ch, row.BotTokenEncrypted, s.cipher))
+	}
+	return out
+}
+
+func (s *TelegramBusinessService) enrichBusinessConnection(
+	ctx context.Context,
+	token string,
+	conn TelegramBusinessConnection,
+) TelegramBusinessConnection {
+	if conn.ID == "" || conn.Rights.CanManageStories {
+		return conn
+	}
+	full, err := s.botClient.GetBusinessConnection(ctx, token, conn.ID)
+	if err != nil || full == nil {
+		return conn
+	}
+	return *full
 }
 
 func formatTelegramBusinessProxyError(err error) error {
@@ -284,7 +369,8 @@ func (s *TelegramBusinessService) HandleWebhook(
 	if err != nil {
 		return err
 	}
-	_, err = s.upsertBusinessChannel(ctx, rec.WorkspaceID, rec, token, *update.BusinessConnection)
+	conn := s.enrichBusinessConnection(ctx, token, *update.BusinessConnection)
+	_, err = s.upsertBusinessChannel(ctx, rec.WorkspaceID, rec, token, conn)
 	if err != nil {
 		_ = s.registrations.UpdateStatus(ctx, rec.ID, "pending", err.Error())
 		return err
