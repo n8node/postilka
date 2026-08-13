@@ -6,7 +6,7 @@ import { ChannelAvatar } from "@/components/channels/ChannelAvatar";
 import { channelDisplayName } from "@/lib/channelPresentation";
 import type { ChannelListItem, ChannelProvider } from "@/lib/api";
 import { getCachedFileMediaUrl } from "@/lib/file-media-cache";
-import { formatMediaDuration, isVideoMime } from "@/lib/file-media";
+import { formatMediaDuration, isLandscapeVideo, isVideoMime } from "@/lib/file-media";
 import type { TelegramButton, TelegramRichBlock } from "@/lib/posts-api";
 import type { TelegramStorySettings } from "@/lib/telegram-story";
 import { cn } from "@/lib/utils";
@@ -56,6 +56,8 @@ export type PreviewMediaItem = {
   name: string;
   mimeType: string;
   durationSeconds?: number;
+  width?: number;
+  height?: number;
 };
 
 type MaxButton = { text: string; url: string };
@@ -926,6 +928,18 @@ export function PostChannelPreview({
     isMax &&
     (format === "short_video" || format === "message");
 
+  const isYouTube = channel.provider === "youtube";
+  const shortsLandscapeWarning =
+    isYouTube &&
+    format === "shorts" &&
+    media.length === 1 &&
+    isVideoMime(media[0]!.mimeType, media[0]!.name) &&
+    typeof media[0]!.width === "number" &&
+    typeof media[0]!.height === "number" &&
+    media[0]!.width > 0 &&
+    media[0]!.height > 0 &&
+    isLandscapeVideo({ width: media[0]!.width, height: media[0]!.height });
+
   const timingLabelResolved = timingLabel ?? "сейчас";
 
   const body =
@@ -1004,6 +1018,11 @@ export function PostChannelPreview({
           <p className="text-[10px] text-muted">{PROVIDER_LABEL[channel.provider]}</p>
         </div>
       </div>
+      {shortsLandscapeWarning && (
+        <div className="border-b border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-snug text-amber-900">
+          Горизонтальное видео, скорее всего, попадёт в раздел «Видео» на YouTube, а не в Shorts.
+        </div>
+      )}
       <div
         className={cn(
           "min-h-[280px] bg-cover bg-center p-2.5",

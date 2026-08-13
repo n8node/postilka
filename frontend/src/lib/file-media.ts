@@ -32,15 +32,87 @@ export function isMediaWithDuration(mime: string, name?: string): boolean {
   return isVideoMime(mime, name) || isAudioMime(mime, name);
 }
 
+export type VideoDimensions = {
+  width: number;
+  height: number;
+};
+
+export type ProbedVideoMetadata = {
+  durationSeconds?: number;
+  width?: number;
+  height?: number;
+};
+
+export function getFileVideoDimensions(
+  file: WorkspaceFile,
+  override?: VideoDimensions | null,
+): VideoDimensions | undefined {
+  if (override && override.width > 0 && override.height > 0) {
+    return override;
+  }
+  const width = file.media_metadata?.width;
+  const height = file.media_metadata?.height;
+  if (typeof width === "number" && typeof height === "number" && width > 0 && height > 0) {
+    return { width, height };
+  }
+  return undefined;
+}
+
+/** Horizontal or square — YouTube is unlikely to treat it as a Short. */
+export function isLandscapeVideo(dimensions: VideoDimensions): boolean {
+  return dimensions.width >= dimensions.height;
+}
+
+export async function probeVideoMetadata(
+  blob: Blob,
+  mimeType: string,
+): Promise<ProbedVideoMetadata> {
+  if (!isVideoMime(mimeType)) {
+    return {};
+  }
+
+  return new Promise((resolve) => {
+    const el = document.createElement("video");
+    const url = URL.createObjectURL(blob);
+    const cleanup = () => {
+      URL.revokeObjectURL(url);
+      el.removeAttribute("src");
+      el.load();
+    };
+
+    el.preload = "metadata";
+    el.onloadedmetadata = () => {
+      const duration = Math.round(el.duration);
+      const width = el.videoWidth;
+      const height = el.videoHeight;
+      cleanup();
+      resolve({
+        durationSeconds:
+          Number.isFinite(duration) && duration > 0 ? duration : undefined,
+        width: width > 0 ? width : undefined,
+        height: height > 0 ? height : undefined,
+      });
+    };
+    el.onerror = () => {
+      cleanup();
+      resolve({});
+    };
+    el.src = url;
+  });
+}
+
 export async function probeMediaDuration(
   blob: Blob,
   mimeType: string,
 ): Promise<number | undefined> {
-  if (!isMediaWithDuration(mimeType)) return undefined;
+  if (isVideoMime(mimeType)) {
+    const meta = await probeVideoMetadata(blob, mimeType);
+    return meta.durationSeconds;
+  }
+  if (!isAudioMime(mimeType)) return undefined;
 
   return new Promise((resolve) => {
-    const isVideo = mimeType.startsWith("video/");
-    const el = document.createElement(isVideo ? "video" : "audio");
+    const el = document.createElement("audio");
     const url = URL.createObjectURL(blob);
     const cleanup = () => {
       URL.revokeObjectURL(url);

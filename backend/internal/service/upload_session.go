@@ -16,6 +16,8 @@ type UploadSessionClaims struct {
 	Size                 int64   `json:"size"`
 	FolderID             *string `json:"folder_id"`
 	MediaDurationSeconds *int    `json:"media_duration_seconds"`
+	MediaWidth           *int    `json:"media_width"`
+	MediaHeight          *int    `json:"media_height"`
 	jwt.RegisteredClaims
 }
 

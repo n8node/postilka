@@ -191,6 +191,8 @@ func (s *FileStorageService) UploadInit(ctx context.Context, userID string, r *h
 		Size:                 req.Size,
 		FolderID:             req.FolderID,
 		MediaDurationSeconds: req.MediaDurationSeconds,
+		MediaWidth:           req.MediaWidth,
+		MediaHeight:          req.MediaHeight,
 	})
 	if err != nil {
 		return nil, err
@@ -234,8 +236,18 @@ func (s *FileStorageService) UploadComplete(ctx context.Context, userID string, 
 		mime = head.ContentType
 	}
 	var mediaMeta json.RawMessage
+	mediaFields := map[string]int{}
 	if claims.MediaDurationSeconds != nil && *claims.MediaDurationSeconds > 0 {
-		b, _ := json.Marshal(map[string]int{"duration_seconds": *claims.MediaDurationSeconds})
+		mediaFields["duration_seconds"] = *claims.MediaDurationSeconds
+	}
+	if claims.MediaWidth != nil && *claims.MediaWidth > 0 {
+		mediaFields["width"] = *claims.MediaWidth
+	}
+	if claims.MediaHeight != nil && *claims.MediaHeight > 0 {
+		mediaFields["height"] = *claims.MediaHeight
+	}
+	if len(mediaFields) > 0 {
+		b, _ := json.Marshal(mediaFields)
 		mediaMeta = b
 	}
 	uid := userID

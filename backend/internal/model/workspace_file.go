@@ -48,6 +48,8 @@ type FileUploadInitRequest struct {
 	MimeType             string  `json:"mime_type"`
 	FolderID             *string `json:"folder_id"`
 	MediaDurationSeconds *int    `json:"media_duration_seconds"`
+	MediaWidth           *int    `json:"media_width"`
+	MediaHeight          *int    `json:"media_height"`
 }
 
 type FileUploadInitResponse struct {

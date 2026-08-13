@@ -58,6 +58,12 @@ import {
 import { channelDisplayName } from "@/lib/channelPresentation";
 import { composePostText } from "@/lib/generation-api";
 import {
+  getFileVideoDimensions,
+  isVideoMime as isVideoMimeFile,
+  probeVideoMetadata,
+} from "@/lib/file-media";
+import { getCachedFileMediaUrl } from "@/lib/file-media-cache";
+import {
   listFiles,
   uploadFile,
   downloadFile,
@@ -132,6 +138,8 @@ const HASHTAG_SETS = [
 ];
 
 type Override = { detached: boolean; html: string; plain: string };
+const TELEGRAM_CIRCLE_LABEL = "Кружок Telegram";
+
 type SelectedMedia = { file: WorkspaceFile; alt: string };
 type ArticleBlock = TelegramRichBlock;
 type Timing = "draft" | "now" | "schedule";
@@ -191,6 +199,31 @@ const YOUTUBE_SHORTS_MAX_SECONDS = 60;
 function fileDurationSeconds(file: WorkspaceFile): number | null {
   const duration = file.media_metadata?.duration_seconds;
   return typeof duration === "number" && duration > 0 ? duration : null;
+}
+
+async function probeWorkspaceFileVideoMetadata(file: WorkspaceFile): Promise<WorkspaceFile> {
+  if (!isVideoMimeFile(file.mime_type, file.name) || getFileVideoDimensions(file)) {
+    return file;
+  }
+  try {
+    const url = await getCachedFileMediaUrl(file.id, "preview");
+    const response = await fetch(url);
+    if (!response.ok) return file;
+    const blob = await response.blob();
+    const meta = await probeVideoMetadata(blob, file.mime_type);
+    if (!meta.width && !meta.height && !meta.durationSeconds) return file;
+    return {
+      ...file,
+      media_metadata: {
+        ...file.media_metadata,
+        ...(meta.durationSeconds ? { duration_seconds: meta.durationSeconds } : {}),
+        ...(meta.width ? { width: meta.width } : {}),
+        ...(meta.height ? { height: meta.height } : {}),
+      },
+    };
+  } catch {
+    return file;
+  }
 }
 
 function plainToEditorHTML(text: string) {
@@ -289,7 +322,7 @@ function channelUnavailableReason(
 
   if (postKind === "short_video") {
     if (!formats.includes("short_video")) {
-      return `${provider} не поддерживает «Короткое видео». Выберите Telegram или другой подходящий канал.`;
+      return `${provider} не поддерживает «${TELEGRAM_CIRCLE_LABEL}». Выберите Telegram или другой подходящий канал.`;
     }
     return `${provider} не поддерживает этот формат публикации.`;
   }
@@ -1318,6 +1351,23 @@ export function PostComposer() {
     };
   }, [postKind, format, media]);
 
+  useEffect(() => {
+    if (format !== "shorts" && format !== "video") return;
+    let cancelled = false;
+    for (const item of media) {
+      if (!isVideoMime(item.file.mime_type) || getFileVideoDimensions(item.file)) continue;
+      void probeWorkspaceFileVideoMetadata(item.file).then((enriched) => {
+        if (cancelled || enriched === item.file) return;
+        setMedia((current) =>
+          current.map((entry) => (entry.file.id === enriched.id ? { ...entry, file: enriched } : entry)),
+        );
+      });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [format, media]);
+
   const selectedChannels = useMemo(
     () => channels.filter((channel) => selectedIds.includes(channel.id)),
     [channels, selectedIds],
@@ -1830,13 +1880,13 @@ export function PostComposer() {
         action !== "draft" &&
         selectedChannels.some((channel) => !channelSupportsPostKind(channel, "short_video"))
       ) {
-        return "Короткое видео поддерживается только для Telegram";
+        return `${TELEGRAM_CIRCLE_LABEL} поддерживается только для Telegram`;
       }
       if (action !== "draft" && media.length !== 1) {
-        return "Для короткого видео прикрепите ровно один файл";
+        return `Для ${TELEGRAM_CIRCLE_LABEL.toLowerCase()} прикрепите ровно один файл`;
       }
       if (action !== "draft" && media.length === 1 && !isVideoMime(media[0]!.file.mime_type)) {
-        return "Короткое видео должно быть файлом video/*";
+        return `${TELEGRAM_CIRCLE_LABEL} должен быть файлом video/*`;
       }
     }
     if (postKind === "video" || format === "video") {
@@ -2334,7 +2384,7 @@ export function PostComposer() {
               [
                 { id: "post" as const, label: "Пост", disabled: false },
                 { id: "story" as const, label: "История", disabled: !hasStoryChannels },
-                { id: "short_video" as const, label: "Короткое видео", disabled: false },
+                { id: "short_video" as const, label: TELEGRAM_CIRCLE_LABEL, disabled: false },
                 { id: "video" as const, label: "Видео", disabled: !hasVideoChannels },
                 { id: "shorts" as const, label: "Shorts", disabled: !hasShortsChannels },
               ] satisfies ReadonlyArray<{ id: PostKind; label: string; disabled: boolean }>
@@ -2365,8 +2415,8 @@ export function PostComposer() {
               ? "История — одно фото или видео в Telegram Stories через Business-подключение."
               : postKind === "short_video"
                 ? maxChannels.length > 0
-                  ? "Короткое видео: в Telegram — кружок, в MAX — обычное прямоугольное видео с текстом."
-                  : "Короткое видео отправляется в Telegram как кружок; подпись — отдельным сообщением."
+                  ? `${TELEGRAM_CIRCLE_LABEL}: в Telegram — кружок, в MAX — обычное прямоугольное видео с текстом.`
+                  : `${TELEGRAM_CIRCLE_LABEL} отправляется в Telegram как кружок; подпись — отдельным сообщением.`
                 : postKind === "video"
                   ? "Видео для YouTube: название, описание и один видеофайл. Запланированная публикация поддерживается."
                   : postKind === "shorts"
@@ -3214,7 +3264,7 @@ export function PostComposer() {
                   </label>
                 </div>
                 <p className="mt-2 text-[11px] text-muted">
-                  «Отправить в круге» — только Telegram, нужно одно видео. В режиме «Короткое видео»
+                  «Отправить в круге» — только Telegram, нужно одно видео. В режиме «{TELEGRAM_CIRCLE_LABEL}»
                   кружок включается автоматически.
                 </p>
                 {maxGetsRectangularVideo && (
@@ -3464,6 +3514,8 @@ export function PostComposer() {
                     name: item.file.name,
                     mimeType: item.file.mime_type,
                     durationSeconds: item.file.media_metadata?.duration_seconds,
+                    width: getFileVideoDimensions(item.file)?.width,
+                    height: getFileVideoDimensions(item.file)?.height,
                   }))}
                   textHtml={previewHTML}
                   textPlain={previewPlain}

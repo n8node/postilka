@@ -1,5 +1,5 @@
 import { apiFetch } from "@/lib/api";
-import { isMediaWithDuration, probeMediaDuration } from "@/lib/file-media";
+import { isMediaWithDuration, probeMediaDuration, probeVideoMetadata } from "@/lib/file-media";
 
 export type WorkspaceFile = {
   id: string;
@@ -8,7 +8,11 @@ export type WorkspaceFile = {
   name: string;
   mime_type: string;
   size: number;
-  media_metadata?: { duration_seconds?: number } | null;
+  media_metadata?: {
+    duration_seconds?: number;
+    width?: number;
+    height?: number;
+  } | null;
   deleted_at?: string | null;
   created_at: string;
   updated_at: string;
@@ -96,6 +100,8 @@ export function initUpload(input: {
   mime_type: string;
   folder_id?: string | null;
   media_duration_seconds?: number;
+  media_width?: number;
+  media_height?: number;
 }) {
   return apiFetch<{
     upload_url: string;
@@ -110,8 +116,17 @@ export function initUpload(input: {
 export async function uploadFile(file: File, folderId?: string | null) {
   const mimeType = file.type || "application/octet-stream";
   let mediaDurationSeconds: number | undefined;
+  let mediaWidth: number | undefined;
+  let mediaHeight: number | undefined;
   if (isMediaWithDuration(mimeType, file.name)) {
-    mediaDurationSeconds = await probeMediaDuration(file, mimeType);
+    if (mimeType.startsWith("video/")) {
+      const meta = await probeVideoMetadata(file, mimeType);
+      mediaDurationSeconds = meta.durationSeconds;
+      mediaWidth = meta.width;
+      mediaHeight = meta.height;
+    } else {
+      mediaDurationSeconds = await probeMediaDuration(file, mimeType);
+    }
   }
   const init = await initUpload({
     name: file.name,
@@ -119,6 +134,8 @@ export async function uploadFile(file: File, folderId?: string | null) {
     mime_type: mimeType,
     folder_id: folderId ?? null,
     ...(mediaDurationSeconds ? { media_duration_seconds: mediaDurationSeconds } : {}),
+    ...(mediaWidth ? { media_width: mediaWidth } : {}),
+    ...(mediaHeight ? { media_height: mediaHeight } : {}),
   });
   const headers = new Headers(init.upload_headers);
   const res = await fetch(init.upload_url, {
