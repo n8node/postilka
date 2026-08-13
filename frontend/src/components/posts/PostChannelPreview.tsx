@@ -1,6 +1,6 @@
 "use client";
 
-import { BellOff, ExternalLink, Loader2, MapPin, Pin, Play } from "lucide-react";
+import { BellOff, ExternalLink, Eye, Loader2, MapPin, Pin, Play } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { ChannelAvatar } from "@/components/channels/ChannelAvatar";
 import { channelDisplayName } from "@/lib/channelPresentation";
@@ -22,6 +22,7 @@ const PROVIDER_LABEL: Record<ChannelProvider, string> = {
 };
 
 const TELEGRAM_PREVIEW_BG = "/app/telegram-chat-bg.png";
+const MAX_PREVIEW_BG = "/app/max-chat-bg.png";
 
 function telegramButtonColors(style?: TelegramButton["style"]) {
   switch (style) {
@@ -444,36 +445,82 @@ function TelegramInlineKeyboard({ buttonRows }: { buttonRows: TelegramButton[][]
   );
 }
 
+function effectiveMaxButtons(
+  maxButtonRows: MaxButton[][],
+  buttonRows: TelegramButton[][],
+): MaxButton[][] {
+  if (maxButtonRows.length > 0) {
+    return maxButtonRows;
+  }
+  const fromTelegram = buttonRows
+    .map((row) =>
+      row
+        .filter((button) => button.text?.trim() && button.url?.trim())
+        .map((button) => ({ text: button.text.trim(), url: button.url!.trim() })),
+    )
+    .filter((row) => row.length > 0);
+  return fromTelegram.length > 0 ? fromTelegram : maxButtonRows;
+}
+
+function MaxInlineKeyboard({ buttonRows }: { buttonRows: MaxButton[][] }) {
+  if (buttonRows.length === 0 || buttonRows.every((row) => row.length === 0)) return null;
+
+  return (
+    <div className="flex flex-col gap-1.5 border-t border-black/[0.04] p-2">
+      {buttonRows.map((row, rowIndex) => (
+        <div key={rowIndex} className="flex gap-1.5">
+          {row.map((button, buttonIndex) => (
+            <div
+              key={buttonIndex}
+              className="relative flex min-h-[42px] flex-1 items-center justify-center rounded-xl bg-[#5daef0] px-2 py-2 text-center text-[14px] font-medium leading-tight text-white"
+            >
+              <span className="line-clamp-2 px-1">{button.text || "Ссылка"}</span>
+              <ExternalLink className="absolute right-2 top-2 h-3 w-3 shrink-0 opacity-90" />
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MaxMetaInline({ time }: { time: string }) {
+  return (
+    <span className="inline-flex items-center gap-1 text-[11px] tabular-nums text-[#8a939b]">
+      <Eye className="h-3.5 w-3.5 shrink-0" />
+      <span>1</span>
+      <span>{time}</span>
+    </span>
+  );
+}
+
+function MaxMessageCard({ children }: { children: ReactNode }) {
+  return (
+    <div className="w-full max-w-[min(100%,420px)] overflow-hidden rounded-2xl bg-white shadow-[0_1px_2px_rgba(0,0,0,0.08)]">
+      {children}
+    </div>
+  );
+}
+
+function MaxTodayPill() {
+  return (
+    <div className="mb-2 flex justify-center">
+      <span className="rounded-full bg-black/25 px-3 py-0.5 text-[11px] font-medium text-white backdrop-blur-[2px]">
+        Сегодня
+      </span>
+    </div>
+  );
+}
+
 function InlineButtons({
   channel,
   buttonRows,
-  maxButtonRows,
 }: {
   channel: ChannelListItem;
   buttonRows: TelegramButton[][];
-  maxButtonRows: MaxButton[][];
 }) {
   if (channel.provider === "telegram") {
     return <TelegramInlineKeyboard buttonRows={buttonRows} />;
-  }
-
-  if (channel.provider === "max" && maxButtonRows.length > 0) {
-    return (
-      <div className="border-t border-zinc-200/80">
-        {maxButtonRows.map((row, index) => (
-          <div key={index} className="grid border-t border-zinc-200/80 first:border-t-0" style={{ gridTemplateColumns: `repeat(${row.length}, minmax(0, 1fr))` }}>
-            {row.map((button, buttonIndex) => (
-              <span
-                key={buttonIndex}
-                className="truncate border-l border-zinc-200/80 px-2 py-2 text-center text-[11px] font-medium text-accent first:border-l-0"
-              >
-                {button.text || "Ссылка"}
-              </span>
-            ))}
-          </div>
-        ))}
-      </div>
-    );
   }
 
   return null;
@@ -655,8 +702,11 @@ function renderChannelBody(props: {
   } = props;
 
   const isTelegram = channel.provider === "telegram";
+  const isMax = channel.provider === "max";
   const hasText = Boolean(textPlain.trim() || format === "article" || format === "rich_message");
   const hasButtons = buttonRows.some((row) => row.length > 0);
+  const maxButtons = effectiveMaxButtons(maxButtonRows, buttonRows);
+  const hasMaxButtons = maxButtons.some((row) => row.length > 0);
   const albumButtonsSeparate =
     effectiveLayout === "caption" && isTelegram && media.length > 1 && hasButtons;
   const showMedia = media.length > 0 && canMedia;
@@ -698,9 +748,7 @@ function renderChannelBody(props: {
     </>
   );
 
-  const buttons = (
-    <InlineButtons channel={channel} buttonRows={buttonRows} maxButtonRows={maxButtonRows} />
-  );
+  const buttons = <InlineButtons channel={channel} buttonRows={buttonRows} />;
 
   if (isTelegram) {
     const textWithMeta = hasText ? (
@@ -749,6 +797,40 @@ function renderChannelBody(props: {
         {mediaBlock}
         {!captionAbove && textWithMeta}
       </TelegramMessageStack>
+    );
+  }
+
+  if (isMax) {
+    const textWithMeta = hasText ? (
+      <div className="px-3 pb-2.5 pt-2">
+        {textInner}
+        <div className="mt-1 flex justify-end">
+          <MaxMetaInline time={clock} />
+        </div>
+      </div>
+    ) : null;
+
+    const maxButtonsBlock = hasMaxButtons ? <MaxInlineKeyboard buttonRows={maxButtons} /> : null;
+
+    if (!showMedia && !textWithMeta && !maxButtonsBlock) {
+      return (
+        <MaxMessageCard>
+          <div className="px-3 py-4 text-[13px] text-[#8a939b]">Текст поста появится здесь…</div>
+        </MaxMessageCard>
+      );
+    }
+
+    return (
+      <MaxMessageCard>
+        {showMedia && mediaBlock}
+        {textWithMeta}
+        {!textWithMeta && showMedia && (
+          <div className="flex justify-end px-3 pb-2">
+            <MaxMetaInline time={clock} />
+          </div>
+        )}
+        {maxButtonsBlock}
+      </MaxMessageCard>
     );
   }
 
@@ -883,6 +965,7 @@ export function PostChannelPreview({
       {isTelegram && pinned && format !== "story" && (
         <TelegramPinnedBar channelName={channelDisplayName(channel)} textSnippet={pinnedSnippet} />
       )}
+      {device === "mobile" && isMax && format !== "story" && <MaxTodayPill />}
       {device === "mobile" && isTelegram && format !== "story" ? (
         <div className="flex items-end gap-2">
           <ChannelAvatar
@@ -922,11 +1005,16 @@ export function PostChannelPreview({
         </div>
       </div>
       <div
-        className={cn("min-h-[280px] bg-cover bg-center p-2.5", !isTelegram && "bg-[#dfe6ec]")}
+        className={cn(
+          "min-h-[280px] bg-cover bg-center p-2.5",
+          !isTelegram && !isMax && "bg-[#dfe6ec]",
+        )}
         style={
           isTelegram
             ? { backgroundImage: `url('${TELEGRAM_PREVIEW_BG}')` }
-            : undefined
+            : isMax
+              ? { backgroundImage: `url('${MAX_PREVIEW_BG}')` }
+              : undefined
         }
       >
         {chatBody}
