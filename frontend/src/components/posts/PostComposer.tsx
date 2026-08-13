@@ -3217,6 +3217,11 @@ export function PostComposer() {
                         ? "черновик"
                         : "сейчас"
                   }
+                  linkPreviewEnabled={
+                    activeChannel.provider === "telegram" &&
+                    Boolean(activeChannel.publish_capabilities?.composer_link_preview) &&
+                    linkPreview
+                  }
                 />
                 {previewPlain.length > maxText && (
                   <p className="mt-2 text-xs font-semibold text-red-600">

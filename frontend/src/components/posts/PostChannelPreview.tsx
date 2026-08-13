@@ -1,6 +1,6 @@
 "use client";
 
-import { BellOff, Loader2, MapPin, Pin, Play } from "lucide-react";
+import { BellOff, ExternalLink, Loader2, MapPin, Pin, Play } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { ChannelAvatar } from "@/components/channels/ChannelAvatar";
 import { channelDisplayName } from "@/lib/channelPresentation";
@@ -22,6 +22,33 @@ const PROVIDER_LABEL: Record<ChannelProvider, string> = {
 };
 
 const TELEGRAM_PREVIEW_BG = "/app/telegram-chat-bg.png";
+
+function telegramButtonColors(style?: TelegramButton["style"]) {
+  switch (style) {
+    case "primary":
+      return "bg-[#3390ec] hover:bg-[#2d84db] text-white";
+    case "success":
+      return "bg-[#4faf4f] hover:bg-[#48a048] text-white";
+    case "danger":
+      return "bg-[#e05356] hover:bg-[#d44a4d] text-white";
+    default:
+      return "bg-[#5bcbe7] hover:bg-[#52bdd8] text-white";
+  }
+}
+
+function previewClockLabel(timingLabel?: string) {
+  if (timingLabel === "по расписанию") return timingLabel;
+  if (timingLabel === "черновик") return timingLabel;
+  return new Date().toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" });
+}
+
+function linkPreviewDomain(url: string) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
 
 export type PreviewMediaItem = {
   fileId: string;
@@ -54,6 +81,7 @@ export type PostChannelPreviewProps = {
   articleBlocks?: TelegramRichBlock[];
   storyMediaPreviewUrl?: string | null;
   timingLabel?: string;
+  linkPreviewEnabled?: boolean;
 };
 
 function ArticleBlockPreview({ block }: { block: TelegramRichBlock }) {
@@ -174,9 +202,11 @@ function PreviewMediaTile({
   );
 }
 
-function AlbumGrid({ items }: { items: PreviewMediaItem[] }) {
+function AlbumGrid({ items, className }: { items: PreviewMediaItem[]; className?: string }) {
   const count = items.length;
   if (count === 0) return null;
+
+  const grid = (() => {
   if (count === 1) {
     return <PreviewMediaTile item={items[0]!} single />;
   }
@@ -302,6 +332,9 @@ function AlbumGrid({ items }: { items: PreviewMediaItem[] }) {
       </div>
     </div>
   );
+  })();
+
+  return <div className={cn("overflow-hidden", className)}>{grid}</div>;
 }
 
 function TextContent({
@@ -328,12 +361,87 @@ function TextContent({
   if (textHtml) {
     return (
       <div
-        className="break-words whitespace-pre-wrap [&_blockquote]:border-l-2 [&_blockquote]:border-blue-300 [&_blockquote]:pl-2 [&_pre]:overflow-x-auto [&_pre]:bg-zinc-100 [&_pre]:p-2"
+        className="telegram-text break-words whitespace-pre-wrap text-[15px] leading-[1.3125] text-black [&_a]:text-[#3390ec] [&_a]:no-underline hover:[&_a]:underline [&_blockquote]:border-l-2 [&_blockquote]:border-[#3390ec]/40 [&_blockquote]:pl-2 [&_code]:rounded [&_code]:bg-black/5 [&_code]:px-1 [&_pre]:overflow-x-auto [&_pre]:rounded [&_pre]:bg-black/5 [&_pre]:p-2 [&_span.tg-spoiler]:rounded [&_span.tg-spoiler]:bg-zinc-300 [&_span.tg-spoiler]:text-zinc-300"
         dangerouslySetInnerHTML={{ __html: textHtml }}
       />
     );
   }
-  return <span className="text-muted">Текст поста появится здесь…</span>;
+  return <span className="text-[#6d7883]">Текст поста появится здесь…</span>;
+}
+
+function LinkPreviewCard({ url }: { url: string }) {
+  const domain = linkPreviewDomain(url);
+  return (
+    <div className="mt-2 overflow-hidden rounded-lg border border-black/5">
+      <div className="h-14 bg-gradient-to-br from-[#c5dff5] via-[#d4e8f7] to-[#e8f0f5]" />
+      <div className="border-t border-black/5 bg-[#f0f2f5] px-2.5 py-1.5">
+        <p className="truncate text-[11px] font-medium uppercase tracking-wide text-[#3390ec]">
+          {domain}
+        </p>
+        <p className="truncate text-[11px] text-[#6d7883]">{url}</p>
+      </div>
+    </div>
+  );
+}
+
+function TelegramMetaOnMedia({
+  time,
+  silent,
+}: {
+  time: string;
+  silent?: boolean;
+}) {
+  return (
+    <span className="absolute bottom-1.5 right-1.5 z-10 flex items-center gap-0.5 rounded-full bg-black/45 px-1.5 py-0.5 text-[11px] font-medium tabular-nums text-white">
+      {silent && <BellOff className="h-3 w-3 shrink-0 opacity-90" />}
+      {time}
+    </span>
+  );
+}
+
+function TelegramMetaInline({
+  time,
+  pinned,
+  silent,
+}: {
+  time: string;
+  pinned?: boolean;
+  silent?: boolean;
+}) {
+  return (
+    <span className="relative -bottom-0.5 ml-2 inline-flex translate-y-0.5 items-center gap-0.5 align-bottom text-[11px] tabular-nums text-[#6d7883]">
+      {pinned && <Pin className="h-3 w-3 shrink-0 fill-[#6d7883] text-[#6d7883]" />}
+      {silent && <BellOff className="h-3 w-3 shrink-0" />}
+      {time}
+    </span>
+  );
+}
+
+function TelegramInlineKeyboard({ buttonRows }: { buttonRows: TelegramButton[][] }) {
+  if (buttonRows.length === 0 || buttonRows.every((row) => row.length === 0)) return null;
+
+  return (
+    <div className="flex flex-col gap-1 pt-1">
+      {buttonRows.map((row, rowIndex) => (
+        <div key={rowIndex} className="flex gap-1">
+          {row.map((button, buttonIndex) => (
+            <div
+              key={buttonIndex}
+              className={cn(
+                "relative flex min-h-[34px] flex-1 items-center justify-center rounded-lg px-2 py-1.5 text-center text-[13px] font-medium leading-tight",
+                telegramButtonColors(button.style),
+              )}
+            >
+              <span className="line-clamp-2 px-1">{button.text || "Кнопка"}</span>
+              {(button.url || button.web_app_url) && (
+                <ExternalLink className="absolute right-1.5 top-1.5 h-2.5 w-2.5 shrink-0 opacity-80" />
+              )}
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
 }
 
 function InlineButtons({
@@ -345,6 +453,10 @@ function InlineButtons({
   buttonRows: TelegramButton[][];
   maxButtonRows: MaxButton[][];
 }) {
+  if (channel.provider === "telegram") {
+    return <TelegramInlineKeyboard buttonRows={buttonRows} />;
+  }
+
   if (channel.provider === "max" && maxButtonRows.length > 0) {
     return (
       <div className="border-t border-zinc-200/80">
@@ -364,35 +476,61 @@ function InlineButtons({
     );
   }
 
-  if (channel.provider !== "max" && buttonRows.length > 0) {
-    return (
-      <div className="border-t border-zinc-200/80">
-        {buttonRows.map((row, index) => (
-          <div
-            key={index}
-            className="grid border-t border-zinc-200/80 first:border-t-0"
-            style={{ gridTemplateColumns: `repeat(${row.length}, minmax(0, 1fr))` }}
-          >
-            {row.map((button, buttonIndex) => (
-              <span
-                key={buttonIndex}
-                className={cn(
-                  "truncate border-l border-zinc-200/80 px-2 py-2 text-center text-[11px] font-semibold text-accent first:border-l-0",
-                  button.style === "primary" && "text-accent",
-                  button.style === "success" && "text-emerald-600",
-                  button.style === "danger" && "text-red-600",
-                )}
-              >
-                {button.text || "Кнопка"}
-              </span>
-            ))}
-          </div>
-        ))}
-      </div>
-    );
-  }
-
   return null;
+}
+
+function TelegramPinnedBar({ channelName, textSnippet }: { channelName: string; textSnippet: string }) {
+  return (
+    <div className="mb-2 flex items-center gap-2 rounded-lg bg-white/95 px-2.5 py-1.5 shadow-sm backdrop-blur-sm">
+      <Pin className="h-3.5 w-3.5 shrink-0 fill-[#3390ec] text-[#3390ec]" />
+      <p className="min-w-0 truncate text-[11px] text-[#3390ec]">
+        <span className="font-semibold">{channelName}</span> pinned &laquo;{textSnippet}&raquo;
+      </p>
+    </div>
+  );
+}
+
+function TelegramMessageStack({
+  children,
+  buttons,
+  className,
+}: {
+  children: ReactNode;
+  buttons?: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cn("w-full max-w-[min(100%,420px)]", className)}>
+      <div className="overflow-hidden rounded-xl bg-white">{children}</div>
+      {buttons}
+    </div>
+  );
+}
+
+function TelegramMediaMessage({
+  children,
+  time,
+  silent,
+  pinned,
+  className,
+}: {
+  children: ReactNode;
+  time: string;
+  silent?: boolean;
+  pinned?: boolean;
+  className?: string;
+}) {
+  return (
+    <div className={cn("relative w-full max-w-[min(100%,420px)] overflow-hidden rounded-xl bg-white", className)}>
+      <div className="relative">{children}</div>
+      <TelegramMetaOnMedia time={time} silent={silent} />
+      {pinned && (
+        <span className="absolute right-1.5 top-1.5 rounded bg-black/45 p-0.5 text-white">
+          <Pin className="h-3 w-3" />
+        </span>
+      )}
+    </div>
+  );
 }
 
 function MessageBubble({
@@ -409,7 +547,7 @@ function MessageBubble({
   className?: string;
 }) {
   return (
-    <div className={cn("relative overflow-hidden bg-white shadow-sm", className)}>
+    <div className={cn("relative overflow-hidden rounded-xl bg-white", className)}>
       {(pinned || silent) && (
         <div className="absolute right-2 top-2 z-10 flex gap-1">
           {pinned && (
@@ -489,6 +627,7 @@ function renderChannelBody(props: {
   maxButtonRows: MaxButton[][];
   channel: ChannelListItem;
   timingLabel?: string;
+  linkPreviewEnabled?: boolean;
 }): ReactNode {
   const {
     format,
@@ -512,16 +651,17 @@ function renderChannelBody(props: {
     maxButtonRows,
     channel,
     timingLabel,
+    linkPreviewEnabled,
   } = props;
 
+  const isTelegram = channel.provider === "telegram";
   const hasText = Boolean(textPlain.trim() || format === "article" || format === "rich_message");
   const hasButtons = buttonRows.some((row) => row.length > 0);
   const albumButtonsSeparate =
-    effectiveLayout === "caption" &&
-    channel.provider === "telegram" &&
-    media.length > 1 &&
-    hasButtons;
+    effectiveLayout === "caption" && isTelegram && media.length > 1 && hasButtons;
   const showMedia = media.length > 0 && canMedia;
+  const clock = previewClockLabel(timingLabel);
+  const showLinkPreview = Boolean(linkPreviewEnabled && detectedUrl && !hasButtons);
 
   const mediaBlock = showMedia
     ? effectiveVideoCircle
@@ -545,11 +685,12 @@ function renderChannelBody(props: {
         articleTitle={articleTitle}
         articleBlocks={articleBlocks}
       />
-      {detectedUrl && (
+      {showLinkPreview && <LinkPreviewCard url={detectedUrl} />}
+      {detectedUrl && !showLinkPreview && !isTelegram && (
         <div className="mt-2 border-l-2 border-accent/40 pl-2 text-[11px] text-muted">{detectedUrl}</div>
       )}
       {locationName && canLocation && (
-        <p className="mt-2 flex items-center gap-1 text-[11px] text-muted">
+        <p className="mt-2 flex items-center gap-1 text-[11px] text-[#3390ec]">
           <MapPin className="h-3 w-3" />
           {locationName}
         </p>
@@ -557,21 +698,68 @@ function renderChannelBody(props: {
     </>
   );
 
-  const textBlock = hasText ? (
-    <div className="px-3 py-2.5 text-[13px] leading-5 text-zinc-900">{textInner}</div>
-  ) : null;
-
   const buttons = (
     <InlineButtons channel={channel} buttonRows={buttonRows} maxButtonRows={maxButtonRows} />
   );
+
+  if (isTelegram) {
+    const textWithMeta = hasText ? (
+      <div className="px-2.5 pb-1.5 pt-1.5">
+        {textInner}
+        <TelegramMetaInline time={clock} pinned={pinned} silent={silent} />
+      </div>
+    ) : null;
+
+    const separateDelivery =
+      effectiveLayout === "separate" || albumButtonsSeparate;
+
+    if (separateDelivery) {
+      const mediaOnly = mediaBlock && (
+        <TelegramMediaMessage time={clock} silent={silent} pinned={pinned} className="mb-1">
+          {mediaBlock}
+        </TelegramMediaMessage>
+      );
+
+      const textStack = (textWithMeta || hasButtons) && (
+        <TelegramMessageStack buttons={hasButtons ? buttons : undefined}>
+          {textWithMeta}
+        </TelegramMessageStack>
+      );
+
+      const order = albumButtonsSeparate ? "media_first" : mediaOrder;
+      return order === "text_first" ? (
+        <div className="flex flex-col gap-1">
+          {textStack}
+          {mediaOnly}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-1">
+          {mediaOnly}
+          {textStack}
+        </div>
+      );
+    }
+
+    const captionAbove =
+      effectiveLayout === "caption" && captionPosition === "above" && media.length === 1;
+
+    return (
+      <TelegramMessageStack buttons={hasButtons ? buttons : undefined}>
+        {captionAbove && textWithMeta}
+        {mediaBlock}
+        {!captionAbove && textWithMeta}
+      </TelegramMessageStack>
+    );
+  }
+
+  const textBlock = hasText ? (
+    <div className="px-3 py-2.5 text-[13px] leading-5 text-zinc-900">{textInner}</div>
+  ) : null;
   const timeFooter = (
     <p className="px-3 pb-2 text-right text-[10px] text-muted">{timingLabel ?? "сейчас"}</p>
   );
 
-  if (
-    (effectiveLayout === "separate" && channel.provider === "telegram") ||
-    albumButtonsSeparate
-  ) {
+  if (effectiveLayout === "separate") {
     const mediaBubble = mediaBlock ? (
       <MessageBubble pinned={pinned} silent={silent} className="mb-[2px]">
         {mediaBlock}
@@ -586,8 +774,7 @@ function renderChannelBody(props: {
       </MessageBubble>
     ) : null;
 
-    const order = albumButtonsSeparate ? "media_first" : mediaOrder;
-    return order === "text_first" ? (
+    return mediaOrder === "text_first" ? (
       <>
         {textBubble}
         {mediaBubble}
@@ -636,6 +823,7 @@ export function PostChannelPreview({
   articleBlocks,
   storyMediaPreviewUrl,
   timingLabel,
+  linkPreviewEnabled = true,
 }: PostChannelPreviewProps) {
   const canMedia = channel.publish_capabilities?.composer_media;
   const canComment = channel.publish_capabilities?.composer_first_comment;
@@ -684,8 +872,34 @@ export function PostChannelPreview({
         maxButtonRows,
         channel,
         timingLabel: timingLabelResolved,
+        linkPreviewEnabled,
       })
     );
+
+  const pinnedSnippet = textPlain.trim().slice(0, 48) || "…";
+
+  const chatBody = (
+    <>
+      {isTelegram && pinned && format !== "story" && (
+        <TelegramPinnedBar channelName={channelDisplayName(channel)} textSnippet={pinnedSnippet} />
+      )}
+      {device === "mobile" && isTelegram && format !== "story" ? (
+        <div className="flex items-end gap-2">
+          <ChannelAvatar
+            name={channel.name}
+            metadata={channel.metadata}
+            channelId={channel.id}
+            provider={channel.provider}
+            size="sm"
+            className="mb-0.5 shrink-0"
+          />
+          <div className="min-w-0 flex-1">{body}</div>
+        </div>
+      ) : (
+        body
+      )}
+    </>
+  );
 
   return (
     <div
@@ -708,14 +922,14 @@ export function PostChannelPreview({
         </div>
       </div>
       <div
-        className={cn("min-h-[280px] bg-cover bg-center p-2", !isTelegram && "bg-[#dfe6ec]")}
+        className={cn("min-h-[280px] bg-cover bg-center p-2.5", !isTelegram && "bg-[#dfe6ec]")}
         style={
           isTelegram
             ? { backgroundImage: `url('${TELEGRAM_PREVIEW_BG}')` }
             : undefined
         }
       >
-        {body}
+        {chatBody}
       </div>
       {firstComment && canComment && (
         <div className="border-t border-dashed border-zinc-300 bg-white/80 px-3 py-2 text-xs text-muted">
