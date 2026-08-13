@@ -539,9 +539,12 @@ func validateContentForChannel(content model.PostContent, channel *model.Channel
 		format = "message"
 	}
 	if format != "message" && channel.Provider != model.ChannelProviderTelegram {
-		return fmt.Errorf("%w: формат %s поддерживается только Telegram", ErrInvalidPost, format)
+		if !providerSupportsFormat(channel.Provider, format) {
+			return fmt.Errorf("%w: формат %s не поддерживается %s", ErrInvalidPost, format, channel.Provider.Label())
+		}
 	}
 	textLength := utf8.RuneCountInString(content.Text)
+	titleLength := utf8.RuneCountInString(content.Title)
 	if channel.Provider == model.ChannelProviderTelegram && format == "message" && textLength > 4096 {
 		return fmt.Errorf("%w: текст Telegram не должен превышать 4096 символов", ErrInvalidPost)
 	}
@@ -561,7 +564,24 @@ func validateContentForChannel(content model.PostContent, channel *model.Channel
 	if channel.Provider == model.ChannelProviderMAX && textLength > 4000 {
 		return fmt.Errorf("%w: текст MAX не должен превышать 4000 символов", ErrInvalidPost)
 	}
+	if channel.Provider == model.ChannelProviderYouTube {
+		if format == "video" && titleLength > 100 {
+			return fmt.Errorf("%w: название YouTube не должно превышать 100 символов", ErrInvalidPost)
+		}
+		if format == "video" && textLength > 5000 {
+			return fmt.Errorf("%w: описание YouTube не должно превышать 5000 символов", ErrInvalidPost)
+		}
+	}
 	return nil
+}
+
+func providerSupportsFormat(provider model.ChannelProvider, format string) bool {
+	for _, supported := range provider.PublishCapabilities().Formats {
+		if supported == format {
+			return true
+		}
+	}
+	return false
 }
 
 func ValidatePostForPublication(post model.Post) error {
@@ -578,13 +598,16 @@ func ValidatePostForPublication(post model.Post) error {
 		if format == "" {
 			format = "message"
 		}
-		if isPostContentEmpty(content) && format != "story" && format != "short_video" {
+		if isPostContentEmpty(content) && format != "story" && format != "short_video" && format != "video" {
 			return fmt.Errorf("%w: введите текст публикации для каждого канала", ErrInvalidPost)
 		}
-		if format == "story" || format == "short_video" {
+		if format == "story" || format == "short_video" || format == "video" {
 			if len(post.Media) != 1 {
 				return fmt.Errorf("%w: для формата %s нужен ровно один медиафайл", ErrInvalidPost, format)
 			}
+		}
+		if format == "video" && strings.TrimSpace(content.Title) == "" {
+			return fmt.Errorf("%w: укажите название видео", ErrInvalidPost)
 		}
 		if settings.TelegramVideoNote && format == "message" && len(post.Media) != 1 {
 			return fmt.Errorf("%w: для отправки в круге нужен ровно один видеофайл", ErrInvalidPost)
@@ -722,6 +745,17 @@ func ValidatePostContent(content model.PostContent, settings model.PostSettings)
 			if err := validateTelegramHTML(content.Text); err != nil {
 				return err
 			}
+		}
+	case "video":
+		title := strings.TrimSpace(content.Title)
+		if title == "" {
+			return fmt.Errorf("%w: укажите название видео", ErrInvalidPost)
+		}
+		if utf8.RuneCountInString(title) > 100 {
+			return fmt.Errorf("%w: название видео не должно превышать 100 символов", ErrInvalidPost)
+		}
+		if utf8.RuneCountInString(content.Text) > 5000 {
+			return fmt.Errorf("%w: описание видео не должно превышать 5000 символов", ErrInvalidPost)
 		}
 	default:
 		return fmt.Errorf("%w: неизвестный формат публикации", ErrInvalidPost)

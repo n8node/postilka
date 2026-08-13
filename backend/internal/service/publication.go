@@ -651,6 +651,35 @@ func (s *PublicationService) publishTarget(
 		return "", nil
 	}
 
+	if channel.Provider == model.ChannelProviderYouTube {
+		if format != "video" {
+			return "", fmt.Errorf("YouTube поддерживает только формат «видео»")
+		}
+		title := strings.TrimSpace(content.Title)
+		if title == "" {
+			return "", fmt.Errorf("%w: укажите название видео для YouTube", ErrInvalidPost)
+		}
+		videoData, mimeType, filename, err := s.youtubeVideoFile(ctx, post)
+		if err != nil {
+			return "", err
+		}
+		var publishAt *time.Time
+		if post.DueAt != nil && post.DueAt.After(time.Now()) {
+			publishAt = post.DueAt
+		}
+		return s.channelTest.PublishYouTubeVideo(
+			ctx,
+			channel,
+			token,
+			title,
+			youtubeVideoDescription(content),
+			mimeType,
+			filename,
+			videoData,
+			publishAt,
+		)
+	}
+
 	if format != "message" {
 		return "", fmt.Errorf("формат %s пока поддерживается только Telegram", format)
 	}

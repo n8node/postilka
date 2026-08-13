@@ -82,6 +82,7 @@ func (p ChannelProvider) PublishCapabilities() PublishCapabilities {
 			Video:    true,
 			Schedule: true,
 			Formats:  []string{"video"},
+			ComposerMedia: true,
 			MaxMedia: 1,
 			MaxTextLength: 5000,
 		}

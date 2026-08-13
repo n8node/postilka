@@ -61,7 +61,8 @@ export type TelegramRichMessage = {
 };
 
 export type PostContent = {
-  format: "message" | "rich_message" | "article" | "story" | "short_video";
+  format: "message" | "rich_message" | "article" | "story" | "short_video" | "video";
+  title?: string;
   text: string;
   parse_mode: "HTML";
   entities: TelegramEntity[];

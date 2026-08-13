@@ -90,6 +90,7 @@ type TelegramRichMessage struct {
 
 type PostContent struct {
 	Format      string                  `json:"format,omitempty"`
+	Title       string                  `json:"title,omitempty"`
 	Text        string                  `json:"text,omitempty"`
 	ParseMode   string                  `json:"parse_mode,omitempty"`
 	Entities    []TelegramMessageEntity `json:"entities,omitempty"`

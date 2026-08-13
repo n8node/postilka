@@ -1,6 +1,7 @@
 package oauth
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -8,12 +9,15 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 )
 
 const (
-	youtubeAuthURL  = "https://accounts.google.com/o/oauth2/v2/auth"
-	youtubeTokenURL = "https://oauth2.googleapis.com/token"
-	youtubeAPIBase  = "https://www.googleapis.com/youtube/v3"
+	youtubeAuthURL        = "https://accounts.google.com/o/oauth2/v2/auth"
+	youtubeTokenURL       = "https://oauth2.googleapis.com/token"
+	youtubeAPIBase        = "https://www.googleapis.com/youtube/v3"
+	youtubeUploadBase     = "https://www.googleapis.com/upload/youtube/v3"
+	youtubeDefaultCategory = "22"
 )
 
 const YouTubeOAuthScope = "https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.force-ssl"
@@ -39,6 +43,25 @@ type YouTubeChannel struct {
 	Title       string
 	ThumbnailURL string
 	CustomURL   string
+}
+
+type YouTubeVideoUploadInput struct {
+	Title         string
+	Description   string
+	CategoryID    string
+	PrivacyStatus string
+	PublishAt     *time.Time
+	MIMEType      string
+	Filename      string
+	Data          []byte
+}
+
+type youtubeVideoInsertResponse struct {
+	ID    string `json:"id"`
+	Error struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+	} `json:"error"`
 }
 
 type youtubeChannelsResponse struct {
@@ -263,6 +286,142 @@ func YouTubeChannelPublicURL(ch YouTubeChannel) string {
 		return "https://www.youtube.com/channel/" + url.PathEscape(id)
 	}
 	return ""
+}
+
+func (c *YouTubeClient) UploadVideo(ctx context.Context, accessToken string, input YouTubeVideoUploadInput) (string, error) {
+	accessToken = strings.TrimSpace(accessToken)
+	if accessToken == "" {
+		return "", fmt.Errorf("youtube upload: empty access token")
+	}
+	if len(input.Data) == 0 {
+		return "", fmt.Errorf("youtube upload: empty video data")
+	}
+	title := strings.TrimSpace(input.Title)
+	if title == "" {
+		return "", fmt.Errorf("youtube upload: title required")
+	}
+	if utf8RuneCount(title) > 100 {
+		return "", fmt.Errorf("youtube upload: title must be at most 100 characters")
+	}
+	description := strings.TrimSpace(input.Description)
+	if utf8RuneCount(description) > 5000 {
+		return "", fmt.Errorf("youtube upload: description must be at most 5000 characters")
+	}
+
+	privacy := strings.ToLower(strings.TrimSpace(input.PrivacyStatus))
+	if privacy == "" {
+		privacy = "public"
+	}
+	if privacy != "public" && privacy != "private" && privacy != "unlisted" {
+		return "", fmt.Errorf("youtube upload: invalid privacy status %q", privacy)
+	}
+
+	categoryID := strings.TrimSpace(input.CategoryID)
+	if categoryID == "" {
+		categoryID = youtubeDefaultCategory
+	}
+
+	status := map[string]any{"privacyStatus": privacy}
+	if input.PublishAt != nil && input.PublishAt.After(time.Now().UTC()) {
+		status["privacyStatus"] = "private"
+		status["publishAt"] = input.PublishAt.UTC().Format(time.RFC3339)
+	}
+
+	metadata := map[string]any{
+		"snippet": map[string]any{
+			"title":       title,
+			"description": description,
+			"categoryId":  categoryID,
+		},
+		"status": status,
+	}
+	metaBytes, err := json.Marshal(metadata)
+	if err != nil {
+		return "", err
+	}
+
+	mimeType := strings.TrimSpace(input.MIMEType)
+	if mimeType == "" {
+		mimeType = "video/mp4"
+	}
+
+	initURL := youtubeUploadBase + "/videos?uploadType=resumable&part=snippet,status"
+	initReq, err := http.NewRequestWithContext(ctx, http.MethodPost, initURL, bytes.NewReader(metaBytes))
+	if err != nil {
+		return "", err
+	}
+	initReq.Header.Set("Authorization", "Bearer "+accessToken)
+	initReq.Header.Set("Content-Type", "application/json; charset=UTF-8")
+	initReq.Header.Set("X-Upload-Content-Type", mimeType)
+	initReq.Header.Set("X-Upload-Content-Length", fmt.Sprintf("%d", len(input.Data)))
+
+	initResp, err := c.http().Do(initReq)
+	if err != nil {
+		return "", err
+	}
+	defer initResp.Body.Close()
+	if initResp.StatusCode >= 400 {
+		body, _ := io.ReadAll(io.LimitReader(initResp.Body, 1<<20))
+		return "", fmt.Errorf("youtube upload init: HTTP %d: %s", initResp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	uploadURL := strings.TrimSpace(initResp.Header.Get("Location"))
+	if uploadURL == "" {
+		return "", fmt.Errorf("youtube upload init: missing Location header")
+	}
+
+	uploadReq, err := http.NewRequestWithContext(ctx, http.MethodPut, uploadURL, bytes.NewReader(input.Data))
+	if err != nil {
+		return "", err
+	}
+	uploadReq.Header.Set("Content-Type", mimeType)
+	uploadReq.ContentLength = int64(len(input.Data))
+
+	uploadClient := c.uploadHTTPClient()
+	uploadResp, err := uploadClient.Do(uploadReq)
+	if err != nil {
+		return "", err
+	}
+	defer uploadResp.Body.Close()
+
+	body, err := io.ReadAll(io.LimitReader(uploadResp.Body, 1<<20))
+	if err != nil {
+		return "", err
+	}
+	if uploadResp.StatusCode >= 400 {
+		return "", fmt.Errorf("youtube upload: HTTP %d: %s", uploadResp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	var parsed youtubeVideoInsertResponse
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return "", fmt.Errorf("youtube upload: parse response: %w", err)
+	}
+	if parsed.Error.Message != "" {
+		return "", fmt.Errorf("youtube upload: %s", parsed.Error.Message)
+	}
+	videoID := strings.TrimSpace(parsed.ID)
+	if videoID == "" {
+		return "", fmt.Errorf("youtube upload: empty video id in response")
+	}
+	return videoID, nil
+}
+
+func (c *YouTubeClient) uploadHTTPClient() *http.Client {
+	base := c.http()
+	if base == nil {
+		base = DefaultVKHTTPClient()
+	}
+	transport := base.Transport
+	if transport == nil {
+		transport = http.DefaultTransport
+	}
+	return &http.Client{
+		Timeout:   30 * time.Minute,
+		Transport: transport,
+	}
+}
+
+func utf8RuneCount(s string) int {
+	return len([]rune(s))
 }
 
 func (c *YouTubeClient) http() *http.Client {

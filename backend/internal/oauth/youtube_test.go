@@ -3,6 +3,7 @@ package oauth
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -110,5 +111,48 @@ func TestYouTubeClientListMyChannels(t *testing.T) {
 	}
 	if got := YouTubeChannelPublicURL(channels[0]); got != "https://www.youtube.com/@mychannel" {
 		t.Fatalf("public url: %s", got)
+	}
+}
+
+func TestYouTubeClientUploadVideo(t *testing.T) {
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/upload/youtube/v3/videos"):
+			if r.Header.Get("Authorization") != "Bearer token" {
+				t.Fatalf("init auth: %s", r.Header.Get("Authorization"))
+			}
+			if ct := r.Header.Get("X-Upload-Content-Type"); ct != "video/mp4" {
+				t.Fatalf("upload content type: %s", ct)
+			}
+			w.Header().Set("Location", srv.URL+"/upload-session")
+			w.WriteHeader(http.StatusOK)
+		case r.Method == http.MethodPut && r.URL.Path == "/upload-session":
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				t.Fatalf("read upload body: %v", err)
+			}
+			if string(body) != "video-bytes" {
+				t.Fatalf("unexpected body: %q", string(body))
+			}
+			_ = json.NewEncoder(w).Encode(map[string]string{"id": "abc123"})
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+
+	client := youtubeTestClient(t, srv)
+	videoID, err := client.UploadVideo(context.Background(), "token", YouTubeVideoUploadInput{
+		Title:       "Test video",
+		Description: "Description",
+		MIMEType:    "video/mp4",
+		Data:        []byte("video-bytes"),
+	})
+	if err != nil {
+		t.Fatalf("UploadVideo: %v", err)
+	}
+	if videoID != "abc123" {
+		t.Fatalf("video id: %s", videoID)
 	}
 }

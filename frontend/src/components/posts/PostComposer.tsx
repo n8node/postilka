@@ -176,11 +176,12 @@ function htmlToPlain(html: string) {
   return (node.innerText || node.textContent || "").trim();
 }
 
-type PostKind = "post" | "story" | "short_video";
+type PostKind = "post" | "story" | "short_video" | "video";
 
 function formatToPostKind(format: PostContent["format"]): PostKind {
   if (format === "story") return "story";
   if (format === "short_video") return "short_video";
+  if (format === "video") return "video";
   return "post";
 }
 
@@ -234,6 +235,9 @@ function channelSupportsPostKind(
   if (kind === "short_video") {
     return formats.includes("short_video");
   }
+  if (kind === "video") {
+    return formats.includes("video");
+  }
   if (formats.length === 1 && formats[0] === "story") {
     return false;
   }
@@ -279,6 +283,13 @@ function channelUnavailableReason(
     return `${provider} не поддерживает этот формат публикации.`;
   }
 
+  if (postKind === "video") {
+    if (!formats.includes("video")) {
+      return `${provider} не поддерживает формат «Видео». Выберите YouTube или другой подходящий канал.`;
+    }
+    return `${provider} не поддерживает этот формат публикации.`;
+  }
+
   if (isTelegramBusinessChannel(channel)) {
     return "Telegram Business предназначен только для Stories. Для обычного поста выберите канал, группу или другую сеть.";
   }
@@ -289,13 +300,13 @@ function channelUnavailableReason(
 
   if (!caps?.text) {
     if (channel.provider === "youtube") {
-      return "YouTube принимает только видео. Выберите тип «Короткое видео» для публикации на YouTube.";
+      return "YouTube принимает только видео. Выберите тип «Видео» для публикации на YouTube.";
     }
     if (formats.includes("wall_post")) {
       return `${provider} принимает только посты на стену. Для этого типа поста нужен другой канал.`;
     }
     if (formats.includes("video") && !formats.includes("message")) {
-      return `${provider} принимает только видео. Выберите «Короткое видео».`;
+      return `${provider} принимает только видео. Выберите тип «Видео».`;
     }
     return `${provider} не поддерживает обычный пост с текстом и медиа. Выберите другой тип публикации.`;
   }
@@ -1126,6 +1137,7 @@ export function PostComposer() {
   const [postKind, setPostKind] = useState<PostKind>("post");
   const [aiBusy, setAiBusy] = useState(false);
   const [articleTitle, setArticleTitle] = useState("");
+  const [videoTitle, setVideoTitle] = useState("");
   const [articleBlocks, setArticleBlocks] = useState<ArticleBlock[]>([
     { type: "paragraph", text: "" },
   ]);
@@ -1296,6 +1308,10 @@ export function PostComposer() {
     () => channels.some((channel) => channelSupportsPostKind(channel, "story")),
     [channels],
   );
+  const hasVideoChannels = useMemo(
+    () => channels.some((channel) => channelSupportsPostKind(channel, "video")),
+    [channels],
+  );
   const activeChannel =
     selectedChannels.find((channel) => channel.id === activeChannelId) ?? selectedChannels[0] ?? null;
   const telegramChannels = selectedChannels.filter((channel) => channel.provider === "telegram");
@@ -1375,6 +1391,7 @@ export function PostComposer() {
     setFormat("message");
     setPostKind("post");
     setArticleTitle("");
+    setVideoTitle("");
     setArticleBlocks([{ type: "paragraph", text: "" }]);
     setButtonRows([]);
     setMaxButtonRows([]);
@@ -1433,6 +1450,7 @@ export function PostComposer() {
     setFormat(post.content.format || "message");
     setPostKind(formatToPostKind(post.content.format || "message"));
     setArticleTitle(post.content.rich_message?.title ?? "");
+    setVideoTitle(post.content.title ?? "");
     setArticleBlocks(
       post.content.rich_message?.blocks?.map((block) => ({ ...block })) ?? [
         { type: "paragraph", text: "" },
@@ -1608,8 +1626,9 @@ export function PostComposer() {
         : undefined;
     const content: PostContent = {
       format,
+      title: format === "video" ? videoTitle.trim() || undefined : undefined,
       text:
-        format === "message" || format === "story" || format === "short_video"
+        format === "message" || format === "story" || format === "short_video" || format === "video"
           ? normalizeTelegramHTMLString(html)
           : "",
       parse_mode: "HTML",
@@ -1673,6 +1692,15 @@ export function PostComposer() {
     if (kind === "short_video") {
       setFormat("short_video");
       setTelegramVideoNote(true);
+      setMedia((current) => {
+        const video = current.find((item) => isVideoMime(item.file.mime_type));
+        return video ? [video] : current.slice(0, 1);
+      });
+      return;
+    }
+    if (kind === "video") {
+      setFormat("video");
+      setTelegramVideoNote(false);
       setMedia((current) => {
         const video = current.find((item) => isVideoMime(item.file.mime_type));
         return video ? [video] : current.slice(0, 1);
@@ -1766,7 +1794,10 @@ export function PostComposer() {
       }
     }
     if (postKind === "short_video" || format === "short_video") {
-      if (action !== "draft" && selectedChannels.some((channel) => channel.provider !== "telegram")) {
+      if (
+        action !== "draft" &&
+        selectedChannels.some((channel) => !channelSupportsPostKind(channel, "short_video"))
+      ) {
         return "Короткое видео поддерживается только для Telegram";
       }
       if (action !== "draft" && media.length !== 1) {
@@ -1774,6 +1805,26 @@ export function PostComposer() {
       }
       if (action !== "draft" && media.length === 1 && !isVideoMime(media[0]!.file.mime_type)) {
         return "Короткое видео должно быть файлом video/*";
+      }
+    }
+    if (postKind === "video" || format === "video") {
+      if (
+        action !== "draft" &&
+        selectedChannels.some((channel) => !channelSupportsPostKind(channel, "video"))
+      ) {
+        return "Формат «Видео» доступен для YouTube и других видеоплатформ — выберите подходящий канал";
+      }
+      if (action !== "draft" && !videoTitle.trim()) {
+        return "Укажите название видео";
+      }
+      if (action !== "draft" && videoTitle.trim().length > 100) {
+        return "Название видео не должно превышать 100 символов";
+      }
+      if (action !== "draft" && media.length !== 1) {
+        return "Для видео прикрепите ровно один файл";
+      }
+      if (action !== "draft" && media.length === 1 && !isVideoMime(media[0]!.file.mime_type)) {
+        return "Видео должно быть файлом video/*";
       }
     }
     if (
@@ -1795,6 +1846,9 @@ export function PostComposer() {
     }
     if ((format === "story" || format === "short_video") && !html.trim() && media.length === 0) {
       return "Добавьте медиа или подпись";
+    }
+    if (format === "video" && !videoTitle.trim() && media.length === 0) {
+      return "Укажите название и прикрепите видео";
     }
     if ((format === "article" || format === "rich_message") && articleBlocks.length === 0) {
       return "Добавьте хотя бы один блок статьи";
@@ -1844,7 +1898,7 @@ export function PostComposer() {
     }
     for (const channel of selectedChannels) {
       const text = overrides[channel.id]?.detached ? overrides[channel.id]!.plain : plain;
-      if (!channel.publish_capabilities?.text) {
+      if (!channel.publish_capabilities?.text && format !== "video") {
         return `${PROVIDER_LABEL[channel.provider]}: обычные текстовые посты не поддерживаются`;
       }
       const limit = channelTextLimit(channel, media.length, telegramMediaLayout);
@@ -2216,6 +2270,7 @@ export function PostComposer() {
                 { id: "post" as const, label: "Пост", disabled: false },
                 { id: "story" as const, label: "История", disabled: !hasStoryChannels },
                 { id: "short_video" as const, label: "Короткое видео", disabled: false },
+                { id: "video" as const, label: "Видео", disabled: !hasVideoChannels },
               ] satisfies ReadonlyArray<{ id: PostKind; label: string; disabled: boolean }>
             ).map(({ id, label, disabled }) => (
               <button
@@ -2225,7 +2280,9 @@ export function PostComposer() {
                 disabled={composerLocked || disabled}
                 title={
                   disabled
-                    ? "Подключите Telegram Business на странице «Каналы»"
+                    ? id === "story"
+                      ? "Подключите Telegram Business на странице «Каналы»"
+                      : "Подключите YouTube или другой видеоканал на странице «Каналы»"
                     : undefined
                 }
                 className={cn(
@@ -2244,7 +2301,9 @@ export function PostComposer() {
                 ? maxChannels.length > 0
                   ? "Короткое видео: в Telegram — кружок, в MAX — обычное прямоугольное видео с текстом."
                   : "Короткое видео отправляется в Telegram как кружок; подпись — отдельным сообщением."
-                : "Обычный пост: текст, медиа и статья Telegram."}
+                : postKind === "video"
+                  ? "Видео для YouTube: название, описание и один видеофайл. Запланированная публикация поддерживается."
+                  : "Обычный пост: текст, медиа и статья Telegram."}
           </p>
           {maxGetsRectangularVideo && postKind !== "short_video" && (
             <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
@@ -2336,7 +2395,7 @@ export function PostComposer() {
                             {channelProviderSubtitle(channel, postKind)}
                             {channel.status !== "active"
                               ? " · недоступен"
-                              : !channel.publish_capabilities?.text && postKind === "post"
+                              : !channel.publish_capabilities?.text && (postKind === "post" || postKind === "video")
                                 ? " · только другой формат"
                                 : ""}
                           </span>
@@ -2502,7 +2561,27 @@ export function PostComposer() {
               </p>
             )}
 
-            {format === "message" || format === "story" || format === "short_video" ? (
+            {format === "video" && (
+              <label className="mb-3 block">
+                <span className="mb-1 block text-xs font-medium text-zinc-600">
+                  Название видео <span className="text-red-500">*</span>
+                </span>
+                <input
+                  type="text"
+                  value={videoTitle}
+                  maxLength={100}
+                  disabled={composerLocked}
+                  onChange={(event) => {
+                    setVideoTitle(event.target.value);
+                    markDirty();
+                  }}
+                  placeholder="Название для YouTube (до 100 символов)"
+                  className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm"
+                />
+              </label>
+            )}
+
+            {format === "message" || format === "story" || format === "short_video" || format === "video" ? (
               <RichTextEditor
                 html={editorHTML}
                 onChange={updateCurrentText}
@@ -2511,7 +2590,9 @@ export function PostComposer() {
                     ? "Подпись к истории (необязательно)…"
                     : format === "short_video"
                       ? "Подпись к видео (необязательно)…"
-                      : "Напишите текст поста…"
+                      : format === "video"
+                        ? "Описание видео (необязательно)…"
+                        : "Напишите текст поста…"
                 }
                 disabled={composerLocked}
               />
