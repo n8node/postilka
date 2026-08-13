@@ -6,6 +6,7 @@ import {
   ArrowUp,
   BellOff,
   CalendarClock,
+  Briefcase,
   Check,
   ChevronDown,
   ChevronUp,
@@ -195,8 +196,15 @@ function isVideoMime(mime: string) {
   return mime.toLowerCase().startsWith("video/");
 }
 
-function isTelegramBusinessChannel(channel: { provider: string; chat_type?: string }) {
-  return channel.provider === "telegram" && channel.chat_type === "business";
+function isTelegramBusinessChannel(channel: {
+  provider: string;
+  chat_type?: string;
+  metadata?: { business_user_id?: string };
+}) {
+  return (
+    channel.provider === "telegram" &&
+    (channel.chat_type === "business" || Boolean(channel.metadata?.business_user_id?.trim()))
+  );
 }
 
 function channelProviderSubtitle(
@@ -230,6 +238,109 @@ function channelSupportsPostKind(
     return false;
   }
   return Boolean(caps?.text);
+}
+
+function channelUnavailableReason(
+  channel: ChannelListItem,
+  postKind: PostKind,
+): string | null {
+  if (channelSupportsPostKind(channel, postKind)) {
+    return null;
+  }
+
+  if (channel.status === "needs_reconnect") {
+    return "Канал требует переподключения — обновите доступ на странице «Каналы».";
+  }
+  if (channel.status === "disabled") {
+    return "Канал отключён. Включите его на странице «Каналы», чтобы снова публиковать.";
+  }
+  if (channel.status !== "active") {
+    return "Канал сейчас недоступен для публикации.";
+  }
+
+  const caps = channel.publish_capabilities;
+  const formats = caps?.formats ?? [];
+  const provider = PROVIDER_LABEL[channel.provider];
+
+  if (postKind === "story") {
+    if (!formats.includes("story")) {
+      if (channel.provider === "telegram") {
+        return "Обычный Telegram-канал или группа не публикует Stories. Подключите Telegram Business в разделе «Каналы».";
+      }
+      return `${provider} не поддерживает формат «История». Выберите тип «Пост» или другой канал.`;
+    }
+    return `${provider} не поддерживает этот формат публикации.`;
+  }
+
+  if (postKind === "short_video") {
+    if (!formats.includes("short_video")) {
+      return `${provider} не поддерживает «Короткое видео». Выберите Telegram или другой подходящий канал.`;
+    }
+    return `${provider} не поддерживает этот формат публикации.`;
+  }
+
+  if (isTelegramBusinessChannel(channel)) {
+    return "Telegram Business предназначен только для Stories. Для обычного поста выберите канал, группу или другую сеть.";
+  }
+
+  if (formats.length === 1 && formats[0] === "story") {
+    return `${provider} поддерживает только Stories. Выберите тип «История» или другой канал.`;
+  }
+
+  if (!caps?.text) {
+    if (channel.provider === "youtube") {
+      return "YouTube принимает только видео. Выберите тип «Короткое видео» для публикации на YouTube.";
+    }
+    if (formats.includes("wall_post")) {
+      return `${provider} принимает только посты на стену. Для этого типа поста нужен другой канал.`;
+    }
+    if (formats.includes("video") && !formats.includes("message")) {
+      return `${provider} принимает только видео. Выберите «Короткое видео».`;
+    }
+    return `${provider} не поддерживает обычный пост с текстом и медиа. Выберите другой тип публикации.`;
+  }
+
+  return `${provider} не поддерживает выбранный тип публикации.`;
+}
+
+const TELEGRAM_BUSINESS_HINT =
+  "Telegram Business — личный или бизнес-профиль, подключённый через бота Postilka. Он публикует только Stories (истории). Обычные посты в канал или группу отправляйте через обычный Telegram-канал.";
+
+function ChannelHintIcon({
+  label,
+  tone = "warning",
+  children,
+}: {
+  label: string;
+  tone?: "warning" | "info";
+  children: React.ReactNode;
+}) {
+  return (
+    <span
+      tabIndex={0}
+      className="group/hint relative inline-flex shrink-0 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+      }}
+      onMouseDown={(event) => {
+        event.stopPropagation();
+      }}
+    >
+      {children}
+      <span
+        role="tooltip"
+        className={cn(
+          "pointer-events-none absolute right-0 top-full z-30 mt-1.5 hidden w-[min(calc(100vw-2rem),17rem)] rounded-xl border px-3 py-2.5 text-left text-[11px] font-normal normal-case leading-relaxed shadow-[0_10px_28px_rgba(15,23,42,0.14)] group-hover/hint:block group-focus-within/hint:block",
+          tone === "warning"
+            ? "border-amber-200/90 bg-white text-zinc-700"
+            : "border-accent/20 bg-white text-zinc-700",
+        )}
+      >
+        {label}
+      </span>
+    </span>
+  );
 }
 
 function buttonToEditable(button: TelegramButton): EditableButton {
@@ -2181,58 +2292,67 @@ export function PostComposer() {
                 {channels.map((channel) => {
                   const selected = selectedIds.includes(channel.id);
                   const supportsPost = channelSupportsPostKind(channel, postKind);
+                  const unavailableReason = channelUnavailableReason(channel, postKind);
+                  const isBusiness = isTelegramBusinessChannel(channel);
                   return (
-                    <button
-                      key={channel.id}
-                      type="button"
-                      disabled={!supportsPost}
-                      onClick={() => toggleChannel(channel)}
-                      title={
-                        channel.status !== "active"
-                          ? "Канал недоступен"
-                          : !supportsPost && postKind === "story"
-                            ? "Профиль не поддерживает Stories — подключите Telegram Business"
-                            : !supportsPost && isTelegramBusinessChannel(channel)
-                              ? "Business-профиль поддерживает только Stories"
-                              : !supportsPost
-                                ? "Канал не поддерживает этот тип публикации"
-                                : undefined
-                      }
-                      className={cn(
-                        "flex min-w-0 items-center gap-3 rounded-lg border p-3 text-left transition-colors",
-                        selected ? "border-accent bg-accent/5" : "border-border hover:bg-zinc-50",
-                        !supportsPost && "cursor-not-allowed opacity-50",
-                      )}
-                    >
-                      <span
+                    <div key={channel.id} className="relative min-w-0">
+                      <button
+                        type="button"
+                        disabled={!supportsPost}
+                        onClick={() => toggleChannel(channel)}
                         className={cn(
-                          "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
-                          selected ? "border-accent bg-accent text-white" : "border-zinc-300 bg-white",
+                          "flex w-full min-w-0 items-center gap-3 rounded-lg border p-3 pr-9 text-left transition-colors",
+                          selected ? "border-accent bg-accent/5" : "border-border hover:bg-zinc-50",
+                          !supportsPost && "cursor-not-allowed opacity-50",
                         )}
                       >
-                        {selected && <Check className="h-3 w-3" />}
-                      </span>
-                      <ChannelAvatar
-                        name={channel.name}
-                        metadata={channel.metadata}
-                        channelId={channel.id}
-                        provider={channel.provider}
-                        size="sm"
-                      />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-semibold">
-                          {channelDisplayName(channel)}
+                        <span
+                          className={cn(
+                            "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
+                            selected ? "border-accent bg-accent text-white" : "border-zinc-300 bg-white",
+                          )}
+                        >
+                          {selected && <Check className="h-3 w-3" />}
                         </span>
-                        <span className="block text-xs text-muted">
-                          {channelProviderSubtitle(channel, postKind)}
-                          {channel.status !== "active"
-                            ? " · недоступен"
-                            : !channel.publish_capabilities?.text
-                              ? " · только другой формат"
-                              : ""}
+                        <ChannelAvatar
+                          name={channel.name}
+                          metadata={channel.metadata}
+                          channelId={channel.id}
+                          provider={channel.provider}
+                          size="sm"
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="flex min-w-0 items-center gap-1.5">
+                            <span className="truncate text-sm font-semibold">
+                              {channelDisplayName(channel)}
+                            </span>
+                            {isBusiness && (
+                              <ChannelHintIcon label={TELEGRAM_BUSINESS_HINT} tone="info">
+                                <Briefcase className="h-3.5 w-3.5 shrink-0 text-accent" aria-hidden />
+                              </ChannelHintIcon>
+                            )}
+                          </span>
+                          <span className="block text-xs text-muted">
+                            {channelProviderSubtitle(channel, postKind)}
+                            {channel.status !== "active"
+                              ? " · недоступен"
+                              : !channel.publish_capabilities?.text && postKind === "post"
+                                ? " · только другой формат"
+                                : ""}
+                          </span>
                         </span>
-                      </span>
-                    </button>
+                      </button>
+                      {!supportsPost && unavailableReason && (
+                        <div className="pointer-events-auto absolute right-2 top-2 z-10">
+                          <ChannelHintIcon label={unavailableReason} tone="warning">
+                            <AlertTriangle
+                              className="h-4 w-4 fill-amber-100 text-amber-500"
+                              aria-label="Почему канал недоступен"
+                            />
+                          </ChannelHintIcon>
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
               </div>
