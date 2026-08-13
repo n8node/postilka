@@ -1,4 +1,5 @@
 import { apiFetch } from "@/lib/api";
+import { isMediaWithDuration, probeMediaDuration } from "@/lib/file-media";
 
 export type WorkspaceFile = {
   id: string;
@@ -94,6 +95,7 @@ export function initUpload(input: {
   size: number;
   mime_type: string;
   folder_id?: string | null;
+  media_duration_seconds?: number;
 }) {
   return apiFetch<{
     upload_url: string;
@@ -106,11 +108,17 @@ export function initUpload(input: {
 }
 
 export async function uploadFile(file: File, folderId?: string | null) {
+  const mimeType = file.type || "application/octet-stream";
+  let mediaDurationSeconds: number | undefined;
+  if (isMediaWithDuration(mimeType, file.name)) {
+    mediaDurationSeconds = await probeMediaDuration(file, mimeType);
+  }
   const init = await initUpload({
     name: file.name,
     size: file.size,
-    mime_type: file.type || "application/octet-stream",
+    mime_type: mimeType,
     folder_id: folderId ?? null,
+    ...(mediaDurationSeconds ? { media_duration_seconds: mediaDurationSeconds } : {}),
   });
   const headers = new Headers(init.upload_headers);
   const res = await fetch(init.upload_url, {

@@ -1401,6 +1401,7 @@ export function PostComposer() {
     singleVideoAttached &&
     (telegramVideoNote || postKind === "short_video" || format === "short_video");
   const maxGetsRectangularVideo = telegramVideoCircleActive && maxChannels.length > 0;
+  const isYouTubeVideoMode = postKind === "video" || postKind === "shorts";
 
   function resetNew() {
     if (dirty && !window.confirm("Несохранённые изменения будут потеряны. Продолжить?")) return;
@@ -1538,7 +1539,7 @@ export function PostComposer() {
   }
 
   function toggleChannel(channel: ChannelListItem) {
-    if (channel.status !== "active" || !channel.publish_capabilities?.text) return;
+    if (!channelSupportsPostKind(channel, postKind)) return;
     markDirty();
     setSelectedIds((current) => {
       const exists = current.includes(channel.id);
@@ -1879,10 +1880,7 @@ export function PostComposer() {
       }
       if (action !== "draft" && media.length === 1) {
         const duration = fileDurationSeconds(media[0]!.file);
-        if (duration == null) {
-          return "Для Shorts нужна длительность видео — загрузите файл через медиатеку Postilka";
-        }
-        if (duration > YOUTUBE_SHORTS_MAX_SECONDS) {
+        if (duration != null && duration > YOUTUBE_SHORTS_MAX_SECONDS) {
           return `YouTube Shorts — не более ${YOUTUBE_SHORTS_MAX_SECONDS} секунд (у файла ${duration} с)`;
         }
       }
@@ -2243,12 +2241,16 @@ export function PostComposer() {
     try {
       const uploaded = await Promise.all(Array.from(files).map((file) => uploadFile(file)));
       setRecentFiles((current) => [...uploaded, ...current]);
-      setMedia((current) => [
-        ...current,
-        ...uploaded
+      setMedia((current) => {
+        const added = uploaded
           .filter((file) => !current.some((item) => item.file.id === file.id))
-          .map((file) => ({ file, alt: "" })),
-      ]);
+          .map((file) => ({ file, alt: "" }));
+        if (isYouTubeVideoMode) {
+          const video = added.find((item) => isVideoMime(item.file.mime_type)) ?? added[0];
+          return video ? [video] : current;
+        }
+        return [...current, ...added];
+      });
       markDirty();
       setSuccess("Файлы загружены и добавлены");
     } catch (uploadError) {
@@ -2368,10 +2370,10 @@ export function PostComposer() {
                 : postKind === "video"
                   ? "Видео для YouTube: название, описание и один видеофайл. Запланированная публикация поддерживается."
                   : postKind === "shorts"
-                    ? "YouTube Shorts: вертикальное видео до 60 секунд (9:16). Отдельного API нет — Postilka загружает через videos.insert и добавляет #Shorts."
+                    ? "YouTube Shorts: вертикальное видео до 60 секунд (9:16). Postilka добавит #Shorts при публикации."
                     : "Обычный пост: текст, медиа и статья Telegram."}
           </p>
-          {maxGetsRectangularVideo && postKind !== "short_video" && (
+          {maxGetsRectangularVideo && postKind !== "short_video" && !isYouTubeVideoMode && (
             <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
               «Отправить в круге» действует только в Telegram. В MAX то же видео уйдёт как обычный
               прямоугольный ролик.
@@ -2461,7 +2463,7 @@ export function PostComposer() {
                             {channelProviderSubtitle(channel, postKind)}
                             {channel.status !== "active"
                               ? " · недоступен"
-                              : !channel.publish_capabilities?.text && (postKind === "post" || postKind === "video" || postKind === "shorts")
+                              : !supportsPost && !channel.publish_capabilities?.text && postKind === "post"
                                 ? " · только другой формат"
                                 : ""}
                           </span>
@@ -2811,7 +2813,8 @@ export function PostComposer() {
             <input
               ref={fileInputRef}
               type="file"
-              multiple
+              multiple={!isYouTubeVideoMode}
+              accept={isYouTubeVideoMode ? "video/*" : undefined}
               className="hidden"
               onChange={(event) => void upload(event.target.files)}
             />
@@ -2827,7 +2830,9 @@ export function PostComposer() {
             </div>
             {media.length === 0 && (
               <p className="mt-3 rounded-lg border border-dashed border-accent/25 bg-white/70 px-3 py-4 text-center text-sm text-muted">
-                Прикрепите фото или видео — это ключевой блок публикации.
+                {isYouTubeVideoMode
+                  ? "Прикрепите один видеофайл — с компьютера или из недавних."
+                  : "Прикрепите фото или видео — это ключевой блок публикации."}
               </p>
             )}
             {media.length > 0 && noMediaDelivery.length > 0 && (
@@ -2838,7 +2843,7 @@ export function PostComposer() {
                   .join(", ")}. Публикация и планирование заблокированы.
               </div>
             )}
-            {media.length > 0 && telegramChannels.length > 0 && (
+            {media.length > 0 && telegramChannels.length > 0 && !isYouTubeVideoMode && (
               <div className="mt-3 space-y-2">
                 <div>
                   <p className="mb-1.5 text-xs font-semibold text-zinc-700">Доставка в Telegram</p>
@@ -2984,11 +2989,13 @@ export function PostComposer() {
                         key={file.id}
                         type="button"
                         onClick={() => {
-                          setMedia((current) =>
-                            selected
-                              ? current.filter((item) => item.file.id !== file.id)
-                              : [...current, { file, alt: "" }],
-                          );
+                          setMedia((current) => {
+                            if (selected) {
+                              return current.filter((item) => item.file.id !== file.id);
+                            }
+                            const next = { file, alt: "" };
+                            return isYouTubeVideoMode ? [next] : [...current, next];
+                          });
                           markDirty();
                         }}
                         className="min-w-0 text-left"
@@ -3071,7 +3078,7 @@ export function PostComposer() {
           )}
 
           <div className="grid gap-4 lg:grid-cols-2">
-            {postKind !== "story" && format !== "story" && (
+            {postKind !== "story" && format !== "story" && !isYouTubeVideoMode && (
             <Card title="Дополнения">
               <label className="block">
                 <span className="mb-1 flex items-center gap-1 text-xs font-medium text-zinc-600">
@@ -3148,7 +3155,7 @@ export function PostComposer() {
             </Card>
             )}
 
-            {telegramChannels.length > 0 && postKind !== "story" && format !== "story" && (
+            {telegramChannels.length > 0 && postKind !== "story" && format !== "story" && !isYouTubeVideoMode && (
               <Card title="Настройки Telegram">
                 <div className="grid gap-2 sm:grid-cols-2">
                   <label className="flex items-center gap-2 text-sm">

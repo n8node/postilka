@@ -116,14 +116,7 @@ func validateYouTubeShortsFile(file *model.WorkspaceFile) error {
 		return fmt.Errorf("%w: медиафайл не найден", ErrInvalidPost)
 	}
 	duration := mediaDurationSeconds(file.MediaMetadata)
-	if duration == nil {
-		return fmt.Errorf(
-			"%w: для YouTube Shorts нужно вертикальное видео до %d секунд — загрузите файл заново, чтобы сохранилась длительность",
-			ErrInvalidPost,
-			maxYouTubeShortsDurationSeconds,
-		)
-	}
-	if *duration > maxYouTubeShortsDurationSeconds {
+	if duration != nil && *duration > maxYouTubeShortsDurationSeconds {
 		return fmt.Errorf(
 			"%w: YouTube Shorts — не более %d секунд (у файла %d с)",
 			ErrInvalidPost,
