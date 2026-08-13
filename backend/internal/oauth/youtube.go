@@ -54,6 +54,7 @@ type YouTubeVideoUploadInput struct {
 	MIMEType      string
 	Filename      string
 	Data          []byte
+	Short         bool
 }
 
 type youtubeVideoInsertResponse struct {
@@ -304,6 +305,9 @@ func (c *YouTubeClient) UploadVideo(ctx context.Context, accessToken string, inp
 		return "", fmt.Errorf("youtube upload: title must be at most 100 characters")
 	}
 	description := strings.TrimSpace(input.Description)
+	if input.Short {
+		title, description = applyYouTubeShortsTags(title, description)
+	}
 	if utf8RuneCount(description) > 5000 {
 		return "", fmt.Errorf("youtube upload: description must be at most 5000 characters")
 	}
@@ -422,6 +426,23 @@ func (c *YouTubeClient) uploadHTTPClient() *http.Client {
 
 func utf8RuneCount(s string) int {
 	return len([]rune(s))
+}
+
+func applyYouTubeShortsTags(title, description string) (string, string) {
+	if strings.Contains(strings.ToLower(title), "#shorts") ||
+		strings.Contains(strings.ToLower(description), "#shorts") {
+		return title, description
+	}
+	if utf8RuneCount(title)+len(" #Shorts") <= 100 {
+		title = strings.TrimSpace(title) + " #Shorts"
+		return title, description
+	}
+	description = strings.TrimSpace(description)
+	if description != "" {
+		description += "\n\n"
+	}
+	description += "#Shorts"
+	return title, description
 }
 
 func (c *YouTubeClient) http() *http.Client {

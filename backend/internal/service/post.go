@@ -568,7 +568,10 @@ func validateContentForChannel(content model.PostContent, channel *model.Channel
 		if format == "video" && titleLength > 100 {
 			return fmt.Errorf("%w: название YouTube не должно превышать 100 символов", ErrInvalidPost)
 		}
-		if format == "video" && textLength > 5000 {
+		if format == "shorts" && titleLength > 100 {
+			return fmt.Errorf("%w: название YouTube Shorts не должно превышать 100 символов", ErrInvalidPost)
+		}
+		if (format == "video" || format == "shorts") && textLength > 5000 {
 			return fmt.Errorf("%w: описание YouTube не должно превышать 5000 символов", ErrInvalidPost)
 		}
 	}
@@ -598,15 +601,15 @@ func ValidatePostForPublication(post model.Post) error {
 		if format == "" {
 			format = "message"
 		}
-		if isPostContentEmpty(content) && format != "story" && format != "short_video" && format != "video" {
+		if isPostContentEmpty(content) && format != "story" && format != "short_video" && format != "video" && format != "shorts" {
 			return fmt.Errorf("%w: введите текст публикации для каждого канала", ErrInvalidPost)
 		}
-		if format == "story" || format == "short_video" || format == "video" {
+		if format == "story" || format == "short_video" || format == "video" || format == "shorts" {
 			if len(post.Media) != 1 {
 				return fmt.Errorf("%w: для формата %s нужен ровно один медиафайл", ErrInvalidPost, format)
 			}
 		}
-		if format == "video" && strings.TrimSpace(content.Title) == "" {
+		if (format == "video" || format == "shorts") && strings.TrimSpace(content.Title) == "" {
 			return fmt.Errorf("%w: укажите название видео", ErrInvalidPost)
 		}
 		if settings.TelegramVideoNote && format == "message" && len(post.Media) != 1 {
@@ -756,6 +759,17 @@ func ValidatePostContent(content model.PostContent, settings model.PostSettings)
 		}
 		if utf8.RuneCountInString(content.Text) > 5000 {
 			return fmt.Errorf("%w: описание видео не должно превышать 5000 символов", ErrInvalidPost)
+		}
+	case "shorts":
+		title := strings.TrimSpace(content.Title)
+		if title == "" {
+			return fmt.Errorf("%w: укажите название Shorts", ErrInvalidPost)
+		}
+		if utf8.RuneCountInString(title) > 100 {
+			return fmt.Errorf("%w: название Shorts не должно превышать 100 символов", ErrInvalidPost)
+		}
+		if utf8.RuneCountInString(content.Text) > 5000 {
+			return fmt.Errorf("%w: описание Shorts не должно превышать 5000 символов", ErrInvalidPost)
 		}
 	default:
 		return fmt.Errorf("%w: неизвестный формат публикации", ErrInvalidPost)

@@ -652,14 +652,15 @@ func (s *PublicationService) publishTarget(
 	}
 
 	if channel.Provider == model.ChannelProviderYouTube {
-		if format != "video" {
-			return "", fmt.Errorf("YouTube поддерживает только формат «видео»")
+		asShort, ok := publishYouTubeFormat(format)
+		if !ok {
+			return "", fmt.Errorf("YouTube поддерживает форматы «видео» и «Shorts»")
 		}
 		title := strings.TrimSpace(content.Title)
 		if title == "" {
 			return "", fmt.Errorf("%w: укажите название видео для YouTube", ErrInvalidPost)
 		}
-		videoData, mimeType, filename, err := s.youtubeVideoFile(ctx, post)
+		videoData, mimeType, filename, err := s.youtubeVideoFile(ctx, post, asShort)
 		if err != nil {
 			return "", err
 		}
@@ -677,6 +678,7 @@ func (s *PublicationService) publishTarget(
 			filename,
 			videoData,
 			publishAt,
+			asShort,
 		)
 	}
 

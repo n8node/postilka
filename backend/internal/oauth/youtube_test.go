@@ -156,3 +156,56 @@ func TestYouTubeClientUploadVideo(t *testing.T) {
 		t.Fatalf("video id: %s", videoID)
 	}
 }
+
+func TestApplyYouTubeShortsTags(t *testing.T) {
+	title, desc := applyYouTubeShortsTags("My clip", "Details")
+	if title != "My clip #Shorts" {
+		t.Fatalf("title: %q", title)
+	}
+	if desc != "Details" {
+		t.Fatalf("desc: %q", desc)
+	}
+
+	longTitle := strings.Repeat("a", 100)
+	title, desc = applyYouTubeShortsTags(longTitle, "body")
+	if title != longTitle {
+		t.Fatalf("long title should stay unchanged")
+	}
+	if !strings.Contains(desc, "#Shorts") {
+		t.Fatalf("expected #Shorts in description, got %q", desc)
+	}
+}
+
+func TestYouTubeClientUploadVideoAsShort(t *testing.T) {
+	var srv *httptest.Server
+	srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/upload/youtube/v3/videos"):
+			body, _ := io.ReadAll(r.Body)
+			if !strings.Contains(string(body), "#Shorts") {
+				t.Fatalf("metadata missing #Shorts: %s", string(body))
+			}
+			w.Header().Set("Location", srv.URL+"/upload-session")
+			w.WriteHeader(http.StatusOK)
+		case r.Method == http.MethodPut && r.URL.Path == "/upload-session":
+			_ = json.NewEncoder(w).Encode(map[string]string{"id": "short1"})
+		default:
+			t.Fatalf("unexpected request: %s %s", r.Method, r.URL.Path)
+		}
+	}))
+	defer srv.Close()
+
+	client := youtubeTestClient(t, srv)
+	videoID, err := client.UploadVideo(context.Background(), "token", YouTubeVideoUploadInput{
+		Title:    "Clip",
+		MIMEType: "video/mp4",
+		Data:     []byte("video-bytes"),
+		Short:    true,
+	})
+	if err != nil {
+		t.Fatalf("UploadVideo: %v", err)
+	}
+	if videoID != "short1" {
+		t.Fatalf("video id: %s", videoID)
+	}
+}
