@@ -1359,7 +1359,7 @@ export function PostComposer() {
     (channel) => channel.publish_capabilities?.telegram_rich_messages,
   );
   const articleOnlyTelegram =
-    format !== "message" &&
+    (format === "article" || format === "rich_message") &&
     selectedChannels.some((channel) => channel.provider !== "telegram");
   const canTelegramButtons =
     telegramChannels.length > 0 &&
