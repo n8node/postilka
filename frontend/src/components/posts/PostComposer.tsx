@@ -3772,4 +3772,6 @@ export function PostComposer() {
           </div>
         </div>
       )}
-   
+    </div>
+  );
+}
