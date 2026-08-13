@@ -338,3 +338,32 @@ func TestApplyUTMToNestedRichBlocks(t *testing.T) {
 		t.Fatalf("source rich content was mutated")
 	}
 }
+
+func TestMaxPublishButtonsFallbackToTelegramLinks(t *testing.T) {
+	settings := model.PostSettings{}
+	content := model.PostContent{
+		Buttons: [][]model.TelegramInlineButton{
+			{
+				{Text: "Сайт", URL: "https://postilka.ru"},
+				{Text: "Callback", CallbackData: "x"},
+			},
+		},
+	}
+	buttons := maxPublishButtons(settings, content)
+	if len(buttons) != 1 || len(buttons[0]) != 1 || buttons[0][0].URL != "https://postilka.ru" {
+		t.Fatalf("unexpected fallback buttons: %#v", buttons)
+	}
+	if !maxOutgoingHasPayload("", 0, buttons) {
+		t.Fatal("link-only buttons should count as MAX payload")
+	}
+}
+
+func TestMaxOutgoingHasPayloadRejectsEmptyHTML(t *testing.T) {
+	content := model.PostContent{
+		Text:      "<b> </b>",
+		ParseMode: "HTML",
+	}
+	if maxOutgoingHasPayload(readableProviderText(content), 0, nil) {
+		t.Fatal("whitespace-only HTML must not count as MAX payload")
+	}
+}

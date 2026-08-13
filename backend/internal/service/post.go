@@ -316,7 +316,11 @@ func validatePostTargets(ctx context.Context, channels *repository.ChannelReposi
 			return err
 		}
 		if channel.Provider == model.ChannelProviderMAX {
-			if err := validateMAXComposerAttachments(len(post.Media), settings.MaxButtons); err != nil {
+			maxButtons := maxPublishButtons(settings, content)
+			if !maxOutgoingHasPayload(readableProviderText(content), len(post.Media), maxButtons) {
+				return fmt.Errorf("%w: для MAX укажите текст, медиа или кнопки-ссылки", ErrInvalidPost)
+			}
+			if err := validateMAXComposerAttachments(len(post.Media), maxButtons); err != nil {
 				return err
 			}
 		}

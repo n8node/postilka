@@ -631,17 +631,21 @@ func (s *PublicationService) publishTarget(
 			return "", fmt.Errorf("формат %s пока поддерживается только Telegram", format)
 		}
 		text := readableProviderText(content)
+		buttons := maxPublishButtons(settings, content)
+		if !maxOutgoingHasPayload(text, len(post.Media), buttons) {
+			return "", fmt.Errorf("%w: для MAX укажите текст, медиа или кнопки-ссылки", ErrInvalidPost)
+		}
 		if len(post.Media) > 0 {
 			attachments, err := s.maxMedia(ctx, token, post)
 			if err != nil {
 				return "", err
 			}
-			if err := s.maxClient.SendChannelMessage(ctx, token, channel.ChatID, text, attachments, settings.MaxButtons); err != nil {
+			if err := s.maxClient.SendChannelMessage(ctx, token, channel.ChatID, text, attachments, buttons); err != nil {
 				return "", err
 			}
 			return "", nil
 		}
-		if err := s.maxClient.SendChannelMessage(ctx, token, channel.ChatID, text, nil, settings.MaxButtons); err != nil {
+		if err := s.maxClient.SendChannelMessage(ctx, token, channel.ChatID, text, nil, buttons); err != nil {
 			return "", err
 		}
 		return "", nil
@@ -812,6 +816,55 @@ func (s *PublicationService) maxMedia(
 }
 
 var providerHTMLAnchor = regexp.MustCompile(`(?is)<a\s+href="(https?://[^"]+)"\s*>(.*?)</a>`)
+
+func maxPublishButtons(settings model.PostSettings, content model.PostContent) [][]model.TelegramInlineButton {
+	if len(settings.MaxButtons) > 0 {
+		return settings.MaxButtons
+	}
+	return telegramLinkButtonsForMAX(content.Buttons)
+}
+
+func telegramLinkButtonsForMAX(rows [][]model.TelegramInlineButton) [][]model.TelegramInlineButton {
+	if len(rows) == 0 {
+		return nil
+	}
+	out := make([][]model.TelegramInlineButton, 0, len(rows))
+	for _, row := range rows {
+		btnRow := make([]model.TelegramInlineButton, 0, len(row))
+		for _, button := range row {
+			text := strings.TrimSpace(button.Text)
+			link := strings.TrimSpace(button.URL)
+			if text == "" || link == "" {
+				continue
+			}
+			if button.CallbackData != "" || button.WebAppURL != "" || button.CopyText != "" {
+				continue
+			}
+			btnRow = append(btnRow, model.TelegramInlineButton{Text: text, URL: link})
+		}
+		if len(btnRow) > 0 {
+			out = append(out, btnRow)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func maxOutgoingHasPayload(text string, mediaCount int, buttons [][]model.TelegramInlineButton) bool {
+	if strings.TrimSpace(text) != "" || mediaCount > 0 {
+		return true
+	}
+	for _, row := range buttons {
+		for _, button := range row {
+			if strings.TrimSpace(button.Text) != "" && strings.TrimSpace(button.URL) != "" {
+				return true
+			}
+		}
+	}
+	return false
+}
 
 func readableProviderText(content model.PostContent) string {
 	text := content.Text

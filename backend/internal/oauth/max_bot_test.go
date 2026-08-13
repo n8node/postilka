@@ -1,6 +1,9 @@
 package oauth
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestMaxChatLinkMatches(t *testing.T) {
 	chat := &MAXChat{Link: "https://max.ru/channel_postilka"}
@@ -62,5 +65,48 @@ func TestBuildMAXMessageAttachmentsPrefersImageToken(t *testing.T) {
 	}
 	if _, hasURL := payload["url"]; hasURL {
 		t.Fatal("token should take precedence over url")
+	}
+}
+
+func TestResolveMAXImageUploadTokenPrefersUploadResponse(t *testing.T) {
+	token := resolveMAXImageUploadToken(
+		"https://iu.oneme.ru/upload.do?token=url-token",
+		[]byte(`{"token":"body-token"}`),
+	)
+	if token != "body-token" {
+		t.Fatalf("got %q", token)
+	}
+}
+
+func TestResolveMAXImageUploadTokenFromURL(t *testing.T) {
+	token := resolveMAXImageUploadToken(
+		"https://iu.oneme.ru/upload.do?token=url-token",
+		[]byte(`{}`),
+	)
+	if token != "url-token" {
+		t.Fatalf("got %q", token)
+	}
+}
+
+func TestIsMAXAttachmentNotReady(t *testing.T) {
+	if !isMAXAttachmentNotReady([]byte(`{"code":"attachment.not.ready","message":"not processed"}`)) {
+		t.Fatal("expected attachment.not.ready")
+	}
+}
+
+func TestFormatMAXMessagesErrorProtoPayload(t *testing.T) {
+	err := formatMAXMessagesError(400, []byte(`{"code":"proto.payload","message":"invalid body"}`))
+	if err == nil || !strings.Contains(err.Error(), "некорректное содержимое поста") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if strings.Contains(err.Error(), "chat_id") {
+		t.Fatalf("proto.payload must not be mapped to chat_id error: %v", err)
+	}
+}
+
+func TestFormatMAXMessagesErrorChatID(t *testing.T) {
+	err := formatMAXMessagesError(400, []byte(`invalid chat_id value`))
+	if err == nil || !strings.Contains(err.Error(), "chat_id канала MAX") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
