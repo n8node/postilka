@@ -194,6 +194,16 @@ function formatToPostKind(format: PostContent["format"]): PostKind {
   return "post";
 }
 
+/** YouTube-only formats break Telegram/MAX bubble layout in the side preview. */
+function previewFormatForChannel(
+  channel: ChannelListItem,
+  format: PostContent["format"],
+): PostContent["format"] {
+  if (channel.provider === "youtube") return format;
+  if (format === "video" || format === "shorts") return "message";
+  return format;
+}
+
 const YOUTUBE_SHORTS_MAX_SECONDS = 60;
 
 function fileDurationSeconds(file: WorkspaceFile): number | null {
@@ -3507,6 +3517,7 @@ export function PostComposer() {
                     </button>
                   ))}
                 </div>
+                {activeChannel && (
                 <PostChannelPreview
                   channel={activeChannel}
                   media={media.map((item) => ({
@@ -3519,7 +3530,7 @@ export function PostComposer() {
                   }))}
                   textHtml={previewHTML}
                   textPlain={previewPlain}
-                  format={format}
+                  format={previewFormatForChannel(activeChannel, format)}
                   device={device}
                   mediaLayout={telegramMediaLayout}
                   captionPosition={telegramCaptionPosition}
@@ -3556,6 +3567,7 @@ export function PostComposer() {
                     linkPreview
                   }
                 />
+                )}
                 {previewPlain.length > maxText && (
                   <p className="mt-2 text-xs font-semibold text-red-600">
                     Текст будет отклонён: превышен лимит на {previewPlain.length - maxText} символов.
