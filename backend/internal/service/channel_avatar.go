@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/postilka/postilka/internal/model"
 	oauthclient "github.com/postilka/postilka/internal/oauth"
@@ -109,6 +110,10 @@ func (s *ChannelService) enrichTelegramBusinessConnection(
 			ch.Metadata.AvatarURL = telegramUsernameAvatarURL(u)
 		}
 	}
+	if userChatID <= 0 && userID > 0 {
+		userChatID = userID
+		ch.Metadata.BusinessUserChatID = strconv.FormatInt(userID, 10)
+	}
 	return userChatID, userID, username
 }
 
@@ -145,7 +150,7 @@ func (s *ChannelService) fetchTelegramBusinessAvatar(
 		return body, ct, nil
 	}
 
-	avatarCtx, cancel := context.WithTimeout(ctx, 12*time.Second)
+	avatarCtx, cancel := context.WithTimeout(ctx, 25*time.Second)
 	defer cancel()
 
 	userChatID, userID, username := s.enrichTelegramBusinessConnection(avatarCtx, token, ch)
@@ -164,6 +169,65 @@ func (s *ChannelService) fetchTelegramBusinessAvatar(
 	}
 
 	return nil, "", ErrChannelAvatarNotFound
+}
+
+func channelAvatarInitials(ch model.Channel) string {
+	name := strings.TrimSpace(ch.Metadata.ProviderTitle)
+	if name == "" {
+		name = strings.TrimSpace(ch.Name)
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "?"
+	}
+	words := strings.Fields(name)
+	if len(words) >= 2 {
+		a, _ := utf8.DecodeRuneInString(words[0])
+		b, _ := utf8.DecodeRuneInString(words[1])
+		if a != utf8.RuneError && b != utf8.RuneError {
+			return strings.ToUpper(string([]rune{a, b}))
+		}
+	}
+	runes := []rune(name)
+	letters := make([]rune, 0, 2)
+	for _, r := range runes {
+		if (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z') || (r >= 'А' && r <= 'я') || r == 'Ё' || r == 'ё' {
+			letters = append(letters, r)
+			if len(letters) == 2 {
+				break
+			}
+		}
+	}
+	if len(letters) == 0 {
+		if len(runes) >= 2 {
+			return strings.ToUpper(string(runes[:2]))
+		}
+		return strings.ToUpper(string(runes))
+	}
+	if len(letters) == 1 {
+		return strings.ToUpper(string(letters))
+	}
+	return strings.ToUpper(string(letters))
+}
+
+func generateInitialsAvatarSVG(initials string) []byte {
+	initials = strings.TrimSpace(initials)
+	if initials == "" {
+		initials = "?"
+	}
+	initials = strings.Map(func(r rune) rune {
+		switch r {
+		case '"', '\'', '<', '>', '&':
+			return -1
+		default:
+			return r
+		}
+	}, initials)
+	svg := fmt.Sprintf(
+		`<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128"><rect width="128" height="128" rx="64" fill="#f4f4f5"/><text x="50%%" y="54%%" dominant-baseline="middle" text-anchor="middle" fill="#52525b" font-family="system-ui,sans-serif" font-size="44" font-weight="600">%s</text></svg>`,
+		initials,
+	)
+	return []byte(svg)
 }
 
 func (s *ChannelService) FetchAvatar(
@@ -202,10 +266,13 @@ func (s *ChannelService) FetchAvatar(
 	case model.ChannelProviderTelegram:
 		if isTelegramBusinessChannel(ch) {
 			body, contentType, err := s.fetchTelegramBusinessAvatar(ctx, token, &ch)
+			s.persistTelegramBusinessMetadata(ctx, ws.ID, &ch, body, contentType)
 			if err != nil {
+				if errors.Is(err, ErrChannelAvatarNotFound) {
+					return generateInitialsAvatarSVG(channelAvatarInitials(ch)), "image/svg+xml", nil
+				}
 				return nil, "", err
 			}
-			s.persistTelegramBusinessMetadata(ctx, ws.ID, &ch, body, contentType)
 			return body, contentType, nil
 		}
 		if body, ct, ok := avatarBytesFromMetadata(ch.Metadata.AvatarURL); ok {
@@ -296,6 +363,7 @@ func fetchRemoteAvatar(ctx context.Context, rawURL string) ([]byte, string, erro
 	if err != nil {
 		return nil, "", err
 	}
+	req.Header.Set("User-Agent", "Postilka/1.0 (+https://postilka.ru)")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, "", err

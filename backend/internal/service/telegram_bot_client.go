@@ -1108,9 +1108,16 @@ func telegramUsernameAvatarURL(username string) string {
 func telegramChatIDParam(chatID string) any {
 	chatID = strings.TrimSpace(chatID)
 	if id, err := strconv.ParseInt(chatID, 10, 64); err == nil {
-		return id
+		return telegramAPIIntParam(id)
 	}
 	return chatID
+}
+
+func telegramAPIIntParam(id int64) any {
+	if id > 2147483647 || id < -2147483648 {
+		return strconv.FormatInt(id, 10)
+	}
+	return id
 }
 
 func (c *TelegramBotClient) ChatPhotoDataURI(ctx context.Context, token, chatID string) (string, error) {
@@ -1226,7 +1233,7 @@ func (c *TelegramBotClient) FetchUserProfilePhoto(ctx context.Context, token str
 		return nil, "", nil
 	}
 	raw, err := c.api(ctx, token, "getUserProfilePhotos", map[string]any{
-		"user_id": userID,
+		"user_id": telegramAPIIntParam(userID),
 		"limit":   1,
 	})
 	if err != nil {
@@ -1265,30 +1272,44 @@ func (c *TelegramBotClient) FetchBusinessUserAvatar(
 	userChatID, userID int64,
 	username string,
 ) ([]byte, string, error) {
+	if userChatID <= 0 && userID > 0 {
+		userChatID = userID
+	}
+	if userID <= 0 && userChatID > 0 {
+		userID = userChatID
+	}
+
+	profileIDs := []int64{}
 	if userChatID > 0 {
-		if body, contentType, err := c.FetchChatPhoto(ctx, token, strconv.FormatInt(userChatID, 10)); err == nil && len(body) > 0 {
+		profileIDs = append(profileIDs, userChatID)
+	}
+	if userID > 0 && userID != userChatID {
+		profileIDs = append(profileIDs, userID)
+	}
+	for _, id := range profileIDs {
+		if body, contentType, err := c.FetchUserProfilePhoto(ctx, token, id); err == nil && len(body) > 0 {
 			return body, contentType, nil
 		}
 	}
-	if userID > 0 {
-		if body, contentType, err := c.FetchChatPhoto(ctx, token, strconv.FormatInt(userID, 10)); err == nil && len(body) > 0 {
-			return body, contentType, nil
-		}
-		if body, contentType, err := c.FetchUserProfilePhoto(ctx, token, userID); err == nil && len(body) > 0 {
+	for _, id := range profileIDs {
+		if body, contentType, err := c.FetchChatPhoto(ctx, token, strconv.FormatInt(id, 10)); err == nil && len(body) > 0 {
 			return body, contentType, nil
 		}
 	}
+
 	username = strings.TrimPrefix(strings.TrimSpace(username), "@")
 	if username != "" {
 		if body, contentType, err := c.FetchChatPhoto(ctx, token, "@"+username); err == nil && len(body) > 0 {
 			return body, contentType, nil
 		}
-		if publicURL := telegramUsernameAvatarURL(username); publicURL != "" {
+		for _, size := range []string{"320", "160"} {
+			publicURL := "https://t.me/i/userpic/" + size + "/" + url.PathEscape(username) + ".jpg"
 			if body, contentType, err := fetchRemoteAvatar(ctx, publicURL); err == nil && len(body) > 0 {
 				return body, contentType, nil
 			}
 		}
 	}
+
 	return nil, "", nil
 }
 

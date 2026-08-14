@@ -310,10 +310,14 @@ func (s *ChannelService) VerifyAndRefresh(
 			}
 			canManage := conn.CanManageStories()
 			enabled := conn.IsEnabled
+			userChatID := conn.UserChatID
+			if userChatID <= 0 && conn.User.ID > 0 {
+				userChatID = conn.User.ID
+			}
 			meta = model.ChannelMetadata{
 				ProviderTitle:             businessConnectionDisplayName(conn.User),
 				BusinessUserID:            fmt.Sprintf("%d", conn.User.ID),
-				BusinessUserChatID:        fmt.Sprintf("%d", conn.UserChatID),
+				BusinessUserChatID:        fmt.Sprintf("%d", userChatID),
 				CanManageStories:          &canManage,
 				BusinessConnectionEnabled: &enabled,
 			}
@@ -321,7 +325,7 @@ func (s *ChannelService) VerifyAndRefresh(
 				meta.PublicURL = "https://t.me/" + username
 				meta.AvatarURL = telegramUsernameAvatarURL(username)
 			}
-			if body, ct, err := s.botClient.FetchBusinessUserAvatar(ctx, token, conn.UserChatID, conn.User.ID, conn.User.Username); err == nil && len(body) > 0 {
+			if body, ct, err := s.botClient.FetchBusinessUserAvatar(ctx, token, userChatID, conn.User.ID, conn.User.Username); err == nil && len(body) > 0 {
 				meta = mergeChannelAvatar(meta, avatarDataURI(body, ct))
 			}
 			ch.Name = meta.ProviderTitle
