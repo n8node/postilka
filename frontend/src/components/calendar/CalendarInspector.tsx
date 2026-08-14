@@ -66,7 +66,17 @@ export function CalendarInspector({
         <p className="font-medium leading-snug">{postPreviewText(post)}</p>
         <p className="mt-1 text-[11px] text-muted">
           {postFormatLabel(post.content.format)} · {POST_STATUS_LABEL[post.status]}
+          {post.origin === "agent" ? " · Агент" : " · Вручную"}
+          {post.plan_manually_changed ? " · ход изменён вручную" : ""}
         </p>
+        {post.mission_id ? (
+          <Link
+            href={`/missions/${post.mission_id}`}
+            className="mt-2 inline-block text-xs text-accent hover:underline"
+          >
+            Открыть задачу продвижения
+          </Link>
+        ) : null}
       </div>
 
       <div>

@@ -45,6 +45,8 @@ func (h *PostHandler) List(w http.ResponseWriter, r *http.Request) {
 		ChannelID: strings.TrimSpace(q.Get("channel_id")),
 		Query:     strings.TrimSpace(q.Get("q")),
 		Format:    strings.TrimSpace(q.Get("format")),
+		Origin:    strings.TrimSpace(q.Get("origin")),
+		MissionID: strings.TrimSpace(q.Get("mission_id")),
 		Limit:     limit,
 		Offset:    offset,
 	}

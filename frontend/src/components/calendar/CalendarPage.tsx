@@ -75,6 +75,7 @@ export function CalendarPage() {
   const [channelFilter, setChannelFilter] = useState("");
   const [query, setQuery] = useState("");
   const [hidePublished, setHidePublished] = useState(true);
+  const [originFilter, setOriginFilter] = useState<"" | "user" | "agent">("");
   const [busy, setBusy] = useState(false);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTargetKey, setDropTargetKey] = useState<string | null>(null);
@@ -102,11 +103,13 @@ export function CalendarPage() {
           status: statusFilter || undefined,
           channel_id: channelFilter || undefined,
           q: query || undefined,
+          origin: originFilter || undefined,
         }),
         fetchUnscheduledPosts({
           status: statusFilter === "draft" ? "draft" : statusFilter || undefined,
           channel_id: channelFilter || undefined,
           q: query || undefined,
+          origin: originFilter || undefined,
         }),
         fetchChannels(),
         fetchAnalyticsPosts({
@@ -124,7 +127,7 @@ export function CalendarPage() {
     } finally {
       setLoading(false);
     }
-  }, [range.from, range.to, statusFilter, channelFilter, query]);
+  }, [range.from, range.to, statusFilter, channelFilter, query, originFilter]);
 
   useEffect(() => {
     void load();
@@ -480,10 +483,12 @@ export function CalendarPage() {
           channelId={channelFilter}
           query={query}
           hidePublished={hidePublished}
+          origin={originFilter}
           onStatusChange={setStatusFilter}
           onChannelChange={setChannelFilter}
           onQueryChange={setQuery}
           onHidePublishedChange={setHidePublished}
+          onOriginChange={setOriginFilter}
         />
 
         {view === "list" ? (

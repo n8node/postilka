@@ -14,3 +14,5 @@ alwaysApply: false
 - Pagination, rate limits, payload caps.
 - Webhooks: verify signatures, idempotent handlers, delivery logs.
 - Update OpenAPI/docs with behavior changes.
+- MCP-сервер — **later**: те же Go services, что UI, встроенный агент и Public API. Внешний агент (ГигаАгент, Cloud.ru, OpenClaw) вызывает инструменты Postilka; публикация, approval, квоты и `origin` поста остаются в Postilka.
+- Запрещено отдавать в MCP/API shell, произвольный REPL и токены провайдеров.

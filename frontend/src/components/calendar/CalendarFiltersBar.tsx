@@ -22,10 +22,12 @@ type CalendarFiltersBarProps = {
   channelId: string;
   query: string;
   hidePublished: boolean;
+  origin: "" | "user" | "agent";
   onStatusChange: (status: StatusFilter) => void;
   onChannelChange: (channelId: string) => void;
   onQueryChange: (query: string) => void;
   onHidePublishedChange: (hide: boolean) => void;
+  onOriginChange: (origin: "" | "user" | "agent") => void;
 };
 
 export function CalendarFiltersBar({
@@ -34,10 +36,12 @@ export function CalendarFiltersBar({
   channelId,
   query,
   hidePublished,
+  origin,
   onStatusChange,
   onChannelChange,
   onQueryChange,
   onHidePublishedChange,
+  onOriginChange,
 }: CalendarFiltersBarProps) {
   return (
     <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -73,6 +77,15 @@ export function CalendarFiltersBar({
             {ch.name}
           </option>
         ))}
+      </select>
+      <select
+        value={origin}
+        onChange={(e) => onOriginChange(e.target.value as "" | "user" | "agent")}
+        className="rounded-md border border-border bg-surface px-2 py-1.5 text-xs"
+      >
+        <option value="">Все авторы</option>
+        <option value="user">Мои</option>
+        <option value="agent">Агент</option>
       </select>
       <label className="flex cursor-pointer items-center gap-1.5 text-xs text-muted">
         <input

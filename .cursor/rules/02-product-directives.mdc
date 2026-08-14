@@ -11,7 +11,7 @@ alwaysApply: true
 - Планирование публикаций: статус, retry, reconnect errors.
 - Каналы РФ: **VK, Telegram, OK, MAX, Rutube, Дзен** — при официальном API.
 - Глобальные каналы — по мере готовности провайдеров + outbound proxy.
-- Public API + webhooks; MCP/CLI — опционально, та же business logic что UI.
+- Public API + webhooks; MCP/CLI — later, та же business logic что UI и встроенный агент.
 - Биллинг РФ — `08-billing-russia.mdc`.
 - Подписки, квоты, кошелёк токенов — `18-subscriptions-tokens-wallet.mdc` (эталон DOC).
 - Полный план функционала — `19-product-feature-plan.mdc`.

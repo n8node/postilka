@@ -115,10 +115,26 @@ func (s *PostService) Create(
 		return nil, err
 	}
 	sanitizePostSaveRequest(&req)
+	req.Origin = model.PostOriginUser
+	req.MissionID = ""
 	if err := s.validate(ctx, ws.ID, req, false); err != nil {
 		return nil, err
 	}
 	return s.posts.Create(ctx, ws.ID, userID, req)
+}
+
+func (s *PostService) CreateAgentDraft(
+	ctx context.Context,
+	workspaceID, userID, missionID string,
+	req model.PostSaveRequest,
+) (*model.Post, error) {
+	sanitizePostSaveRequest(&req)
+	req.Origin = model.PostOriginAgent
+	req.MissionID = missionID
+	if err := s.validate(ctx, workspaceID, req, false); err != nil {
+		return nil, err
+	}
+	return s.posts.Create(ctx, workspaceID, userID, req)
 }
 
 func (s *PostService) Update(
@@ -150,7 +166,15 @@ func (s *PostService) Update(
 		}
 		return s.posts.UpdatePublishedStory(ctx, ws.ID, postID, req)
 	}
-	return s.posts.Update(ctx, ws.ID, postID, req)
+	updated, err := s.posts.Update(ctx, ws.ID, postID, req)
+	if err != nil {
+		return nil, err
+	}
+	if existing.MissionID != "" {
+		_ = s.posts.MarkPlanManuallyChanged(ctx, ws.ID, postID)
+		updated.PlanManuallyChanged = true
+	}
+	return updated, nil
 }
 
 func (s *PostService) Delete(ctx context.Context, userID string, r *http.Request, postID string) error {
@@ -192,7 +216,23 @@ func (s *PostService) Schedule(
 	if submit {
 		return s.SubmitForApproval(ctx, userID, r, postID, model.PostApprovalSubmitRequest{DueAt: &dueAt})
 	}
-	return s.posts.SetScheduled(ctx, ws.ID, postID, dueAt.UTC())
+	scheduled, err := s.posts.SetScheduled(ctx, ws.ID, postID, dueAt.UTC())
+	if err != nil {
+		return nil, err
+	}
+	if post.MissionID != "" {
+		_ = s.posts.MarkPlanManuallyChanged(ctx, ws.ID, postID)
+		scheduled.PlanManuallyChanged = true
+	}
+	return scheduled, nil
+}
+
+func (s *PostService) ScheduleAgentPost(
+	ctx context.Context,
+	workspaceID, postID string,
+	dueAt time.Time,
+) (*model.Post, error) {
+	return s.posts.SetScheduled(ctx, workspaceID, postID, dueAt.UTC())
 }
 
 func (s *PostService) PublishNow(

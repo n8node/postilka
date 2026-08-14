@@ -18,6 +18,7 @@ import { AdminPaymentSettingsPage } from "@/components/admin/AdminPaymentSetting
 import { AdminTelegramPage } from "@/components/admin/AdminTelegramPage";
 import { AdminMetrikaPage } from "@/components/admin/AdminMetrikaPage";
 import { AdminYandexGptPage } from "@/components/admin/AdminYandexGptPage";
+import { AdminAgentTemplatesPage } from "@/components/admin/AdminAgentTemplatesPage";
 import { cn } from "@/lib/utils";
 
 type SettingsKey =
@@ -27,6 +28,7 @@ type SettingsKey =
   | "payment"
   | "email-smtp"
   | "ai-yandex-gpt"
+  | "ai-agents"
   | "ai-kie"
   | "ai-kie-video"
   | "analytics-metrika";
@@ -61,6 +63,11 @@ const SETTINGS_MENU: { key: SettingsKey; label: string; description: string }[] 
     key: "ai-yandex-gpt",
     label: "AI — Yandex GPT",
     description: "Текст, модели и цены",
+  },
+  {
+    key: "ai-agents",
+    label: "AI — агенты",
+    description: "Системные промпты задач продвижения",
   },
   {
     key: "ai-kie",
@@ -224,6 +231,9 @@ function SettingsSectionContent({
   }
   if (selected === "ai-yandex-gpt") {
     return <AdminYandexGptPage embedded />;
+  }
+  if (selected === "ai-agents") {
+    return <AdminAgentTemplatesPage embedded />;
   }
   if (selected === "ai-kie") {
     return <AdminKiePage embedded />;

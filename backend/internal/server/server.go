@@ -176,6 +176,12 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	telegramBusinessHandler := handler.NewTelegramBusinessHandler(telegramBusinessSvc)
 	channelConnectHandler := handler.NewChannelConnectHandler(channelConnectSvc, cfg)
 	postHandler := handler.NewPostHandler(postSvc)
+	missionRepo := repository.NewMissionRepository(db.Pool)
+	agentTemplateRepo := repository.NewAgentTemplateRepository(db.Pool)
+	missionSvc := service.NewMissionService(
+		missionRepo, agentTemplateRepo, postSvc, channelRepo, wsSvc, yandexGptConfigSvc, quotaSvc,
+	)
+	missionHandler := handler.NewMissionHandler(missionSvc)
 	analyticsRepo := repository.NewAnalyticsRepository(db.Pool)
 	metrikaRepo := repository.NewMetrikaRepository(db.Pool)
 	metrikaPlatformConfigRepo := repository.NewMetrikaPlatformConfigRepository(db.Pool)
@@ -355,6 +361,24 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 
 		r.Group(func(r chi.Router) {
 			r.Use(authMW.Required)
+			r.Get("/agent-templates", missionHandler.ListTemplates)
+			r.Post("/agent-templates", missionHandler.CreateTemplate)
+			r.Patch("/agent-templates/{id}", missionHandler.UpdateTemplate)
+			r.Delete("/agent-templates/{id}", missionHandler.DeleteTemplate)
+			r.Get("/missions", missionHandler.List)
+			r.Post("/missions", missionHandler.Create)
+			r.Get("/missions/{id}", missionHandler.Get)
+			r.Patch("/missions/{id}", missionHandler.Update)
+			r.Post("/missions/{id}/chat", missionHandler.Chat)
+			r.Post("/missions/{id}/drafts", missionHandler.CreateDrafts)
+			r.Post("/missions/{id}/approve", missionHandler.Approve)
+			r.Post("/missions/{id}/cancel", missionHandler.Cancel)
+			r.Post("/missions/{id}/complete", missionHandler.Complete)
+			r.Post("/missions/{id}/save-template", missionHandler.SaveTemplate)
+		})
+
+		r.Group(func(r chi.Router) {
+			r.Use(authMW.Required)
 			r.Get("/analytics/overview", analyticsHandler.Overview)
 			r.Get("/analytics/posts", analyticsHandler.ListPosts)
 			r.Get("/analytics/metrika/status", analyticsHandler.MetrikaStatus)
@@ -459,6 +483,8 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Get("/config/yandex-gpt", yandexGptConfigHandler.GetAdmin)
 				r.Put("/config/yandex-gpt", yandexGptConfigHandler.UpdateAdmin)
 				r.Post("/config/yandex-gpt/test", yandexGptConfigHandler.TestConnection)
+				r.Get("/agent-templates", missionHandler.AdminListTemplates)
+				r.Put("/agent-templates/{id}", missionHandler.AdminUpdateTemplate)
 				r.Get("/config/metrika", metrikaPlatformConfigHandler.GetAdmin)
 				r.Put("/config/metrika", metrikaPlatformConfigHandler.UpdateAdmin)
 				r.Get("/config/kie", kieConfigHandler.GetAdmin)

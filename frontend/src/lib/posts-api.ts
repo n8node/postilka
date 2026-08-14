@@ -140,6 +140,9 @@ export type PostMedia = {
 export type Post = {
   id: string;
   workspace_id: string;
+  mission_id?: string;
+  origin?: "user" | "agent";
+  plan_manually_changed?: boolean;
   status:
     | "draft"
     | "pending_approval"
@@ -183,6 +186,8 @@ export type PostListParams = {
   channel_id?: string;
   q?: string;
   format?: string;
+  origin?: "user" | "agent" | "";
+  mission_id?: string;
   calendar?: boolean;
   from?: string;
   to?: string;
@@ -215,6 +220,8 @@ export function fetchPosts(params: PostListParams = {}) {
   if (params.channel_id) qs.set("channel_id", params.channel_id);
   if (params.q) qs.set("q", params.q);
   if (params.format) qs.set("format", params.format);
+  if (params.origin) qs.set("origin", params.origin);
+  if (params.mission_id) qs.set("mission_id", params.mission_id);
   if (params.calendar) qs.set("calendar", "1");
   if (params.from) qs.set("from", params.from);
   if (params.to) qs.set("to", params.to);

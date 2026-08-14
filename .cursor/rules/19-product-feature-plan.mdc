@@ -30,6 +30,7 @@ alwaysApply: true
 - Очередь, таймзона, recurring, bulk
 - Retry, идемпотентность публикации; reconnect errors
 - Worker + `due_at` + NATS prod (`05`)
+- Календарь один: визуально отличать посты человека и посты агента (бейдж + фильтр)
 
 ## 4. Медиатека
 - Upload, S3-compatible storage (`13`), папки/теги/поиск
@@ -41,6 +42,9 @@ alwaysApply: true
 - Media: KIE.ai — image/video (`12`)
 - Лимиты: included квота тарифа → overage с кошелька (`18`)
 - Prefail при нуле квоты и пустом кошельке
+- Два пути: классические инструменты кабинета и запуск агента. Агент не подменяет композер, календарь и каналы.
+- Встроенный агент (системные шаблоны + пользовательские) ведёт «Задачу продвижения»; создаёт обычные посты с `origin=agent`.
+- ГигаАгент / OpenClaw / Cloud.ru AI Agents — не рантайм продукта. Подключение только через Public API и MCP, later.
 
 ## 6. Подписка, квоты, кошелёк
 - Тарифы free/paid; entitlements (каналы, посты, seats, storage, AI)
@@ -70,9 +74,10 @@ alwaysApply: true
 - In-app + email/Telegram по настройкам; webhooks для API-клиентов
 
 ## 11. Интеграции
-- Public API + webhooks (`11`); та же business logic что UI
+- Public API + webhooks (`11`); та же business logic что UI и встроенный агент
+- MCP-сервер — later: те же инструменты (каналы, черновики, слоты, короткие ссылки, метрики задачи) для внешних агентов. Публикация только через API Postilka, с approval и квотами.
 - RSS→пост, Zapier/Make — later
-- MCP/CLI — optional, later
+- CLI — optional, later
 
 ## 12. Онбординг и UX
 - Регистрация/логин; RU UI (`07`)
@@ -109,5 +114,7 @@ alwaysApply: true
 6. AI text/media + debit priority  
 7. Team/roles/approval  
 8. Analytics MVP  
-9. Public API/webhooks  
-10. Inbox / bulk / integrations — later
+9. Задачи продвижения + встроенный агент + метка в календаре  
+10. Public API / webhooks  
+11. MCP для внешних агентов  
+12. Inbox / bulk — later

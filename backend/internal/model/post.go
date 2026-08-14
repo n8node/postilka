@@ -5,6 +5,13 @@ import (
 	"time"
 )
 
+type PostOrigin string
+
+const (
+	PostOriginUser  PostOrigin = "user"
+	PostOriginAgent PostOrigin = "agent"
+)
+
 type PostStatus string
 
 const (
@@ -224,19 +231,22 @@ type PostMedia struct {
 }
 
 type Post struct {
-	ID              string          `json:"id"`
-	WorkspaceID     string          `json:"workspace_id"`
-	CreatedByUserID string          `json:"created_by_user_id,omitempty"`
-	Status          PostStatus      `json:"status"`
-	Content         PostContent     `json:"content"`
-	Settings        PostSettings    `json:"settings"`
-	DueAt           *time.Time      `json:"due_at,omitempty"`
-	PublishedAt     *time.Time      `json:"published_at,omitempty"`
-	LastError       string          `json:"last_error,omitempty"`
-	Targets         []PostTarget    `json:"targets"`
-	Media           []PostMedia     `json:"media"`
-	CreatedAt       time.Time       `json:"created_at"`
-	UpdatedAt       time.Time       `json:"updated_at"`
+	ID                   string     `json:"id"`
+	WorkspaceID          string     `json:"workspace_id"`
+	CreatedByUserID      string     `json:"created_by_user_id,omitempty"`
+	MissionID            string     `json:"mission_id,omitempty"`
+	Origin               PostOrigin `json:"origin"`
+	PlanManuallyChanged  bool       `json:"plan_manually_changed,omitempty"`
+	Status               PostStatus `json:"status"`
+	Content              PostContent `json:"content"`
+	Settings             PostSettings `json:"settings"`
+	DueAt                *time.Time `json:"due_at,omitempty"`
+	PublishedAt          *time.Time `json:"published_at,omitempty"`
+	LastError            string     `json:"last_error,omitempty"`
+	Targets              []PostTarget `json:"targets"`
+	Media                []PostMedia `json:"media"`
+	CreatedAt            time.Time  `json:"created_at"`
+	UpdatedAt            time.Time  `json:"updated_at"`
 }
 
 type PostTargetInput struct {
@@ -250,10 +260,12 @@ type PostMediaInput struct {
 }
 
 type PostSaveRequest struct {
-	Content  PostContent      `json:"content"`
-	Settings PostSettings     `json:"settings"`
-	Targets  []PostTargetInput `json:"targets"`
-	Media    []PostMediaInput `json:"media,omitempty"`
+	Content   PostContent       `json:"content"`
+	Settings  PostSettings      `json:"settings"`
+	Targets   []PostTargetInput `json:"targets"`
+	Media     []PostMediaInput  `json:"media,omitempty"`
+	Origin    PostOrigin        `json:"-"`
+	MissionID string            `json:"-"`
 }
 
 type PostScheduleRequest struct {

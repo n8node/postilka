@@ -23,7 +23,8 @@ func NewPostRepository(pool *pgxpool.Pool) *PostRepository {
 
 const postColumns = `
 	id, workspace_id, COALESCE(created_by_user_id::text, ''), status, content, settings,
-	due_at, published_at, COALESCE(last_error, ''), created_at, updated_at
+	due_at, published_at, COALESCE(last_error, ''), created_at, updated_at,
+	COALESCE(mission_id::text, ''), origin, plan_manually_changed
 `
 
 func scanPost(row pgx.Row) (*model.Post, error) {
@@ -32,6 +33,7 @@ func scanPost(row pgx.Row) (*model.Post, error) {
 	err := row.Scan(
 		&post.ID, &post.WorkspaceID, &post.CreatedByUserID, &post.Status, &contentRaw, &settingsRaw,
 		&post.DueAt, &post.PublishedAt, &post.LastError, &post.CreatedAt, &post.UpdatedAt,
+		&post.MissionID, &post.Origin, &post.PlanManuallyChanged,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -51,17 +53,19 @@ func scanPost(row pgx.Row) (*model.Post, error) {
 }
 
 type PostListFilter struct {
-	WorkspaceID      string
-	Status           string
-	ChannelID        string
-	Query            string
-	Format           string
-	From             *time.Time
-	To               *time.Time
-	Calendar         bool
+	WorkspaceID        string
+	Status             string
+	ChannelID          string
+	Query              string
+	Format             string
+	Origin             string
+	MissionID          string
+	From               *time.Time
+	To                 *time.Time
+	Calendar           bool
 	IncludeUnscheduled bool
-	Limit            int
-	Offset           int
+	Limit              int
+	Offset             int
 }
 
 func (r *PostRepository) buildListWhere(filter PostListFilter) (string, []any) {
@@ -95,6 +99,16 @@ func (r *PostRepository) buildListWhere(filter PostListFilter) (string, []any) {
 	if filter.Format != "" {
 		conditions = append(conditions, fmt.Sprintf("COALESCE(content->>'format', 'message') = $%d", argN))
 		args = append(args, filter.Format)
+		argN++
+	}
+	if filter.Origin != "" {
+		conditions = append(conditions, fmt.Sprintf("origin = $%d", argN))
+		args = append(args, filter.Origin)
+		argN++
+	}
+	if filter.MissionID != "" {
+		conditions = append(conditions, fmt.Sprintf("mission_id = $%d", argN))
+		args = append(args, filter.MissionID)
 		argN++
 	}
 	if filter.Calendar {
@@ -269,10 +283,14 @@ func (r *PostRepository) Create(
 	defer tx.Rollback(ctx)
 
 	var postID string
+	origin := req.Origin
+	if origin == "" {
+		origin = model.PostOriginUser
+	}
 	if err := tx.QueryRow(ctx, `
-		INSERT INTO posts (workspace_id, created_by_user_id, content, settings)
-		VALUES ($1, $2, $3, $4) RETURNING id
-	`, workspaceID, userID, contentRaw, settingsRaw).Scan(&postID); err != nil {
+		INSERT INTO posts (workspace_id, created_by_user_id, content, settings, origin, mission_id)
+		VALUES ($1, $2, $3, $4, $5, $6) RETURNING id
+	`, workspaceID, userID, contentRaw, settingsRaw, origin, nullIfEmpty(req.MissionID)).Scan(&postID); err != nil {
 		return nil, err
 	}
 	if err := replacePostRelations(ctx, tx, workspaceID, postID, req); err != nil {
@@ -429,6 +447,22 @@ func (r *PostRepository) DeleteDraft(ctx context.Context, workspaceID, postID st
 		return ErrNotFound
 	}
 	return nil
+}
+
+func (r *PostRepository) MarkPlanManuallyChanged(ctx context.Context, workspaceID, postID string) error {
+	_, err := r.pool.Exec(ctx, `
+		UPDATE posts SET plan_manually_changed = TRUE, updated_at = NOW()
+		WHERE id = $1 AND workspace_id = $2 AND mission_id IS NOT NULL
+	`, postID, workspaceID)
+	return err
+}
+
+func (r *PostRepository) MarkPlanManuallyChanged(ctx context.Context, workspaceID, postID string) error {
+	_, err := r.pool.Exec(ctx, `
+		UPDATE posts SET plan_manually_changed = TRUE, updated_at = NOW()
+		WHERE id = $1 AND workspace_id = $2 AND mission_id IS NOT NULL
+	`, postID, workspaceID)
+	return err
 }
 
 func (r *PostRepository) SetScheduled(ctx context.Context, workspaceID, postID string, dueAt time.Time) (*model.Post, error) {
@@ -701,11 +735,15 @@ func (r *PostRepository) CloneForRecurrence(
 	defer tx.Rollback(ctx)
 
 	var postID string
+	origin := source.Origin
+	if origin == "" {
+		origin = model.PostOriginUser
+	}
 	if err := tx.QueryRow(ctx, `
-		INSERT INTO posts (workspace_id, created_by_user_id, status, content, settings, due_at)
-		VALUES ($1, $2, 'scheduled', $3, $4, $5)
+		INSERT INTO posts (workspace_id, created_by_user_id, status, content, settings, due_at, origin, mission_id)
+		VALUES ($1, $2, 'scheduled', $3, $4, $5, $6, $7)
 		RETURNING id
-	`, source.WorkspaceID, source.CreatedByUserID, contentRaw, settingsRaw, nextDue.UTC()).Scan(&postID); err != nil {
+	`, source.WorkspaceID, source.CreatedByUserID, contentRaw, settingsRaw, nextDue.UTC(), origin, nullIfEmpty(source.MissionID)).Scan(&postID); err != nil {
 		return nil, err
 	}
 
