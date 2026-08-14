@@ -11,6 +11,7 @@ import {
   postCalendarDate,
   WEEKDAY_LABELS,
 } from "@/lib/calendar-utils";
+import type { PostMetricsSummary } from "@/lib/calendar-metrics";
 import { postHasConflict } from "@/lib/calendar-conflicts";
 import { CalendarEventCard } from "@/components/calendar/CalendarEventCard";
 import { cn } from "@/lib/utils";
@@ -24,6 +25,7 @@ type CalendarMonthViewProps = {
   channels: ChannelListItem[];
   selectedId: string | null;
   conflicts: ReturnType<typeof import("@/lib/calendar-conflicts").detectCalendarConflicts>;
+  metricsByPost: Map<string, PostMetricsSummary>;
   draggingId: string | null;
   dropTargetKey: string | null;
   invalidDrop: boolean;
@@ -42,6 +44,7 @@ export function CalendarMonthView({
   channels,
   selectedId,
   conflicts,
+  metricsByPost,
   draggingId,
   dropTargetKey,
   invalidDrop,
@@ -130,6 +133,7 @@ export function CalendarMonthView({
                     compact
                     selected={selectedId === post.id}
                     hasConflict={postHasConflict(post.id, conflicts)}
+                    metrics={metricsByPost.get(post.id)}
                     dragging={draggingId === post.id}
                     onSelect={() => onSelect(post.id)}
                     onDragStart={(e) => onDragStart(post, e)}

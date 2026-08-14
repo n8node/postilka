@@ -1,12 +1,14 @@
 import type { Post } from "@/lib/posts-api";
 
-export type CalendarView = "month" | "week" | "day" | "list";
+export type CalendarView = "month" | "week" | "day" | "list" | "kanban" | "timeline";
 
 export const CALENDAR_VIEWS: { id: CalendarView; label: string }[] = [
   { id: "month", label: "Месяц" },
   { id: "week", label: "Неделя" },
   { id: "day", label: "День" },
   { id: "list", label: "Список" },
+  { id: "kanban", label: "Kanban" },
+  { id: "timeline", label: "Timeline" },
 ];
 
 export const WEEKDAY_LABELS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
@@ -142,17 +144,27 @@ export function rangeForView(view: CalendarView, anchor: Date, timeZone: string)
       to: endOfDay(addDays(anchor, 1, timeZone), timeZone),
     };
   }
+  if (view === "kanban") {
+    const start = startOfWeek(anchor, timeZone);
+    const end = addDays(start, 27, timeZone);
+    return { from: startOfDay(start, timeZone), to: endOfDay(addDays(end, 1, timeZone), timeZone) };
+  }
+  if (view === "timeline") {
+    const start = startOfWeek(anchor, timeZone);
+    const end = addDays(start, 13, timeZone);
+    return { from: startOfDay(start, timeZone), to: endOfDay(addDays(end, 1, timeZone), timeZone) };
+  }
   const start = startOfWeek(anchor, timeZone);
   const end = addDays(start, 27, timeZone);
   return { from: startOfDay(start, timeZone), to: endOfDay(addDays(end, 1, timeZone), timeZone) };
 }
 
 export function shiftAnchor(view: CalendarView, anchor: Date, delta: number, timeZone: string) {
-  if (view === "month" || view === "list") {
+  if (view === "month" || view === "list" || view === "kanban") {
     const parts = datePartsInTz(anchor, timeZone);
     return zonedDateTime(parts.year, parts.month + delta, 1, 12, 0, timeZone);
   }
-  if (view === "week") return addDays(anchor, delta * 7, timeZone);
+  if (view === "week" || view === "timeline") return addDays(anchor, delta * 7, timeZone);
   return addDays(anchor, delta, timeZone);
 }
 
@@ -174,10 +186,10 @@ export function formatPeriodTitle(view: CalendarView, anchor: Date, timeZone: st
     });
     return `${f.format(from)} – ${t.format(to)}`;
   };
-  if (view === "month" || view === "list") return fmtMonth.format(anchor);
-  if (view === "week") {
+  if (view === "month" || view === "list" || view === "kanban") return fmtMonth.format(anchor);
+  if (view === "week" || view === "timeline") {
     const start = startOfWeek(anchor, timeZone);
-    const end = endOfWeek(anchor, timeZone);
+    const end = view === "timeline" ? addDays(start, 13, timeZone) : endOfWeek(anchor, timeZone);
     return fmtWeekRange(start, end);
   }
   return fmtDay.format(anchor);

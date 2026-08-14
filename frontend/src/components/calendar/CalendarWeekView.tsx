@@ -4,7 +4,6 @@ import type { Post } from "@/lib/posts-api";
 import type { ChannelListItem } from "@/lib/api";
 import {
   dateKey,
-  dateKey,
   isToday,
   postCalendarDate,
   weekDays,
@@ -12,6 +11,7 @@ import {
   WORK_HOUR_END,
   WORK_HOUR_START,
 } from "@/lib/calendar-utils";
+import type { PostMetricsSummary } from "@/lib/calendar-metrics";
 import { postHasConflict } from "@/lib/calendar-conflicts";
 import { CalendarEventCard } from "@/components/calendar/CalendarEventCard";
 import { cn } from "@/lib/utils";
@@ -23,6 +23,7 @@ type CalendarWeekViewProps = {
   channels: ChannelListItem[];
   selectedId: string | null;
   conflicts: ReturnType<typeof import("@/lib/calendar-conflicts").detectCalendarConflicts>;
+  metricsByPost: Map<string, PostMetricsSummary>;
   draggingId: string | null;
   dropTargetKey: string | null;
   invalidDrop: boolean;
@@ -40,6 +41,7 @@ export function CalendarWeekView({
   channels,
   selectedId,
   conflicts,
+  metricsByPost,
   draggingId,
   dropTargetKey,
   invalidDrop,
@@ -125,6 +127,7 @@ export function CalendarWeekView({
                         timeZone={timeZone}
                         selected={selectedId === post.id}
                         hasConflict={postHasConflict(post.id, conflicts)}
+                        metrics={metricsByPost.get(post.id)}
                         dragging={draggingId === post.id}
                         onSelect={() => onSelect(post.id)}
                         onDragStart={(e) => onDragStart(post, e)}
@@ -152,6 +155,7 @@ export function CalendarDayView({
   channels,
   selectedId,
   conflicts,
+  metricsByPost,
   draggingId,
   dropTargetKey,
   invalidDrop,
@@ -167,6 +171,7 @@ export function CalendarDayView({
   channels: ChannelListItem[];
   selectedId: string | null;
   conflicts: ReturnType<typeof import("@/lib/calendar-conflicts").detectCalendarConflicts>;
+  metricsByPost: Map<string, PostMetricsSummary>;
   draggingId: string | null;
   dropTargetKey: string | null;
   invalidDrop: boolean;
@@ -234,6 +239,7 @@ export function CalendarDayView({
                     timeZone={timeZone}
                     selected={selectedId === post.id}
                     hasConflict={postHasConflict(post.id, conflicts)}
+                    metrics={metricsByPost.get(post.id)}
                     dragging={draggingId === post.id}
                     showTime={false}
                     onSelect={() => onSelect(post.id)}

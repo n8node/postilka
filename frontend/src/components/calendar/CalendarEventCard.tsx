@@ -15,6 +15,8 @@ import {
   POST_STATUS_CLASS,
   POST_STATUS_LABEL,
 } from "@/lib/posts-display";
+import { CalendarEventMetrics } from "@/components/calendar/CalendarEventMetrics";
+import type { PostMetricsSummary } from "@/lib/calendar-metrics";
 import { cn } from "@/lib/utils";
 
 type CalendarEventCardProps = {
@@ -26,6 +28,7 @@ type CalendarEventCardProps = {
   hasConflict?: boolean;
   dragging?: boolean;
   showTime?: boolean;
+  metrics?: PostMetricsSummary | null;
   onSelect?: () => void;
   onDragStart?: (e: React.DragEvent) => void;
   onDragEnd?: () => void;
@@ -40,6 +43,7 @@ export function CalendarEventCard({
   hasConflict,
   dragging,
   showTime = true,
+  metrics,
   onSelect,
   onDragStart,
   onDragEnd,
@@ -130,6 +134,9 @@ export function CalendarEventCard({
                 ? ` · ${targetChannels.length} канала`
                 : ""}
           </span>
+        ) : null}
+        {post.status === "published" ? (
+          <CalendarEventMetrics metrics={metrics} compact={compact} className="mt-0.5" />
         ) : null}
       </div>
     </div>

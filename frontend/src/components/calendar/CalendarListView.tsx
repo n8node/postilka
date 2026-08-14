@@ -11,6 +11,8 @@ import {
   POST_STATUS_CLASS,
   POST_STATUS_LABEL,
 } from "@/lib/posts-display";
+import { CalendarEventMetrics } from "@/components/calendar/CalendarEventMetrics";
+import type { PostMetricsSummary } from "@/lib/calendar-metrics";
 import { cn } from "@/lib/utils";
 import { AlertCircle } from "lucide-react";
 
@@ -20,6 +22,7 @@ type CalendarListViewProps = {
   timeZone: string;
   selectedId: string | null;
   conflicts: ReturnType<typeof import("@/lib/calendar-conflicts").detectCalendarConflicts>;
+  metricsByPost: Map<string, PostMetricsSummary>;
   selectedIds: Set<string>;
   onSelect: (id: string) => void;
   onToggleSelect: (id: string) => void;
@@ -31,6 +34,7 @@ export function CalendarListView({
   timeZone,
   selectedId,
   conflicts,
+  metricsByPost,
   selectedIds,
   onSelect,
   onToggleSelect,
@@ -57,6 +61,7 @@ export function CalendarListView({
             <th className="px-3 py-2 font-medium">Публикация</th>
             <th className="px-3 py-2 font-medium">Каналы</th>
             <th className="px-3 py-2 font-medium">Статус</th>
+            <th className="px-3 py-2 font-medium">Метрики</th>
           </tr>
         </thead>
         <tbody>
@@ -123,6 +128,13 @@ export function CalendarListView({
                   >
                     {POST_STATUS_LABEL[post.status]}
                   </span>
+                </td>
+                <td className="px-3 py-2">
+                  {post.status === "published" ? (
+                    <CalendarEventMetrics metrics={metricsByPost.get(post.id)} compact />
+                  ) : (
+                    <span className="text-muted">—</span>
+                  )}
                 </td>
               </tr>
             );

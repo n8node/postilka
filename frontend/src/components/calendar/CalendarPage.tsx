@@ -12,6 +12,8 @@ import { CalendarFiltersBar, type StatusFilter } from "@/components/calendar/Cal
 import { CalendarMonthView } from "@/components/calendar/CalendarMonthView";
 import { CalendarWeekView, CalendarDayView } from "@/components/calendar/CalendarWeekView";
 import { CalendarListView } from "@/components/calendar/CalendarListView";
+import { CalendarKanbanView, type KanbanColumnId, columnForPost } from "@/components/calendar/CalendarKanbanView";
+import { CalendarTimelineView } from "@/components/calendar/CalendarTimelineView";
 import { CalendarInspector } from "@/components/calendar/CalendarInspector";
 import { CalendarQueuePanel } from "@/components/calendar/CalendarQueuePanel";
 import { UndoToast } from "@/components/calendar/UndoToast";
@@ -28,6 +30,9 @@ import {
   toRFC3339,
 } from "@/lib/calendar-utils";
 import { detectCalendarConflicts } from "@/lib/calendar-conflicts";
+import { downloadCalendarIcs } from "@/lib/calendar-ical";
+import { metricsMapFromAnalytics, type PostMetricsSummary } from "@/lib/calendar-metrics";
+import { fetchAnalyticsPosts } from "@/lib/analytics-api";
 import { DEFAULT_TIMEZONE, normalizeTimezone, RUSSIA_TIMEZONES } from "@/lib/russia-timezones";
 import {
   cancelPost,
@@ -76,6 +81,8 @@ export function CalendarPage() {
   const [invalidDrop, setInvalidDrop] = useState(false);
   const [undo, setUndo] = useState<UndoState | null>(null);
   const [expandedDay, setExpandedDay] = useState<Date | null>(null);
+  const [metricsByPost, setMetricsByPost] = useState<Map<string, PostMetricsSummary>>(new Map());
+  const [dropColumn, setDropColumn] = useState<KanbanColumnId | null>(null);
   const dragPayload = useRef<DragPayload | null>(null);
 
   useEffect(() => {
@@ -88,7 +95,7 @@ export function CalendarPage() {
     setLoading(true);
     setError(null);
     try {
-      const [calendarRes, queueRes, channelsRes] = await Promise.all([
+      const [calendarRes, queueRes, channelsRes, analyticsRes] = await Promise.all([
         fetchCalendarPosts({
           from: toRFC3339(range.from),
           to: toRFC3339(range.to),
@@ -102,10 +109,16 @@ export function CalendarPage() {
           q: query || undefined,
         }),
         fetchChannels(),
+        fetchAnalyticsPosts({
+          from: toRFC3339(range.from),
+          to: toRFC3339(range.to),
+          limit: 500,
+        }).catch(() => ({ items: [], total: 0 })),
       ]);
       setPosts(calendarRes.items);
       setQueuePosts(queueRes.items);
       setChannels(channelsRes.items);
+      setMetricsByPost(metricsMapFromAnalytics(analyticsRes.items));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Не удалось загрузить календарь");
     } finally {
@@ -173,8 +186,46 @@ export function CalendarPage() {
   const handleDragEnd = () => {
     setDraggingId(null);
     setDropTargetKey(null);
+    setDropColumn(null);
     setInvalidDrop(false);
     dragPayload.current = null;
+  };
+
+  const handleDragOverColumn = (column: KanbanColumnId, e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDropColumn(column);
+  };
+
+  const handleDropColumn = async (column: KanbanColumnId, e: React.DragEvent) => {
+    e.preventDefault();
+    const payload = dragPayload.current;
+    handleDragEnd();
+    if (!payload) return;
+    const post = [...filteredPosts, ...queuePosts].find((p) => p.id === payload.postId);
+    if (!post) return;
+    if (columnForPost(post) === column) return;
+
+    if (column === "scheduled") {
+      const next = combineDateAndTime(new Date(), post.due_at, displayTimeZone);
+      if (isPastDateTime(next)) return;
+      await reschedulePost(post, next);
+      return;
+    }
+    if (column === "issues" && ["scheduled", "pending_approval", "draft", "failed"].includes(post.status)) {
+      try {
+        const updated = await cancelPost(post.id);
+        updatePostLocal(updated);
+      } catch (err) {
+        setError(err instanceof ApiError ? err.message : "Не удалось отменить публикацию");
+      }
+    }
+  };
+
+  const handleExportIcal = () => {
+    const exportPosts = [...filteredPosts, ...queuePosts].filter((p) => postCalendarDate(p));
+    const stamp = new Intl.DateTimeFormat("en-CA", { timeZone: displayTimeZone }).format(new Date());
+    downloadCalendarIcs(exportPosts, displayTimeZone, `postilka-${stamp}.ics`);
   };
 
   const evaluateDrop = (targetDate: Date) => {
@@ -348,6 +399,7 @@ export function CalendarPage() {
               post={selected}
               channels={channels}
               timeZone={displayTimeZone}
+              metrics={metricsByPost.get(selected.id)}
               busy={busy}
               onReschedule={() => {
                 const next = window.prompt(
@@ -419,6 +471,7 @@ export function CalendarPage() {
           onDisplayTimeZoneChange={setDisplayTimeZone}
           timezoneOptions={RUSSIA_TIMEZONES}
           loading={loading}
+          onExportIcal={handleExportIcal}
         />
 
         <CalendarFiltersBar
@@ -509,6 +562,7 @@ export function CalendarPage() {
               channels={channels}
               selectedId={selectedId}
               conflicts={conflicts}
+              metricsByPost={metricsByPost}
               draggingId={draggingId}
               dropTargetKey={dropTargetKey}
               invalidDrop={invalidDrop}
@@ -527,6 +581,7 @@ export function CalendarPage() {
               channels={channels}
               selectedId={selectedId}
               conflicts={conflicts}
+              metricsByPost={metricsByPost}
               draggingId={draggingId}
               dropTargetKey={dropTargetKey}
               invalidDrop={invalidDrop}
@@ -544,6 +599,7 @@ export function CalendarPage() {
               channels={channels}
               selectedId={selectedId}
               conflicts={conflicts}
+              metricsByPost={metricsByPost}
               draggingId={draggingId}
               dropTargetKey={dropTargetKey}
               invalidDrop={invalidDrop}
@@ -553,6 +609,32 @@ export function CalendarPage() {
               onDragOverHour={handleDragOverHour}
               onDropHour={handleDropHour}
             />
+          ) : view === "kanban" ? (
+            <CalendarKanbanView
+              posts={[...filteredPosts, ...queuePosts]}
+              channels={channels}
+              timeZone={displayTimeZone}
+              selectedId={selectedId}
+              metricsByPost={metricsByPost}
+              conflicts={conflicts}
+              draggingId={draggingId}
+              dropColumn={dropColumn}
+              onSelect={setSelectedId}
+              onDragStart={handleDragStart}
+              onDragEnd={handleDragEnd}
+              onDragOverColumn={handleDragOverColumn}
+              onDropColumn={handleDropColumn}
+            />
+          ) : view === "timeline" ? (
+            <CalendarTimelineView
+              anchor={anchor}
+              timeZone={displayTimeZone}
+              posts={filteredPosts}
+              channels={channels}
+              selectedId={selectedId}
+              metricsByPost={metricsByPost}
+              onSelect={setSelectedId}
+            />
           ) : (
             <CalendarListView
               posts={filteredPosts}
@@ -560,6 +642,7 @@ export function CalendarPage() {
               timeZone={displayTimeZone}
               selectedId={selectedId}
               conflicts={conflicts}
+              metricsByPost={metricsByPost}
               selectedIds={bulkSelected}
               onSelect={setSelectedId}
               onToggleSelect={toggleBulk}

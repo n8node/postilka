@@ -25,12 +25,14 @@ import {
   postPreviewText,
   POST_STATUS_LABEL,
 } from "@/lib/posts-display";
-import { cn } from "@/lib/utils";
+import { CalendarEventMetrics } from "@/components/calendar/CalendarEventMetrics";
+import type { PostMetricsSummary } from "@/lib/calendar-metrics";
 
 type CalendarInspectorProps = {
   post: Post;
   channels: ChannelListItem[];
   timeZone: string;
+  metrics?: PostMetricsSummary | null;
   busy?: boolean;
   onReschedule: () => void;
   onCancel: () => void;
@@ -43,6 +45,7 @@ export function CalendarInspector({
   post,
   channels,
   timeZone,
+  metrics,
   busy,
   onReschedule,
   onCancel,
@@ -98,6 +101,16 @@ export function CalendarInspector({
 
       {post.last_error ? (
         <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">{post.last_error}</div>
+      ) : null}
+
+      {post.status === "published" ? (
+        <div>
+          <p className="mb-1.5 text-xs text-muted">Результаты</p>
+          <CalendarEventMetrics metrics={metrics} />
+          {!metrics?.has_data ? (
+            <p className="mt-1 text-[11px] text-muted">Данные появятся после сбора метрик с каналов</p>
+          ) : null}
+        </div>
       ) : null}
 
       <div className="flex flex-col gap-2">

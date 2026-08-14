@@ -3,7 +3,7 @@
 import { cn } from "@/lib/utils";
 import type { CalendarView } from "@/lib/calendar-utils";
 import { CALENDAR_VIEWS, formatPeriodTitle } from "@/lib/calendar-utils";
-import { Calendar, ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight, Download, Plus } from "lucide-react";
 import Link from "next/link";
 
 type CalendarToolbarProps = {
@@ -18,6 +18,7 @@ type CalendarToolbarProps = {
   onDisplayTimeZoneChange: (tz: string) => void;
   timezoneOptions: { id: string; label: string }[];
   loading?: boolean;
+  onExportIcal?: () => void;
 };
 
 export function CalendarToolbar({
@@ -32,6 +33,7 @@ export function CalendarToolbar({
   onDisplayTimeZoneChange,
   timezoneOptions,
   loading,
+  onExportIcal,
 }: CalendarToolbarProps) {
   return (
     <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -43,7 +45,7 @@ export function CalendarToolbar({
               type="button"
               onClick={() => onViewChange(v.id)}
               className={cn(
-                "rounded-md px-3 py-1.5 text-xs font-medium transition-colors",
+                "rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors sm:px-3",
                 view === v.id ? "bg-accent text-white shadow-sm" : "text-muted hover:text-text",
               )}
             >
@@ -97,6 +99,17 @@ export function CalendarToolbar({
             ))}
           </select>
         </label>
+        {onExportIcal ? (
+          <button
+            type="button"
+            onClick={onExportIcal}
+            className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-1.5 text-xs font-medium hover:bg-zinc-50"
+            title="Скачать .ics для Google Calendar, Outlook и др."
+          >
+            <Download className="h-3.5 w-3.5" />
+            iCal
+          </button>
+        ) : null}
         <Link
           href="/posts/new"
           className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:opacity-90"
