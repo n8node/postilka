@@ -413,6 +413,9 @@ func (s *ChannelService) VerifyAndRefresh(
 			MetadataRefreshedAt:   ch.MetadataRefreshedAt,
 		})
 		_ = s.channels.UpdateStatus(ctx, ws.ID, channelID, model.ChannelStatusNeedsReconnect, verifyErr.Error())
+		if s.notify != nil {
+			s.notify.NotifyChannelReconnect(ctx, ws.ID, channelID, ch.Name, verifyErr.Error())
+		}
 		return nil, verifyErr
 	}
 

@@ -29,6 +29,7 @@ type WorkspaceInviteService struct {
 	emails  *TransactionalEmailService
 	cfg     *config.Config
 	logger  *slog.Logger
+	notify  *NotificationService
 }
 
 func NewWorkspaceInviteService(
@@ -44,6 +45,10 @@ func NewWorkspaceInviteService(
 		invites: invites, workspaces: workspaces, users: users,
 		wsSvc: wsSvc, emails: emails, cfg: cfg, logger: logger,
 	}
+}
+
+func (s *WorkspaceInviteService) SetNotifier(n *NotificationService) {
+	s.notify = n
 }
 
 func (s *WorkspaceInviteService) List(ctx context.Context, userID, workspaceID string) ([]model.WorkspaceInvite, error) {
@@ -134,6 +139,9 @@ func (s *WorkspaceInviteService) Accept(ctx context.Context, userID, rawToken st
 	ws, err := s.workspaces.GetMembership(ctx, inv.WorkspaceID, userID)
 	if err != nil {
 		return nil, err
+	}
+	if s.notify != nil {
+		s.notify.NotifyInviteAccepted(ctx, inv.WorkspaceID, user.Name, user.Email)
 	}
 	return ws, nil
 }

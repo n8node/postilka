@@ -2205,3 +2205,74 @@ export function fetchVideoGenerationExamples() {
   return apiFetch<{ examples: KieVideoExample[] }>("/generation/video-examples");
 }
 
+export type NotificationCategory = "info" | "warning" | "success" | "error";
+
+export type AppNotification = {
+  id: string;
+  user_id: string;
+  workspace_id?: string | null;
+  type: string;
+  category: NotificationCategory;
+  title: string;
+  body?: string;
+  payload?: Record<string, unknown> | null;
+  href?: string;
+  read_at?: string | null;
+  created_at: string;
+};
+
+export type NotificationListResponse = {
+  items: AppNotification[];
+  total: number;
+  unread_count: number;
+};
+
+export type NotificationPreferences = {
+  posts: boolean;
+  channels: boolean;
+  billing: boolean;
+  quota: boolean;
+  ai: boolean;
+  files: boolean;
+  team: boolean;
+};
+
+export function fetchNotifications(params?: {
+  limit?: number;
+  offset?: number;
+  type?: string;
+  unreadOnly?: boolean;
+}) {
+  const search = new URLSearchParams();
+  if (params?.limit) search.set("limit", String(params.limit));
+  if (params?.offset) search.set("offset", String(params.offset));
+  if (params?.type) search.set("type", params.type);
+  if (params?.unreadOnly) search.set("unreadOnly", "true");
+  const q = search.toString();
+  return apiFetch<NotificationListResponse>(`/notifications${q ? `?${q}` : ""}`);
+}
+
+export function markNotificationRead(id: string) {
+  return apiFetch<{ ok: boolean }>(`/notifications/${id}/read`, { method: "PATCH" });
+}
+
+export function markAllNotificationsRead() {
+  return apiFetch<{ count: number }>("/notifications/read-all", { method: "POST" });
+}
+
+export function deleteAllNotifications() {
+  return apiFetch<{ deleted: number }>("/notifications", { method: "DELETE" });
+}
+
+export function fetchNotificationPreferences() {
+  return apiFetch<NotificationPreferences>("/notifications/preferences");
+}
+
+export function updateNotificationPreferences(prefs: Partial<NotificationPreferences>) {
+  return apiFetch<NotificationPreferences>("/notifications/preferences", {
+    method: "PATCH",
+    body: JSON.stringify(prefs),
+  });
+}
+
+

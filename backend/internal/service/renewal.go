@@ -18,6 +18,7 @@ type RenewalService struct {
 	ws      *repository.WorkspaceRepository
 	subSvc  *SubscriptionService
 	logger  *slog.Logger
+	notify  *NotificationService
 }
 
 func NewRenewalService(
@@ -29,6 +30,10 @@ func NewRenewalService(
 	logger *slog.Logger,
 ) *RenewalService {
 	return &RenewalService{subs: subs, plans: plans, wallet: wallet, ws: ws, subSvc: subSvc, logger: logger}
+}
+
+func (s *RenewalService) SetNotifier(n *NotificationService) {
+	s.notify = n
 }
 
 func (s *RenewalService) Process(ctx context.Context) error {
@@ -88,6 +93,10 @@ func (s *RenewalService) processOne(ctx context.Context, sub *model.WorkspaceSub
 			"plan_id", sub.PlanID,
 			"amount_cents", amount,
 		)
+		if s.notify != nil {
+			s.notify.NotifyPlanRenewed(ctx, sub.WorkspaceID, plan.Name, amount)
+			s.notify.MaybeWalletLow(ctx, ownerID)
+		}
 		return nil
 	}
 
@@ -96,12 +105,22 @@ func (s *RenewalService) processOne(ctx context.Context, sub *model.WorkspaceSub
 	}
 
 	if sub.Status != model.SubscriptionStatusPastDue {
-		return s.subs.SetStatus(ctx, sub.ID, model.SubscriptionStatusPastDue)
+		if err := s.subs.SetStatus(ctx, sub.ID, model.SubscriptionStatusPastDue); err != nil {
+			return err
+		}
+		if s.notify != nil {
+			s.notify.NotifyPlanPastDue(ctx, sub.WorkspaceID, plan.Name)
+			s.notify.NotifyWalletLow(ctx, ownerID, balance)
+		}
 	}
 	return nil
 }
 
 func (s *RenewalService) downgrade(ctx context.Context, sub *model.WorkspaceSubscription) error {
+	planName := ""
+	if plan, err := s.plans.GetByID(ctx, sub.PlanID); err == nil && plan != nil {
+		planName = plan.Name
+	}
 	free, err := s.plans.GetDefaultFree(ctx)
 	if err != nil {
 		return err
@@ -115,6 +134,9 @@ func (s *RenewalService) downgrade(ctx context.Context, sub *model.WorkspaceSubs
 	s.logger.Info("subscription downgraded to free after expiry",
 		"workspace_id", sub.WorkspaceID,
 	)
+	if s.notify != nil {
+		s.notify.NotifyPlanDowngraded(ctx, sub.WorkspaceID, planName)
+	}
 	return nil
 }
 

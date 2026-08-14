@@ -27,6 +27,7 @@ type PublicationService struct {
 	maxClient   *oauthclient.MAXBotClient
 	quota       *QuotaService
 	shortener   *LinkShortenerService
+	notify      *NotificationService
 }
 
 func NewPublicationService(
@@ -50,6 +51,10 @@ func NewPublicationService(
 	}
 }
 
+func (s *PublicationService) SetNotifier(n *NotificationService) {
+	s.notify = n
+}
+
 func (s *PublicationService) Publish(ctx context.Context, postID string, allowRetry bool) error {
 	if err := s.posts.ResetStaleTargets(ctx, postID); err != nil {
 		return err
@@ -69,6 +74,9 @@ func (s *PublicationService) Publish(ctx context.Context, postID string, allowRe
 	}
 	if s.quota != nil && postHasPublishableTargets(*post) {
 		if err := s.quota.CheckPostQuota(ctx, post.WorkspaceID); err != nil {
+			if s.notify != nil {
+				s.notify.NotifyPostQuotaBlocked(ctx, *post)
+			}
 			return err
 		}
 	}
@@ -124,6 +132,9 @@ func (s *PublicationService) Publish(ctx context.Context, postID string, allowRe
 	if err != nil {
 		return err
 	}
+	if s.notify != nil {
+		s.notify.NotifyPostResult(ctx, updated)
+	}
 	if lastPublishErr != nil && !publicationAnyDelivered(*updated) {
 		if errors.Is(lastPublishErr, ErrInvalidPost) {
 			return lastPublishErr
@@ -139,6 +150,8 @@ func (s *PublicationService) Publish(ctx context.Context, postID string, allowRe
 					"workspace_id", updated.WorkspaceID,
 					"error", err,
 				)
+			} else if s.notify != nil {
+				s.notify.MaybeUsageWarnings(ctx, updated.WorkspaceID)
 			}
 			if err := s.scheduleNextRecurrence(ctx, updated); err != nil {
 				slog.Warn(

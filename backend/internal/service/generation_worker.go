@@ -204,7 +204,7 @@ func (s *GenerationService) pollKieJob(ctx context.Context, job model.AIGenerati
 		if msg == "" {
 			msg = "generation failed"
 		}
-		_ = s.jobRepo.MarkFailed(ctx, job.ID, msg)
+		s.markJobFailed(ctx, job.ID, msg)
 		return false, true, nil
 	default:
 		_ = s.jobRepo.UpdateProgress(ctx, job.ID, status, detail.State, progress, "", pollAfter)
@@ -285,5 +285,15 @@ func (s *GenerationService) finalizeJob(ctx context.Context, jobID string) error
 		return err
 	}
 
-	return s.jobRepo.MarkSucceeded(ctx, job.ID, record.ID, debit.WalletCentsCharged, debit.QuotaCreditsUsed)
+	if err := s.jobRepo.MarkSucceeded(ctx, job.ID, record.ID, debit.WalletCentsCharged, debit.QuotaCreditsUsed); err != nil {
+		return err
+	}
+	if s.notify != nil {
+		gid := record.ID
+		job.GenerationID = &gid
+		s.notify.NotifyAIDone(ctx, job)
+		s.notify.MaybeUsageWarnings(ctx, job.WorkspaceID)
+		s.notify.MaybeWalletLow(ctx, job.UserID)
+	}
+	return nil
 }

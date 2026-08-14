@@ -64,6 +64,9 @@ func (s *PostService) SubmitForApproval(
 	if _, err := s.approvals.AddEvent(ctx, ws.ID, postID, userID, "submit", req.Comment); err != nil {
 		return nil, err
 	}
+	if s.notify != nil {
+		s.notify.NotifyApprovalSubmitted(ctx, *updated, userID)
+	}
 	return updated, nil
 }
 
@@ -100,6 +103,9 @@ func (s *PostService) ApprovePost(
 		next := req.DueAt.UTC()
 		dueAt = &next
 	}
+	if s.notify != nil {
+		s.notify.NotifyApprovalDecision(ctx, *post, true, req.Comment)
+	}
 	if req.Publish || dueAt == nil || !dueAt.After(time.Now()) {
 		if err := s.posts.SetPublishing(ctx, ws.ID, postID); err != nil {
 			return nil, ErrPostConflict
@@ -134,6 +140,9 @@ func (s *PostService) RejectPost(
 	if _, err := s.approvals.AddEvent(ctx, ws.ID, postID, userID, "reject", req.Comment); err != nil {
 		return nil, err
 	}
+	if s.notify != nil {
+		s.notify.NotifyApprovalDecision(ctx, *updated, false, req.Comment)
+	}
 	return updated, nil
 }
 
@@ -154,7 +163,16 @@ func (s *PostService) CommentPost(
 	if _, err := s.posts.Get(ctx, ws.ID, postID); err != nil {
 		return nil, err
 	}
-	return s.approvals.AddEvent(ctx, ws.ID, postID, userID, "comment", req.Comment)
+	event, err := s.approvals.AddEvent(ctx, ws.ID, postID, userID, "comment", req.Comment)
+	if err != nil {
+		return nil, err
+	}
+	if s.notify != nil {
+		if post, getErr := s.posts.Get(ctx, ws.ID, postID); getErr == nil {
+			s.notify.NotifyApprovalComment(ctx, *post, userID, req.Comment)
+		}
+	}
+	return event, nil
 }
 
 func (s *PostService) requireAdmin(

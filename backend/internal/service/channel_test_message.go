@@ -23,6 +23,7 @@ type ChannelTestService struct {
 	wsSvc          *WorkspaceService
 	cipher         *SecretCipher
 	maxClient      *oauthclient.MAXBotClient
+	notify         *NotificationService
 }
 
 func NewChannelTestService(
@@ -44,6 +45,10 @@ func NewChannelTestService(
 		cipher:         cipher,
 		maxClient:      oauthclient.NewMAXBotClient(),
 	}
+}
+
+func (s *ChannelTestService) SetNotifier(n *NotificationService) {
+	s.notify = n
 }
 
 func (s *ChannelTestService) SendTestMessage(
@@ -127,6 +132,9 @@ func (s *ChannelTestService) SendTestMessage(
 	postID, sendErr := s.publish(ctx, ch, token, text, title, photoURL, videoURL, contentType, publishAt)
 	if sendErr != nil {
 		_ = s.channels.UpdateStatus(ctx, ws.ID, channelID, model.ChannelStatusNeedsReconnect, sendErr.Error())
+		if s.notify != nil {
+			s.notify.NotifyChannelReconnect(ctx, ws.ID, channelID, ch.Name, sendErr.Error())
+		}
 		return nil, sendErr
 	}
 

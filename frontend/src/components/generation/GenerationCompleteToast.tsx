@@ -62,7 +62,7 @@ export function GenerationCompleteToast() {
 
   return (
     <div
-      className="pointer-events-none fixed right-4 top-4 z-[90] flex flex-col gap-2 sm:right-6"
+      className="pointer-events-none fixed right-4 top-16 z-[90] flex flex-col gap-2 sm:right-6"
       aria-live="polite"
     >
       {toasts.map((toast) => (

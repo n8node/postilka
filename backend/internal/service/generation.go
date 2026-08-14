@@ -46,6 +46,7 @@ type GenerationService struct {
 	yandexGPT      *YandexGptConfigService
 	quota          *QuotaService
 	createGate     *kieCreateGate
+	notify         *NotificationService
 }
 
 func NewGenerationService(
@@ -75,6 +76,22 @@ func NewGenerationService(
 		quota:       quota,
 		createGate:  newKieCreateGate(),
 	}
+}
+
+func (s *GenerationService) SetNotifier(n *NotificationService) {
+	s.notify = n
+}
+
+func (s *GenerationService) markJobFailed(ctx context.Context, jobID, msg string) {
+	_ = s.jobRepo.MarkFailed(ctx, jobID, msg)
+	if s.notify == nil {
+		return
+	}
+	job, err := s.jobRepo.GetByIDInternal(ctx, jobID)
+	if err != nil {
+		return
+	}
+	s.notify.NotifyAIFailed(ctx, job, msg)
 }
 
 type GenerateImageInput struct {
@@ -785,7 +802,7 @@ func (s *GenerationService) submitPendingJob(ctx context.Context, jobID string, 
 	baseURL, apiKey, err := s.kieConfig.ResolveCredentials(ctx)
 	if err != nil {
 		_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
-		_ = s.jobRepo.MarkFailed(ctx, jobID, err.Error())
+		s.markJobFailed(ctx, jobID, err.Error())
 		return err
 	}
 	client := ai.NewKieClient(baseURL, apiKey)
@@ -796,7 +813,7 @@ func (s *GenerationService) submitPendingJob(ctx context.Context, jobID string, 
 		sourceID := strings.TrimSpace(in.SourceUploadID)
 		if sourceID == "" {
 			_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
-			_ = s.jobRepo.MarkFailed(ctx, jobID, ErrGenerationSourceRequired.Error())
+			s.markJobFailed(ctx, jobID, ErrGenerationSourceRequired.Error())
 			return ErrGenerationSourceRequired
 		}
 		urls, err := s.kieImageURLs(ctx, client, userID, workspaceID, []string{sourceID})
@@ -806,14 +823,14 @@ func (s *GenerationService) submitPendingJob(ctx context.Context, jobID string, 
 				return nil
 			}
 			_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
-			_ = s.jobRepo.MarkFailed(ctx, jobID, generationFailMessage(err))
+			s.markJobFailed(ctx, jobID, generationFailMessage(err))
 			return err
 		}
 		imageURLs = urls
 	case "combine":
 		if len(in.CombineUploadIDs) < 2 {
 			_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
-			_ = s.jobRepo.MarkFailed(ctx, jobID, ErrGenerationCombineMin.Error())
+			s.markJobFailed(ctx, jobID, ErrGenerationCombineMin.Error())
 			return ErrGenerationCombineMin
 		}
 		urls, err := s.kieImageURLs(ctx, client, userID, workspaceID, in.CombineUploadIDs)
@@ -823,7 +840,7 @@ func (s *GenerationService) submitPendingJob(ctx context.Context, jobID string, 
 				return nil
 			}
 			_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
-			_ = s.jobRepo.MarkFailed(ctx, jobID, generationFailMessage(err))
+			s.markJobFailed(ctx, jobID, generationFailMessage(err))
 			return err
 		}
 		imageURLs = urls
@@ -875,7 +892,7 @@ func (s *GenerationService) submitPendingJob(ctx context.Context, jobID string, 
 			return nil
 		}
 		_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
-		_ = s.jobRepo.MarkFailed(ctx, jobID, generationFailMessage(err))
+		s.markJobFailed(ctx, jobID, generationFailMessage(err))
 		return err
 	}
 

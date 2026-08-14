@@ -44,6 +44,7 @@ type PostService struct {
 	workspaces  *WorkspaceService
 	publication *PublicationService
 	approvals   *repository.PostApprovalRepository
+	notify      *NotificationService
 }
 
 func NewPostService(
@@ -57,6 +58,10 @@ func NewPostService(
 		posts: posts, channels: channels, workspaces: workspaces,
 		publication: publication, approvals: approvals,
 	}
+}
+
+func (s *PostService) SetNotifier(n *NotificationService) {
+	s.notify = n
 }
 
 func (s *PostService) requireEditor(

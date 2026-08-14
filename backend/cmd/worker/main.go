@@ -87,6 +87,15 @@ func main() {
 	publicationSvc := service.NewPublicationService(
 		postRepo, channelRepo, fileStorageRepo, objectStorage, channelTestSvc, telegramBotClient, oauthclient.NewMAXBotClient(), quotaSvc, linkShortener,
 	)
+	notificationRepo := repository.NewNotificationRepository(db.Pool)
+	notificationSvc := service.NewNotificationService(
+		notificationRepo, wsRepo, quotaSvc, planRepo, channelRepo, subscriptionRepo,
+		fileStorageRepo, folderStorageRepo, walletRepo, logger,
+	)
+	renewalSvc.SetNotifier(notificationSvc)
+	youtubeReconnectNotifier.SetNotifier(notificationSvc)
+	publicationSvc.SetNotifier(notificationSvc)
+	fileStorageSvc.SetNotifier(notificationSvc)
 	analyticsRepo := repository.NewAnalyticsRepository(db.Pool)
 	metrikaRepo := repository.NewMetrikaRepository(db.Pool)
 	metrikaPlatformConfigRepo := repository.NewMetrikaPlatformConfigRepository(db.Pool)
@@ -116,6 +125,9 @@ func main() {
 			}
 			if err := youtubeReconnectNotifier.Process(ctx); err != nil {
 				logger.Warn("youtube reconnect notify tick failed", "error", err)
+			}
+			if err := notificationSvc.ProcessScheduled(ctx); err != nil {
+				logger.Warn("notification scheduled tick failed", "error", err)
 			}
 			if n, err := publicationSvc.ProcessDue(ctx, cfg.WorkerPublishConcurrency); err != nil {
 				logger.Warn("post publication tick failed", "error", err, "claimed", n)

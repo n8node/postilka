@@ -32,6 +32,7 @@ type FileStorageService struct {
 	storage        *ObjectStorage
 	sessions       *UploadSessionService
 	uploadSettings *UploadFileSettingsService
+	notify         *NotificationService
 }
 
 func NewFileStorageService(
@@ -48,6 +49,10 @@ func NewFileStorageService(
 		files: files, folders: folders, workspaces: workspaces, plans: plans,
 		wsSvc: wsSvc, storage: storage, sessions: sessions, uploadSettings: uploadSettings,
 	}
+}
+
+func (s *FileStorageService) SetNotifier(n *NotificationService) {
+	s.notify = n
 }
 
 func (s *FileStorageService) resolveWorkspace(ctx context.Context, userID string, r *http.Request, minRole model.WorkspaceRole) (*model.Workspace, error) {
@@ -264,6 +269,9 @@ func (s *FileStorageService) UploadComplete(ctx context.Context, userID string, 
 	if err != nil {
 		_ = s.releaseStorage(ctx, ws.ID, claims.Size)
 		return nil, err
+	}
+	if s.notify != nil {
+		s.notify.MaybeUsageWarnings(ctx, ws.ID)
 	}
 	return created, nil
 }
@@ -911,6 +919,9 @@ func (s *FileStorageService) PurgeExpiredTrash(ctx context.Context) (int, error)
 		}
 		folderIDs, _ := s.folders.ListExpiredTrashed(ctx, wsID, cutoff)
 		_ = s.folders.DeleteByIDs(ctx, wsID, folderIDs)
+		if n := len(expired); n > 0 && s.notify != nil {
+			s.notify.NotifyTrashPurged(ctx, wsID, n)
+		}
 	}
 	return total, nil
 }

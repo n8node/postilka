@@ -141,6 +141,11 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	oauthHandler := handler.NewOAuthLoginHandler(oauthSvc, wsSvc, authMW, cfg, logger)
 	wsHandler := handler.NewWorkspaceHandler(wsSvc, cfg)
 	folderStorageRepo := repository.NewWorkspaceFolderRepository(db.Pool)
+	notificationRepo := repository.NewNotificationRepository(db.Pool)
+	notificationSvc := service.NewNotificationService(
+		notificationRepo, wsRepo, quotaSvc, planRepo, channelRepo, subscriptionRepo,
+		fileStorageRepo, folderStorageRepo, walletRepo, logger,
+	)
 	adminAnalyticsRepo := repository.NewAdminAnalyticsRepository(db.Pool)
 	adminHandler := handler.NewAdminHandler(userRepo, adminUserSvc, adminWalletSvc, planSvc, oauthSvc, adminWorkspaceSvc, fileStorageRepo, folderStorageRepo, adminAnalyticsRepo)
 	inviteHandler := handler.NewInviteHandler(inviteSvc, oauthSvc)
@@ -199,7 +204,20 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	generationHandler := handler.NewGenerationHandler(generationSvc)
 	videoGenerationHandler := handler.NewVideoGenerationHandler(generationSvc)
 
+	publicationSvc.SetNotifier(notificationSvc)
+	postSvc.SetNotifier(notificationSvc)
+	channelSvc.SetNotifier(notificationSvc)
+	channelConnectSvc.SetNotifier(notificationSvc)
+	channelTestSvc.SetNotifier(notificationSvc)
+	telegramBusinessSvc.SetNotifier(notificationSvc)
+	checkoutSvc.SetNotifier(notificationSvc)
+	adminWalletSvc.SetNotifier(notificationSvc)
+	generationSvc.SetNotifier(notificationSvc)
+	fileStorageSvc.SetNotifier(notificationSvc)
+	wsInviteSvc.SetNotifier(notificationSvc)
+
 	billingHandler := handler.NewBillingHandler(billingSvc, checkoutSvc, wsSvc)
+	notificationHandler := handler.NewNotificationHandler(notificationSvc, wsSvc)
 
 	r.Get("/health", health.ServeHTTP)
 	r.Get("/go/{code}", linkRedirectHandler.Redirect)
@@ -249,6 +267,16 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 		})
 
 		r.With(authMW.Required).Get("/user/invites", inviteHandler.UserInvites)
+
+		r.Group(func(r chi.Router) {
+			r.Use(authMW.Required)
+			r.Get("/notifications", notificationHandler.List)
+			r.Delete("/notifications", notificationHandler.DeleteAll)
+			r.Post("/notifications/read-all", notificationHandler.MarkAllRead)
+			r.Patch("/notifications/{id}/read", notificationHandler.MarkRead)
+			r.Get("/notifications/preferences", notificationHandler.GetPrefs)
+			r.Patch("/notifications/preferences", notificationHandler.UpdatePrefs)
+		})
 
 		r.Route("/billing", func(r chi.Router) {
 			r.Use(authMW.Required)

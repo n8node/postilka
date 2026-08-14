@@ -31,6 +31,7 @@ type TelegramBusinessService struct {
 	cipher        *SecretCipher
 	cfg           *config.Config
 	botSyncLocks  sync.Map
+	notify        *NotificationService
 }
 
 func NewTelegramBusinessService(
@@ -53,6 +54,10 @@ func NewTelegramBusinessService(
 		cipher:        cipher,
 		cfg:           cfg,
 	}
+}
+
+func (s *TelegramBusinessService) SetNotifier(n *NotificationService) {
+	s.notify = n
 }
 
 func (s *TelegramBusinessService) ensureEnabled(ctx context.Context) error {
@@ -510,6 +515,9 @@ func (s *TelegramBusinessService) upsertBusinessChannel(
 		existing, err := s.channels.GetByChat(ctx, workspaceID, string(model.ChannelProviderTelegram), conn.ID)
 		if err == nil && existing != nil && existing.ChatType == model.TelegramChatTypeBusiness {
 			_ = s.channels.UpdateStatus(ctx, workspaceID, existing.ID, model.ChannelStatusNeedsReconnect, "Business-подключение отключено в Telegram")
+			if s.notify != nil {
+				s.notify.NotifyChannelReconnect(ctx, workspaceID, existing.ID, existing.Name, "Business-подключение отключено в Telegram")
+			}
 		}
 		return model.ChannelListItem{}, errSkipDisabledBusinessConnection
 	}

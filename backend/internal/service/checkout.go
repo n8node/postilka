@@ -31,6 +31,7 @@ type CheckoutService struct {
 	emails     *TransactionalEmailService
 	telegram   *TelegramService
 	cfg        *config.Config
+	notify     *NotificationService
 }
 
 func NewCheckoutService(
@@ -59,6 +60,10 @@ func NewCheckoutService(
 		telegram:   telegram,
 		cfg:        cfg,
 	}
+}
+
+func (s *CheckoutService) SetNotifier(n *NotificationService) {
+	s.notify = n
 }
 
 func (s *CheckoutService) CreateSubscribe(
@@ -294,6 +299,9 @@ func (s *CheckoutService) HandleRobokassaResult(ctx context.Context, invIDStr, o
 			s.telegram.NotifyWalletTopup(ctx, user, paid.AmountCents, balance)
 		}
 	}
+	if paid.Status == model.CheckoutStatusPaid && s.notify != nil {
+		s.notify.NotifyWalletTopup(ctx, paid.UserID, paid.AmountCents)
+	}
 	return nil
 }
 
@@ -338,6 +346,13 @@ func (s *CheckoutService) FulfillSubscribe(ctx context.Context, checkoutID strin
 				s.telegram.NotifyPayment(ctx, user, plan, paid.AmountCents)
 			}
 		}
+	}
+	if s.notify != nil {
+		planName := ""
+		if plan, err := s.plans.GetByID(ctx, paid.PlanID); err == nil && plan != nil {
+			planName = plan.Name
+		}
+		s.notify.NotifyPlanPaid(ctx, paid.UserID, paid.WorkspaceID, planName)
 	}
 	return nil
 }

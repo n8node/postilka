@@ -35,6 +35,7 @@ type ChannelConnectService struct {
 	cipher         *SecretCipher
 	maxClient      *oauthclient.MAXBotClient
 	cfg            *config.Config
+	notify         *NotificationService
 }
 
 func NewChannelConnectService(
@@ -60,6 +61,10 @@ func NewChannelConnectService(
 		maxClient:      oauthclient.NewMAXBotClient(),
 		cfg:            cfg,
 	}
+}
+
+func (s *ChannelConnectService) SetNotifier(n *NotificationService) {
+	s.notify = n
 }
 
 func (s *ChannelConnectService) CombinedProviderInfo(ctx context.Context) model.ChannelProviderInfo {
@@ -508,6 +513,9 @@ func (s *ChannelConnectService) OAuthConnect(
 	}
 
 	_ = s.oauthSessions.Delete(ctx, session.ID)
+	if s.notify != nil {
+		s.notify.MaybeUsageWarnings(ctx, ws.ID)
+	}
 	return result, nil
 }
 
@@ -820,6 +828,9 @@ func (s *ChannelConnectService) ConnectMAX(
 
 	if len(result.Connected) == 0 {
 		return nil, fmt.Errorf("не удалось подключить каналы")
+	}
+	if s.notify != nil {
+		s.notify.MaybeUsageWarnings(ctx, ws.ID)
 	}
 	return result, nil
 }

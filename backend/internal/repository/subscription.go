@@ -141,6 +141,35 @@ func (r *SubscriptionRepository) ListDueForRenewal(ctx context.Context, before t
 	return out, rows.Err()
 }
 
+func (r *SubscriptionRepository) ListEndingBetween(ctx context.Context, from, to time.Time, limit int) ([]model.WorkspaceSubscription, error) {
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	rows, err := r.pool.Query(ctx, `
+		SELECT `+subscriptionColumns+`
+		FROM workspace_subscriptions
+		WHERE status IN ('active', 'past_due')
+		  AND period_end > $1
+		  AND period_end <= $2
+		ORDER BY period_end ASC
+		LIMIT $3
+	`, from, to, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := make([]model.WorkspaceSubscription, 0)
+	for rows.Next() {
+		s, err := r.scan(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *s)
+	}
+	return out, rows.Err()
+}
+
 func (r *SubscriptionRepository) scan(row pgx.Row) (*model.WorkspaceSubscription, error) {
 	var s model.WorkspaceSubscription
 	err := row.Scan(

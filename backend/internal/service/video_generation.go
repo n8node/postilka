@@ -285,7 +285,7 @@ func (s *GenerationService) submitPendingVideoJob(ctx context.Context, jobID str
 	}
 	if s.kieVideoConfig == nil {
 		_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
-		_ = s.jobRepo.MarkFailed(ctx, jobID, ErrVideoGenerationNotConfigured.Error())
+		s.markJobFailed(ctx, jobID, ErrVideoGenerationNotConfigured.Error())
 		return ErrVideoGenerationNotConfigured
 	}
 
@@ -309,7 +309,7 @@ func (s *GenerationService) submitPendingVideoJob(ctx context.Context, jobID str
 	if err != nil {
 		slog.Warn("kie video credentials unavailable", "job_id", jobID, "err", err)
 		_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
-		_ = s.jobRepo.MarkFailed(ctx, jobID, err.Error())
+		s.markJobFailed(ctx, jobID, err.Error())
 		return err
 	}
 	client := ai.NewKieClient(baseURL, apiKey)
@@ -321,7 +321,7 @@ func (s *GenerationService) submitPendingVideoJob(ctx context.Context, jobID str
 		lastID := strings.TrimSpace(jobRow.LastFrameUploadID)
 		if firstID == "" && lastID == "" {
 			_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
-			_ = s.jobRepo.MarkFailed(ctx, jobID, ErrVideoGenerationSourceRequired.Error())
+			s.markJobFailed(ctx, jobID, ErrVideoGenerationSourceRequired.Error())
 			return ErrVideoGenerationSourceRequired
 		}
 		if firstID != "" {
@@ -332,7 +332,7 @@ func (s *GenerationService) submitPendingVideoJob(ctx context.Context, jobID str
 					return nil
 				}
 				_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
-				_ = s.jobRepo.MarkFailed(ctx, jobID, generationFailMessage(err))
+				s.markJobFailed(ctx, jobID, generationFailMessage(err))
 				return err
 			}
 			if len(urls) > 0 {
@@ -347,7 +347,7 @@ func (s *GenerationService) submitPendingVideoJob(ctx context.Context, jobID str
 					return nil
 				}
 				_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
-				_ = s.jobRepo.MarkFailed(ctx, jobID, generationFailMessage(err))
+				s.markJobFailed(ctx, jobID, generationFailMessage(err))
 				return err
 			}
 			if len(urls) > 0 {
@@ -360,7 +360,7 @@ func (s *GenerationService) submitPendingVideoJob(ctx context.Context, jobID str
 		audioIDs := nonEmptyUploadIDs(jobRow.ReferenceAudioUploadIDs)
 		if len(imageIDs) == 0 && len(videoIDs) == 0 {
 			_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
-			_ = s.jobRepo.MarkFailed(ctx, jobID, ErrVideoGenerationSourceRequired.Error())
+			s.markJobFailed(ctx, jobID, ErrVideoGenerationSourceRequired.Error())
 			return ErrVideoGenerationSourceRequired
 		}
 		if len(imageIDs) > 0 {
@@ -371,7 +371,7 @@ func (s *GenerationService) submitPendingVideoJob(ctx context.Context, jobID str
 					return nil
 				}
 				_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
-				_ = s.jobRepo.MarkFailed(ctx, jobID, generationFailMessage(err))
+				s.markJobFailed(ctx, jobID, generationFailMessage(err))
 				return err
 			}
 			taskSources.ReferenceImageURLs = urls
@@ -384,7 +384,7 @@ func (s *GenerationService) submitPendingVideoJob(ctx context.Context, jobID str
 					return nil
 				}
 				_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
-				_ = s.jobRepo.MarkFailed(ctx, jobID, generationFailMessage(err))
+				s.markJobFailed(ctx, jobID, generationFailMessage(err))
 				return err
 			}
 			taskSources.ReferenceVideoURLs = urls
@@ -397,7 +397,7 @@ func (s *GenerationService) submitPendingVideoJob(ctx context.Context, jobID str
 					return nil
 				}
 				_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
-				_ = s.jobRepo.MarkFailed(ctx, jobID, generationFailMessage(err))
+				s.markJobFailed(ctx, jobID, generationFailMessage(err))
 				return err
 			}
 			taskSources.ReferenceAudioURLs = urls
@@ -435,7 +435,7 @@ func (s *GenerationService) submitPendingVideoJob(ctx context.Context, jobID str
 		msg := generationFailMessage(err)
 		slog.Warn("kie video create task failed", "job_id", jobID, "mode", mode, "model", jobRow.Model, "err", err)
 		_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
-		_ = s.jobRepo.MarkFailed(ctx, jobID, msg)
+		s.markJobFailed(ctx, jobID, msg)
 		return err
 	}
 
@@ -494,7 +494,7 @@ func (s *GenerationService) pollKieVideoJob(ctx context.Context, job model.AIGen
 		if msg == "" {
 			msg = "generation failed"
 		}
-		_ = s.jobRepo.MarkFailed(ctx, job.ID, msg)
+		s.markJobFailed(ctx, job.ID, msg)
 		return false, true, nil
 	default:
 		_ = s.jobRepo.UpdateProgress(ctx, job.ID, status, detail.State, progress, "", pollAfter)
@@ -594,7 +594,17 @@ func (s *GenerationService) finalizeVideoJob(ctx context.Context, jobID string) 
 		return err
 	}
 
-	return s.jobRepo.MarkSucceeded(ctx, job.ID, record.ID, debit.WalletCentsCharged, debit.QuotaCreditsUsed)
+	if err := s.jobRepo.MarkSucceeded(ctx, job.ID, record.ID, debit.WalletCentsCharged, debit.QuotaCreditsUsed); err != nil {
+		return err
+	}
+	if s.notify != nil {
+		gid := record.ID
+		job.GenerationID = &gid
+		s.notify.NotifyAIDone(ctx, job)
+		s.notify.MaybeUsageWarnings(ctx, job.WorkspaceID)
+		s.notify.MaybeWalletLow(ctx, job.UserID)
+	}
+	return nil
 }
 
 func videoGenerationResultS3Key(workspaceID, ext string) string {

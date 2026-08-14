@@ -29,6 +29,7 @@ type ChannelService struct {
 	quota          *QuotaService
 	cipher         *SecretCipher
 	business       *TelegramBusinessService
+	notify         *NotificationService
 }
 
 func NewChannelService(
@@ -50,6 +51,10 @@ func NewChannelService(
 		quota:          quota,
 		cipher:         cipher,
 	}
+}
+
+func (s *ChannelService) SetNotifier(n *NotificationService) {
+	s.notify = n
 }
 
 func (s *ChannelService) SetTelegramBusinessService(business *TelegramBusinessService) {
@@ -255,6 +260,9 @@ func (s *ChannelService) ConnectTelegram(ctx context.Context, userID string, r *
 
 	if len(result.Connected) == 0 {
 		return nil, fmt.Errorf("не удалось подключить каналы")
+	}
+	if s.notify != nil {
+		s.notify.MaybeUsageWarnings(ctx, ws.ID)
 	}
 	return result, nil
 }

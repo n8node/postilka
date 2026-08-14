@@ -248,6 +248,36 @@ type WorkspaceMemberEmail struct {
 	Name  string
 }
 
+func (r *WorkspaceRepository) ListMemberUserIDs(ctx context.Context, workspaceID string, roles []string) ([]string, error) {
+	q := `
+		SELECT wm.user_id
+		FROM workspace_members wm
+		JOIN users u ON u.id = wm.user_id
+		WHERE wm.workspace_id = $1::uuid
+		  AND u.is_blocked = false
+	`
+	args := []any{workspaceID}
+	if len(roles) > 0 {
+		q += ` AND wm.role::text = ANY($2::text[])`
+		args = append(args, roles)
+	}
+	q += ` ORDER BY wm.created_at ASC`
+	rows, err := r.pool.Query(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]string, 0)
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}
+
 func (r *WorkspaceRepository) ListEditorMemberEmails(ctx context.Context, workspaceID string) ([]WorkspaceMemberEmail, error) {
 	const q = `
 		SELECT DISTINCT u.email, COALESCE(NULLIF(u.name, ''), u.email)

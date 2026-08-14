@@ -80,6 +80,9 @@ func (s *GenerationService) ComposePostText(
 	if err := s.quota.RecordTextTokens(ctx, ws.ID, tokens); err != nil {
 		return "", err
 	}
+	if s.notify != nil {
+		s.notify.MaybeUsageWarnings(ctx, ws.ID)
+	}
 	return out, nil
 }
 

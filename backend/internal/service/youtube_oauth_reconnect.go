@@ -84,6 +84,7 @@ type YouTubeOAuthReconnectNotifier struct {
 	email    *EmailService
 	cfg      *config.Config
 	log      *slog.Logger
+	notify   *NotificationService
 }
 
 func NewYouTubeOAuthReconnectNotifier(
@@ -100,6 +101,10 @@ func NewYouTubeOAuthReconnectNotifier(
 		cfg:      cfg,
 		log:      logger,
 	}
+}
+
+func (n *YouTubeOAuthReconnectNotifier) SetNotifier(svc *NotificationService) {
+	n.notify = svc
 }
 
 func (n *YouTubeOAuthReconnectNotifier) Process(ctx context.Context) error {
@@ -119,6 +124,13 @@ func (n *YouTubeOAuthReconnectNotifier) Process(ctx context.Context) error {
 		reconnectBy := YouTubeOAuthReconnectBy(ch)
 		if reconnectBy == nil || now.Before(*reconnectBy) {
 			continue
+		}
+		if n.notify != nil {
+			name := strings.TrimSpace(ch.Name)
+			if name == "" {
+				name = strings.TrimSpace(ch.Metadata.ProviderTitle)
+			}
+			n.notify.NotifyYouTubeReconnect(ctx, ch.WorkspaceID, ch.ID, name)
 		}
 		if err := n.notifyWorkspace(ctx, ch, appURL); err != nil && n.log != nil {
 			n.log.Warn("youtube reconnect email failed", "channel_id", ch.ID, "error", err)

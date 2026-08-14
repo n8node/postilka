@@ -16,10 +16,15 @@ const maxAdminGrantCents int64 = 10_000_000 // 100 000 ₽
 type AdminWalletService struct {
 	wallet *repository.WalletRepository
 	users  *repository.UserRepository
+	notify *NotificationService
 }
 
 func NewAdminWalletService(wallet *repository.WalletRepository, users *repository.UserRepository) *AdminWalletService {
 	return &AdminWalletService{wallet: wallet, users: users}
+}
+
+func (s *AdminWalletService) SetNotifier(n *NotificationService) {
+	s.notify = n
 }
 
 func (s *AdminWalletService) GrantCredit(ctx context.Context, actorID, targetUserID string, amountCents int64, note string) (int64, error) {
@@ -41,5 +46,12 @@ func (s *AdminWalletService) GrantCredit(ctx context.Context, actorID, targetUse
 		desc += " — " + trimmed
 	}
 
-	return s.wallet.Credit(ctx, targetUserID, amountCents, "admin_grant", "admin_user", actorID, desc)
+	balance, err := s.wallet.Credit(ctx, targetUserID, amountCents, "admin_grant", "admin_user", actorID, desc)
+	if err != nil {
+		return 0, err
+	}
+	if s.notify != nil {
+		s.notify.NotifyWalletAdminGrant(ctx, targetUserID, amountCents)
+	}
+	return balance, nil
 }

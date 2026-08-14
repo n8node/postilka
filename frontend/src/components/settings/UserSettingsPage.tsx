@@ -8,6 +8,7 @@ import { LoginIdentitiesBlock } from "@/components/settings/LoginIdentitiesBlock
 import { ChangeEmailForm } from "@/components/settings/ChangeEmailForm";
 import { WorkspaceSettingsBlock } from "@/components/settings/WorkspaceSettingsBlock";
 import { TimezoneSettingsBlock } from "@/components/settings/TimezoneSettingsBlock";
+import { NotificationSettingsBlock } from "@/components/settings/NotificationSettingsBlock";
 import { fetchUserInvites } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
@@ -18,7 +19,8 @@ export type UserSettingsKey =
   | "email"
   | "invites"
   | "login"
-  | "timezone";
+  | "timezone"
+  | "notifications";
 
 const SETTINGS_MENU: {
   key: UserSettingsKey;
@@ -31,6 +33,7 @@ const SETTINGS_MENU: {
   { key: "invites", label: "Мои инвайты", description: "Ключи регистрации" },
   { key: "login", label: "Вход через соцсети", description: "VK и MAX" },
   { key: "timezone", label: "Таймзона", description: "Расписание публикаций" },
+  { key: "notifications", label: "Уведомления", description: "Колокольчик в кабинете" },
 ];
 
 function isSettingsKey(value: string | null): value is UserSettingsKey {
@@ -120,6 +123,18 @@ function SettingsSectionContent({
       return <LoginIdentitiesBlock embedded />;
     case "timezone":
       return <TimezoneSettingsBlock embedded />;
+    case "notifications":
+      return (
+        <div className="space-y-6">
+          <div>
+            <h2 className="text-lg font-semibold text-text">Уведомления</h2>
+            <p className="mt-1 text-sm text-muted">
+              Какие события показывать в колокольчике.
+            </p>
+          </div>
+          <NotificationSettingsBlock />
+        </div>
+      );
     default:
       return null;
   }
@@ -169,7 +184,7 @@ export function UserSettingsPage() {
     <div className="space-y-5">
       <PageHeader
         title="Настройки"
-        description="Профиль, workspace, вход и параметры публикаций."
+        description="Профиль, проект, вход и уведомления."
         className="mb-4"
       />
 
