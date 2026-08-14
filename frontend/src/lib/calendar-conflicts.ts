@@ -12,6 +12,11 @@ export type CalendarConflict = {
 const OVERLAP_MINUTES = 30;
 const DENSITY_THRESHOLD = 5;
 
+function isConflictEligible(post: Post, at: Date) {
+  if (post.status === "published") return false;
+  return at.getTime() > Date.now();
+}
+
 export function detectCalendarConflicts(
   posts: Post[],
   channels: ChannelListItem[],
@@ -22,7 +27,7 @@ export function detectCalendarConflicts(
 
   const timed = posts
     .map((post) => ({ post, at: postCalendarDate(post) }))
-    .filter((item): item is { post: Post; at: Date } => item.at != null)
+    .filter((item): item is { post: Post; at: Date } => item.at != null && isConflictEligible(item.post, item.at))
     .sort((a, b) => a.at.getTime() - b.at.getTime());
 
   for (let i = 0; i < timed.length; i++) {

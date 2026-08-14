@@ -74,7 +74,7 @@ export function CalendarPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("");
   const [channelFilter, setChannelFilter] = useState("");
   const [query, setQuery] = useState("");
-  const [hidePublished, setHidePublished] = useState(false);
+  const [hidePublished, setHidePublished] = useState(true);
   const [busy, setBusy] = useState(false);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dropTargetKey, setDropTargetKey] = useState<string | null>(null);
