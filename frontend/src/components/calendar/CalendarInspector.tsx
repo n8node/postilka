@@ -27,6 +27,7 @@ import {
 } from "@/lib/posts-display";
 import { CalendarEventMetrics } from "@/components/calendar/CalendarEventMetrics";
 import type { PostMetricsSummary } from "@/lib/calendar-metrics";
+import { cn } from "@/lib/utils";
 
 type CalendarInspectorProps = {
   post: Post;
