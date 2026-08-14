@@ -122,12 +122,40 @@ func (h *AnalyticsHandler) MetrikaConnectStart(w http.ResponseWriter, r *http.Re
 		writeError(w, http.StatusBadRequest, "workspace_id обязателен")
 		return
 	}
-	redirectURL, err := h.metrika.ConnectStart(r.Context(), userID, workspaceID, req.CounterID)
+	authorizeURL, state, err := h.metrika.ConnectStart(r.Context(), userID, workspaceID, req.CounterID)
 	if err != nil {
 		writeAnalyticsError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"redirect_url": redirectURL})
+	writeJSON(w, http.StatusOK, map[string]string{
+		"authorize_url": authorizeURL,
+		"state":         state,
+	})
+}
+
+func (h *AnalyticsHandler) MetrikaConnectComplete(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
+		return
+	}
+	var req struct {
+		State string `json:"state"`
+		Code  string `json:"code"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Некорректное тело запроса")
+		return
+	}
+	if strings.TrimSpace(req.Code) == "" {
+		writeError(w, http.StatusBadRequest, "Укажите код подтверждения")
+		return
+	}
+	if err := h.metrika.ConnectComplete(r.Context(), userID, strings.TrimSpace(req.State), strings.TrimSpace(req.Code)); err != nil {
+		writeAnalyticsError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 func (h *AnalyticsHandler) MetrikaCallback(w http.ResponseWriter, r *http.Request) {

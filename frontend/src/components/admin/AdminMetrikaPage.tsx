@@ -78,7 +78,7 @@ export function AdminMetrikaPage({ embedded = false }: { embedded?: boolean }) {
           <h1 className="text-2xl font-semibold text-slate-900">Яндекс Метрика — OAuth</h1>
         )}
         <p className="mt-1 text-sm text-slate-500">
-          OAuth-приложение платформы для подключения счётчиков пользователями. Создайте приложение в{" "}
+          Создайте приложение типа «Доступ к API» на{" "}
           <a
             href="https://oauth.yandex.ru/"
             target="_blank"
@@ -87,7 +87,7 @@ export function AdminMetrikaPage({ embedded = false }: { embedded?: boolean }) {
           >
             oauth.yandex.ru
           </a>{" "}
-          с правом «metrika:read».
+          с правом «metrika:read». Redirect URI для таких приложений Яндекс задаёт сам — это нормально.
         </p>
       </div>
 
@@ -142,7 +142,7 @@ export function AdminMetrikaPage({ embedded = false }: { embedded?: boolean }) {
         </div>
 
         <div>
-          <label className="mb-1.5 block text-sm font-medium">Redirect URI</label>
+          <label className="mb-1.5 block text-sm font-medium">Redirect URI (задаёт Яндекс)</label>
           <input
             type="text"
             readOnly
@@ -150,7 +150,9 @@ export function AdminMetrikaPage({ embedded = false }: { embedded?: boolean }) {
             className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 font-mono text-sm text-slate-600"
           />
           <p className="mt-1 text-xs text-slate-500">
-            Укажите этот адрес в настройках OAuth-приложения Яндекса как Callback URL.
+            Для приложений «Доступ к API» Яндекс не позволяет указать свой callback — используется фиксированный
+            адрес <span className="font-mono">verification_code</span>. Пользователи копируют код подтверждения
+            со страницы Яндекса в разделе «Аналитика».
           </p>
         </div>
       </section>

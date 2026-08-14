@@ -87,28 +87,28 @@ func (s *MetrikaConnectionService) ConnectStart(
 	ctx context.Context,
 	userID, workspaceID string,
 	counterID int64,
-) (string, error) {
+) (authorizeURL, state string, err error) {
 	if _, err := s.wsSvc.RequireMembership(ctx, userID, workspaceID, model.RoleEditor); err != nil {
-		return "", err
+		return "", "", err
 	}
 	oauthReady, err := s.OAuthReady(ctx)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	if !oauthReady {
-		return "", ErrMetrikaNotConfigured
+		return "", "", ErrMetrikaNotConfigured
 	}
 	if counterID <= 0 {
-		return "", fmt.Errorf("укажите номер счётчика Яндекс Метрики")
+		return "", "", fmt.Errorf("укажите номер счётчика Яндекс Метрики")
 	}
 
-	state, err := randomStateToken(24)
+	state, err = randomStateToken(24)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	sessionID, err := randomStateToken(16)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	if err := s.repo.CreateOAuthSession(ctx, repository.MetrikaOAuthSessionRow{
 		ID:          sessionID,
@@ -118,14 +118,29 @@ func (s *MetrikaConnectionService) ConnectStart(
 		CounterID:   counterID,
 		ExpiresAt:   time.Now().UTC().Add(15 * time.Minute),
 	}); err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	client, err := s.metrikaClient(ctx)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
-	return client.AuthorizeURL(state), nil
+	return client.AuthorizeURL(state), state, nil
+}
+
+func (s *MetrikaConnectionService) ConnectComplete(ctx context.Context, userID, state, code string) error {
+	code = strings.TrimSpace(code)
+	if code == "" {
+		return fmt.Errorf("код авторизации не получен")
+	}
+	session, err := s.repo.GetOAuthSessionByState(ctx, state)
+	if err != nil {
+		return err
+	}
+	if session.UserID != userID {
+		return fmt.Errorf("сессия подключения не найдена")
+	}
+	return s.finishOAuthSession(ctx, session, code)
 }
 
 func (s *MetrikaConnectionService) ConnectCallback(ctx context.Context, state, code string) error {
@@ -136,6 +151,10 @@ func (s *MetrikaConnectionService) ConnectCallback(ctx context.Context, state, c
 	if err != nil {
 		return err
 	}
+	return s.finishOAuthSession(ctx, session, code)
+}
+
+func (s *MetrikaConnectionService) finishOAuthSession(ctx context.Context, session *repository.MetrikaOAuthSessionRow, code string) error {
 	if time.Now().After(session.ExpiresAt) {
 		_ = s.repo.DeleteOAuthSession(ctx, session.ID)
 		return fmt.Errorf("сессия подключения Метрики истекла — повторите попытку")

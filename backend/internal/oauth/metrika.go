@@ -16,6 +16,8 @@ const (
 	yandexMetrikaTokenURL = "https://oauth.yandex.ru/token"
 	yandexMetrikaAPIBase  = "https://api-metrika.yandex.net"
 	MetrikaOAuthScope     = "metrika:read"
+	// YandexOAuthVerificationRedirectURI is fixed for OAuth apps registered "For API access".
+	YandexOAuthVerificationRedirectURI = "https://oauth.yandex.ru/verification_code"
 )
 
 type MetrikaClient struct {
@@ -51,12 +53,16 @@ func (c *MetrikaClient) AuthorizeURL(state string) string {
 }
 
 func (c *MetrikaClient) ExchangeCode(ctx context.Context, code string) (*MetrikaTokenResponse, error) {
-	return c.requestToken(ctx, url.Values{
+	values := url.Values{
 		"grant_type":    {"authorization_code"},
-		"code":          {code},
+		"code":          {strings.TrimSpace(code)},
 		"client_id":     {c.ClientID},
 		"client_secret": {c.ClientSecret},
-	})
+	}
+	if redirectURI := strings.TrimSpace(c.RedirectURI); redirectURI != "" {
+		values.Set("redirect_uri", redirectURI)
+	}
+	return c.requestToken(ctx, values)
 }
 
 func (c *MetrikaClient) RefreshToken(ctx context.Context, refreshToken string) (*MetrikaTokenResponse, error) {

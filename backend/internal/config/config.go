@@ -78,5 +78,6 @@ func (c *Config) ChannelOAuthRedirectURI(provider string) string {
 }
 
 func (c *Config) MetrikaOAuthRedirectURI() string {
-	return c.PublicAppURLNormalized() + "/api/v1/analytics/metrika/callback"
+	// API access apps in Yandex OAuth use a fixed verification_code redirect URI.
+	return "https://oauth.yandex.ru/verification_code"
 }

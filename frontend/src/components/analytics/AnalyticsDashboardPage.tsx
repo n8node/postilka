@@ -20,6 +20,7 @@ import { ApiError } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import {
   connectMetrika,
+  completeMetrikaConnect,
   disconnectMetrika,
   fetchAnalyticsOverview,
   fetchAnalyticsPosts,
@@ -58,10 +59,12 @@ function MetrikaConnectCard({
   onChanged: () => void;
 }) {
   const [counterId, setCounterId] = useState("");
+  const [pendingConnect, setPendingConnect] = useState<{ authorizeUrl: string; state: string } | null>(null);
+  const [verificationCode, setVerificationCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleConnect = async () => {
+  const handleStartConnect = async () => {
     const parsed = Number(counterId.trim());
     if (!Number.isFinite(parsed) || parsed <= 0) {
       setError("Укажите номер счётчика Метрики");
@@ -71,9 +74,33 @@ function MetrikaConnectCard({
     setError(null);
     try {
       const res = await connectMetrika(workspaceId, parsed);
-      window.location.href = res.redirect_url;
+      setPendingConnect({ authorizeUrl: res.authorize_url, state: res.state });
+      setVerificationCode("");
+      window.open(res.authorize_url, "_blank", "noopener,noreferrer");
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Не удалось начать подключение");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleCompleteConnect = async () => {
+    if (!pendingConnect) return;
+    const code = verificationCode.trim();
+    if (!code) {
+      setError("Вставьте код подтверждения со страницы Яндекса");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      await completeMetrikaConnect(pendingConnect.state, code);
+      setPendingConnect(null);
+      setVerificationCode("");
+      onChanged();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Не удалось завершить подключение");
+    } finally {
       setBusy(false);
     }
   };
@@ -132,8 +159,8 @@ function MetrikaConnectCard({
     <div className="rounded-xl border border-border bg-surface p-4">
       <p className="font-semibold">Подключить Яндекс Метрику</p>
       <p className="mt-1 text-sm text-muted">
-        Укажите номер счётчика и авторизуйтесь в Яндексе — Postilka покажет визиты и достижения целей по UTM
-        кампаниям ваших постов.
+        Укажите номер счётчика, авторизуйтесь в Яндексе и вставьте код подтверждения — Postilka покажет визиты
+        и достижения целей по UTM-кампаниям ваших постов.
       </p>
       <div className="mt-3 flex flex-wrap items-end gap-2">
         <label className="flex flex-col gap-1 text-sm">
@@ -142,19 +169,72 @@ function MetrikaConnectCard({
             value={counterId}
             onChange={(e) => setCounterId(e.target.value)}
             placeholder="12345678"
-            className="w-48 rounded-md border border-border px-3 py-2"
+            disabled={!!pendingConnect}
+            className="w-48 rounded-md border border-border px-3 py-2 disabled:bg-slate-50"
           />
         </label>
-        <button
-          type="button"
-          disabled={busy}
-          onClick={() => void handleConnect()}
-          className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-        >
-          {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
-          Подключить
-        </button>
+        {!pendingConnect ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void handleStartConnect()}
+            className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+          >
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
+            Получить код
+          </button>
+        ) : null}
       </div>
+
+      {pendingConnect ? (
+        <div className="mt-4 space-y-3 rounded-lg border border-border bg-slate-50 p-4">
+          <p className="text-sm text-slate-700">
+            1. Откройте{" "}
+            <a
+              href={pendingConnect.authorizeUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-blue-600 hover:underline"
+            >
+              страницу авторизации Яндекса
+            </a>
+            , разрешите доступ и скопируйте код подтверждения.
+          </p>
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-muted">2. Код подтверждения</span>
+            <input
+              value={verificationCode}
+              onChange={(e) => setVerificationCode(e.target.value)}
+              placeholder="1234567"
+              className="max-w-xs rounded-md border border-border px-3 py-2 font-mono"
+            />
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void handleCompleteConnect()}
+              className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
+              Подключить
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setPendingConnect(null);
+                setVerificationCode("");
+                setError(null);
+              }}
+              className="rounded-md border border-border bg-white px-4 py-2 text-sm hover:bg-slate-100 disabled:opacity-50"
+            >
+              Отмена
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
     </div>
   );

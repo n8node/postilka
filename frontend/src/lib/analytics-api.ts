@@ -133,9 +133,16 @@ export async function fetchMetrikaStatus() {
 }
 
 export async function connectMetrika(workspaceId: string, counterId: number) {
-  return apiFetch<{ redirect_url: string }>("/analytics/metrika/connect", {
+  return apiFetch<{ authorize_url: string; state: string }>("/analytics/metrika/connect", {
     method: "POST",
     body: JSON.stringify({ workspace_id: workspaceId, counter_id: counterId }),
+  });
+}
+
+export async function completeMetrikaConnect(state: string, code: string) {
+  return apiFetch<{ ok: boolean }>("/analytics/metrika/connect/complete", {
+    method: "POST",
+    body: JSON.stringify({ state, code }),
   });
 }
 

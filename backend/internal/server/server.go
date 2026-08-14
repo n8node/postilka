@@ -331,6 +331,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Get("/analytics/posts", analyticsHandler.ListPosts)
 			r.Get("/analytics/metrika/status", analyticsHandler.MetrikaStatus)
 			r.Post("/analytics/metrika/connect", analyticsHandler.MetrikaConnectStart)
+			r.Post("/analytics/metrika/connect/complete", analyticsHandler.MetrikaConnectComplete)
 			r.Delete("/analytics/metrika/disconnect", analyticsHandler.MetrikaDisconnect)
 		})
 
