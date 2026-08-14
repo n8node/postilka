@@ -171,6 +171,11 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	telegramBusinessHandler := handler.NewTelegramBusinessHandler(telegramBusinessSvc)
 	channelConnectHandler := handler.NewChannelConnectHandler(channelConnectSvc, cfg)
 	postHandler := handler.NewPostHandler(postSvc)
+	analyticsRepo := repository.NewAnalyticsRepository(db.Pool)
+	metrikaRepo := repository.NewMetrikaRepository(db.Pool)
+	metrikaSvc := service.NewMetrikaConnectionService(metrikaRepo, wsSvc, secretCipher, cfg)
+	analyticsSvc := service.NewAnalyticsService(analyticsRepo, postRepo, metrikaSvc, wsSvc)
+	analyticsHandler := handler.NewAnalyticsHandler(analyticsSvc, metrikaSvc, cfg)
 	linkRedirectHandler := handler.NewLinkRedirectHandler(linkShortener)
 	publicPageHandler := handler.NewPublicPageHandler(publicPageSvc)
 	paymentWebhookHandler := handler.NewPaymentWebhookHandler(paymentSettingsSvc, checkoutSvc, logger)
@@ -294,6 +299,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 		})
 
 		r.Get("/channels/oauth/{provider}/callback", channelConnectHandler.OAuthCallback)
+		r.Get("/analytics/metrika/callback", analyticsHandler.MetrikaCallback)
 
 		r.Group(func(r chi.Router) {
 			r.Use(authMW.Required)
@@ -313,6 +319,16 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Post("/posts/{id}/reject", postHandler.Reject)
 			r.Post("/posts/{id}/comments", postHandler.Comment)
 			r.Get("/posts/{id}/approval-events", postHandler.ListApprovalEvents)
+			r.Get("/posts/{id}/analytics", analyticsHandler.PostAnalytics)
+		})
+
+		r.Group(func(r chi.Router) {
+			r.Use(authMW.Required)
+			r.Get("/analytics/overview", analyticsHandler.Overview)
+			r.Get("/analytics/posts", analyticsHandler.ListPosts)
+			r.Get("/analytics/metrika/status", analyticsHandler.MetrikaStatus)
+			r.Post("/analytics/metrika/connect", analyticsHandler.MetrikaConnectStart)
+			r.Delete("/analytics/metrika/disconnect", analyticsHandler.MetrikaDisconnect)
 		})
 
 		r.Group(func(r chi.Router) {

@@ -1160,6 +1160,22 @@ func (c *TelegramBotClient) GetChat(ctx context.Context, token, chatID string) (
 	return chat, nil
 }
 
+func (c *TelegramBotClient) GetChatMemberCount(ctx context.Context, token, chatID string) (int, error) {
+	raw, err := c.api(ctx, token, "getChatMemberCount", map[string]any{
+		"chat_id": telegramChatIDParam(chatID),
+	})
+	if err != nil {
+		return 0, err
+	}
+	var parsed struct {
+		Result int `json:"result"`
+	}
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return 0, errors.New("telegram api: invalid getChatMemberCount result")
+	}
+	return parsed.Result, nil
+}
+
 func (c *TelegramBotClient) GetChatPhotoFilePath(ctx context.Context, token, chatID string) (string, error) {
 	chat, err := c.GetChat(ctx, token, chatID)
 	if err != nil {

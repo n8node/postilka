@@ -931,21 +931,93 @@ func (c *MAXBotClient) SendChannelMessage(
 	attachments []MAXOutgoingAttachment,
 	buttons [][]model.TelegramInlineButton,
 ) error {
+	_, err := c.SendChannelMessageReturningID(ctx, botToken, chatID, text, attachments, buttons)
+	return err
+}
+
+type MAXMessageStats struct {
+	MessageID string
+	Views     int
+}
+
+func (c *MAXBotClient) GetMessagesByIDs(
+	ctx context.Context,
+	token string,
+	messageIDs ...string,
+) ([]MAXMessageStats, error) {
+	token = strings.TrimSpace(token)
+	if token == "" || len(messageIDs) == 0 {
+		return nil, nil
+	}
+	ids := make([]string, 0, len(messageIDs))
+	for _, id := range messageIDs {
+		id = strings.TrimSpace(id)
+		if id != "" {
+			ids = append(ids, id)
+		}
+	}
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	endpoint := maxAPIBase + "/messages?" + url.Values{
+		"message_ids": {strings.Join(ids, ",")},
+	}.Encode()
+	respBody, status, err := c.do(ctx, http.MethodGet, endpoint, token, nil)
+	if err != nil {
+		return nil, err
+	}
+	if status >= 400 {
+		return nil, formatMAXMessagesError(status, respBody)
+	}
+
+	var parsed struct {
+		Messages []struct {
+			Body struct {
+				Mid string `json:"mid"`
+			} `json:"body"`
+			Stat *struct {
+				Views int64 `json:"views"`
+			} `json:"stat"`
+		} `json:"messages"`
+	}
+	if err := json.Unmarshal(respBody, &parsed); err != nil {
+		return nil, err
+	}
+	out := make([]MAXMessageStats, 0, len(parsed.Messages))
+	for _, msg := range parsed.Messages {
+		item := MAXMessageStats{MessageID: strings.TrimSpace(msg.Body.Mid)}
+		if msg.Stat != nil {
+			item.Views = int(msg.Stat.Views)
+		}
+		if item.MessageID != "" {
+			out = append(out, item)
+		}
+	}
+	return out, nil
+}
+
+func (c *MAXBotClient) SendChannelMessageReturningID(
+	ctx context.Context,
+	botToken, chatID, text string,
+	attachments []MAXOutgoingAttachment,
+	buttons [][]model.TelegramInlineButton,
+) (string, error) {
 	botToken = strings.TrimSpace(botToken)
 	chatID = strings.TrimSpace(chatID)
 	if botToken == "" {
-		return fmt.Errorf("max message: empty bot token")
+		return "", fmt.Errorf("max message: empty bot token")
 	}
 	if chatID == "" {
-		return fmt.Errorf("max message: empty chat_id")
+		return "", fmt.Errorf("max message: empty chat_id")
 	}
 
 	chat, err := c.ResolveChat(ctx, botToken, chatID)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if err := c.VerifyChannelPostAccess(ctx, botToken, chat.ChatID); err != nil {
-		return err
+		return "", err
 	}
 
 	body := map[string]any{}
@@ -958,11 +1030,11 @@ func (c *MAXBotClient) SendChannelMessage(
 		body["attachments"] = atts
 	}
 	if len(body) == 0 {
-		return fmt.Errorf("max message: пустое сообщение — добавьте текст, медиа или кнопки-ссылки")
+		return "", fmt.Errorf("max message: пустое сообщение — добавьте текст, медиа или кнопки-ссылки")
 	}
 	payload, err := json.Marshal(body)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	endpoint := maxAPIBase + "/messages?" + url.Values{
@@ -987,17 +1059,27 @@ func (c *MAXBotClient) SendChannelMessage(
 		}
 		respBody, status, err := c.do(ctx, http.MethodPost, endpoint, botToken, payload)
 		if err != nil {
-			return err
+			return "", err
 		}
 		if status < 400 {
-			return nil
+			var parsed struct {
+				Message struct {
+					Body struct {
+						Mid string `json:"mid"`
+					} `json:"body"`
+				} `json:"message"`
+			}
+			if err := json.Unmarshal(respBody, &parsed); err == nil {
+				return strings.TrimSpace(parsed.Message.Body.Mid), nil
+			}
+			return "", nil
 		}
 		lastErr = formatMAXMessagesError(status, respBody)
 		if !isMAXAttachmentNotReady(respBody) {
-			return lastErr
+			return "", lastErr
 		}
 	}
-	return lastErr
+	return "", lastErr
 }
 
 func formatMAXMessagesError(status int, respBody []byte) error {

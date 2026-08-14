@@ -87,10 +87,17 @@ func main() {
 	publicationSvc := service.NewPublicationService(
 		postRepo, channelRepo, fileStorageRepo, objectStorage, channelTestSvc, telegramBotClient, oauthclient.NewMAXBotClient(), quotaSvc, linkShortener,
 	)
+	analyticsRepo := repository.NewAnalyticsRepository(db.Pool)
+	metrikaRepo := repository.NewMetrikaRepository(db.Pool)
+	metrikaSvc := service.NewMetrikaConnectionService(metrikaRepo, wsSvc, secretCipher, cfg)
+	metricsCollector := service.NewMetricsCollectorService(
+		analyticsRepo, linkCodeRepo, postRepo, channelRepo, channelTestSvc, metrikaSvc, telegramBotClient, logger,
+	)
 	logger.Info("worker started", "publish_concurrency", cfg.WorkerPublishConcurrency, "version", config.Version)
 
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
+	var lastMetricsRun time.Time
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
@@ -117,6 +124,14 @@ func main() {
 				logger.Warn("purge trash tick failed", "error", err)
 			} else if n > 0 {
 				logger.Info("purged expired trash files", "count", n)
+			}
+			if time.Since(lastMetricsRun) >= 15*time.Minute {
+				if n, err := metricsCollector.Process(ctx, 50); err != nil {
+					logger.Warn("metrics collection tick failed", "error", err)
+				} else if n > 0 {
+					logger.Info("collected post metrics", "count", n)
+				}
+				lastMetricsRun = time.Now()
 			}
 		case <-quit:
 			logger.Info("worker stopped")

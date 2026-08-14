@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -443,6 +444,86 @@ func applyYouTubeShortsTags(title, description string) (string, string) {
 	}
 	description += "#Shorts"
 	return title, description
+}
+
+type YouTubeVideoStatistics struct {
+	ViewCount     int
+	LikeCount     int
+	CommentCount  int
+	FavoriteCount int
+}
+
+func (c *YouTubeClient) GetVideoStatistics(ctx context.Context, accessToken, videoID string) (*YouTubeVideoStatistics, error) {
+	videoID = strings.TrimSpace(videoID)
+	if videoID == "" {
+		return nil, fmt.Errorf("youtube stats: empty video id")
+	}
+	values := url.Values{}
+	values.Set("part", "statistics")
+	values.Set("id", videoID)
+	endpoint := youtubeAPIBase + "/videos?" + values.Encode()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+
+	resp, err := c.http().Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("youtube stats: HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	var parsed struct {
+		Items []struct {
+			Statistics struct {
+				ViewCount     string `json:"viewCount"`
+				LikeCount     string `json:"likeCount"`
+				CommentCount  string `json:"commentCount"`
+				FavoriteCount string `json:"favoriteCount"`
+			} `json:"statistics"`
+		} `json:"items"`
+		Error struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return nil, err
+	}
+	if parsed.Error.Message != "" {
+		return nil, fmt.Errorf("youtube stats: %s", parsed.Error.Message)
+	}
+	if len(parsed.Items) == 0 {
+		return nil, fmt.Errorf("youtube stats: video not found")
+	}
+	stats := parsed.Items[0].Statistics
+	return &YouTubeVideoStatistics{
+		ViewCount:     parseYouTubeStatInt(stats.ViewCount),
+		LikeCount:     parseYouTubeStatInt(stats.LikeCount),
+		CommentCount:  parseYouTubeStatInt(stats.CommentCount),
+		FavoriteCount: parseYouTubeStatInt(stats.FavoriteCount),
+	}, nil
+}
+
+func parseYouTubeStatInt(raw string) int {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0
+	}
+	n, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil || n < 0 {
+		return 0
+	}
+	return int(n)
 }
 
 func (c *YouTubeClient) http() *http.Client {

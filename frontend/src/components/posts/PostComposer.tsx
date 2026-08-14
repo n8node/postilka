@@ -31,6 +31,7 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
+import { PostStatsPanel } from "@/components/analytics/PostStatsPanel";
 import { useRouter } from "next/navigation";
 import {
   useCallback,
@@ -3472,6 +3473,10 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
               </Card>
             )}
           </div>
+
+          {postId && currentStatus === "published" ? (
+            <PostStatsPanel postId={postId} published />
+          ) : null}
         </div>
 
         <div

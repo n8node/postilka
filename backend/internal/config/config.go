@@ -37,6 +37,8 @@ type Config struct {
 	YandexGPTBaseURL  string `env:"YANDEX_GPT_BASE_URL" envDefault:"https://llm.api.cloud.yandex.net/v1"`
 	KIEAPIKey         string `env:"KIE_API_KEY"`
 	KIEVideoAPIKey    string `env:"KIE_VIDEO_API_KEY"`
+	YandexMetrikaClientID     string `env:"YANDEX_METRIKA_CLIENT_ID"`
+	YandexMetrikaClientSecret string `env:"YANDEX_METRIKA_CLIENT_SECRET"`
 }
 
 func Load() (*Config, error) {
@@ -73,4 +75,8 @@ func (c *Config) PublicAppURLNormalized() string {
 
 func (c *Config) ChannelOAuthRedirectURI(provider string) string {
 	return c.PublicAppURLNormalized() + "/api/v1/channels/oauth/" + provider + "/callback"
+}
+
+func (c *Config) MetrikaOAuthRedirectURI() string {
+	return c.PublicAppURLNormalized() + "/api/v1/analytics/metrika/callback"
 }

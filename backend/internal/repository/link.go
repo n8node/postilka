@@ -102,6 +102,39 @@ func (r *LinkCodeRepository) RecordClick(
 	return err
 }
 
+type LinkClickCounts struct {
+	Total  int
+	Unique int
+}
+
+func (r *LinkCodeRepository) CountClicksByTarget(ctx context.Context, targetID string) (LinkClickCounts, error) {
+	var counts LinkClickCounts
+	err := r.pool.QueryRow(ctx, `
+		SELECT
+			COUNT(*) FILTER (WHERE lc.is_bot = false)::int,
+			COUNT(DISTINCT COALESCE(lc.referrer_hash, '') || ':' || COALESCE(lc.user_agent_hash, ''))
+				FILTER (WHERE lc.is_bot = false)::int
+		FROM link_clicks lc
+		JOIN link_codes lk ON lk.id = lc.link_code_id
+		WHERE lk.target_id = $1::uuid
+	`, targetID).Scan(&counts.Total, &counts.Unique)
+	return counts, err
+}
+
+func (r *LinkCodeRepository) CountClicksByPost(ctx context.Context, postID string) (LinkClickCounts, error) {
+	var counts LinkClickCounts
+	err := r.pool.QueryRow(ctx, `
+		SELECT
+			COUNT(*) FILTER (WHERE lc.is_bot = false)::int,
+			COUNT(DISTINCT COALESCE(lc.referrer_hash, '') || ':' || COALESCE(lc.user_agent_hash, ''))
+				FILTER (WHERE lc.is_bot = false)::int
+		FROM link_clicks lc
+		JOIN link_codes lk ON lk.id = lc.link_code_id
+		WHERE lk.post_id = $1::uuid
+	`, postID).Scan(&counts.Total, &counts.Unique)
+	return counts, err
+}
+
 type PostApprovalRepository struct {
 	pool *pgxpool.Pool
 }

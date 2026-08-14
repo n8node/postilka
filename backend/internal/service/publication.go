@@ -640,15 +640,13 @@ func (s *PublicationService) publishTarget(
 			if err != nil {
 				return "", err
 			}
-			if err := s.maxClient.SendChannelMessage(ctx, token, channel.ChatID, text, attachments, buttons); err != nil {
+			msgID, err := s.maxClient.SendChannelMessageReturningID(ctx, token, channel.ChatID, text, attachments, buttons)
+			if err != nil {
 				return "", err
 			}
-			return "", nil
+			return msgID, nil
 		}
-		if err := s.maxClient.SendChannelMessage(ctx, token, channel.ChatID, text, nil, buttons); err != nil {
-			return "", err
-		}
-		return "", nil
+		return s.maxClient.SendChannelMessageReturningID(ctx, token, channel.ChatID, text, nil, buttons)
 	}
 
 	if channel.Provider == model.ChannelProviderYouTube {
