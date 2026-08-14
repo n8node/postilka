@@ -115,7 +115,6 @@ export function CalendarEventCard({
                 metadata={ch.metadata}
                 provider={ch.provider}
                 chatType={ch.chat_type}
-                avatarUrl={ch.avatar_url}
                 size="sm"
                 className="!h-4 !w-4 !text-[8px]"
               />
