@@ -51,13 +51,17 @@ func scanPost(row pgx.Row) (*model.Post, error) {
 }
 
 type PostListFilter struct {
-	WorkspaceID string
-	Status      string
-	ChannelID   string
-	Query       string
-	Format      string
-	Limit       int
-	Offset      int
+	WorkspaceID      string
+	Status           string
+	ChannelID        string
+	Query            string
+	Format           string
+	From             *time.Time
+	To               *time.Time
+	Calendar         bool
+	IncludeUnscheduled bool
+	Limit            int
+	Offset           int
 }
 
 func (r *PostRepository) buildListWhere(filter PostListFilter) (string, []any) {
@@ -93,13 +97,33 @@ func (r *PostRepository) buildListWhere(filter PostListFilter) (string, []any) {
 		args = append(args, filter.Format)
 		argN++
 	}
+	if filter.Calendar {
+		if filter.IncludeUnscheduled {
+			conditions = append(conditions, `(due_at IS NULL AND status IN ('draft', 'failed', 'canceled'))`)
+		} else if filter.From != nil && filter.To != nil {
+			conditions = append(conditions, fmt.Sprintf(`(
+				(due_at IS NOT NULL AND due_at >= $%d AND due_at < $%d)
+				OR (published_at IS NOT NULL AND published_at >= $%d AND published_at < $%d)
+			)`, argN, argN+1, argN, argN+1))
+			args = append(args, *filter.From, *filter.To)
+			argN += 2
+		}
+	}
 
 	return strings.Join(conditions, " AND "), args
 }
 
 func (r *PostRepository) List(ctx context.Context, filter PostListFilter) ([]model.Post, int, error) {
-	if filter.Limit <= 0 || filter.Limit > 100 {
-		filter.Limit = 50
+	maxLimit := 100
+	if filter.Calendar {
+		maxLimit = 500
+	}
+	if filter.Limit <= 0 || filter.Limit > maxLimit {
+		if filter.Calendar {
+			filter.Limit = 500
+		} else {
+			filter.Limit = 50
+		}
 	}
 	if filter.Offset < 0 {
 		filter.Offset = 0
@@ -112,6 +136,13 @@ func (r *PostRepository) List(ctx context.Context, filter PostListFilter) ([]mod
 		return nil, 0, err
 	}
 
+	orderBy := "updated_at DESC"
+	if filter.Calendar && !filter.IncludeUnscheduled {
+		orderBy = "COALESCE(due_at, published_at) ASC NULLS LAST, updated_at DESC"
+	} else if filter.Calendar && filter.IncludeUnscheduled {
+		orderBy = "updated_at DESC"
+	}
+
 	listArgs := append(append([]any{}, args...), filter.Limit, filter.Offset)
 	limitArg := len(args) + 1
 	offsetArg := len(args) + 2
@@ -119,7 +150,7 @@ func (r *PostRepository) List(ctx context.Context, filter PostListFilter) ([]mod
 		SELECT `+postColumns+`
 		FROM posts
 		WHERE `+where+`
-		ORDER BY updated_at DESC
+		ORDER BY `+orderBy+`
 		LIMIT $`+fmt.Sprint(limitArg)+` OFFSET $`+fmt.Sprint(offsetArg),
 		listArgs...)
 	if err != nil {

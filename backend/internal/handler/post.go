@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/postilka/postilka/internal/middleware"
@@ -46,6 +47,27 @@ func (h *PostHandler) List(w http.ResponseWriter, r *http.Request) {
 		Format:    strings.TrimSpace(q.Get("format")),
 		Limit:     limit,
 		Offset:    offset,
+	}
+	if q.Get("calendar") == "1" || q.Get("calendar") == "true" {
+		filter.Calendar = true
+	}
+	if q.Get("include_unscheduled") == "1" || q.Get("include_unscheduled") == "true" {
+		filter.Calendar = true
+		filter.IncludeUnscheduled = true
+	}
+	if fromRaw := strings.TrimSpace(q.Get("from")); fromRaw != "" {
+		if t, err := time.Parse(time.RFC3339, fromRaw); err == nil {
+			filter.From = &t
+		} else if t, err := time.Parse("2006-01-02", fromRaw); err == nil {
+			filter.From = &t
+		}
+	}
+	if toRaw := strings.TrimSpace(q.Get("to")); toRaw != "" {
+		if t, err := time.Parse(time.RFC3339, toRaw); err == nil {
+			filter.To = &t
+		} else if t, err := time.Parse("2006-01-02", toRaw); err == nil {
+			filter.To = &t
+		}
 	}
 	items, total, err := h.posts.List(r.Context(), userID, r, filter)
 	if err != nil {
