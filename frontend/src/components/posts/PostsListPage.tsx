@@ -169,7 +169,7 @@ export function PostsListPage() {
 
   async function handleDelete(post: Post) {
     if (!canDeletePost(post.status)) return;
-    if (!window.confirm("Удалить черновик без возможности восстановления?")) return;
+    if (!window.confirm("Удалить запись без возможности восстановления?")) return;
     setActionId(post.id);
     setError(null);
     try {
@@ -450,8 +450,8 @@ export function PostsListPage() {
                             disabled={busy || !canDeletePost(post.status)}
                             title={
                               canDeletePost(post.status)
-                                ? "Удалить черновик"
-                                : "Удалить можно только черновик. Опубликованные записи остаются в истории."
+                                ? "Удалить запись"
+                                : "Удалить можно только черновик, отменённую или неудачную публикацию. Опубликованные записи остаются в истории."
                             }
                             variant="danger"
                             onClick={() => void handleDelete(post)}

@@ -388,7 +388,8 @@ func replacePostRelations(
 
 func (r *PostRepository) DeleteDraft(ctx context.Context, workspaceID, postID string) error {
 	tag, err := r.pool.Exec(ctx, `
-		DELETE FROM posts WHERE id = $1 AND workspace_id = $2 AND status = 'draft'
+		DELETE FROM posts
+		WHERE id = $1 AND workspace_id = $2 AND status IN ('draft', 'canceled', 'failed')
 	`, postID, workspaceID)
 	if err != nil {
 		return err

@@ -68,7 +68,7 @@ export function canEditPost(status: Post["status"]) {
 }
 
 export function canDeletePost(status: Post["status"]) {
-  return status === "draft";
+  return status === "draft" || status === "canceled" || status === "failed";
 }
 
 export function canCancelPost(status: Post["status"]) {
