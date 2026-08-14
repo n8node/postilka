@@ -176,8 +176,27 @@ export type PostSaveInput = {
   media: { file_id: string; settings: { alt_text?: string } }[];
 };
 
-export function fetchPosts(limit = 50, offset = 0) {
-  return apiFetch<{ items: Post[] }>(`/posts?limit=${limit}&offset=${offset}`);
+export type PostListParams = {
+  limit?: number;
+  offset?: number;
+  status?: Post["status"] | "";
+  channel_id?: string;
+  q?: string;
+  format?: string;
+};
+
+export function fetchPosts(params: PostListParams = {}) {
+  const qs = new URLSearchParams();
+  if (params.limit != null) qs.set("limit", String(params.limit));
+  if (params.offset != null) qs.set("offset", String(params.offset));
+  if (params.status) qs.set("status", params.status);
+  if (params.channel_id) qs.set("channel_id", params.channel_id);
+  if (params.q) qs.set("q", params.q);
+  if (params.format) qs.set("format", params.format);
+  const query = qs.toString();
+  return apiFetch<{ items: Post[]; total: number; limit: number; offset: number }>(
+    `/posts${query ? `?${query}` : ""}`,
+  );
 }
 
 export function fetchPost(id: string) {

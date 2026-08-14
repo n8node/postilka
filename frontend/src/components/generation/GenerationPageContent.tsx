@@ -286,7 +286,7 @@ export function GenerationPageContent() {
 
   const makePost = () => {
     if (!resultGenerationId) return;
-    router.push(`/posts?generation=${encodeURIComponent(resultGenerationId)}`);
+    router.push(`/posts/new?generation=${encodeURIComponent(resultGenerationId)}`);
   };
 
   const showProgress = generating || (!resultUrl && !generating);

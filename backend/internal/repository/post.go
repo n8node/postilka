@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -49,22 +50,80 @@ func scanPost(row pgx.Row) (*model.Post, error) {
 	return &post, nil
 }
 
-func (r *PostRepository) List(ctx context.Context, workspaceID string, limit, offset int) ([]model.Post, error) {
-	if limit <= 0 || limit > 100 {
-		limit = 50
+type PostListFilter struct {
+	WorkspaceID string
+	Status      string
+	ChannelID   string
+	Query       string
+	Format      string
+	Limit       int
+	Offset      int
+}
+
+func (r *PostRepository) buildListWhere(filter PostListFilter) (string, []any) {
+	conditions := []string{"workspace_id = $1"}
+	args := []any{filter.WorkspaceID}
+	argN := 2
+
+	if filter.Status != "" {
+		conditions = append(conditions, fmt.Sprintf("status = $%d", argN))
+		args = append(args, filter.Status)
+		argN++
 	}
-	if offset < 0 {
-		offset = 0
+	if filter.ChannelID != "" {
+		conditions = append(conditions, fmt.Sprintf(`EXISTS (
+			SELECT 1 FROM post_targets pt
+			WHERE pt.post_id = posts.id AND pt.channel_id = $%d
+		)`, argN))
+		args = append(args, filter.ChannelID)
+		argN++
 	}
+	if filter.Query != "" {
+		pattern := "%" + filter.Query + "%"
+		conditions = append(conditions, fmt.Sprintf(`(
+			COALESCE(content->>'text', '') ILIKE $%d
+			OR COALESCE(content->'rich_message'->>'title', '') ILIKE $%d
+			OR COALESCE(content->>'title', '') ILIKE $%d
+		)`, argN, argN, argN))
+		args = append(args, pattern)
+		argN++
+	}
+	if filter.Format != "" {
+		conditions = append(conditions, fmt.Sprintf("COALESCE(content->>'format', 'message') = $%d", argN))
+		args = append(args, filter.Format)
+		argN++
+	}
+
+	return strings.Join(conditions, " AND "), args
+}
+
+func (r *PostRepository) List(ctx context.Context, filter PostListFilter) ([]model.Post, int, error) {
+	if filter.Limit <= 0 || filter.Limit > 100 {
+		filter.Limit = 50
+	}
+	if filter.Offset < 0 {
+		filter.Offset = 0
+	}
+
+	where, args := r.buildListWhere(filter)
+
+	var total int
+	if err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM posts WHERE `+where, args...).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	listArgs := append(append([]any{}, args...), filter.Limit, filter.Offset)
+	limitArg := len(args) + 1
+	offsetArg := len(args) + 2
 	rows, err := r.pool.Query(ctx, `
 		SELECT `+postColumns+`
 		FROM posts
-		WHERE workspace_id = $1
-		ORDER BY created_at DESC
-		LIMIT $2 OFFSET $3
-	`, workspaceID, limit, offset)
+		WHERE `+where+`
+		ORDER BY updated_at DESC
+		LIMIT $`+fmt.Sprint(limitArg)+` OFFSET $`+fmt.Sprint(offsetArg),
+		listArgs...)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
@@ -72,14 +131,14 @@ func (r *PostRepository) List(ctx context.Context, workspaceID string, limit, of
 	for rows.Next() {
 		post, err := scanPost(rows)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		if err := r.loadRelations(ctx, post); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		items = append(items, *post)
 	}
-	return items, rows.Err()
+	return items, total, rows.Err()
 }
 
 func (r *PostRepository) Get(ctx context.Context, workspaceID, postID string) (*model.Post, error) {

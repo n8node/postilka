@@ -1,5 +1,5 @@
-import { PostComposer } from "@/components/posts/PostComposer";
+import { PostsListPage } from "@/components/posts/PostsListPage";
 
 export default function PostsPage() {
-  return <PostComposer />;
+  return <PostsListPage />;
 }

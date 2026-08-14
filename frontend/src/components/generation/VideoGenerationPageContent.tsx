@@ -299,7 +299,7 @@ export function VideoGenerationPageContent() {
 
   const makePost = () => {
     if (!resultGenerationId) return;
-    router.push(`/posts?generation=${encodeURIComponent(resultGenerationId)}`);
+    router.push(`/posts/new?generation=${encodeURIComponent(resultGenerationId)}`);
   };
 
   const handleDeleteHistory = useCallback(

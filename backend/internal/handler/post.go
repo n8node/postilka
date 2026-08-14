@@ -36,14 +36,28 @@ func (h *PostHandler) List(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
-	items, err := h.posts.List(r.Context(), userID, r, limit, offset)
+	q := r.URL.Query()
+	limit, _ := strconv.Atoi(q.Get("limit"))
+	offset, _ := strconv.Atoi(q.Get("offset"))
+	filter := repository.PostListFilter{
+		Status:    strings.TrimSpace(q.Get("status")),
+		ChannelID: strings.TrimSpace(q.Get("channel_id")),
+		Query:     strings.TrimSpace(q.Get("q")),
+		Format:    strings.TrimSpace(q.Get("format")),
+		Limit:     limit,
+		Offset:    offset,
+	}
+	items, total, err := h.posts.List(r.Context(), userID, r, filter)
 	if err != nil {
 		writePostError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"items":  items,
+		"total":  total,
+		"limit":  filter.Limit,
+		"offset": filter.Offset,
+	})
 }
 
 func (h *PostHandler) Create(w http.ResponseWriter, r *http.Request) {

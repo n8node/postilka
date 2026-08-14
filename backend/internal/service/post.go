@@ -81,13 +81,14 @@ func (s *PostService) List(
 	ctx context.Context,
 	userID string,
 	r *http.Request,
-	limit, offset int,
-) ([]model.Post, error) {
+	filter repository.PostListFilter,
+) ([]model.Post, int, error) {
 	ws, err := s.requireEditor(ctx, userID, r)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	return s.posts.List(ctx, ws.ID, limit, offset)
+	filter.WorkspaceID = ws.ID
+	return s.posts.List(ctx, filter)
 }
 
 func (s *PostService) Get(ctx context.Context, userID string, r *http.Request, postID string) (*model.Post, error) {

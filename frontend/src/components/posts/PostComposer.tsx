@@ -31,6 +31,7 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   useCallback,
   useEffect,
@@ -76,7 +77,6 @@ import {
   deleteTelegramStory,
   fetchPost,
   fetchPostApprovalEvents,
-  fetchPosts,
   publishPost,
   rejectPost,
   schedulePost,
@@ -1180,9 +1180,9 @@ function MaxButtonBuilder({
   );
 }
 
-export function PostComposer() {
+export function PostComposer({ initialPostId }: { initialPostId?: string } = {}) {
+  const router = useRouter();
   const [channels, setChannels] = useState<ChannelListItem[]>([]);
-  const [posts, setPosts] = useState<Post[]>([]);
   const [recentFiles, setRecentFiles] = useState<WorkspaceFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -1258,7 +1258,11 @@ export function PostComposer() {
   const isPendingApproval = currentStatus === "pending_approval";
   const isPublishedStory =
     currentStatus === "published" && (postKind === "story" || format === "story");
-  const composerLocked = isPendingApproval && !isAdmin;
+  const isViewOnly =
+    currentStatus === "scheduled" ||
+    currentStatus === "publishing" ||
+    (currentStatus === "published" && !isPublishedStory);
+  const composerLocked = (isPendingApproval && !isAdmin) || isViewOnly;
   const publishLocked =
     currentStatus === "publishing" ||
     (currentStatus === "published" && !isPublishedStory);
@@ -1293,14 +1297,12 @@ export function PostComposer() {
     setLoading(true);
     setError(null);
     try {
-      const [channelData, postData, fileData, meData] = await Promise.all([
+      const [channelData, fileData, meData] = await Promise.all([
         fetchChannels(),
-        fetchPosts(),
         listFiles("recent"),
         fetchMe(),
       ]);
       setChannels(channelData.items);
-      setPosts(postData.items);
       setRecentFiles(fileData.files);
       setWorkspaceRole(meData.active_workspace?.role ?? meData.workspace?.role ?? null);
       setSelectedIds([]);
@@ -1319,6 +1321,21 @@ export function PostComposer() {
       setPreviewWidth(Math.min(stored, Math.min(560, window.innerWidth * 0.45)));
     }
   }, [load]);
+
+  useEffect(() => {
+    if (!initialPostId || loading) return;
+    let cancelled = false;
+    void fetchPost(initialPostId)
+      .then((post) => {
+        if (!cancelled) openPost(post);
+      })
+      .catch(() => {
+        if (!cancelled) setError("Не удалось загрузить публикацию");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [initialPostId, loading]);
 
   useEffect(() => {
     const warn = (event: BeforeUnloadEvent) => {
@@ -1471,6 +1488,10 @@ export function PostComposer() {
 
   function resetNew() {
     if (dirty && !window.confirm("Несохранённые изменения будут потеряны. Продолжить?")) return;
+    if (initialPostId) {
+      router.push("/posts/new");
+      return;
+    }
     setPostId(null);
     setSelectedIds([]);
     setActiveChannelId(null);
@@ -1511,15 +1532,6 @@ export function PostComposer() {
 
   function openPost(post: Post) {
     if (dirty && !window.confirm("Несохранённые изменения будут потеряны. Открыть публикацию?")) return;
-    if (
-      post.status !== "draft" &&
-      post.status !== "canceled" &&
-      post.status !== "failed" &&
-      post.status !== "pending_approval"
-    ) {
-      setError("Редактировать можно только черновики, отменённые, неудачные публикации и записи на согласовании");
-      return;
-    }
     const targetOverrides: Record<string, Override> = {};
     for (const target of post.targets) {
       const targetHTML = target.settings?.content?.text ?? post.content.text;
@@ -2150,7 +2162,6 @@ export function PostComposer() {
               publish: timing === "now",
             })
           : await rejectPost(postId, { comment: discussionComment.trim() || undefined });
-      setPosts((current) => [finalPost, ...current.filter((item) => item.id !== finalPost.id)]);
       setCurrentStatus(finalPost.status);
       await loadApprovalEvents(finalPost.id);
       setDiscussionComment("");
@@ -2227,7 +2238,9 @@ export function PostComposer() {
       }
       setPostId(finalPost.id);
       setCurrentStatus(finalPost.status);
-      setPosts((current) => [finalPost, ...current.filter((item) => item.id !== finalPost.id)]);
+      if (!postId) {
+        router.replace(`/posts/${finalPost.id}`, { scroll: false });
+      }
       if (finalPost.status === "pending_approval" || approvalRequired) {
         await loadApprovalEvents(finalPost.id);
         setActivePreviewTab("discussion");
@@ -2247,10 +2260,6 @@ export function PostComposer() {
         try {
           const latest = await fetchPost(postId);
           setCurrentStatus(latest.status);
-          setPosts((current) => [
-            latest,
-            ...current.filter((item) => item.id !== latest.id),
-          ]);
         } catch {
           // ignore sync errors
         }
@@ -2278,7 +2287,6 @@ export function PostComposer() {
       await updatePost(postId, buildPayload());
       const finalPost = await syncTelegramStory(postId);
       setCurrentStatus(finalPost.status);
-      setPosts((current) => [finalPost, ...current.filter((item) => item.id !== finalPost.id)]);
       setDirty(false);
       setSuccess("История обновлена в Telegram");
     } catch (syncError) {
@@ -2297,7 +2305,6 @@ export function PostComposer() {
     try {
       const finalPost = await deleteTelegramStory(postId);
       setCurrentStatus(finalPost.status);
-      setPosts((current) => [finalPost, ...current.filter((item) => item.id !== finalPost.id)]);
       setSuccess("История удалена из Telegram");
     } catch (deleteError) {
       setError(errorText(deleteError, "Не удалось удалить историю в Telegram"));
@@ -2366,17 +2373,35 @@ export function PostComposer() {
   return (
     <div>
       <PageHeader
-        title={postId ? "Редактирование поста" : "Новый пост"}
-        description="Создайте общую публикацию, адаптируйте её для каналов и выберите время отправки."
+        title={
+          isViewOnly
+            ? "Просмотр публикации"
+            : postId
+              ? "Редактирование поста"
+              : "Новый пост"
+        }
+        description={
+          isViewOnly
+            ? "Запись уже отправлена или стоит в очереди. Редактирование недоступно — можно дублировать из списка публикаций."
+            : "Создайте общую публикацию, адаптируйте её для каналов и выберите время отправки."
+        }
         actions={
-          <button
-            type="button"
-            onClick={resetNew}
-            className="inline-flex items-center gap-2 rounded-md border border-border bg-white px-3 py-2 text-sm font-medium hover:bg-zinc-50"
-          >
-            <Plus className="h-4 w-4" />
-            Новый пост
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href="/posts"
+              className="inline-flex items-center gap-2 rounded-md border border-border bg-white px-3 py-2 text-sm font-medium hover:bg-zinc-50"
+            >
+              Все публикации
+            </Link>
+            <button
+              type="button"
+              onClick={resetNew}
+              className="inline-flex items-center gap-2 rounded-md border border-border bg-white px-3 py-2 text-sm font-medium hover:bg-zinc-50"
+            >
+              <Plus className="h-4 w-4" />
+              Новый пост
+            </button>
+          </div>
         }
       />
 
@@ -3447,60 +3472,6 @@ export function PostComposer() {
               </Card>
             )}
           </div>
-
-          <Card
-            title="Черновики и публикации"
-            action={<span className="text-xs text-muted">{posts.length} записей</span>}
-          >
-            {posts.length === 0 ? (
-              <p className="text-sm text-muted">Сохранённых публикаций пока нет.</p>
-            ) : (
-              <div className="divide-y divide-border">
-                {posts.map((post) => {
-                  const text =
-                    post.content.text ||
-                    post.content.rich_message?.title ||
-                    post.content.rich_message?.blocks?.[0]?.text ||
-                    "Без текста";
-                  const editable = ["draft", "failed", "canceled"].includes(post.status);
-                  const reviewable = post.status === "pending_approval";
-                  return (
-                    <button
-                      key={post.id}
-                      type="button"
-                      onClick={() => (editable || reviewable) && openPost(post)}
-                      className={cn(
-                        "flex w-full items-center gap-3 py-3 text-left",
-                        !editable && !reviewable && "cursor-default",
-                      )}
-                    >
-                      <span
-                        className={cn(
-                          "rounded-full px-2 py-1 text-[11px] font-semibold",
-                          post.status === "published"
-                            ? "bg-emerald-50 text-emerald-700"
-                            : post.status === "pending_approval"
-                              ? "bg-amber-50 text-amber-800"
-                            : post.status === "failed"
-                              ? "bg-red-50 text-red-700"
-                              : "bg-zinc-100 text-zinc-700",
-                        )}
-                      >
-                        {STATUS_LABEL[post.status]}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium">{htmlToPlain(text)}</span>
-                        <span className="block text-xs text-muted">
-                          {new Date(post.updated_at).toLocaleString("ru-RU")} · {post.targets.length} каналов
-                        </span>
-                      </span>
-                      {editable && <span className="text-xs text-accent">Открыть</span>}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </Card>
         </div>
 
         <div
