@@ -313,6 +313,7 @@ func (s *ChannelService) VerifyAndRefresh(
 			meta = model.ChannelMetadata{
 				ProviderTitle:             businessConnectionDisplayName(conn.User),
 				BusinessUserID:            fmt.Sprintf("%d", conn.User.ID),
+				BusinessUserChatID:        fmt.Sprintf("%d", conn.UserChatID),
 				CanManageStories:          &canManage,
 				BusinessConnectionEnabled: &enabled,
 			}
@@ -320,8 +321,8 @@ func (s *ChannelService) VerifyAndRefresh(
 				meta.PublicURL = "https://t.me/" + username
 				meta.AvatarURL = telegramUsernameAvatarURL(username)
 			}
-			if uri, err := s.botClient.UserProfilePhotoDataURI(ctx, token, conn.User.ID); err == nil && uri != "" {
-				meta = mergeChannelAvatar(meta, uri)
+			if body, ct, err := s.botClient.FetchBusinessUserAvatar(ctx, token, conn.UserChatID, conn.User.ID, conn.User.Username); err == nil && len(body) > 0 {
+				meta = mergeChannelAvatar(meta, avatarDataURI(body, ct))
 			}
 			ch.Name = meta.ProviderTitle
 			if !conn.IsEnabled {

@@ -1632,6 +1632,7 @@ export type ChannelMetadata = {
   bot_permissions?: string[];
   participants_count?: number;
   business_user_id?: string;
+  business_user_chat_id?: string;
   can_manage_stories?: boolean;
   business_connection_enabled?: boolean;
 };

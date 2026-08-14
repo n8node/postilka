@@ -39,6 +39,7 @@ export function ChannelAvatar({
 }: ChannelAvatarProps) {
   const [failed, setFailed] = useState(false);
   const [useProxy, setUseProxy] = useState(false);
+  const [businessBlobUrl, setBusinessBlobUrl] = useState<string | null>(null);
   const displayName = channelDisplayName({ name, metadata });
   const initials = channelInitials(displayName);
 
@@ -58,21 +59,57 @@ export function ChannelAvatar({
       proxyUrl,
   );
 
+  useEffect(() => {
+    if (!isBusinessTelegram || cachedDataUrl || !canProxy || !proxyUrl) {
+      setBusinessBlobUrl(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    void fetch(proxyUrl, { credentials: "include" })
+      .then((res) => (res.ok ? res.blob() : null))
+      .then((blob) => {
+        if (cancelled || !blob) return;
+        const nextUrl = URL.createObjectURL(blob);
+        setBusinessBlobUrl((prev) => {
+          if (prev) URL.revokeObjectURL(prev);
+          return nextUrl;
+        });
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setBusinessBlobUrl((prev) => {
+            if (prev) URL.revokeObjectURL(prev);
+            return null;
+          });
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isBusinessTelegram, cachedDataUrl, canProxy, proxyUrl, channelId]);
+
   const src = useMemo(() => {
     if (useProxy && canProxy) return proxyUrl;
     if (isBusinessTelegram) {
       if (cachedDataUrl) return cachedDataUrl;
-      if (canProxy) return proxyUrl;
+      if (businessBlobUrl) return businessBlobUrl;
       return null;
     }
     if (publicDirectUrl) return publicDirectUrl;
     if (canProxy) return proxyUrl;
     return null;
-  }, [useProxy, canProxy, proxyUrl, publicDirectUrl, isBusinessTelegram, cachedDataUrl]);
+  }, [useProxy, canProxy, proxyUrl, publicDirectUrl, isBusinessTelegram, cachedDataUrl, businessBlobUrl]);
 
   useEffect(() => {
     setFailed(false);
     setUseProxy(false);
+    setBusinessBlobUrl((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return null;
+    });
   }, [channelId, directUrl, provider, name]);
 
   if (!src || failed) {

@@ -247,6 +247,8 @@ func writeChannelError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusNotFound, "Workspace не найден")
 	case errors.Is(err, repository.ErrNotFound):
 		writeError(w, http.StatusNotFound, "Канал не найден")
+	case errors.Is(err, service.ErrChannelAvatarNotFound):
+		writeError(w, http.StatusNotFound, "Аватар не найден")
 	case errors.Is(err, service.ErrCryptoUnavailable):
 		writeError(w, http.StatusInternalServerError, "Шифрование недоступно")
 	default:

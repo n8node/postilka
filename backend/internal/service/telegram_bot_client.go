@@ -1259,6 +1259,39 @@ func (c *TelegramBotClient) FetchUserProfilePhoto(ctx context.Context, token str
 	return c.fetchTelegramFile(ctx, token, path)
 }
 
+func (c *TelegramBotClient) FetchBusinessUserAvatar(
+	ctx context.Context,
+	token string,
+	userChatID, userID int64,
+	username string,
+) ([]byte, string, error) {
+	if userChatID > 0 {
+		if body, contentType, err := c.FetchChatPhoto(ctx, token, strconv.FormatInt(userChatID, 10)); err == nil && len(body) > 0 {
+			return body, contentType, nil
+		}
+	}
+	if userID > 0 {
+		if body, contentType, err := c.FetchChatPhoto(ctx, token, strconv.FormatInt(userID, 10)); err == nil && len(body) > 0 {
+			return body, contentType, nil
+		}
+		if body, contentType, err := c.FetchUserProfilePhoto(ctx, token, userID); err == nil && len(body) > 0 {
+			return body, contentType, nil
+		}
+	}
+	username = strings.TrimPrefix(strings.TrimSpace(username), "@")
+	if username != "" {
+		if body, contentType, err := c.FetchChatPhoto(ctx, token, "@"+username); err == nil && len(body) > 0 {
+			return body, contentType, nil
+		}
+		if publicURL := telegramUsernameAvatarURL(username); publicURL != "" {
+			if body, contentType, err := fetchRemoteAvatar(ctx, publicURL); err == nil && len(body) > 0 {
+				return body, contentType, nil
+			}
+		}
+	}
+	return nil, "", nil
+}
+
 func (c *TelegramBotClient) fetchTelegramFile(ctx context.Context, token, path string) ([]byte, string, error) {
 	fileURL := fmt.Sprintf("https://api.telegram.org/file/bot%s/%s", strings.TrimSpace(token), path)
 	resp, err := c.doRequest(ctx, http.MethodGet, fileURL, "", nil)
@@ -1512,10 +1545,11 @@ type TelegramBusinessConnectionRights struct {
 }
 
 type TelegramBusinessConnection struct {
-	ID        string                            `json:"id"`
-	User      telegramUser                      `json:"user"`
-	IsEnabled bool                              `json:"is_enabled"`
-	Rights    *TelegramBusinessConnectionRights `json:"rights"`
+	ID         string                            `json:"id"`
+	User       telegramUser                      `json:"user"`
+	UserChatID int64                             `json:"user_chat_id"`
+	IsEnabled  bool                              `json:"is_enabled"`
+	Rights     *TelegramBusinessConnectionRights `json:"rights"`
 }
 
 func (c TelegramBusinessConnection) CanManageStories() bool {

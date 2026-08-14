@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,6 +15,8 @@ import (
 	oauthclient "github.com/postilka/postilka/internal/oauth"
 	"github.com/postilka/postilka/internal/repository"
 )
+
+var ErrChannelAvatarNotFound = errors.New("channel avatar not found")
 
 func mergeChannelAvatar(meta model.ChannelMetadata, avatarURL string) model.ChannelMetadata {
 	avatarURL = strings.TrimSpace(avatarURL)
@@ -33,6 +36,134 @@ func parseTelegramBusinessUserID(raw string) int64 {
 		return 0
 	}
 	return id
+}
+
+func isTelegramBusinessChannel(ch model.Channel) bool {
+	if ch.Provider != model.ChannelProviderTelegram {
+		return false
+	}
+	if ch.ChatType == model.TelegramChatTypeBusiness {
+		return true
+	}
+	if strings.TrimSpace(ch.Metadata.BusinessUserID) != "" {
+		return true
+	}
+	if strings.TrimSpace(ch.Metadata.BusinessUserChatID) != "" {
+		return true
+	}
+	return false
+}
+
+func telegramUsernameFromPublicURL(raw string) string {
+	raw = strings.TrimSpace(raw)
+	raw = strings.TrimPrefix(raw, "https://")
+	raw = strings.TrimPrefix(raw, "http://")
+	if strings.HasPrefix(strings.ToLower(raw), "t.me/") {
+		raw = raw[5:]
+	}
+	raw = strings.TrimPrefix(raw, "@")
+	if i := strings.IndexAny(raw, "/?#"); i >= 0 {
+		raw = raw[:i]
+	}
+	return strings.TrimSpace(raw)
+}
+
+func avatarDataURI(body []byte, contentType string) string {
+	if len(body) == 0 {
+		return ""
+	}
+	if contentType == "" {
+		contentType = "image/jpeg"
+	}
+	return fmt.Sprintf("data:%s;base64,%s", contentType, base64.StdEncoding.EncodeToString(body))
+}
+
+func (s *ChannelService) enrichTelegramBusinessConnection(
+	ctx context.Context,
+	token string,
+	ch *model.Channel,
+) (userChatID, userID int64, username string) {
+	userID = parseTelegramBusinessUserID(ch.Metadata.BusinessUserID)
+	userChatID = parseTelegramBusinessUserID(ch.Metadata.BusinessUserChatID)
+	username = telegramUsernameFromPublicURL(ch.Metadata.PublicURL)
+
+	conn, err := s.botClient.GetBusinessConnection(ctx, token, ch.ChatID)
+	if err != nil || conn == nil {
+		return userChatID, userID, username
+	}
+	if conn.User.ID > 0 {
+		userID = conn.User.ID
+		ch.Metadata.BusinessUserID = strconv.FormatInt(conn.User.ID, 10)
+	}
+	if conn.UserChatID > 0 {
+		userChatID = conn.UserChatID
+		ch.Metadata.BusinessUserChatID = strconv.FormatInt(conn.UserChatID, 10)
+	}
+	if title := businessConnectionDisplayName(conn.User); title != "" && strings.TrimSpace(ch.Metadata.ProviderTitle) == "" {
+		ch.Metadata.ProviderTitle = title
+	}
+	if u := strings.TrimSpace(conn.User.Username); u != "" {
+		username = u
+		ch.Metadata.PublicURL = "https://t.me/" + u
+		if strings.TrimSpace(ch.Metadata.AvatarURL) == "" {
+			ch.Metadata.AvatarURL = telegramUsernameAvatarURL(u)
+		}
+	}
+	return userChatID, userID, username
+}
+
+func (s *ChannelService) persistTelegramBusinessMetadata(
+	ctx context.Context,
+	workspaceID string,
+	ch *model.Channel,
+	body []byte,
+	contentType string,
+) {
+	meta := ch.Metadata
+	if len(body) > 0 {
+		if dataURI := avatarDataURI(body, contentType); dataURI != "" {
+			meta = mergeChannelAvatar(meta, dataURI)
+		}
+	}
+	if meta.AvatarURL == ch.Metadata.AvatarURL &&
+		meta.BusinessUserID == ch.Metadata.BusinessUserID &&
+		meta.BusinessUserChatID == ch.Metadata.BusinessUserChatID &&
+		meta.PublicURL == ch.Metadata.PublicURL &&
+		meta.ProviderTitle == ch.Metadata.ProviderTitle {
+		return
+	}
+	_ = s.channels.UpdateChannelMetadata(ctx, workspaceID, ch.ID, meta)
+	ch.Metadata = meta
+}
+
+func (s *ChannelService) fetchTelegramBusinessAvatar(
+	ctx context.Context,
+	token string,
+	ch *model.Channel,
+) ([]byte, string, error) {
+	if body, ct, ok := avatarBytesFromMetadata(ch.Metadata.AvatarURL); ok {
+		return body, ct, nil
+	}
+
+	avatarCtx, cancel := context.WithTimeout(ctx, 12*time.Second)
+	defer cancel()
+
+	userChatID, userID, username := s.enrichTelegramBusinessConnection(avatarCtx, token, ch)
+	if username == "" && strings.TrimSpace(ch.Metadata.AvatarURL) != "" {
+		username = telegramUsernameFromPublicURL(ch.Metadata.AvatarURL)
+	}
+
+	if body, contentType, err := s.botClient.FetchBusinessUserAvatar(avatarCtx, token, userChatID, userID, username); err == nil && len(body) > 0 {
+		return body, contentType, nil
+	}
+
+	if url := strings.TrimSpace(ch.Metadata.AvatarURL); url != "" && !strings.HasPrefix(url, "data:") {
+		if body, ct, err := fetchRemoteAvatar(avatarCtx, url); err == nil && len(body) > 0 {
+			return body, ct, nil
+		}
+	}
+
+	return nil, "", ErrChannelAvatarNotFound
 }
 
 func (s *ChannelService) FetchAvatar(
@@ -69,23 +200,13 @@ func (s *ChannelService) FetchAvatar(
 
 	switch ch.Provider {
 	case model.ChannelProviderTelegram:
-		if ch.ChatType == model.TelegramChatTypeBusiness {
-			if body, ct, ok := avatarBytesFromMetadata(ch.Metadata.AvatarURL); ok {
-				return body, ct, nil
+		if isTelegramBusinessChannel(ch) {
+			body, contentType, err := s.fetchTelegramBusinessAvatar(ctx, token, &ch)
+			if err != nil {
+				return nil, "", err
 			}
-			avatarCtx, cancel := context.WithTimeout(ctx, 12*time.Second)
-			defer cancel()
-			if userID := parseTelegramBusinessUserID(ch.Metadata.BusinessUserID); userID > 0 {
-				if body, contentType, err := s.botClient.FetchUserProfilePhoto(avatarCtx, token, userID); err == nil && len(body) > 0 {
-					return body, contentType, nil
-				}
-			}
-			if url := strings.TrimSpace(ch.Metadata.AvatarURL); url != "" {
-				if body, ct, err := fetchRemoteAvatar(ctx, url); err == nil && len(body) > 0 {
-					return body, ct, nil
-				}
-			}
-			return nil, "", repository.ErrNotFound
+			s.persistTelegramBusinessMetadata(ctx, ws.ID, &ch, body, contentType)
+			return body, contentType, nil
 		}
 		if body, ct, ok := avatarBytesFromMetadata(ch.Metadata.AvatarURL); ok {
 			return body, ct, nil
@@ -105,7 +226,7 @@ func (s *ChannelService) FetchAvatar(
 		if err != nil {
 			return nil, "", err
 		}
-		return nil, "", repository.ErrNotFound
+		return nil, "", ErrChannelAvatarNotFound
 
 	case model.ChannelProviderMAX:
 		body, contentType, err := s.maxClient.FetchChatIcon(ctx, token, parseMAXChatID(ch.ChatID))
@@ -126,13 +247,13 @@ func (s *ChannelService) FetchAvatar(
 		if avatarURL, err := s.lookupOAuthAvatar(ctx, ch.Provider, token, ch.ChatID); err == nil && avatarURL != "" {
 			return fetchYouTubeRemoteAvatar(ctx, avatarURL)
 		}
-		return nil, "", repository.ErrNotFound
+		return nil, "", ErrChannelAvatarNotFound
 
 	default:
 		if avatarURL, err := s.lookupOAuthAvatar(ctx, ch.Provider, token, ch.ChatID); err == nil && avatarURL != "" {
 			return fetchRemoteAvatar(ctx, avatarURL)
 		}
-		return nil, "", repository.ErrNotFound
+		return nil, "", ErrChannelAvatarNotFound
 	}
 }
 

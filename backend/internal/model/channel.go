@@ -68,6 +68,7 @@ type ChannelMetadata struct {
 	BotPermissions    []string   `json:"bot_permissions,omitempty"`
 	ParticipantsCount *int       `json:"participants_count,omitempty"`
 	BusinessUserID              string `json:"business_user_id,omitempty"`
+	BusinessUserChatID          string `json:"business_user_chat_id,omitempty"`
 	CanManageStories            *bool  `json:"can_manage_stories,omitempty"`
 	BusinessConnectionEnabled   *bool  `json:"business_connection_enabled,omitempty"`
 }

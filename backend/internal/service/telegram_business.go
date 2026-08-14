@@ -520,6 +520,7 @@ func (s *TelegramBusinessService) upsertBusinessChannel(
 	meta := model.ChannelMetadata{
 		ProviderTitle:             name,
 		BusinessUserID:            strconvFormatInt(conn.User.ID),
+		BusinessUserChatID:        strconvFormatInt(conn.UserChatID),
 		CanManageStories:          &canManage,
 		BusinessConnectionEnabled: &enabled,
 	}
@@ -527,8 +528,8 @@ func (s *TelegramBusinessService) upsertBusinessChannel(
 		meta.PublicURL = "https://t.me/" + username
 		meta.AvatarURL = telegramUsernameAvatarURL(username)
 	}
-	if uri, err := s.botClient.UserProfilePhotoDataURI(ctx, botToken, conn.User.ID); err == nil && uri != "" {
-		meta = mergeChannelAvatar(meta, uri)
+	if body, ct, err := s.botClient.FetchBusinessUserAvatar(ctx, botToken, conn.UserChatID, conn.User.ID, conn.User.Username); err == nil && len(body) > 0 {
+		meta = mergeChannelAvatar(meta, avatarDataURI(body, ct))
 	}
 	status := model.ChannelStatusActive
 	lastError := ""
