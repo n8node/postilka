@@ -305,6 +305,7 @@ export default function ChannelsPage() {
                   metadata={selected.metadata}
                   channelId={selected.id}
                   provider={selected.provider}
+                  chatType={selected.chat_type}
                   size="lg"
                 />
                 <div className="min-w-0">
@@ -628,6 +629,7 @@ export default function ChannelsPage() {
                             metadata={ch.metadata}
                             channelId={ch.id}
                             provider={ch.provider}
+                            chatType={ch.chat_type}
                             size="sm"
                           />
                           <div className="min-w-0">

@@ -22,6 +22,7 @@ type ChannelAvatarProps = {
   channelId?: string;
   avatarUrl?: string;
   provider?: ChannelProvider;
+  chatType?: string;
   size?: keyof typeof sizeClass;
   className?: string;
 };
@@ -32,6 +33,7 @@ export function ChannelAvatar({
   channelId,
   avatarUrl,
   provider,
+  chatType,
   size = "md",
   className,
 }: ChannelAvatarProps) {
@@ -42,28 +44,31 @@ export function ChannelAvatar({
 
   const directUrl = (avatarUrl?.trim() || metadata?.avatar_url?.trim() || "") || null;
   const isBusinessTelegram =
-    provider === "telegram" && Boolean(metadata?.business_user_id?.trim());
+    provider === "telegram" &&
+    (chatType === "business" || Boolean(metadata?.business_user_id?.trim()));
+  const cachedDataUrl = directUrl?.startsWith("data:") ? directUrl : null;
   const publicDirectUrl =
-    directUrl &&
-    (directUrl.startsWith("data:") ||
-      (!isBusinessTelegram && isPublicChannelAvatarURL(directUrl, provider)))
+    !isBusinessTelegram && directUrl && isPublicChannelAvatarURL(directUrl, provider)
       ? directUrl
       : null;
   const proxyUrl = channelId ? channelProxyAvatarURL(channelId) : null;
-  const hasCachedBusinessAvatar = Boolean(isBusinessTelegram && directUrl?.startsWith("data:"));
   const canProxy = Boolean(
     channelId &&
       (provider === "telegram" || provider === "max" || provider === "youtube") &&
-      proxyUrl &&
-      (!isBusinessTelegram || hasCachedBusinessAvatar),
+      proxyUrl,
   );
 
   const src = useMemo(() => {
     if (useProxy && canProxy) return proxyUrl;
+    if (isBusinessTelegram) {
+      if (cachedDataUrl) return cachedDataUrl;
+      if (canProxy) return proxyUrl;
+      return null;
+    }
     if (publicDirectUrl) return publicDirectUrl;
     if (canProxy) return proxyUrl;
     return null;
-  }, [useProxy, canProxy, proxyUrl, publicDirectUrl]);
+  }, [useProxy, canProxy, proxyUrl, publicDirectUrl, isBusinessTelegram, cachedDataUrl]);
 
   useEffect(() => {
     setFailed(false);
@@ -95,7 +100,7 @@ export function ChannelAvatar({
         className,
       )}
       onError={() => {
-        if (!useProxy && canProxy && publicDirectUrl && src === publicDirectUrl) {
+        if (!useProxy && canProxy && src !== proxyUrl) {
           setUseProxy(true);
           return;
         }

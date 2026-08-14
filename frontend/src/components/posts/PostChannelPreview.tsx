@@ -1044,6 +1044,7 @@ export function PostChannelPreview({
             metadata={channel.metadata}
             channelId={channel.id}
             provider={channel.provider}
+            chatType={channel.chat_type}
             size="sm"
             className="mb-0.5 shrink-0"
           />
@@ -1068,6 +1069,7 @@ export function PostChannelPreview({
           metadata={channel.metadata}
           channelId={channel.id}
           provider={channel.provider}
+          chatType={channel.chat_type}
           size="sm"
         />
         <div className="min-w-0">

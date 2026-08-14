@@ -212,6 +212,7 @@ export function ConnectTelegramBusinessDialog({
                     metadata={item.metadata}
                     channelId={item.id}
                     provider={item.provider}
+                    chatType={item.chat_type}
                     size="sm"
                   />
                   <div className="min-w-0">

@@ -84,6 +84,7 @@ export function EditChannelDialog({ channel, open, onClose, onSaved }: EditChann
               metadata={channel.metadata}
               channelId={channel.id}
               provider={channel.provider}
+              chatType={channel.chat_type}
               size="md"
             />
             <div className="min-w-0">

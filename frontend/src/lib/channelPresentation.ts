@@ -52,8 +52,19 @@ export function channelAvatarSrc(input: {
   metadata?: ChannelMetadata;
   avatarUrl?: string;
   provider?: ChannelProvider;
+  chatType?: string;
 }) {
   const direct = input.avatarUrl?.trim() || input.metadata?.avatar_url?.trim();
+  const isBusinessTelegram =
+    input.provider === "telegram" &&
+    (input.chatType === "business" || Boolean(input.metadata?.business_user_id?.trim()));
+
+  if (isBusinessTelegram) {
+    if (direct?.startsWith("data:")) return direct;
+    if (input.channelId) return channelProxyAvatarURL(input.channelId);
+    return null;
+  }
+
   if (direct && isPublicChannelAvatarURL(direct, input.provider)) {
     return direct;
   }

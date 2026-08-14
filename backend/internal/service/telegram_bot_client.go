@@ -1094,7 +1094,11 @@ func (c *TelegramBotClient) clearWebhookForPolling(ctx context.Context, token st
 }
 
 func telegramPublicAvatarURL(chat telegramChat) string {
-	username := strings.TrimPrefix(strings.TrimSpace(chat.Username), "@")
+	return telegramUsernameAvatarURL(chat.Username)
+}
+
+func telegramUsernameAvatarURL(username string) string {
+	username = strings.TrimPrefix(strings.TrimSpace(username), "@")
 	if username == "" {
 		return ""
 	}

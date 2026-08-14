@@ -525,7 +525,7 @@ func (s *TelegramBusinessService) upsertBusinessChannel(
 	}
 	if username := strings.TrimSpace(conn.User.Username); username != "" {
 		meta.PublicURL = "https://t.me/" + username
-		meta.AvatarURL = "https://t.me/i/userpic/320/" + username + ".jpg"
+		meta.AvatarURL = telegramUsernameAvatarURL(username)
 	}
 	if uri, err := s.botClient.UserProfilePhotoDataURI(ctx, botToken, conn.User.ID); err == nil && uri != "" {
 		meta = mergeChannelAvatar(meta, uri)

@@ -2518,6 +2518,7 @@ export function PostComposer() {
                           metadata={channel.metadata}
                           channelId={channel.id}
                           provider={channel.provider}
+                          chatType={channel.chat_type}
                           size="sm"
                         />
                         <span className="min-w-0 flex-1">
