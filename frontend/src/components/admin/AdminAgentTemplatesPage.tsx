@@ -73,7 +73,7 @@ export function AdminAgentTemplatesPage({ embedded = false }: { embedded?: boole
     <div className={embedded ? "space-y-4" : "mx-auto max-w-3xl space-y-4 p-6"}>
       {!embedded ? <h1 className="text-lg font-semibold">Системные агенты</h1> : null}
       <p className="text-sm text-slate-600">
-        Промпт системного агента «Задача продвижения». Пользовательские шаблоны живут в кабинете.
+        Промпт системного Ai агента. Пользовательские шаблоны живут в кабинете.
       </p>
       {error ? <div className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div> : null}
       {saved ? <div className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Сохранено</div> : null}

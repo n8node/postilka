@@ -67,7 +67,7 @@ const SETTINGS_MENU: { key: SettingsKey; label: string; description: string }[] 
   {
     key: "ai-agents",
     label: "AI — агенты",
-    description: "Системные промпты задач продвижения",
+    description: "Системные промпты Ai агентов",
   },
   {
     key: "ai-kie",

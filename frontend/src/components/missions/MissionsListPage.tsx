@@ -36,7 +36,7 @@ export function MissionsListPage() {
       const res = await fetchMissions({ status: status || undefined, limit: 50 });
       setItems(res.items);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Не удалось загрузить задачи");
+      setError(err instanceof ApiError ? err.message : "Не удалось загрузить агентов");
     } finally {
       setLoading(false);
     }
@@ -49,7 +49,7 @@ export function MissionsListPage() {
   return (
     <div>
       <PageHeader
-        title="Задачи продвижения"
+        title="Ai агенты"
         description="Агент ведёт от цели к ходу публикаций. Классический композер и календарь никуда не делись."
         actions={
           <Link
@@ -57,7 +57,7 @@ export function MissionsListPage() {
             className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-medium text-white hover:bg-accent/90"
           >
             <Plus className="h-4 w-4" />
-            Новая задача
+            Новый агент
           </Link>
         }
       />
@@ -91,15 +91,15 @@ export function MissionsListPage() {
         </div>
       ) : items.length === 0 ? (
         <EmptyState
-          title="Пока нет задач"
-          description="Запустите агента «Задача продвижения» или продолжайте публиковать вручную — оба пути равноправны."
+          title="Пока нет агентов"
+          description="Запустите Ai агента или продолжайте публиковать вручную — оба пути равноправны."
           action={
             <Link
               href="/missions/new"
               className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-medium text-white"
             >
               <Target className="h-4 w-4" />
-              Создать задачу
+              Создать агента
             </Link>
           }
         />

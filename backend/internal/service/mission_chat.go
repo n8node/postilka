@@ -484,7 +484,7 @@ func defaultMissionAgentPrompt() string {
 	return missionAgentSystemPrompt
 }
 
-const missionAgentSystemPrompt = `Ты агент «Задача продвижения» внутри Postilka. Ты ведёшь пользователя по пути:
+const missionAgentSystemPrompt = `Ты Ai агент внутри Postilka. Ты ведёшь пользователя по пути:
 задача → цель и показатель → продукт и аудитория → наблюдения по данным проекта → проверяемые замыслы → связный ход публикаций → материалы → разрешение → запуск → разбор результата.
 
 Правила:

@@ -117,7 +117,7 @@ export function MissionWorkspace({ missionId }: { missionId: string }) {
     );
   }
   if (!mission) {
-    return <p className="text-sm text-red-700">{error || "Задача не найдена"}</p>;
+    return <p className="text-sm text-red-700">{error || "Агент не найден"}</p>;
   }
 
   const closed = mission.status === "canceled" || mission.status === "completed";
@@ -129,7 +129,7 @@ export function MissionWorkspace({ missionId }: { missionId: string }) {
         title={mission.title}
         crumbs={[
           { label: "Главная", href: "/dashboard" },
-          { label: "Задачи продвижения", href: "/missions" },
+          { label: "Ai агенты", href: "/missions" },
           { label: mission.title },
         ]}
         description={`${MISSION_STATUS_LABEL[mission.status]} · ${MISSION_METRIC_LABEL[mission.metric]} · измеримость: ${MEASURABILITY_LABEL[mission.measurability]}`}
@@ -174,7 +174,7 @@ export function MissionWorkspace({ missionId }: { missionId: string }) {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               disabled={closed || busy}
-              placeholder={closed ? "Задача закрыта" : "Напишите агенту…"}
+              placeholder={closed ? "Агент закрыт" : "Напишите агенту…"}
               className="flex-1 rounded-md border border-border bg-bg px-3 py-2 text-sm"
             />
             <button
@@ -295,7 +295,7 @@ export function MissionWorkspace({ missionId }: { missionId: string }) {
               onClick={() =>
                 run(async () => {
                   const next = await completeMission(missionId, {
-                    summary: "Задача закрыта пользователем",
+                    summary: "Агент закрыт пользователем",
                   });
                   setMission(next);
                   setPlanItems(next.plan.items || []);

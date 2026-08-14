@@ -12,6 +12,7 @@ import {
   type AgentTemplate,
   type MissionMetric,
 } from "@/lib/missions-api";
+import { formatProviderLabel, ProviderIcon } from "@/components/channels/ProviderIcon";
 import { cn } from "@/lib/utils";
 
 export function NewMissionPage() {
@@ -66,7 +67,7 @@ export function NewMissionPage() {
       });
       router.push(`/missions/${mission.id}`);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Не удалось создать задачу");
+      setError(err instanceof ApiError ? err.message : "Не удалось создать агента");
       setBusy(false);
     }
   }
@@ -87,11 +88,11 @@ export function NewMissionPage() {
   return (
     <div>
       <PageHeader
-        title="Новая задача продвижения"
+        title="Новый Ai агент"
         crumbs={[
           { label: "Главная", href: "/dashboard" },
-          { label: "Задачи продвижения", href: "/missions" },
-          { label: "Новая" },
+          { label: "Ai агенты", href: "/missions" },
+          { label: "Новый" },
         ]}
         description="Короткая форма задаёт рамку. Дальше агент уточнит детали в чате."
       />
@@ -132,16 +133,21 @@ export function NewMissionPage() {
           />
         </label>
 
-        <label className="block text-sm">
-          Цель
+        <div className="block text-sm">
+          <span>
+            Цель <span className="font-normal text-muted">(необязательно)</span>
+          </span>
+          <p className="mt-0.5 text-xs text-muted">
+            Что должно получиться: заявки, подписчики, переходы или другой результат. Можно оставить пустым — агент уточнит это в чате.
+          </p>
           <textarea
             value={goal}
             onChange={(e) => setGoal(e.target.value)}
             rows={3}
             className="mt-1 w-full rounded-md border border-border bg-surface px-3 py-2 text-sm"
-            placeholder="Что должно получиться и зачем"
+            placeholder="Например: 50 заявок с Telegram за две недели"
           />
-        </label>
+        </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="block text-sm">
@@ -213,13 +219,17 @@ export function NewMissionPage() {
                   type="button"
                   onClick={() => toggleChannel(ch.id)}
                   className={cn(
-                    "rounded-full border px-3 py-1 text-xs",
+                    "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs",
                     channelIds.includes(ch.id)
                       ? "border-accent bg-accent/10 text-accent"
-                      : "border-border text-muted",
+                      : "border-border text-text",
                   )}
                 >
-                  {ch.name}
+                  <ProviderIcon provider={ch.provider} />
+                  <span>{ch.name}</span>
+                  <span className={channelIds.includes(ch.id) ? "text-accent/80" : "text-muted"}>
+                    {formatProviderLabel(ch.provider, ch.chat_type)}
+                  </span>
                 </button>
               ))}
             </div>

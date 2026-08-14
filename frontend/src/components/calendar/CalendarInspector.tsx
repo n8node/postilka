@@ -74,7 +74,7 @@ export function CalendarInspector({
             href={`/missions/${post.mission_id}`}
             className="mt-2 inline-block text-xs text-accent hover:underline"
           >
-            Открыть задачу продвижения
+            Открыть Ai агента
           </Link>
         ) : null}
       </div>

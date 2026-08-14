@@ -296,7 +296,7 @@ func writeMissionError(w http.ResponseWriter, err error) {
 	case errors.Is(err, service.ErrNoPrimaryWS):
 		writeError(w, http.StatusNotFound, "Workspace не найден")
 	case errors.Is(err, repository.ErrNotFound):
-		writeError(w, http.StatusNotFound, "Задача или шаблон не найдены")
+		writeError(w, http.StatusNotFound, "Агент или шаблон не найдены")
 	case errors.Is(err, service.ErrYandexGptNotConfigured):
 		writeError(w, http.StatusServiceUnavailable, "Yandex GPT не настроен")
 	case errors.Is(err, service.ErrMissionConflict):
@@ -312,6 +312,6 @@ func writeMissionError(w http.ResponseWriter, err error) {
 		}
 		writeError(w, http.StatusBadRequest, message)
 	default:
-		writeError(w, http.StatusInternalServerError, "Не удалось выполнить операцию с задачей")
+		writeError(w, http.StatusInternalServerError, "Не удалось выполнить операцию с агентом")
 	}
 }
