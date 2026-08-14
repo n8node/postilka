@@ -619,10 +619,37 @@ function MessageBubble({
 
 function VideoNotePreview({ item }: { item: PreviewMediaItem }) {
   return (
-    <div className="flex justify-center bg-[#0e1621] py-4">
-      <div className="relative h-[220px] w-[220px] overflow-hidden rounded-full bg-zinc-800 ring-1 ring-white/10">
-        <PreviewMediaTile item={item} className="absolute inset-0 h-full w-full [&_img]:h-full [&_img]:w-full [&_img]:object-cover [&_video]:h-full [&_video]:w-full [&_video]:object-cover" />
-      </div>
+    <div className="relative h-[220px] w-[220px] overflow-hidden rounded-full ring-1 ring-black/10">
+      <PreviewMediaTile
+        item={item}
+        className="absolute inset-0 h-full w-full [&_img]:h-full [&_img]:w-full [&_img]:object-cover [&_video]:h-full [&_video]:w-full [&_video]:object-cover"
+      />
+    </div>
+  );
+}
+
+function TelegramVideoNoteMessage({
+  item,
+  time,
+  silent,
+  pinned,
+  className,
+}: {
+  item: PreviewMediaItem;
+  time: string;
+  silent?: boolean;
+  pinned?: boolean;
+  className?: string;
+}) {
+  return (
+    <div className={cn("relative mx-auto w-fit max-w-[min(100%,420px)]", className)}>
+      <VideoNotePreview item={item} />
+      <TelegramMetaOnMedia time={time} silent={silent} />
+      {pinned && (
+        <span className="absolute right-1.5 top-1.5 rounded bg-black/45 p-0.5 text-white">
+          <Pin className="h-3 w-3" />
+        </span>
+      )}
     </div>
   );
 }
@@ -715,9 +742,19 @@ function renderChannelBody(props: {
   const clock = previewClockLabel(timingLabel);
   const showLinkPreview = Boolean(linkPreviewEnabled && detectedUrl && !hasButtons);
 
+  const videoNoteBlock =
+    showMedia && effectiveVideoCircle ? (
+      <TelegramVideoNoteMessage
+        item={media[0]!}
+        time={clock}
+        silent={silent}
+        pinned={pinned}
+      />
+    ) : null;
+
   const mediaBlock = showMedia
     ? effectiveVideoCircle
-      ? <VideoNotePreview item={media[0]!} />
+      ? null
       : maxRectVideo
         ? <PreviewMediaTile item={media[0]!} single />
         : <AlbumGrid items={media} />
@@ -762,6 +799,26 @@ function renderChannelBody(props: {
 
     const separateDelivery =
       effectiveLayout === "separate" || albumButtonsSeparate;
+
+    if (effectiveVideoCircle && videoNoteBlock) {
+      const textStack = (textWithMeta || hasButtons) && (
+        <TelegramMessageStack buttons={hasButtons ? buttons : undefined}>
+          {textWithMeta}
+        </TelegramMessageStack>
+      );
+      const order = mediaOrder;
+      return order === "text_first" ? (
+        <div className="flex flex-col gap-1">
+          {textStack}
+          {videoNoteBlock}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-1">
+          {videoNoteBlock}
+          {textStack}
+        </div>
+      );
+    }
 
     if (separateDelivery) {
       const mediaOnly = mediaBlock && (
