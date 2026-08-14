@@ -148,6 +148,18 @@ export function PostStatsPanel({ postId, published }: { postId: string; publishe
                 {target.subscriber_count != null ? (
                   <p className="mt-2 text-xs text-muted">Подписчиков канала: {formatMetric(target.subscriber_count)}</p>
                 ) : null}
+                {target.metrika_by_counter && target.metrika_by_counter.length > 0 ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {target.metrika_by_counter.map((c) => (
+                      <span
+                        key={c.counter_id}
+                        className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-xs text-violet-900"
+                      >
+                        {c.label?.trim() || `Счётчик ${c.counter_id}`}: {formatMetric(c.visits)} виз.
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             ))}
           </div>

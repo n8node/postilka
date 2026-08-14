@@ -18,8 +18,10 @@ func NewMetrikaRepository(pool *pgxpool.Pool) *MetrikaRepository {
 }
 
 type MetrikaConnectionRow struct {
+	ID                    string
 	WorkspaceID           string
 	CounterID             int64
+	Label                 string
 	AccessTokenEncrypted  string
 	RefreshTokenEncrypted string
 	TokenExpiresAt        *time.Time
@@ -39,17 +41,64 @@ type MetrikaOAuthSessionRow struct {
 	CreatedAt   time.Time
 }
 
-func (r *MetrikaRepository) GetConnection(ctx context.Context, workspaceID string) (*MetrikaConnectionRow, error) {
-	var row MetrikaConnectionRow
-	err := r.pool.QueryRow(ctx, `
-		SELECT workspace_id::text, counter_id, access_token_encrypted,
+func (r *MetrikaRepository) ListConnections(ctx context.Context, workspaceID string) ([]MetrikaConnectionRow, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT id::text, workspace_id::text, counter_id, COALESCE(label, ''),
+		       access_token_encrypted,
 		       COALESCE(refresh_token_encrypted, ''), token_expires_at,
 		       COALESCE(connected_by_user_id::text, ''), enabled, connected_at, updated_at
 		FROM workspace_metrika_connections
 		WHERE workspace_id = $1
-	`, workspaceID).Scan(
-		&row.WorkspaceID, &row.CounterID, &row.AccessTokenEncrypted,
-		&row.RefreshTokenEncrypted, &row.TokenExpiresAt,
+		ORDER BY connected_at ASC, counter_id ASC
+	`, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanMetrikaConnectionRows(rows)
+}
+
+func (r *MetrikaRepository) ListEnabledConnections(ctx context.Context, workspaceID string) ([]MetrikaConnectionRow, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT id::text, workspace_id::text, counter_id, COALESCE(label, ''),
+		       access_token_encrypted,
+		       COALESCE(refresh_token_encrypted, ''), token_expires_at,
+		       COALESCE(connected_by_user_id::text, ''), enabled, connected_at, updated_at
+		FROM workspace_metrika_connections
+		WHERE workspace_id = $1 AND enabled = true
+		ORDER BY connected_at ASC, counter_id ASC
+	`, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanMetrikaConnectionRows(rows)
+}
+
+func (r *MetrikaRepository) GetConnection(ctx context.Context, workspaceID string) (*MetrikaConnectionRow, error) {
+	rows, err := r.ListEnabledConnections(ctx, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return nil, ErrNotFound
+	}
+	row := rows[0]
+	return &row, nil
+}
+
+func (r *MetrikaRepository) GetConnectionByCounter(ctx context.Context, workspaceID string, counterID int64) (*MetrikaConnectionRow, error) {
+	var row MetrikaConnectionRow
+	err := r.pool.QueryRow(ctx, `
+		SELECT id::text, workspace_id::text, counter_id, COALESCE(label, ''),
+		       access_token_encrypted,
+		       COALESCE(refresh_token_encrypted, ''), token_expires_at,
+		       COALESCE(connected_by_user_id::text, ''), enabled, connected_at, updated_at
+		FROM workspace_metrika_connections
+		WHERE workspace_id = $1 AND counter_id = $2
+	`, workspaceID, counterID).Scan(
+		&row.ID, &row.WorkspaceID, &row.CounterID, &row.Label,
+		&row.AccessTokenEncrypted, &row.RefreshTokenEncrypted, &row.TokenExpiresAt,
 		&row.ConnectedByUserID, &row.Enabled, &row.ConnectedAt, &row.UpdatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -64,24 +113,32 @@ func (r *MetrikaRepository) GetConnection(ctx context.Context, workspaceID strin
 func (r *MetrikaRepository) UpsertConnection(ctx context.Context, row MetrikaConnectionRow) error {
 	_, err := r.pool.Exec(ctx, `
 		INSERT INTO workspace_metrika_connections (
-			workspace_id, counter_id, access_token_encrypted, refresh_token_encrypted,
+			workspace_id, counter_id, label, access_token_encrypted, refresh_token_encrypted,
 			token_expires_at, connected_by_user_id, enabled, connected_at, updated_at
-		) VALUES ($1, $2, $3, NULLIF($4, ''), $5, NULLIF($6, '')::uuid, $7, NOW(), NOW())
-		ON CONFLICT (workspace_id) DO UPDATE SET
-			counter_id = EXCLUDED.counter_id,
+		) VALUES ($1, $2, NULLIF($3, ''), $4, NULLIF($5, ''), $6, NULLIF($7, '')::uuid, $8, NOW(), NOW())
+		ON CONFLICT (workspace_id, counter_id) DO UPDATE SET
+			label = COALESCE(NULLIF(EXCLUDED.label, ''), workspace_metrika_connections.label),
 			access_token_encrypted = EXCLUDED.access_token_encrypted,
 			refresh_token_encrypted = EXCLUDED.refresh_token_encrypted,
 			token_expires_at = EXCLUDED.token_expires_at,
 			connected_by_user_id = EXCLUDED.connected_by_user_id,
 			enabled = EXCLUDED.enabled,
 			updated_at = NOW()
-	`, row.WorkspaceID, row.CounterID, row.AccessTokenEncrypted, row.RefreshTokenEncrypted,
+	`, row.WorkspaceID, row.CounterID, row.Label, row.AccessTokenEncrypted, row.RefreshTokenEncrypted,
 		row.TokenExpiresAt, row.ConnectedByUserID, row.Enabled)
 	return err
 }
 
 func (r *MetrikaRepository) DeleteConnection(ctx context.Context, workspaceID string) error {
 	_, err := r.pool.Exec(ctx, `DELETE FROM workspace_metrika_connections WHERE workspace_id = $1`, workspaceID)
+	return err
+}
+
+func (r *MetrikaRepository) DeleteConnectionByCounter(ctx context.Context, workspaceID string, counterID int64) error {
+	_, err := r.pool.Exec(ctx, `
+		DELETE FROM workspace_metrika_connections
+		WHERE workspace_id = $1 AND counter_id = $2
+	`, workspaceID, counterID)
 	return err
 }
 
@@ -119,4 +176,20 @@ func (r *MetrikaRepository) DeleteOAuthSession(ctx context.Context, id string) e
 func (r *MetrikaRepository) CleanupExpiredSessions(ctx context.Context) error {
 	_, err := r.pool.Exec(ctx, `DELETE FROM metrika_oauth_sessions WHERE expires_at < NOW()`)
 	return err
+}
+
+func scanMetrikaConnectionRows(rows pgx.Rows) ([]MetrikaConnectionRow, error) {
+	items := make([]MetrikaConnectionRow, 0)
+	for rows.Next() {
+		var row MetrikaConnectionRow
+		if err := rows.Scan(
+			&row.ID, &row.WorkspaceID, &row.CounterID, &row.Label,
+			&row.AccessTokenEncrypted, &row.RefreshTokenEncrypted, &row.TokenExpiresAt,
+			&row.ConnectedByUserID, &row.Enabled, &row.ConnectedAt, &row.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, row)
+	}
+	return items, rows.Err()
 }

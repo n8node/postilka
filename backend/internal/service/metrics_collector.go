@@ -255,7 +255,7 @@ func (s *MetricsCollectorService) applyMetrika(
 	target repository.MetricsPollTarget,
 	input *repository.MetricsUpsertInput,
 ) error {
-	if s.metrika == nil {
+	if s.metrika == nil || s.analytics == nil {
 		return nil
 	}
 	campaign := s.utmCampaignForTarget(ctx, target)
@@ -267,13 +267,36 @@ func (s *MetricsCollectorService) applyMetrika(
 	if target.PublishedAt != nil {
 		from = target.PublishedAt.UTC()
 	}
-	stats, err := s.metrika.UTMCampaignStats(ctx, target.WorkspaceID, campaign, from, to)
+	connections, err := s.metrika.ListEnabledConnections(ctx, target.WorkspaceID)
 	if err != nil {
 		return err
 	}
-	input.MetrikaVisits = stats.Visits
-	input.MetrikaUsers = stats.Users
-	input.MetrikaGoals = stats.Goals
+	for _, conn := range connections {
+		stats, err := s.metrika.UTMCampaignStatsForCounter(ctx, target.WorkspaceID, conn.CounterID, campaign, from, to)
+		if err != nil {
+			s.logger.Warn("metrika counter stats failed",
+				"target_id", target.TargetID,
+				"counter_id", conn.CounterID,
+				"error", err,
+			)
+			continue
+		}
+		if err := s.analytics.UpsertCounterMetrics(ctx, repository.MetrikaCounterMetricInput{
+			TargetID:    target.TargetID,
+			PostID:      target.PostID,
+			WorkspaceID: target.WorkspaceID,
+			CounterID:   conn.CounterID,
+			UTMCampaign: campaign,
+			Visits:      stats.Visits,
+			Users:       stats.Users,
+			Goals:       stats.Goals,
+		}); err != nil {
+			return err
+		}
+		input.MetrikaVisits += stats.Visits
+		input.MetrikaUsers += stats.Users
+		input.MetrikaGoals += stats.Goals
+	}
 	return nil
 }
 

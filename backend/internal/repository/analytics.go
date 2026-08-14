@@ -429,3 +429,162 @@ func (r *AnalyticsRepository) PostHasVisibleMetrics(ctx context.Context, workspa
 	`, workspaceID, postID).Scan(&visible)
 	return visible, err
 }
+
+type MetrikaCounterMetricInput struct {
+	TargetID    string
+	PostID      string
+	WorkspaceID string
+	CounterID   int64
+	UTMCampaign string
+	Visits      int
+	Users       int
+	Goals       int
+}
+
+func (r *AnalyticsRepository) UpsertCounterMetrics(ctx context.Context, input MetrikaCounterMetricInput) error {
+	_, err := r.pool.Exec(ctx, `
+		INSERT INTO post_target_metrika_counter_metrics (
+			target_id, counter_id, workspace_id, post_id, utm_campaign,
+			visits, users, goals, updated_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+		ON CONFLICT (target_id, counter_id) DO UPDATE SET
+			utm_campaign = EXCLUDED.utm_campaign,
+			visits = EXCLUDED.visits,
+			users = EXCLUDED.users,
+			goals = EXCLUDED.goals,
+			updated_at = NOW()
+	`, input.TargetID, input.CounterID, input.WorkspaceID, input.PostID, input.UTMCampaign,
+		input.Visits, input.Users, input.Goals)
+	return err
+}
+
+func (r *AnalyticsRepository) DeleteCounterMetricsForWorkspaceCounter(ctx context.Context, workspaceID string, counterID int64) error {
+	_, err := r.pool.Exec(ctx, `
+		DELETE FROM post_target_metrika_counter_metrics
+		WHERE workspace_id = $1 AND counter_id = $2
+	`, workspaceID, counterID)
+	return err
+}
+
+func (r *AnalyticsRepository) ListCounterMetricsByTarget(ctx context.Context, targetID string) ([]model.MetrikaCounterStats, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT m.counter_id, COALESCE(c.label, ''), m.visits, m.users, m.goals
+		FROM post_target_metrika_counter_metrics m
+		LEFT JOIN workspace_metrika_connections c
+			ON c.workspace_id = m.workspace_id AND c.counter_id = m.counter_id
+		WHERE m.target_id = $1
+		ORDER BY m.counter_id ASC
+	`, targetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := make([]model.MetrikaCounterStats, 0)
+	for rows.Next() {
+		var item model.MetrikaCounterStats
+		if err := rows.Scan(&item.CounterID, &item.Label, &item.Visits, &item.Users, &item.Goals); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+type MetrikaUTMMetricRow struct {
+	PostID      string
+	TargetID    string
+	ChannelName string
+	PublishedAt *time.Time
+	UTMCampaign string
+	CounterID   int64
+	CounterLabel string
+	Visits      int
+	Users       int
+	Goals       int
+}
+
+func (r *AnalyticsRepository) ListMetrikaUTMMetricRows(
+	ctx context.Context,
+	workspaceID string,
+	from, to time.Time,
+) ([]MetrikaUTMMetricRow, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT
+			m.post_id::text,
+			m.target_id::text,
+			COALESCE(ch.name, ''),
+			p.published_at,
+			m.utm_campaign,
+			m.counter_id,
+			COALESCE(mc.label, ''),
+			m.visits,
+			m.users,
+			m.goals
+		FROM post_target_metrika_counter_metrics m
+		JOIN posts p ON p.id = m.post_id AND p.workspace_id = m.workspace_id
+		LEFT JOIN post_targets pt ON pt.id = m.target_id
+		LEFT JOIN channels ch ON ch.id = pt.channel_id AND ch.workspace_id = m.workspace_id
+		LEFT JOIN workspace_metrika_connections mc
+			ON mc.workspace_id = m.workspace_id AND mc.counter_id = m.counter_id
+		WHERE m.workspace_id = $1
+		  AND p.status = 'published'
+		  AND p.published_at >= $2
+		  AND p.published_at < $3
+		  AND NULLIF(m.utm_campaign, '') IS NOT NULL
+		ORDER BY p.published_at DESC, m.target_id ASC, m.counter_id ASC
+	`, workspaceID, from, to.Add(24*time.Hour))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := make([]MetrikaUTMMetricRow, 0)
+	for rows.Next() {
+		var item MetrikaUTMMetricRow
+		if err := rows.Scan(
+			&item.PostID, &item.TargetID, &item.ChannelName, &item.PublishedAt,
+			&item.UTMCampaign, &item.CounterID, &item.CounterLabel,
+			&item.Visits, &item.Users, &item.Goals,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, rows.Err()
+}
+
+func (r *AnalyticsRepository) CounterPeriodStats(
+	ctx context.Context,
+	workspaceID string,
+	from, to time.Time,
+) (map[int64]model.MetrikaCounterStats, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT
+			m.counter_id,
+			COALESCE(mc.label, ''),
+			COALESCE(SUM(m.visits), 0)::int,
+			COALESCE(SUM(m.users), 0)::int,
+			COALESCE(SUM(m.goals), 0)::int
+		FROM post_target_metrika_counter_metrics m
+		JOIN posts p ON p.id = m.post_id AND p.workspace_id = m.workspace_id
+		LEFT JOIN workspace_metrika_connections mc
+			ON mc.workspace_id = m.workspace_id AND mc.counter_id = m.counter_id
+		WHERE m.workspace_id = $1
+		  AND p.status = 'published'
+		  AND p.published_at >= $2
+		  AND p.published_at < $3
+		GROUP BY m.counter_id, mc.label
+	`, workspaceID, from, to.Add(24*time.Hour))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make(map[int64]model.MetrikaCounterStats)
+	for rows.Next() {
+		var item model.MetrikaCounterStats
+		if err := rows.Scan(&item.CounterID, &item.Label, &item.Visits, &item.Users, &item.Goals); err != nil {
+			return nil, err
+		}
+		out[item.CounterID] = item
+	}
+	return out, rows.Err()
+}

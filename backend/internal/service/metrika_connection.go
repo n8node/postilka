@@ -53,7 +53,11 @@ func (s *MetrikaConnectionService) OAuthReady(ctx context.Context) (bool, error)
 	return s.platform.OAuthReady(ctx)
 }
 
-func (s *MetrikaConnectionService) Status(ctx context.Context, userID string, r *http.Request) (*model.WorkspaceMetrikaStatus, error) {
+func (s *MetrikaConnectionService) Status(
+	ctx context.Context,
+	userID string,
+	r *http.Request,
+) (*model.WorkspaceMetrikaStatus, error) {
 	ws, _, err := s.wsSvc.ResolveActive(ctx, userID, r)
 	if err != nil {
 		return nil, err
@@ -67,20 +71,25 @@ func (s *MetrikaConnectionService) Status(ctx context.Context, userID string, r 
 	}
 	status := &model.WorkspaceMetrikaStatus{
 		OAuthReady: oauthReady,
+		Counters:   []model.MetrikaCounterSummary{},
 	}
-	row, err := s.repo.GetConnection(ctx, ws.ID)
-	if errors.Is(err, repository.ErrNotFound) {
-		return status, nil
-	}
+	rows, err := s.repo.ListConnections(ctx, ws.ID)
 	if err != nil {
 		return nil, err
 	}
-	status.Connected = true
-	status.Enabled = row.Enabled
-	status.CounterID = row.CounterID
-	t := row.ConnectedAt
-	status.ConnectedAt = &t
+	for _, row := range rows {
+		status.Counters = append(status.Counters, model.MetrikaCounterSummary{
+			CounterID:   row.CounterID,
+			Label:       strings.TrimSpace(row.Label),
+			Enabled:     row.Enabled,
+			ConnectedAt: row.ConnectedAt,
+		})
+	}
 	return status, nil
+}
+
+func (s *MetrikaConnectionService) ListEnabledConnections(ctx context.Context, workspaceID string) ([]repository.MetrikaConnectionRow, error) {
+	return s.repo.ListEnabledConnections(ctx, workspaceID)
 }
 
 func (s *MetrikaConnectionService) ConnectStart(
@@ -128,7 +137,7 @@ func (s *MetrikaConnectionService) ConnectStart(
 	return client.AuthorizeURL(state), state, nil
 }
 
-func (s *MetrikaConnectionService) ConnectComplete(ctx context.Context, userID, state, code string) error {
+func (s *MetrikaConnectionService) ConnectComplete(ctx context.Context, userID, state, code, label string) error {
 	code = strings.TrimSpace(code)
 	if code == "" {
 		return fmt.Errorf("код авторизации не получен")
@@ -140,7 +149,7 @@ func (s *MetrikaConnectionService) ConnectComplete(ctx context.Context, userID, 
 	if session.UserID != userID {
 		return fmt.Errorf("сессия подключения не найдена")
 	}
-	return s.finishOAuthSession(ctx, session, code)
+	return s.finishOAuthSession(ctx, session, code, label)
 }
 
 func (s *MetrikaConnectionService) ConnectCallback(ctx context.Context, state, code string) error {
@@ -151,10 +160,14 @@ func (s *MetrikaConnectionService) ConnectCallback(ctx context.Context, state, c
 	if err != nil {
 		return err
 	}
-	return s.finishOAuthSession(ctx, session, code)
+	return s.finishOAuthSession(ctx, session, code, "")
 }
 
-func (s *MetrikaConnectionService) finishOAuthSession(ctx context.Context, session *repository.MetrikaOAuthSessionRow, code string) error {
+func (s *MetrikaConnectionService) finishOAuthSession(
+	ctx context.Context,
+	session *repository.MetrikaOAuthSessionRow,
+	code, label string,
+) error {
 	if time.Now().After(session.ExpiresAt) {
 		_ = s.repo.DeleteOAuthSession(ctx, session.ID)
 		return fmt.Errorf("сессия подключения Метрики истекла — повторите попытку")
@@ -191,6 +204,7 @@ func (s *MetrikaConnectionService) finishOAuthSession(ctx context.Context, sessi
 	if err := s.repo.UpsertConnection(ctx, repository.MetrikaConnectionRow{
 		WorkspaceID:           session.WorkspaceID,
 		CounterID:             session.CounterID,
+		Label:                 strings.TrimSpace(label),
 		AccessTokenEncrypted:  encAccess,
 		RefreshTokenEncrypted: encRefresh,
 		TokenExpiresAt:        expiresAt,
@@ -214,12 +228,55 @@ func (s *MetrikaConnectionService) Disconnect(ctx context.Context, userID string
 	return s.repo.DeleteConnection(ctx, ws.ID)
 }
 
+func (s *MetrikaConnectionService) DisconnectCounter(
+	ctx context.Context,
+	userID string,
+	r *http.Request,
+	counterID int64,
+) error {
+	ws, _, err := s.wsSvc.ResolveActive(ctx, userID, r)
+	if err != nil || ws == nil {
+		return ErrWorkspaceNotFound
+	}
+	if _, err := s.wsSvc.RequireMembership(ctx, userID, ws.ID, model.RoleAdmin); err != nil {
+		return err
+	}
+	if counterID <= 0 {
+		return fmt.Errorf("укажите номер счётчика")
+	}
+	return s.repo.DeleteConnectionByCounter(ctx, ws.ID, counterID)
+}
+
 func (s *MetrikaConnectionService) UTMCampaignStats(
 	ctx context.Context,
 	workspaceID, campaign string,
 	from, to time.Time,
 ) (*oauthclient.MetrikaUTMStats, error) {
-	row, err := s.repo.GetConnection(ctx, workspaceID)
+	connections, err := s.repo.ListEnabledConnections(ctx, workspaceID)
+	if err != nil || len(connections) == 0 {
+		return &oauthclient.MetrikaUTMStats{}, nil
+	}
+	total := &oauthclient.MetrikaUTMStats{}
+	for _, row := range connections {
+		stats, err := s.UTMCampaignStatsForCounter(ctx, workspaceID, row.CounterID, campaign, from, to)
+		if err != nil {
+			return nil, err
+		}
+		total.Visits += stats.Visits
+		total.Users += stats.Users
+		total.Goals += stats.Goals
+	}
+	return total, nil
+}
+
+func (s *MetrikaConnectionService) UTMCampaignStatsForCounter(
+	ctx context.Context,
+	workspaceID string,
+	counterID int64,
+	campaign string,
+	from, to time.Time,
+) (*oauthclient.MetrikaUTMStats, error) {
+	row, err := s.repo.GetConnectionByCounter(ctx, workspaceID, counterID)
 	if errors.Is(err, repository.ErrNotFound) || row == nil || !row.Enabled {
 		return &oauthclient.MetrikaUTMStats{}, nil
 	}
@@ -278,6 +335,7 @@ func (s *MetrikaConnectionService) ensureAccessToken(ctx context.Context, row *r
 	if err := s.repo.UpsertConnection(ctx, repository.MetrikaConnectionRow{
 		WorkspaceID:           row.WorkspaceID,
 		CounterID:             row.CounterID,
+		Label:                 row.Label,
 		AccessTokenEncrypted:  encAccess,
 		RefreshTokenEncrypted: encRefresh,
 		TokenExpiresAt:        expiresAt,

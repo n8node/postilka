@@ -25,6 +25,7 @@ type PostTargetMetrics struct {
 	MetrikaVisits    int        `json:"metrika_visits"`
 	MetrikaUsers     int        `json:"metrika_users"`
 	MetrikaGoals     int        `json:"metrika_goals"`
+	MetrikaByCounter []MetrikaCounterStats `json:"metrika_by_counter,omitempty"`
 	SubscriberCount  *int       `json:"subscriber_count,omitempty"`
 	Measurability    string     `json:"measurability"`
 	ProviderNote     string     `json:"provider_note,omitempty"`
@@ -103,13 +104,40 @@ type PostAnalyticsResponse struct {
 }
 
 type WorkspaceMetrikaStatus struct {
-	Connected   bool       `json:"connected"`
+	OAuthReady bool                    `json:"oauth_ready"`
+	Counters   []MetrikaCounterSummary `json:"counters"`
+}
+
+type MetrikaCounterSummary struct {
+	CounterID   int64      `json:"counter_id"`
+	Label       string     `json:"label,omitempty"`
 	Enabled     bool       `json:"enabled"`
-	CounterID   int64      `json:"counter_id,omitempty"`
-	ConnectedAt *time.Time `json:"connected_at,omitempty"`
-	OAuthReady  bool       `json:"oauth_ready"`
+	ConnectedAt time.Time  `json:"connected_at"`
+	Visits      int        `json:"visits,omitempty"`
+	Goals       int        `json:"goals,omitempty"`
+}
+
+type MetrikaCounterStats struct {
+	CounterID int64  `json:"counter_id"`
+	Label     string `json:"label,omitempty"`
+	Visits    int    `json:"visits"`
+	Users     int    `json:"users"`
+	Goals     int    `json:"goals"`
+}
+
+type MetrikaUTMBinding struct {
+	PostID      string                `json:"post_id"`
+	PostPreview string                `json:"post_preview"`
+	TargetID    string                `json:"target_id"`
+	ChannelName string                `json:"channel_name,omitempty"`
+	PublishedAt *time.Time            `json:"published_at,omitempty"`
+	UTMCampaign string                `json:"utm_campaign"`
+	UTMSource   string                `json:"utm_source,omitempty"`
+	UTMMedium   string                `json:"utm_medium,omitempty"`
+	Counters    []MetrikaCounterStats `json:"counters"`
 }
 
 type WorkspaceMetrikaSettingsRequest struct {
-	CounterID int64 `json:"counter_id"`
+	CounterID int64  `json:"counter_id"`
+	Label     string `json:"label,omitempty"`
 }

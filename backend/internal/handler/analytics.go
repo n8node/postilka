@@ -95,6 +95,8 @@ func (h *AnalyticsHandler) MetrikaStatus(w http.ResponseWriter, r *http.Request)
 		writeAnalyticsError(w, err)
 		return
 	}
+	from, to := parseUserAnalyticsRange(r)
+	_ = h.analytics.EnrichMetrikaStatusForUser(r.Context(), userID, r, status, from, to)
 	writeJSON(w, http.StatusOK, status)
 }
 
@@ -142,6 +144,7 @@ func (h *AnalyticsHandler) MetrikaConnectComplete(w http.ResponseWriter, r *http
 	var req struct {
 		State string `json:"state"`
 		Code  string `json:"code"`
+		Label string `json:"label,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "Некорректное тело запроса")
@@ -151,7 +154,7 @@ func (h *AnalyticsHandler) MetrikaConnectComplete(w http.ResponseWriter, r *http
 		writeError(w, http.StatusBadRequest, "Укажите код подтверждения")
 		return
 	}
-	if err := h.metrika.ConnectComplete(r.Context(), userID, strings.TrimSpace(req.State), strings.TrimSpace(req.Code)); err != nil {
+	if err := h.metrika.ConnectComplete(r.Context(), userID, strings.TrimSpace(req.State), strings.TrimSpace(req.Code), strings.TrimSpace(req.Label)); err != nil {
 		writeAnalyticsError(w, err)
 		return
 	}
@@ -169,6 +172,39 @@ func (h *AnalyticsHandler) MetrikaCallback(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	redirectMetrikaResult(w, r, h.cfg.PublicAppURLNormalized(), true, "")
+}
+
+func (h *AnalyticsHandler) MetrikaDisconnectCounter(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
+		return
+	}
+	counterID, err := strconv.ParseInt(chi.URLParam(r, "counter_id"), 10, 64)
+	if err != nil || counterID <= 0 {
+		writeError(w, http.StatusBadRequest, "Укажите номер счётчика")
+		return
+	}
+	if err := h.analytics.DisconnectMetrikaCounter(r.Context(), userID, r, counterID); err != nil {
+		writeAnalyticsError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func (h *AnalyticsHandler) MetrikaUTMBindings(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
+		return
+	}
+	from, to := parseUserAnalyticsRange(r)
+	items, err := h.analytics.MetrikaUTMBindings(r.Context(), userID, r, from, to)
+	if err != nil {
+		writeAnalyticsError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
 }
 
 func (h *AnalyticsHandler) MetrikaDisconnect(w http.ResponseWriter, r *http.Request) {

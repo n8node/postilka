@@ -44,7 +44,7 @@ func (s *AnalyticsService) Overview(ctx context.Context, userID string, r *http.
 	if s.metrika != nil {
 		status, err := s.metrika.Status(ctx, userID, r)
 		if err == nil && status != nil {
-			overview.MetrikaConnected = status.Connected && status.Enabled
+			overview.MetrikaConnected = len(status.Counters) > 0
 		}
 	}
 	series, err := s.analytics.DailySeries(ctx, ws.ID, from, to)
@@ -92,6 +92,12 @@ func (s *AnalyticsService) PostAnalytics(ctx context.Context, userID string, r *
 	if err != nil {
 		return nil, err
 	}
+	for i := range targets {
+		byCounter, err := s.analytics.ListCounterMetricsByTarget(ctx, targets[i].TargetID)
+		if err == nil && len(byCounter) > 0 {
+			targets[i].MetrikaByCounter = byCounter
+		}
+	}
 	timeline, err := s.analytics.ListSnapshotsByPost(ctx, ws.ID, postID, 90)
 	if err != nil {
 		return nil, err
@@ -114,6 +120,153 @@ func (s *AnalyticsService) PostAnalytics(ctx context.Context, userID string, r *
 		resp.Explanation = "Показатели обновляются автоматически каждые 15 минут. Переходы считаются через короткие ссылки Postilka; визиты на сайте — через Яндекс Метрику, если она подключена."
 	}
 	return resp, nil
+}
+
+func (s *AnalyticsService) MetrikaUTMBindings(
+	ctx context.Context,
+	userID string,
+	r *http.Request,
+	from, to time.Time,
+) ([]model.MetrikaUTMBinding, error) {
+	ws, err := s.activeWorkspace(ctx, userID, r)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.analytics.ListMetrikaUTMMetricRows(ctx, ws.ID, from, to)
+	if err != nil {
+		return nil, err
+	}
+	postUTM := make(map[string]struct{ source, medium string })
+	if s.posts != nil {
+		for _, row := range rows {
+			key := row.PostID + "|" + row.TargetID
+			if _, ok := postUTM[key]; ok {
+				continue
+			}
+			post, err := s.posts.Get(ctx, ws.ID, row.PostID)
+			if err != nil {
+				continue
+			}
+			source, medium := utmFromPostTarget(post, row.TargetID)
+			postUTM[key] = struct{ source, medium string }{source, medium}
+		}
+	}
+
+	type bindingKey struct {
+		postID, targetID, campaign string
+	}
+	grouped := make(map[bindingKey]*model.MetrikaUTMBinding)
+	order := make([]bindingKey, 0)
+	for _, row := range rows {
+		key := bindingKey{postID: row.PostID, targetID: row.TargetID, campaign: row.UTMCampaign}
+		item, ok := grouped[key]
+		if !ok {
+			preview := row.UTMCampaign
+			if post, err := s.posts.Get(ctx, ws.ID, row.PostID); err == nil {
+				preview = postPreviewText(post)
+			}
+			utmKey := row.PostID + "|" + row.TargetID
+			utmMeta := postUTM[utmKey]
+			item = &model.MetrikaUTMBinding{
+				PostID:      row.PostID,
+				PostPreview: preview,
+				TargetID:    row.TargetID,
+				ChannelName: row.ChannelName,
+				PublishedAt: row.PublishedAt,
+				UTMCampaign: row.UTMCampaign,
+				UTMSource:   utmMeta.source,
+				UTMMedium:   utmMeta.medium,
+				Counters:    []model.MetrikaCounterStats{},
+			}
+			grouped[key] = item
+			order = append(order, key)
+		}
+		item.Counters = append(item.Counters, model.MetrikaCounterStats{
+			CounterID: row.CounterID,
+			Label:     row.CounterLabel,
+			Visits:    row.Visits,
+			Users:     row.Users,
+			Goals:     row.Goals,
+		})
+	}
+	out := make([]model.MetrikaUTMBinding, 0, len(order))
+	for _, key := range order {
+		if item := grouped[key]; item != nil {
+			out = append(out, *item)
+		}
+	}
+	return out, nil
+}
+
+func (s *AnalyticsService) EnrichMetrikaStatusForUser(
+	ctx context.Context,
+	userID string,
+	r *http.Request,
+	status *model.WorkspaceMetrikaStatus,
+	from, to time.Time,
+) error {
+	ws, err := s.activeWorkspace(ctx, userID, r)
+	if err != nil {
+		return err
+	}
+	return s.EnrichMetrikaStatus(ctx, ws.ID, status, from, to)
+}
+
+func (s *AnalyticsService) DisconnectMetrikaCounter(
+	ctx context.Context,
+	userID string,
+	r *http.Request,
+	counterID int64,
+) error {
+	ws, err := s.activeWorkspace(ctx, userID, r)
+	if err != nil {
+		return err
+	}
+	if err := s.metrika.DisconnectCounter(ctx, userID, r, counterID); err != nil {
+		return err
+	}
+	return s.analytics.DeleteCounterMetricsForWorkspaceCounter(ctx, ws.ID, counterID)
+}
+
+func (s *AnalyticsService) EnrichMetrikaStatus(
+	ctx context.Context,
+	workspaceID string,
+	status *model.WorkspaceMetrikaStatus,
+	from, to time.Time,
+) error {
+	if status == nil {
+		return nil
+	}
+	stats, err := s.analytics.CounterPeriodStats(ctx, workspaceID, from, to)
+	if err != nil {
+		return err
+	}
+	for i := range status.Counters {
+		if item, ok := stats[status.Counters[i].CounterID]; ok {
+			status.Counters[i].Visits = item.Visits
+			status.Counters[i].Goals = item.Goals
+		}
+	}
+	return nil
+}
+
+func utmFromPostTarget(post *model.Post, targetID string) (source, medium string) {
+	if post == nil {
+		return "", ""
+	}
+	for _, t := range post.Targets {
+		if t.ID != targetID {
+			continue
+		}
+		settings, err := DecodePostTargetSettings(t.Settings)
+		if err == nil && settings.Settings != nil && settings.Settings.UTM != nil {
+			return strings.TrimSpace(settings.Settings.UTM.Source), strings.TrimSpace(settings.Settings.UTM.Medium)
+		}
+	}
+	if post.Settings.UTM != nil {
+		return strings.TrimSpace(post.Settings.UTM.Source), strings.TrimSpace(post.Settings.UTM.Medium)
+	}
+	return "", ""
 }
 
 func (s *AnalyticsService) activeWorkspace(ctx context.Context, userID string, r *http.Request) (*model.Workspace, error) {
