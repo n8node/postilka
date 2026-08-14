@@ -6,6 +6,7 @@ import { AlertTriangle, Loader2 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { CabinetPage } from "@/components/layout/CabinetPage";
 import { EmptyState } from "@/components/layout/EmptyState";
+import { CalendarBulkBar } from "@/components/calendar/CalendarBulkBar";
 import { CalendarToolbar } from "@/components/calendar/CalendarToolbar";
 import { CalendarFiltersBar, type StatusFilter } from "@/components/calendar/CalendarFiltersBar";
 import { CalendarMonthView } from "@/components/calendar/CalendarMonthView";
@@ -431,6 +432,27 @@ export function CalendarPage() {
           onQueryChange={setQuery}
           onHidePublishedChange={setHidePublished}
         />
+
+        {view === "list" ? (
+          <CalendarBulkBar
+            count={bulkSelected.size}
+            busy={busy}
+            onClear={() => setBulkSelected(new Set())}
+            onCancelSelected={() =>
+              void handleInspectorAction(async () => {
+                for (const id of bulkSelected) {
+                  try {
+                    const updated = await cancelPost(id);
+                    updatePostLocal(updated);
+                  } catch {
+                    /* skip failed */
+                  }
+                }
+                setBulkSelected(new Set());
+              })
+            }
+          />
+        ) : null}
 
         {conflicts.length > 0 ? (
           <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
