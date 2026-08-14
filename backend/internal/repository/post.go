@@ -457,14 +457,6 @@ func (r *PostRepository) MarkPlanManuallyChanged(ctx context.Context, workspaceI
 	return err
 }
 
-func (r *PostRepository) MarkPlanManuallyChanged(ctx context.Context, workspaceID, postID string) error {
-	_, err := r.pool.Exec(ctx, `
-		UPDATE posts SET plan_manually_changed = TRUE, updated_at = NOW()
-		WHERE id = $1 AND workspace_id = $2 AND mission_id IS NOT NULL
-	`, postID, workspaceID)
-	return err
-}
-
 func (r *PostRepository) SetScheduled(ctx context.Context, workspaceID, postID string, dueAt time.Time) (*model.Post, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {

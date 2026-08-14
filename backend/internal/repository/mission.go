@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -255,11 +254,4 @@ func (r *MissionRepository) InsertMessage(ctx context.Context, msg model.Mission
 		return nil, err
 	}
 	return &out, nil
-}
-
-func nullIfEmpty(s string) any {
-	if strings.TrimSpace(s) == "" {
-		return nil
-	}
-	return s
 }
