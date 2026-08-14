@@ -34,11 +34,23 @@ export type MissionStatus =
 
 export type MissionMetric = "clicks" | "likes" | "reach" | "subscribers" | "manual";
 
+export type MissionPlanButton = {
+  text: string;
+  url: string;
+};
+
 export type MissionPlanItem = {
   role: "attention" | "problem" | "proof" | "choice" | "objection" | "action";
   due_at?: string;
   channel_ids?: string[];
   text: string;
+  title?: string;
+  format?: string;
+  file_ids?: string[];
+  media_kind?: "none" | "photo" | "video" | "album" | string;
+  image_prompt?: string;
+  video_prompt?: string;
+  buttons?: MissionPlanButton[];
   post_id?: string;
 };
 
@@ -167,6 +179,13 @@ export function updateMission(id: string, payload: Partial<{
   return apiFetch<Mission>(`/missions/${encodeURIComponent(id)}`, {
     method: "PATCH",
     body: JSON.stringify(payload),
+  });
+}
+
+export function updateMissionPlan(id: string, items: MissionPlanItem[]) {
+  return apiFetch<Mission>(`/missions/${encodeURIComponent(id)}/plan`, {
+    method: "PATCH",
+    body: JSON.stringify({ items }),
   });
 }
 

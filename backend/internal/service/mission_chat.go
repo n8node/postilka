@@ -11,6 +11,7 @@ import (
 
 	"github.com/postilka/postilka/internal/ai"
 	"github.com/postilka/postilka/internal/model"
+	"github.com/postilka/postilka/internal/repository"
 )
 
 type agentChatPayload struct {
@@ -79,12 +80,16 @@ func (s *MissionService) Chat(ctx context.Context, userID string, r *http.Reques
 		return nil, err
 	}
 	channelHint, _ := s.channelHint(ctx, ws.ID, mission.ChannelIDs)
+	fileHint, _ := s.fileHint(ctx, ws.ID)
 
 	sys := strings.TrimSpace(tmplPrompt)
 	if sys == "" {
 		sys = defaultMissionAgentPrompt()
 	}
 	sys += "\n\nТекущая задача (JSON):\n" + missionSnapshot(mission) + "\nКаналы workspace:\n" + channelHint
+	if fileHint != "" {
+		sys += "\nФайлы workspace (можно ставить в file_ids только эти id):\n" + fileHint
+	}
 
 	chatMsgs := []ai.ChatMessage{{Role: "system", Content: sys}}
 	for _, msg := range history {
@@ -123,7 +128,7 @@ func (s *MissionService) Chat(ctx context.Context, userID string, r *http.Reques
 		changed = true
 	}
 	if payload != nil && payload.Plan != nil && len(payload.Plan.Items) > 0 {
-		mission.Plan.Items = normalizePlanItems(payload.Plan.Items, mission)
+		mission.Plan.Items = normalizePlanItems(payload.Plan.Items, mission, false)
 		mission.Plan.ApprovedAt = nil
 		if mission.Status == model.MissionStatusDraft || mission.Status == model.MissionStatusClarifying {
 			mission.Status = model.MissionStatusPlanning
@@ -177,43 +182,38 @@ func (s *MissionService) CreateDrafts(ctx context.Context, userID string, r *htt
 	}
 
 	created := make([]model.Post, 0, len(mission.Plan.Items))
+	campaign := "mission-" + mission.ID
+	if len(mission.ID) >= 8 {
+		campaign = "mission-" + mission.ID[:8]
+	}
 	for i := range mission.Plan.Items {
 		item := &mission.Plan.Items[i]
-		text := strings.TrimSpace(item.Text)
-		if text == "" {
+		if !planItemHasContent(*item) {
 			continue
 		}
 		channelIDs := item.ChannelIDs
 		if len(channelIDs) == 0 {
 			channelIDs = mission.ChannelIDs
 		}
-		channelIDs, err = s.filterWorkspaceChannels(ctx, ws.ID, channelIDs)
+		channels, err := s.channelsByIDs(ctx, ws.ID, channelIDs)
 		if err != nil {
 			return nil, nil, err
 		}
-		if len(channelIDs) == 0 {
+		if len(channels) == 0 {
 			return nil, nil, fmt.Errorf("%w: укажите каналы задачи", ErrInvalidMission)
 		}
-		targets := make([]model.PostTargetInput, 0, len(channelIDs))
-		for _, chID := range channelIDs {
-			targets = append(targets, model.PostTargetInput{ChannelID: chID})
+		item.Format = resolveItemFormat(item.Format, channels)
+		item.MediaKind = normalizeMediaKind(item.MediaKind, item.Format, len(uniqueFileIDs(item.FileIDs)))
+		item.FileIDs = s.filterWorkspaceFiles(ctx, ws.ID, item.FileIDs, item.MediaKind)
+		if !formatAllowsURLButtons(item.Format) || !allChannelsAllowInlineButtons(channels) {
+			item.Buttons = nil
+		} else {
+			item.Buttons = normalizePlanButtons(item.Buttons)
 		}
-		campaign := "mission-" + mission.ID[:8]
-		req := model.PostSaveRequest{
-			Content: model.PostContent{
-				Format:    "message",
-				Text:      text,
-				ParseMode: "HTML",
-			},
-			Settings: model.PostSettings{
-				UTM: &model.PostUTMSettings{
-					Source:   "postilka",
-					Medium:   "social",
-					Campaign: campaign,
-					Shorten:  mission.Metric == model.MissionMetricClicks,
-				},
-			},
-			Targets: targets,
+		req := buildPlanDraftRequest(*item, channels, campaign, mission.Metric == model.MissionMetricClicks)
+		sanitizePostSaveRequest(&req)
+		if err := s.posts.validate(ctx, ws.ID, req, false); err != nil {
+			return nil, nil, err
 		}
 		if item.PostID != "" {
 			existing, gErr := s.posts.posts.Get(ctx, ws.ID, item.PostID)
@@ -232,6 +232,9 @@ func (s *MissionService) CreateDrafts(ctx context.Context, userID string, r *htt
 		}
 		item.PostID = post.ID
 		created = append(created, *post)
+	}
+	if len(created) == 0 {
+		return nil, nil, fmt.Errorf("%w: нет публикаций для черновиков", ErrInvalidMission)
 	}
 	mission.Status = model.MissionStatusPendingApproval
 	updated, err := s.missions.Update(ctx, mission)
@@ -302,10 +305,58 @@ func (s *MissionService) channelHint(ctx context.Context, workspaceID string, se
 		if _, ok := sel[ch.ID]; ok {
 			mark = " [выбран]"
 		}
-		fmt.Fprintf(&b, "- %s (%s) id=%s%s\n", ch.Name, ch.Provider.Label(), ch.ID, mark)
+		caps := model.PublishCapabilitiesForChannel(ch)
+		fmt.Fprintf(&b, "- %s (%s) id=%s%s formats=%s photo=%v video=%v album=%v buttons=%v max_media=%d\n",
+			ch.Name, ch.Provider.Label(), ch.ID, mark,
+			strings.Join(caps.Formats, ","),
+			caps.Photo || caps.ComposerMedia,
+			caps.Video || caps.ComposerMedia,
+			caps.MediaAlbum,
+			caps.InlineButtons,
+			caps.MaxMedia,
+		)
 	}
 	if b.Len() == 0 {
 		return "(каналы не подключены)", nil
+	}
+	return b.String(), nil
+}
+
+func (s *MissionService) fileHint(ctx context.Context, workspaceID string) (string, error) {
+	if s.files == nil {
+		return "", nil
+	}
+	images, err := s.files.List(ctx, repository.ListFilesFilter{
+		WorkspaceID: workspaceID,
+		ScopeAll:    true,
+		TypeFilter:  "image",
+		RecentOnly:  true,
+		Limit:       12,
+	})
+	if err != nil {
+		return "", err
+	}
+	videos, err := s.files.List(ctx, repository.ListFilesFilter{
+		WorkspaceID: workspaceID,
+		ScopeAll:    true,
+		TypeFilter:  "video",
+		RecentOnly:  true,
+		Limit:       8,
+	})
+	if err != nil {
+		return "", err
+	}
+	if len(images) == 0 && len(videos) == 0 {
+		return "(в файлах пока нет фото и видео — укажите image_prompt или video_prompt, не выдумывайте file_ids)", nil
+	}
+	var b strings.Builder
+	for _, f := range images {
+		b.WriteString(fileHintLine(f))
+		b.WriteByte('\n')
+	}
+	for _, f := range videos {
+		b.WriteString(fileHintLine(f))
+		b.WriteByte('\n')
 	}
 	return b.String(), nil
 }
@@ -378,15 +429,14 @@ func parseAgentChat(raw string) (*agentChatPayload, string) {
 	return &payload, reply
 }
 
-func normalizePlanItems(items []model.MissionPlanItem, mission *model.Mission) []model.MissionPlanItem {
+func normalizePlanItems(items []model.MissionPlanItem, mission *model.Mission, keepPostIDs bool) []model.MissionPlanItem {
 	out := make([]model.MissionPlanItem, 0, len(items))
 	base := time.Now().Add(24 * time.Hour)
 	if mission.StartsAt != nil && mission.StartsAt.After(time.Now()) {
 		base = *mission.StartsAt
 	}
 	for i, item := range items {
-		text := strings.TrimSpace(item.Text)
-		if text == "" {
+		if !planItemHasContent(item) {
 			continue
 		}
 		role := item.Role
@@ -402,16 +452,84 @@ func normalizePlanItems(items []model.MissionPlanItem, mission *model.Mission) [
 		if len(channels) == 0 {
 			channels = mission.ChannelIDs
 		}
-		out = append(out, model.MissionPlanItem{
-			Role:       role,
-			DueAt:      due,
-			ChannelIDs: channels,
-			Text:       text,
-		})
+		format := mapStoredPostFormat(item.Format)
+		fileIDs := uniqueFileIDs(item.FileIDs)
+		kind := normalizeMediaKind(item.MediaKind, format, len(fileIDs))
+		buttons := normalizePlanButtons(item.Buttons)
+		if !formatAllowsURLButtons(format) {
+			buttons = nil
+		}
+		next := model.MissionPlanItem{
+			Role:        role,
+			DueAt:       due,
+			ChannelIDs:  channels,
+			Text:        strings.TrimSpace(item.Text),
+			Title:       strings.TrimSpace(item.Title),
+			Format:      format,
+			FileIDs:     fileIDs,
+			MediaKind:   kind,
+			ImagePrompt: strings.TrimSpace(item.ImagePrompt),
+			VideoPrompt: strings.TrimSpace(item.VideoPrompt),
+			Buttons:     buttons,
+		}
+		if keepPostIDs {
+			next.PostID = strings.TrimSpace(item.PostID)
+		}
+		out = append(out, next)
 	}
 	return out
 }
 
 func defaultMissionAgentPrompt() string {
-	return "Ты агент задачи продвижения Postilka. Отвечай по-русски. Не публикуй посты. Ответ — только JSON с полями reply, mission_patch, plan."
+	return missionAgentSystemPrompt
 }
+
+const missionAgentSystemPrompt = `Ты агент «Задача продвижения» внутри Postilka. Ты ведёшь пользователя по пути:
+задача → цель и показатель → продукт и аудитория → наблюдения по данным проекта → проверяемые замыслы → связный ход публикаций → материалы → разрешение → запуск → разбор результата.
+
+Правила:
+- Отвечай по-русски, кратко и по делу.
+- Не публикуй посты в сети. Ты только уточняешь задачу, предлагаешь ход и готовишь черновики.
+- Новые варианты — черновики. Публикация и изменение утверждённого хода требуют явного разрешения человека.
+- Не объявляй причинность по одному результату. Разделяй: наблюдение, предположение, подтверждённая закономерность, недостаточно данных.
+- Публикации в ходе имеют роли: внимание, проблема, доказательство, выбор, снятие сомнения, действие.
+- Используй только каналы, форматы и файлы из контекста. Не выдумывай метрики, подписчиков и file_ids.
+- Если данных мало — скажи об этом и задай один-два уточняющих вопроса.
+- Каждый пункт хода — полноценный пост, как в композере: вид контента, текст, фото/видео, кнопки если канал умеет.
+- format бери только из formats канала. Для VK wall_post пиши format="message". Для Telegram Business story — только story.
+- Чередуй форматы, если каналы это позволяют: не делай все пункты обычными постами.
+- media_kind: none | photo | video | album. file_ids — только id из списка файлов workspace. Если подходящего файла нет — оставь file_ids пустым и заполни image_prompt или video_prompt; не вызывай генерацию сам.
+- buttons — только URL-кнопки (text+url), и только если у ВСЕХ выбранных каналов пункта buttons=true и format это message, rich_message или article. Иначе buttons=[].
+- Не предлагай кнопки для story, video, shorts, short_video.
+
+Формат ответа: только JSON-объект без markdown:
+{
+  "reply": "текст пользователю",
+  "mission_patch": null или {
+    "title": "",
+    "goal": "",
+    "metric": "clicks|likes|reach|subscribers|manual",
+    "metric_target": 0,
+    "frequency": "",
+    "brief": {"product": "", "audience": "", "observations": ""}
+  },
+  "plan": null или {
+    "items": [
+      {
+        "role": "attention|problem|proof|choice|objection|action",
+        "due_at": "RFC3339",
+        "channel_ids": ["uuid"],
+        "format": "message|rich_message|article|story|short_video|video|shorts",
+        "title": "для video/shorts",
+        "text": "текст или подпись",
+        "media_kind": "none|photo|video|album",
+        "file_ids": [],
+        "image_prompt": "",
+        "video_prompt": "",
+        "buttons": [{"text": "Открыть", "url": "https://example.com"}]
+      }
+    ]
+  }
+}
+Поле plan заполняй, только когда пользователь просит составить ход или данных уже достаточно. mission_patch — только изменённые поля.`
+

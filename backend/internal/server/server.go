@@ -179,7 +179,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	missionRepo := repository.NewMissionRepository(db.Pool)
 	agentTemplateRepo := repository.NewAgentTemplateRepository(db.Pool)
 	missionSvc := service.NewMissionService(
-		missionRepo, agentTemplateRepo, postSvc, channelRepo, wsSvc, yandexGptConfigSvc, quotaSvc,
+		missionRepo, agentTemplateRepo, postSvc, channelRepo, fileStorageRepo, wsSvc, yandexGptConfigSvc, quotaSvc,
 	)
 	missionHandler := handler.NewMissionHandler(missionSvc)
 	analyticsRepo := repository.NewAnalyticsRepository(db.Pool)
@@ -369,6 +369,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Post("/missions", missionHandler.Create)
 			r.Get("/missions/{id}", missionHandler.Get)
 			r.Patch("/missions/{id}", missionHandler.Update)
+			r.Patch("/missions/{id}/plan", missionHandler.UpdatePlan)
 			r.Post("/missions/{id}/chat", missionHandler.Chat)
 			r.Post("/missions/{id}/drafts", missionHandler.CreateDrafts)
 			r.Post("/missions/{id}/approve", missionHandler.Approve)

@@ -22,6 +22,9 @@ export const POST_STATUS_CLASS: Record<Post["status"], string> = {
 
 const FORMAT_LABEL: Record<string, string> = {
   message: "Пост",
+  wall_post: "Пост",
+  feed: "Пост",
+  brief: "Пост",
   rich_message: "Статья",
   article: "Статья",
   story: "История",

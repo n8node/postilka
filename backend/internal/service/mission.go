@@ -19,13 +19,14 @@ var (
 )
 
 type MissionService struct {
-	missions  *repository.MissionRepository
-	templates *repository.AgentTemplateRepository
-	posts     *PostService
-	channels  *repository.ChannelRepository
+	missions   *repository.MissionRepository
+	templates  *repository.AgentTemplateRepository
+	posts      *PostService
+	channels   *repository.ChannelRepository
+	files      *repository.WorkspaceFileRepository
 	workspaces *WorkspaceService
-	yandex    *YandexGptConfigService
-	quota     *QuotaService
+	yandex     *YandexGptConfigService
+	quota      *QuotaService
 }
 
 func NewMissionService(
@@ -33,13 +34,14 @@ func NewMissionService(
 	templates *repository.AgentTemplateRepository,
 	posts *PostService,
 	channels *repository.ChannelRepository,
+	files *repository.WorkspaceFileRepository,
 	workspaces *WorkspaceService,
 	yandex *YandexGptConfigService,
 	quota *QuotaService,
 ) *MissionService {
 	return &MissionService{
 		missions: missions, templates: templates, posts: posts,
-		channels: channels, workspaces: workspaces, yandex: yandex, quota: quota,
+		channels: channels, files: files, workspaces: workspaces, yandex: yandex, quota: quota,
 	}
 }
 
@@ -280,6 +282,32 @@ func (s *MissionService) Update(ctx context.Context, userID string, r *http.Requ
 		return nil, fmt.Errorf("%w: задачу в этом статусе нельзя изменить", ErrMissionConflict)
 	}
 	applyMissionPatch(m, req)
+	return s.missions.Update(ctx, m)
+}
+
+func (s *MissionService) UpdatePlan(ctx context.Context, userID string, r *http.Request, id string, req model.MissionPlanUpdateRequest) (*model.Mission, error) {
+	ws, err := s.resolve(ctx, userID, r, model.RoleEditor)
+	if err != nil {
+		return nil, err
+	}
+	m, err := s.missions.Get(ctx, ws.ID, id)
+	if err != nil {
+		return nil, err
+	}
+	if m.Status == model.MissionStatusCanceled || m.Status == model.MissionStatusCompleted || m.Status == model.MissionStatusRunning {
+		return nil, fmt.Errorf("%w: ход в этом статусе нельзя изменить здесь — правьте отдельные посты", ErrMissionConflict)
+	}
+	if len(req.Items) == 0 {
+		return nil, fmt.Errorf("%w: ход не должен быть пустым", ErrInvalidMission)
+	}
+	m.Plan.Items = normalizePlanItems(req.Items, m, true)
+	if len(m.Plan.Items) == 0 {
+		return nil, fmt.Errorf("%w: в ходе нет публикаций", ErrInvalidMission)
+	}
+	if m.Status == model.MissionStatusDraft || m.Status == model.MissionStatusClarifying {
+		m.Status = model.MissionStatusPlanning
+	}
+	m.Plan.ApprovedAt = nil
 	return s.missions.Update(ctx, m)
 }
 

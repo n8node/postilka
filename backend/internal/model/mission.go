@@ -90,12 +90,24 @@ const (
 	MissionPlanRoleAction    MissionPlanItemRole = "action"
 )
 
+type MissionPlanButton struct {
+	Text string `json:"text"`
+	URL  string `json:"url"`
+}
+
 type MissionPlanItem struct {
-	Role       MissionPlanItemRole `json:"role"`
-	DueAt      *time.Time          `json:"due_at,omitempty"`
-	ChannelIDs []string            `json:"channel_ids,omitempty"`
-	Text       string              `json:"text"`
-	PostID     string              `json:"post_id,omitempty"`
+	Role        MissionPlanItemRole `json:"role"`
+	DueAt       *time.Time          `json:"due_at,omitempty"`
+	ChannelIDs  []string            `json:"channel_ids,omitempty"`
+	Text        string              `json:"text"`
+	Title       string              `json:"title,omitempty"`
+	Format      string              `json:"format,omitempty"`
+	FileIDs     []string            `json:"file_ids,omitempty"`
+	MediaKind   string              `json:"media_kind,omitempty"`
+	ImagePrompt string              `json:"image_prompt,omitempty"`
+	VideoPrompt string              `json:"video_prompt,omitempty"`
+	Buttons     []MissionPlanButton `json:"buttons,omitempty"`
+	PostID      string              `json:"post_id,omitempty"`
 }
 
 type MissionPlan struct {
@@ -159,6 +171,10 @@ type MissionUpdateRequest struct {
 	Brief        *MissionBrief  `json:"brief,omitempty"`
 	ClearStart   bool           `json:"clear_start,omitempty"`
 	ClearEnd     bool           `json:"clear_end,omitempty"`
+}
+
+type MissionPlanUpdateRequest struct {
+	Items []MissionPlanItem `json:"items"`
 }
 
 type MissionMessage struct {

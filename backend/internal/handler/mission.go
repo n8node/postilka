@@ -159,6 +159,24 @@ func (h *MissionHandler) Update(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, item)
 }
 
+func (h *MissionHandler) UpdatePlan(w http.ResponseWriter, r *http.Request) {
+	userID, ok := postUserID(w, r)
+	if !ok {
+		return
+	}
+	var req model.MissionPlanUpdateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Некорректный запрос")
+		return
+	}
+	item, err := h.svc.UpdatePlan(r.Context(), userID, r, chi.URLParam(r, "id"), req)
+	if err != nil {
+		writeMissionError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, item)
+}
+
 func (h *MissionHandler) Chat(w http.ResponseWriter, r *http.Request) {
 	userID, ok := postUserID(w, r)
 	if !ok {

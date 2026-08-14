@@ -14,12 +14,15 @@ import {
   fetchMission,
   MEASURABILITY_LABEL,
   MISSION_METRIC_LABEL,
-  MISSION_ROLE_LABEL,
   MISSION_STATUS_LABEL,
   saveMissionAsTemplate,
+  updateMissionPlan,
   type Mission,
   type MissionMessage,
+  type MissionPlanItem,
 } from "@/lib/missions-api";
+import { listFiles, type WorkspaceFile } from "@/lib/files-api";
+import { MissionPlanItemCard, channelsForItem } from "@/components/missions/MissionPlanItemCard";
 import type { Post } from "@/lib/posts-api";
 import { postPreviewText } from "@/lib/posts-display";
 import { cn } from "@/lib/utils";
@@ -29,6 +32,8 @@ export function MissionWorkspace({ missionId }: { missionId: string }) {
   const [messages, setMessages] = useState<MissionMessage[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
   const [channels, setChannels] = useState<ChannelListItem[]>([]);
+  const [files, setFiles] = useState<WorkspaceFile[]>([]);
+  const [planItems, setPlanItems] = useState<MissionPlanItem[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -40,11 +45,18 @@ export function MissionWorkspace({ missionId }: { missionId: string }) {
     setLoading(true);
     setError(null);
     try {
-      const [detail, ch] = await Promise.all([fetchMission(missionId), fetchChannels()]);
+      const [detail, ch, photos, videos] = await Promise.all([
+        fetchMission(missionId),
+        fetchChannels(),
+        listFiles("photos").catch(() => ({ files: [] as WorkspaceFile[] })),
+        listFiles("videos").catch(() => ({ files: [] as WorkspaceFile[] })),
+      ]);
       setMission(detail.mission);
       setMessages(detail.messages || []);
       setPosts(detail.posts || []);
       setChannels(ch.items);
+      setPlanItems(detail.mission.plan.items || []);
+      setFiles([...(photos.files || []), ...(videos.files || [])]);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Не удалось загрузить задачу");
     } finally {
@@ -69,6 +81,7 @@ export function MissionWorkspace({ missionId }: { missionId: string }) {
     try {
       const res = await chatMission(missionId, text);
       setMission(res.mission);
+      setPlanItems(res.mission.plan.items || []);
       setMessages((prev) => [
         ...prev,
         { id: "tmp-user", workspace_id: "", mission_id: missionId, role: "user", content: text, created_at: new Date().toISOString() },
@@ -188,15 +201,22 @@ export function MissionWorkspace({ missionId }: { missionId: string }) {
 
           <div className="rounded-xl border border-border bg-surface p-4">
             <p className="text-sm font-semibold">Ход публикаций</p>
-            {(mission.plan.items || []).length === 0 ? (
-              <p className="mt-2 text-xs text-muted">Попросите агента составить ход — появятся черновики с ролями.</p>
+            {planItems.length === 0 ? (
+              <p className="mt-2 text-xs text-muted">Попросите агента составить ход — появятся черновики с видом контента, медиа и кнопками.</p>
             ) : (
               <ol className="mt-2 space-y-2">
-                {(mission.plan.items || []).map((item, idx) => (
-                  <li key={`${item.role}-${idx}`} className="rounded-md border border-border px-2 py-1.5 text-xs">
-                    <span className="font-medium">{MISSION_ROLE_LABEL[item.role] || item.role}</span>
-                    <p className="mt-0.5 line-clamp-3 text-muted">{item.text}</p>
-                  </li>
+                {planItems.map((item, idx) => (
+                  <MissionPlanItemCard
+                    key={`${item.role}-${item.post_id || idx}`}
+                    item={item}
+                    index={idx}
+                    channels={channelsForItem(item, mission.channel_ids, channels)}
+                    files={files}
+                    closed={closed}
+                    onChange={(next) =>
+                      setPlanItems((prev) => prev.map((row, rowIdx) => (rowIdx === idx ? next : row)))
+                    }
+                  />
                 ))}
               </ol>
             )}
@@ -222,13 +242,32 @@ export function MissionWorkspace({ missionId }: { missionId: string }) {
           <div className="flex flex-col gap-2">
             <button
               type="button"
-              disabled={busy || closed || (mission.plan.items || []).length === 0}
+              disabled={busy || closed || planItems.length === 0}
               onClick={() =>
                 run(async () => {
+                  const saved = await updateMissionPlan(missionId, planItems);
+                  setMission(saved);
+                  setPlanItems(saved.plan.items || []);
+                  setNotice("Правки хода сохранены.");
+                })
+              }
+              className="rounded-md border border-border px-3 py-2 text-sm disabled:opacity-50"
+            >
+              Сохранить ход
+            </button>
+            <button
+              type="button"
+              disabled={busy || closed || planItems.length === 0}
+              onClick={() =>
+                run(async () => {
+                  const saved = await updateMissionPlan(missionId, planItems);
+                  setMission(saved);
+                  setPlanItems(saved.plan.items || []);
                   const res = await createMissionDrafts(missionId);
                   setMission(res.mission);
+                  setPlanItems(res.mission.plan.items || []);
                   setPosts(res.posts);
-                  setNotice("Черновики созданы. Проверьте тексты и утвердите ход.");
+                  setNotice("Черновики созданы с медиа и кнопками. Если правили ход — создайте черновики снова до утверждения.");
                 })
               }
               className="rounded-md border border-border px-3 py-2 text-sm disabled:opacity-50"
@@ -259,6 +298,7 @@ export function MissionWorkspace({ missionId }: { missionId: string }) {
                     summary: "Задача закрыта пользователем",
                   });
                   setMission(next);
+                  setPlanItems(next.plan.items || []);
                 })
               }
               className="rounded-md border border-border px-3 py-2 text-sm disabled:opacity-50"
@@ -272,6 +312,7 @@ export function MissionWorkspace({ missionId }: { missionId: string }) {
                 run(async () => {
                   const next = await cancelMission(missionId);
                   setMission(next);
+                  setPlanItems(next.plan.items || []);
                 })
               }
               className="rounded-md border border-border px-3 py-2 text-sm text-red-700 disabled:opacity-50"
