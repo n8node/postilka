@@ -337,3 +337,21 @@ body {
 .generation-history-item--posted {
   opacity: 1;
 }
+
+@keyframes calendar-undo-shrink {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .calendar-event-card {
+    transition: none !important;
+  }
+  .calendar-event-card:hover {
+    transform: none !important;
+  }
+}

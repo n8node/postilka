@@ -183,7 +183,29 @@ export type PostListParams = {
   channel_id?: string;
   q?: string;
   format?: string;
+  calendar?: boolean;
+  from?: string;
+  to?: string;
+  include_unscheduled?: boolean;
 };
+
+export function fetchCalendarPosts(params: { from: string; to: string } & Omit<PostListParams, "calendar" | "from" | "to">) {
+  return fetchPosts({
+    ...params,
+    calendar: true,
+    limit: 500,
+    from: params.from,
+    to: params.to,
+  });
+}
+
+export function fetchUnscheduledPosts(params: Omit<PostListParams, "include_unscheduled" | "calendar"> = {}) {
+  return fetchPosts({
+    ...params,
+    include_unscheduled: true,
+    limit: 100,
+  });
+}
 
 export function fetchPosts(params: PostListParams = {}) {
   const qs = new URLSearchParams();
@@ -193,6 +215,10 @@ export function fetchPosts(params: PostListParams = {}) {
   if (params.channel_id) qs.set("channel_id", params.channel_id);
   if (params.q) qs.set("q", params.q);
   if (params.format) qs.set("format", params.format);
+  if (params.calendar) qs.set("calendar", "1");
+  if (params.from) qs.set("from", params.from);
+  if (params.to) qs.set("to", params.to);
+  if (params.include_unscheduled) qs.set("include_unscheduled", "1");
   const query = qs.toString();
   return apiFetch<{ items: Post[]; total: number; limit: number; offset: number }>(
     `/posts${query ? `?${query}` : ""}`,
