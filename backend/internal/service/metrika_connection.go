@@ -22,24 +22,35 @@ var (
 )
 
 type MetrikaConnectionService struct {
-	repo    *repository.MetrikaRepository
-	wsSvc   *WorkspaceService
-	cipher  *SecretCipher
-	cfg     *config.Config
+	repo     *repository.MetrikaRepository
+	wsSvc    *WorkspaceService
+	platform *MetrikaPlatformConfigService
+	cipher   *SecretCipher
+	cfg      *config.Config
 }
 
 func NewMetrikaConnectionService(
 	repo *repository.MetrikaRepository,
 	wsSvc *WorkspaceService,
+	platform *MetrikaPlatformConfigService,
 	cipher *SecretCipher,
 	cfg *config.Config,
 ) *MetrikaConnectionService {
-	return &MetrikaConnectionService{repo: repo, wsSvc: wsSvc, cipher: cipher, cfg: cfg}
+	return &MetrikaConnectionService{
+		repo:     repo,
+		wsSvc:    wsSvc,
+		platform: platform,
+		cipher:   cipher,
+		cfg:      cfg,
+	}
 }
 
-func (s *MetrikaConnectionService) OAuthReady() bool {
-	return strings.TrimSpace(s.cfg.YandexMetrikaClientID) != "" &&
-		strings.TrimSpace(s.cfg.YandexMetrikaClientSecret) != ""
+func (s *MetrikaConnectionService) OAuthReady(ctx context.Context) (bool, error) {
+	if s.platform == nil {
+		return strings.TrimSpace(s.cfg.YandexMetrikaClientID) != "" &&
+			strings.TrimSpace(s.cfg.YandexMetrikaClientSecret) != "", nil
+	}
+	return s.platform.OAuthReady(ctx)
 }
 
 func (s *MetrikaConnectionService) Status(ctx context.Context, userID string, r *http.Request) (*model.WorkspaceMetrikaStatus, error) {
@@ -50,8 +61,12 @@ func (s *MetrikaConnectionService) Status(ctx context.Context, userID string, r 
 	if ws == nil {
 		return nil, ErrWorkspaceNotFound
 	}
+	oauthReady, err := s.OAuthReady(ctx)
+	if err != nil {
+		return nil, err
+	}
 	status := &model.WorkspaceMetrikaStatus{
-		OAuthReady: s.OAuthReady(),
+		OAuthReady: oauthReady,
 	}
 	row, err := s.repo.GetConnection(ctx, ws.ID)
 	if errors.Is(err, repository.ErrNotFound) {
@@ -76,7 +91,11 @@ func (s *MetrikaConnectionService) ConnectStart(
 	if _, err := s.wsSvc.RequireMembership(ctx, userID, workspaceID, model.RoleEditor); err != nil {
 		return "", err
 	}
-	if !s.OAuthReady() {
+	oauthReady, err := s.OAuthReady(ctx)
+	if err != nil {
+		return "", err
+	}
+	if !oauthReady {
 		return "", ErrMetrikaNotConfigured
 	}
 	if counterID <= 0 {
@@ -102,10 +121,9 @@ func (s *MetrikaConnectionService) ConnectStart(
 		return "", err
 	}
 
-	client := &oauthclient.MetrikaClient{
-		ClientID:     s.cfg.YandexMetrikaClientID,
-		ClientSecret: s.cfg.YandexMetrikaClientSecret,
-		RedirectURI:  s.cfg.MetrikaOAuthRedirectURI(),
+	client, err := s.metrikaClient(ctx)
+	if err != nil {
+		return "", err
 	}
 	return client.AuthorizeURL(state), nil
 }
@@ -123,10 +141,9 @@ func (s *MetrikaConnectionService) ConnectCallback(ctx context.Context, state, c
 		return fmt.Errorf("сессия подключения Метрики истекла — повторите попытку")
 	}
 
-	client := &oauthclient.MetrikaClient{
-		ClientID:     s.cfg.YandexMetrikaClientID,
-		ClientSecret: s.cfg.YandexMetrikaClientSecret,
-		RedirectURI:  s.cfg.MetrikaOAuthRedirectURI(),
+	client, err := s.metrikaClient(ctx)
+	if err != nil {
+		return err
 	}
 	token, err := client.ExchangeCode(ctx, code)
 	if err != nil {
@@ -191,9 +208,9 @@ func (s *MetrikaConnectionService) UTMCampaignStats(
 	if err != nil {
 		return nil, err
 	}
-	client := &oauthclient.MetrikaClient{
-		ClientID:     s.cfg.YandexMetrikaClientID,
-		ClientSecret: s.cfg.YandexMetrikaClientSecret,
+	client, err := s.metrikaClient(ctx)
+	if err != nil {
+		return nil, err
 	}
 	return client.GetUTMCampaignStats(ctx, token, row.CounterID, campaign, from, to)
 }
@@ -213,9 +230,9 @@ func (s *MetrikaConnectionService) ensureAccessToken(ctx context.Context, row *r
 	if err != nil {
 		return "", err
 	}
-	client := &oauthclient.MetrikaClient{
-		ClientID:     s.cfg.YandexMetrikaClientID,
-		ClientSecret: s.cfg.YandexMetrikaClientSecret,
+	client, err := s.metrikaClient(ctx)
+	if err != nil {
+		return "", err
 	}
 	token, err := client.RefreshToken(ctx, refresh)
 	if err != nil {
@@ -252,6 +269,25 @@ func (s *MetrikaConnectionService) ensureAccessToken(ctx context.Context, row *r
 		return "", err
 	}
 	return token.AccessToken, nil
+}
+
+func (s *MetrikaConnectionService) metrikaClient(ctx context.Context) (*oauthclient.MetrikaClient, error) {
+	if s.platform != nil {
+		clientID, clientSecret, redirectURI, err := s.platform.ResolveOAuthCredentials(ctx)
+		if err != nil {
+			return nil, ErrMetrikaNotConfigured
+		}
+		return &oauthclient.MetrikaClient{
+			ClientID:     clientID,
+			ClientSecret: clientSecret,
+			RedirectURI:  redirectURI,
+		}, nil
+	}
+	return &oauthclient.MetrikaClient{
+		ClientID:     s.cfg.YandexMetrikaClientID,
+		ClientSecret: s.cfg.YandexMetrikaClientSecret,
+		RedirectURI:  s.cfg.MetrikaOAuthRedirectURI(),
+	}, nil
 }
 
 func randomStateToken(nBytes int) (string, error) {

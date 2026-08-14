@@ -94,8 +94,11 @@ function MetrikaConnectCard({
   if (!status?.oauth_ready) {
     return (
       <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-        OAuth Яндекс Метрики на сервере не настроен. Переходы по ссылкам Postilka всё равно считаются;
-        визиты на сайте появятся после настройки интеграции администратором.
+        OAuth Яндекс Метрики на платформе не настроен. Администратор может указать OAuth-приложение в{" "}
+        <a href="/admin/settings?section=analytics-metrika" className="font-medium underline">
+          настройках платформы
+        </a>
+        . Переходы по ссылкам Postilka всё равно считаются; визиты на сайте появятся после подключения Метрики.
       </div>
     );
   }

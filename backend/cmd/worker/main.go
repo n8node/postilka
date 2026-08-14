@@ -89,7 +89,9 @@ func main() {
 	)
 	analyticsRepo := repository.NewAnalyticsRepository(db.Pool)
 	metrikaRepo := repository.NewMetrikaRepository(db.Pool)
-	metrikaSvc := service.NewMetrikaConnectionService(metrikaRepo, wsSvc, secretCipher, cfg)
+	metrikaPlatformConfigRepo := repository.NewMetrikaPlatformConfigRepository(db.Pool)
+	metrikaPlatformConfigSvc := service.NewMetrikaPlatformConfigService(metrikaPlatformConfigRepo, cfg, secretCipher)
+	metrikaSvc := service.NewMetrikaConnectionService(metrikaRepo, wsSvc, metrikaPlatformConfigSvc, secretCipher, cfg)
 	metricsCollector := service.NewMetricsCollectorService(
 		analyticsRepo, linkCodeRepo, postRepo, channelRepo, channelTestSvc, metrikaSvc, telegramBotClient, logger,
 	)

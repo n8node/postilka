@@ -2004,6 +2004,32 @@ export function testAdminYandexGptConnection(payload?: {
   });
 }
 
+export type MetrikaPlatformAdminView = {
+  enabled: boolean;
+  oauth_client_id: string;
+  client_secret_set: boolean;
+  client_secret_hint?: string;
+  oauth_redirect_uri: string;
+  updated_at: string;
+};
+
+export type MetrikaPlatformAdminUpdateRequest = {
+  enabled: boolean;
+  oauth_client_id: string;
+  oauth_client_secret?: string;
+};
+
+export function fetchAdminMetrikaSettings() {
+  return apiFetch<MetrikaPlatformAdminView>("/admin/config/metrika");
+}
+
+export function updateAdminMetrikaSettings(payload: MetrikaPlatformAdminUpdateRequest) {
+  return apiFetch<MetrikaPlatformAdminView>("/admin/config/metrika", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
 export type KieModel = {
   id: string;
   name: string;
