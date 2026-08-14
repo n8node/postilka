@@ -211,9 +211,11 @@ type improvePromptRequest struct {
 }
 
 type composePostTextRequest struct {
-	Task string `json:"task"`
-	Text string `json:"text"`
-	Tone string `json:"tone"`
+	Task   string `json:"task"`
+	Text   string `json:"text"`
+	Prompt string `json:"prompt"`
+	Tone   string `json:"tone"`
+	Length string `json:"length"`
 }
 
 func (h *GenerationHandler) ComposePostText(w http.ResponseWriter, r *http.Request) {
@@ -230,9 +232,11 @@ func (h *GenerationHandler) ComposePostText(w http.ResponseWriter, r *http.Reque
 	}
 
 	text, err := h.generation.ComposePostText(r.Context(), userID, r, service.ComposePostTextInput{
-		Task: req.Task,
-		Text: req.Text,
-		Tone: req.Tone,
+		Task:   req.Task,
+		Text:   req.Text,
+		Prompt: req.Prompt,
+		Tone:   req.Tone,
+		Length: req.Length,
 	})
 	if err != nil {
 		h.mapError(w, err)

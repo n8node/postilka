@@ -1197,6 +1197,12 @@ export function PostComposer() {
   const [format, setFormat] = useState<PostContent["format"]>("message");
   const [postKind, setPostKind] = useState<PostKind>("post");
   const [aiBusy, setAiBusy] = useState(false);
+  const [aiPanelOpen, setAiPanelOpen] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiUseEditorText, setAiUseEditorText] = useState(false);
+  const [aiTone, setAiTone] = useState("нейтральный");
+  const [aiLength, setAiLength] = useState<"short" | "medium" | "long">("medium");
+  const [aiResult, setAiResult] = useState<string | null>(null);
   const [articleTitle, setArticleTitle] = useState("");
   const [videoTitle, setVideoTitle] = useState("");
   const [articleBlocks, setArticleBlocks] = useState<ArticleBlock[]>([
@@ -1803,41 +1809,47 @@ export function PostComposer() {
     setTelegramVideoNote(false);
   }
 
-  async function runAIAction(label: string) {
-    const taskMap: Record<string, { task: string; tone?: string }> = {
-      "Переписать с AI": { task: "rewrite" },
-      Сократить: { task: "shorten" },
-      "Изменить тон": { task: "tone", tone: window.prompt("Укажите желаемый тон", "дружелюбный") ?? "" },
-      "Подобрать хэштеги": { task: "hashtags" },
-    };
-    const mapped = taskMap[label];
-    if (!mapped) return;
-    if (mapped.task === "tone" && !mapped.tone?.trim()) return;
-    const sourceText = editorPlain.trim();
-    if (!sourceText) {
-      setError("Сначала введите текст публикации");
+  async function runAIGenerate() {
+    const prompt = aiPrompt.trim();
+    if (!prompt) {
+      setError("Введите задание для AI");
       return;
     }
     setAiBusy(true);
     setError(null);
     setSuccess(null);
+    setAiResult(null);
     try {
+      const editorText = editorPlain.trim();
       const { text } = await composePostText({
-        task: mapped.task,
-        text: sourceText,
-        tone: mapped.tone,
+        task: "generate",
+        prompt,
+        text: aiUseEditorText && editorText ? editorText : undefined,
+        tone: aiTone !== "нейтральный" ? aiTone : undefined,
+        length: aiLength,
       });
-      if (mapped.task === "hashtags") {
-        appendHashtags(text);
-      } else {
-        updateCurrentText(plainToEditorHTML(text), text);
-      }
-      setSuccess("Текст обновлён с помощью AI");
+      setAiResult(text);
     } catch (aiError) {
-      setError(errorText(aiError, "Не удалось выполнить AI-действие"));
+      setError(errorText(aiError, "Не удалось сгенерировать текст"));
     } finally {
       setAiBusy(false);
     }
+  }
+
+  function applyAIResult(mode: "replace" | "append") {
+    if (!aiResult?.trim()) return;
+    const value = aiResult.trim();
+    if (mode === "replace") {
+      updateCurrentText(plainToEditorHTML(value), value);
+    } else {
+      const separator = editorPlain.trim() ? "\n\n" : "";
+      updateCurrentText(
+        `${editorHTML}${separator}${value}`,
+        `${editorPlain}${separator}${value}`.trim(),
+      );
+    }
+    setSuccess("Текст вставлен из AI");
+    setAiResult(null);
   }
 
   function validate(action: Timing) {
@@ -2632,23 +2644,166 @@ export function PostComposer() {
               </div>
             )}
 
-            <div className="mb-3 flex flex-wrap gap-2">
-              {["Переписать с AI", "Сократить", "Изменить тон", "Подобрать хэштеги"].map((label) => (
-                <button
-                  key={label}
-                  type="button"
-                  disabled={aiBusy || composerLocked || format !== "message"}
-                  onClick={() => void runAIAction(label)}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-3 py-1.5 text-xs font-semibold text-accent hover:bg-blue-100 disabled:opacity-50"
-                >
+            <div className="mb-3">
+              <button
+                type="button"
+                disabled={composerLocked || format !== "message"}
+                onClick={() => setAiPanelOpen((open) => !open)}
+                className={cn(
+                  "inline-flex w-full items-center justify-between gap-2 rounded-lg border px-3 py-2 text-left text-xs font-semibold transition-colors",
+                  aiPanelOpen
+                    ? "border-accent/30 bg-blue-50 text-accent"
+                    : "border-border bg-white text-accent hover:bg-blue-50/60",
+                  (composerLocked || format !== "message") && "opacity-50",
+                )}
+              >
+                <span className="inline-flex items-center gap-1.5">
                   {aiBusy ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   ) : (
                     <Sparkles className="h-3.5 w-3.5" />
                   )}
-                  {label}
-                </button>
-              ))}
+                  AI генерация текста
+                </span>
+                <ChevronDown
+                  className={cn("h-4 w-4 transition-transform", aiPanelOpen && "rotate-180")}
+                />
+              </button>
+
+              {aiPanelOpen && (
+                <div className="mt-2 space-y-3 rounded-lg border border-accent/20 bg-gradient-to-b from-blue-50/70 to-white p-3">
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-zinc-600">
+                      Задание для нейросети
+                    </label>
+                    <textarea
+                      value={aiPrompt}
+                      disabled={aiBusy || composerLocked}
+                      onChange={(event) => setAiPrompt(event.target.value)}
+                      placeholder="Например: напиши пост про скидку 20% до конца недели с призывом перейти на сайт"
+                      rows={3}
+                      className="box-border w-full resize-y rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm leading-relaxed text-zinc-800 outline-none focus:border-accent/40"
+                    />
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5">
+                    {[
+                      { label: "Написать с нуля", prompt: "Напиши пост для соцсетей", useEditor: false },
+                      {
+                        label: "Переписать",
+                        prompt: "Перепиши текст: улучши ясность и вовлечение",
+                        useEditor: true,
+                      },
+                      { label: "Сократить", prompt: "Сократи текст, сохрани смысл", useEditor: true },
+                      {
+                        label: "Продающий",
+                        prompt: "Сделай текст более продающим с чётким призывом к действию",
+                        useEditor: true,
+                      },
+                      {
+                        label: "Хэштеги",
+                        prompt: "Подбери 5–10 релевантных хэштегов для этого поста",
+                        useEditor: true,
+                      },
+                    ].map((chip) => (
+                      <button
+                        key={chip.label}
+                        type="button"
+                        disabled={aiBusy || composerLocked}
+                        onClick={() => {
+                          setAiPrompt(chip.prompt);
+                          setAiUseEditorText(chip.useEditor);
+                        }}
+                        className="rounded-full border border-zinc-200 bg-white px-2.5 py-1 text-[11px] font-medium text-zinc-600 hover:border-accent/30 hover:text-accent disabled:opacity-50"
+                      >
+                        {chip.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3">
+                    <label className="inline-flex items-center gap-2 text-xs text-zinc-600">
+                      <input
+                        type="checkbox"
+                        checked={aiUseEditorText}
+                        disabled={aiBusy || composerLocked}
+                        onChange={(event) => setAiUseEditorText(event.target.checked)}
+                        className="rounded border-zinc-300"
+                      />
+                      Использовать текст редактора
+                    </label>
+                    <label className="inline-flex items-center gap-1.5 text-xs text-zinc-600">
+                      Тон
+                      <select
+                        value={aiTone}
+                        disabled={aiBusy || composerLocked}
+                        onChange={(event) => setAiTone(event.target.value)}
+                        className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs"
+                      >
+                        {["нейтральный", "дружелюбный", "экспертный", "продающий", "юмористический"].map(
+                          (tone) => (
+                            <option key={tone} value={tone}>
+                              {tone}
+                            </option>
+                          ),
+                        )}
+                      </select>
+                    </label>
+                    <label className="inline-flex items-center gap-1.5 text-xs text-zinc-600">
+                      Длина
+                      <select
+                        value={aiLength}
+                        disabled={aiBusy || composerLocked}
+                        onChange={(event) =>
+                          setAiLength(event.target.value as "short" | "medium" | "long")
+                        }
+                        className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs"
+                      >
+                        <option value="short">короткий</option>
+                        <option value="medium">средний</option>
+                        <option value="long">длинный</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={aiBusy || composerLocked || !aiPrompt.trim()}
+                    onClick={() => void runAIGenerate()}
+                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-white hover:bg-accent/90 disabled:opacity-50"
+                  >
+                    {aiBusy ? (
+                      <>
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        Генерация…
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-3.5 w-3.5" />
+                        Сгенерировать
+                      </>
+                    )}
+                  </button>
+
+                  {aiResult && (
+                    <div className="space-y-2 rounded-lg border border-zinc-200 bg-white p-3">
+                      <p className="text-[11px] font-medium uppercase tracking-wide text-muted">
+                        Результат
+                      </p>
+                      <p className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-800">
+                        {aiResult}
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <SmallButton onClick={() => applyAIResult("replace")}>Заменить</SmallButton>
+                        <SmallButton onClick={() => applyAIResult("append")}>Добавить ниже</SmallButton>
+                        <SmallButton disabled={aiBusy} onClick={() => void runAIGenerate()}>
+                          Ещё раз
+                        </SmallButton>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {canArticle && postKind === "post" && (
