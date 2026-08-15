@@ -155,9 +155,27 @@ export function defaultAdStudioRatio(
   return "1:1";
 }
 
+export function visibleAdStudioCategories(hidden: string[] | undefined) {
+  const blocked = new Set(hidden ?? []);
+  return AD_STUDIO_CATEGORIES.filter((item) => !blocked.has(item.id));
+}
+
 export function fetchAdStudioTemplates(category?: string) {
   const qs = category ? `?category=${encodeURIComponent(category)}` : "";
-  return apiFetch<{ items: AdStudioTemplate[] }>(`/ad-studio/templates${qs}`);
+  return apiFetch<{ items: AdStudioTemplate[]; hidden_categories?: string[] }>(
+    `/ad-studio/templates${qs}`,
+  );
+}
+
+export function fetchAdminAdStudioCategories() {
+  return apiFetch<{ hidden_categories: string[] }>("/admin/ad-studio/categories");
+}
+
+export function updateAdminAdStudioCategories(hidden: string[]) {
+  return apiFetch<{ hidden_categories: string[] }>("/admin/ad-studio/categories", {
+    method: "PUT",
+    body: JSON.stringify({ hidden_categories: hidden }),
+  });
 }
 
 export function generateFromAdStudioTemplate(

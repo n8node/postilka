@@ -10,7 +10,6 @@ import { GenerationProgressPanel } from "@/components/generation/GenerationProgr
 import { MediaSourcePickerModal } from "@/components/generation/MediaSourcePickerModal";
 import { ApiError } from "@/lib/api";
 import {
-  AD_STUDIO_CATEGORIES,
   adStudioCategoryLabel,
   adStudioModeLabel,
   adStudioModeNeedsProduct,
@@ -18,6 +17,7 @@ import {
   fetchAdStudioTemplates,
   generateFromAdStudioTemplate,
   resolveAdStudioMode,
+  visibleAdStudioCategories,
   type AdStudioCategoryId,
   type AdStudioTemplate,
 } from "@/lib/ad-studio";
@@ -46,11 +46,6 @@ import { useVideoGenerationJobStore } from "@/lib/video-generation-job-store";
 import { cn } from "@/lib/utils";
 
 type FilterId = "all" | AdStudioCategoryId;
-
-const FILTERS: { id: FilterId; label: string }[] = [
-  { id: "all", label: "Все" },
-  ...AD_STUDIO_CATEGORIES,
-];
 
 function aspectClass(ratio: string): string {
   switch (ratio) {
@@ -206,6 +201,7 @@ export function AdStudioPage() {
   const [items, setItems] = useState<AdStudioTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
+  const [hiddenCategories, setHiddenCategories] = useState<string[]>([]);
   const [selected, setSelected] = useState<AdStudioTemplate | null>(null);
   const [product, setProduct] = useState<GenerationUpload | null>(null);
   const [avatar, setAvatar] = useState<GenerationUpload | null>(null);
@@ -266,6 +262,11 @@ export function AdStudioPage() {
     try {
       const res = await fetchAdStudioTemplates(filter === "all" ? undefined : filter);
       setItems(res.items ?? []);
+      setHiddenCategories(res.hidden_categories ?? []);
+      const visible = visibleAdStudioCategories(res.hidden_categories);
+      if (filter !== "all" && !visible.some((item) => item.id === filter)) {
+        setFilter("all");
+      }
     } catch (err) {
       setListError(err instanceof ApiError ? err.message : "Не удалось загрузить шаблоны");
     } finally {
@@ -454,6 +455,10 @@ export function AdStudioPage() {
   const explore = selected
     ? items.filter((item) => item.id !== selected.id).slice(0, 12)
     : items;
+  const filters: { id: FilterId; label: string }[] = [
+    { id: "all", label: "Все" },
+    ...visibleAdStudioCategories(hiddenCategories),
+  ];
 
   return (
     <div className="flex flex-col gap-6">
@@ -633,7 +638,7 @@ export function AdStudioPage() {
         </div>
 
         <div className="mb-4 flex flex-wrap gap-1.5">
-          {FILTERS.map((item) => {
+          {filters.map((item) => {
             const active = filter === item.id;
             return (
               <button

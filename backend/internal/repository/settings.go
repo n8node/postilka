@@ -2,7 +2,9 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -62,6 +64,44 @@ func (r *SettingsRepository) IsOAuthLoginEnabled(ctx context.Context, provider s
 		return false, err
 	}
 	return value == "true", nil
+}
+
+const adStudioHiddenCategoriesKey = "ad_studio.hidden_categories"
+
+func (r *SettingsRepository) GetAdStudioHiddenCategories(ctx context.Context) ([]string, error) {
+	value, err := r.Get(ctx, adStudioHiddenCategoriesKey)
+	if errors.Is(err, ErrNotFound) || strings.TrimSpace(value) == "" {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var raw []string
+	if err := json.Unmarshal([]byte(value), &raw); err != nil {
+		return nil, nil
+	}
+	out := make([]string, 0, len(raw))
+	seen := map[string]bool{}
+	for _, item := range raw {
+		id := strings.TrimSpace(item)
+		if id == "" || seen[id] {
+			continue
+		}
+		seen[id] = true
+		out = append(out, id)
+	}
+	return out, nil
+}
+
+func (r *SettingsRepository) SetAdStudioHiddenCategories(ctx context.Context, hidden []string) error {
+	if hidden == nil {
+		hidden = []string{}
+	}
+	raw, err := json.Marshal(hidden)
+	if err != nil {
+		return err
+	}
+	return r.Set(ctx, adStudioHiddenCategoriesKey, string(raw))
 }
 
 func (r *SettingsRepository) SetOAuthLoginEnabled(ctx context.Context, provider string, enabled bool) error {

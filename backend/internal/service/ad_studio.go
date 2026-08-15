@@ -30,31 +30,44 @@ var (
 
 type AdStudioService struct {
 	repo        *repository.AdStudioRepository
+	settings    *repository.SettingsRepository
 	generation  *GenerationService
 	objectStore *ObjectStorage
 }
 
 func NewAdStudioService(
 	repo *repository.AdStudioRepository,
+	settings *repository.SettingsRepository,
 	generation *GenerationService,
 	objectStore *ObjectStorage,
 ) *AdStudioService {
-	return &AdStudioService{repo: repo, generation: generation, objectStore: objectStore}
+	return &AdStudioService{repo: repo, settings: settings, generation: generation, objectStore: objectStore}
 }
 
-func (s *AdStudioService) ListPublic(ctx context.Context, category string) ([]model.AdStudioTemplatePublicView, error) {
+func (s *AdStudioService) ListPublic(ctx context.Context, category string) ([]model.AdStudioTemplatePublicView, []string, error) {
 	if err := validateAdStudioCategory(category, true); err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+	hidden, err := s.HiddenCategories(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	if cat := strings.TrimSpace(category); cat != "" && hiddenSet(hidden)[cat] {
+		return []model.AdStudioTemplatePublicView{}, hidden, nil
 	}
 	items, err := s.repo.List(ctx, category, true)
 	if err != nil {
-		return nil, err
+		return nil, hidden, err
 	}
+	blocked := hiddenSet(hidden)
 	out := make([]model.AdStudioTemplatePublicView, 0, len(items))
 	for _, t := range items {
+		if blocked[t.Category] {
+			continue
+		}
 		out = append(out, t.ToPublicView())
 	}
-	return out, nil
+	return out, hidden, nil
 }
 
 func (s *AdStudioService) GetPublic(ctx context.Context, id string) (model.AdStudioTemplatePublicView, error) {
@@ -65,7 +78,36 @@ func (s *AdStudioService) GetPublic(ctx context.Context, id string) (model.AdStu
 	if !t.IsPublished {
 		return model.AdStudioTemplatePublicView{}, ErrAdStudioNotPublished
 	}
+	hidden, err := s.categoryIsHidden(ctx, t.Category)
+	if err != nil {
+		return model.AdStudioTemplatePublicView{}, err
+	}
+	if hidden {
+		return model.AdStudioTemplatePublicView{}, ErrAdStudioNotPublished
+	}
 	return t.ToPublicView(), nil
+}
+
+func (s *AdStudioService) HiddenCategories(ctx context.Context) ([]string, error) {
+	if s.settings == nil {
+		return nil, nil
+	}
+	hidden, err := s.settings.GetAdStudioHiddenCategories(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return normalizeHiddenAdStudioCategories(hidden), nil
+}
+
+func (s *AdStudioService) SetHiddenCategories(ctx context.Context, hidden []string) ([]string, error) {
+	if s.settings == nil {
+		return nil, errors.New("ad studio settings unavailable")
+	}
+	normalized := normalizeHiddenAdStudioCategories(hidden)
+	if err := s.settings.SetAdStudioHiddenCategories(ctx, normalized); err != nil {
+		return nil, err
+	}
+	return normalized, nil
 }
 
 func (s *AdStudioService) ListAdmin(ctx context.Context, category string) ([]model.AdStudioTemplateAdminView, error) {
@@ -188,6 +230,15 @@ func (s *AdStudioService) PreviewObject(ctx context.Context, id string, publishe
 	if publishedOnly && !t.IsPublished {
 		return nil, "", ErrAdStudioNotPublished
 	}
+	if publishedOnly {
+		hidden, err := s.categoryIsHidden(ctx, t.Category)
+		if err != nil {
+			return nil, "", err
+		}
+		if hidden {
+			return nil, "", ErrAdStudioNotPublished
+		}
+	}
 	if strings.TrimSpace(t.PreviewS3Key) == "" {
 		return nil, "", repository.ErrNotFound
 	}
@@ -213,6 +264,11 @@ func (s *AdStudioService) Generate(
 		return StartGenerateResult{}, "", err
 	}
 	if !t.IsPublished {
+		return StartGenerateResult{}, "", ErrAdStudioNotPublished
+	}
+	if hidden, err := s.categoryIsHidden(ctx, t.Category); err != nil {
+		return StartGenerateResult{}, "", err
+	} else if hidden {
 		return StartGenerateResult{}, "", ErrAdStudioNotPublished
 	}
 
@@ -426,6 +482,36 @@ func templateFromWrite(base model.AdStudioTemplate, req model.AdStudioTemplateWr
 		t.IsPublished = *req.IsPublished
 	}
 	return t, nil
+}
+
+func (s *AdStudioService) categoryIsHidden(ctx context.Context, category string) (bool, error) {
+	hidden, err := s.HiddenCategories(ctx)
+	if err != nil {
+		return false, err
+	}
+	return hiddenSet(hidden)[strings.TrimSpace(category)], nil
+}
+
+func hiddenSet(hidden []string) map[string]bool {
+	out := make(map[string]bool, len(hidden))
+	for _, id := range hidden {
+		out[id] = true
+	}
+	return out
+}
+
+func normalizeHiddenAdStudioCategories(hidden []string) []string {
+	out := make([]string, 0, len(hidden))
+	seen := map[string]bool{}
+	for _, id := range hidden {
+		id = strings.TrimSpace(id)
+		if id == "" || seen[id] || validateAdStudioCategory(id, false) != nil {
+			continue
+		}
+		seen[id] = true
+		out = append(out, id)
+	}
+	return out
 }
 
 func validateAdStudioCategory(category string, allowEmpty bool) error {

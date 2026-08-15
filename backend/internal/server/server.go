@@ -210,7 +210,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	generationHandler := handler.NewGenerationHandler(generationSvc)
 	videoGenerationHandler := handler.NewVideoGenerationHandler(generationSvc)
 	adStudioRepo := repository.NewAdStudioRepository(db.Pool)
-	adStudioSvc := service.NewAdStudioService(adStudioRepo, generationSvc, objectStorage)
+	adStudioSvc := service.NewAdStudioService(adStudioRepo, settingsRepo, generationSvc, objectStorage)
 	adStudioHandler := handler.NewAdStudioHandler(adStudioSvc)
 
 	publicationSvc.SetNotifier(notificationSvc)
@@ -504,6 +504,8 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Get("/config/kie-video/examples", kieVideoConfigHandler.ListExamplesAdmin)
 				r.Post("/config/kie-video/examples", kieVideoConfigHandler.CreateExampleAdmin)
 				r.Delete("/config/kie-video/examples/{id}", kieVideoConfigHandler.DeleteExampleAdmin)
+				r.Get("/ad-studio/categories", adStudioHandler.AdminGetCategories)
+				r.Put("/ad-studio/categories", adStudioHandler.AdminUpdateCategories)
 				r.Get("/ad-studio/templates", adStudioHandler.AdminList)
 				r.Post("/ad-studio/templates", adStudioHandler.AdminCreate)
 				r.Put("/ad-studio/templates/{id}", adStudioHandler.AdminUpdate)

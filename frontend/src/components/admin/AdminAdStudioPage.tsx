@@ -16,7 +16,9 @@ import {
   defaultAdStudioMode,
   defaultAdStudioRatio,
   deleteAdminAdStudioTemplate,
+  fetchAdminAdStudioCategories,
   fetchAdminAdStudioTemplates,
+  updateAdminAdStudioCategories,
   updateAdminAdStudioTemplate,
   uploadAdminAdStudioPreview,
   type AdStudioCategoryId,
@@ -73,6 +75,8 @@ export function AdminAdStudioPage({ embedded = false }: { embedded?: boolean }) 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [hiddenCategories, setHiddenCategories] = useState<string[]>([]);
+  const [savingSections, setSavingSections] = useState(false);
 
   const selected = items.find((item) => item.id === selectedId) ?? null;
 
@@ -80,8 +84,12 @@ export function AdminAdStudioPage({ embedded = false }: { embedded?: boolean }) 
     setLoading(true);
     setError(null);
     try {
-      const res = await fetchAdminAdStudioTemplates(filter || undefined);
+      const [res, cats] = await Promise.all([
+        fetchAdminAdStudioTemplates(filter || undefined),
+        fetchAdminAdStudioCategories(),
+      ]);
       setItems(res.items ?? []);
+      setHiddenCategories(cats.hidden_categories ?? []);
       setSelectedId((prev) => {
         if (prev && res.items.some((item) => item.id === prev)) return prev;
         return res.items[0]?.id ?? "";
@@ -193,6 +201,23 @@ export function AdminAdStudioPage({ embedded = false }: { embedded?: boolean }) 
     }
   }
 
+  async function toggleSection(id: AdStudioCategoryId, visible: boolean) {
+    const next = visible
+      ? hiddenCategories.filter((item) => item !== id)
+      : [...new Set([...hiddenCategories, id])];
+    setSavingSections(true);
+    setError(null);
+    try {
+      const res = await updateAdminAdStudioCategories(next);
+      setHiddenCategories(res.hidden_categories ?? next);
+      setSaved(true);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Не удалось скрыть раздел");
+    } finally {
+      setSavingSections(false);
+    }
+  }
+
   const ratios = form.media_kind === "video" ? VIDEO_RATIOS : IMAGE_RATIOS;
 
   return (
@@ -209,6 +234,30 @@ export function AdminAdStudioPage({ embedded = false }: { embedded?: boolean }) 
       {saved ? (
         <div className="rounded-md bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Сохранено</div>
       ) : null}
+
+      <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-3">
+        <p className="text-sm font-medium text-slate-800">Разделы в кабинете</p>
+        <p className="mt-1 text-xs text-slate-500">
+          Снимите галочку, чтобы скрыть раздел у пользователей. Шаблоны останутся в админке.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
+          {AD_STUDIO_CATEGORIES.map((item) => {
+            const visible = !hiddenCategories.includes(item.id);
+            return (
+              <label key={item.id} className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={visible}
+                  disabled={savingSections}
+                  onChange={(e) => void toggleSection(item.id, e.target.checked)}
+                />
+                {item.label}
+                {!visible ? <span className="text-xs text-slate-400">скрыт</span> : null}
+              </label>
+            );
+          })}
+        </div>
+      </div>
 
       <div className="flex flex-wrap gap-2">
         <select
