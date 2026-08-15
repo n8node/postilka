@@ -65,16 +65,17 @@ function aspectClass(ratio: string): string {
   }
 }
 
-function selectedPreviewClass(ratio: string): string {
+function previewBoxSize(ratio: string, height: number): { width: number; height: number } {
+  const h = Math.max(0, height);
   switch (ratio) {
     case "9:16":
-      return "h-[220px] w-[124px]";
+      return { width: (h * 9) / 16, height: h };
     case "4:5":
-      return "h-[200px] w-[160px]";
+      return { width: (h * 4) / 5, height: h };
     case "16:9":
-      return "h-[126px] w-[224px]";
+      return { width: Math.min((h * 16) / 9, 512), height: h };
     default:
-      return "h-[180px] w-[180px]";
+      return { width: h, height: h };
   }
 }
 
@@ -213,6 +214,8 @@ export function AdStudioPage() {
   const [pickerSlot, setPickerSlot] = useState<"product" | "avatar" | null>(null);
   const pickerSlotRef = useRef<"product" | "avatar" | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const formRef = useRef<HTMLDivElement>(null);
+  const [formHeight, setFormHeight] = useState(0);
 
   const openPicker = (slot: "product" | "avatar") => {
     pickerSlotRef.current = slot;
@@ -287,6 +290,32 @@ export function AdStudioPage() {
       .then((res) => setVideoPricing(res.pricing))
       .catch(() => undefined);
   }, [setCreditsRemaining]);
+
+  useEffect(() => {
+    if (!selected) {
+      setFormHeight(0);
+      return;
+    }
+    const el = formRef.current;
+    if (!el) return;
+
+    const mq = window.matchMedia("(min-width: 640px)");
+    const update = () => {
+      if (!mq.matches) {
+        setFormHeight(0);
+        return;
+      }
+      setFormHeight(Math.round(el.getBoundingClientRect().height));
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    mq.addEventListener("change", update);
+    return () => {
+      observer.disconnect();
+      mq.removeEventListener("change", update);
+    };
+  }, [selected]);
 
   const selectTemplate = (item: AdStudioTemplate) => {
     setSelected(item);
@@ -429,12 +458,15 @@ export function AdStudioPage() {
   return (
     <div className="flex flex-col gap-6">
       {selected ? (
-        <div className="flex flex-col items-start gap-4 sm:flex-row">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
           <div
             className={cn(
-              "relative shrink-0 overflow-hidden rounded-xl border border-border bg-zinc-100 shadow-sm",
-              selectedPreviewClass(selected.aspect_ratio),
+              "relative mx-auto shrink-0 overflow-hidden rounded-2xl border border-border bg-zinc-100 shadow-sm sm:mx-0",
+              formHeight <= 0 && cn("h-60 w-auto", aspectClass(selected.aspect_ratio)),
             )}
+            style={
+              formHeight > 0 ? previewBoxSize(selected.aspect_ratio, formHeight) : undefined
+            }
           >
             {generating || (!resultUrl && activeJob) ? (
               <div className="absolute inset-0">
@@ -475,7 +507,10 @@ export function AdStudioPage() {
             )}
           </div>
 
-          <div className="flex w-full max-w-md flex-col gap-4 rounded-xl border border-border bg-surface p-4 shadow-sm">
+          <div
+            ref={formRef}
+            className="flex w-full max-w-md flex-col gap-4 rounded-xl border border-border bg-surface p-4 shadow-sm"
+          >
             <div>
               <p className="text-[11px] font-medium uppercase tracking-[0.04em] text-muted">
                 Пересоздать шаблон
