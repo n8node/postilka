@@ -21,7 +21,8 @@ export function requiresProtectedMedia(url: string): boolean {
   const resolved = mediaUrl(url);
   return (
     resolved.includes("/media/ai-generations/") ||
-    resolved.includes("/media/generation-uploads/")
+    resolved.includes("/media/generation-uploads/") ||
+    resolved.includes("/ad-studio/templates/")
   );
 }
 

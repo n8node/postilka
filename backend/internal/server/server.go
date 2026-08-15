@@ -209,6 +209,9 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	generationSvc.StartGenerationWorker(context.Background())
 	generationHandler := handler.NewGenerationHandler(generationSvc)
 	videoGenerationHandler := handler.NewVideoGenerationHandler(generationSvc)
+	adStudioRepo := repository.NewAdStudioRepository(db.Pool)
+	adStudioSvc := service.NewAdStudioService(adStudioRepo, generationSvc, objectStorage)
+	adStudioHandler := handler.NewAdStudioHandler(adStudioSvc)
 
 	publicationSvc.SetNotifier(notificationSvc)
 	postSvc.SetNotifier(notificationSvc)
@@ -442,6 +445,10 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Post("/generation/compose-text", generationHandler.ComposePostText)
 			r.Get("/media/ai-generations/{id}", generationHandler.ResultMedia)
 			r.Get("/media/ai-generations/{id}/preview", generationHandler.ResultPreviewMedia)
+			r.Get("/ad-studio/templates", adStudioHandler.List)
+			r.Get("/ad-studio/templates/{id}", adStudioHandler.Get)
+			r.Get("/ad-studio/templates/{id}/preview", adStudioHandler.Preview)
+			r.Post("/ad-studio/templates/{id}/generate", adStudioHandler.Generate)
 		})
 
 		r.Route("/admin", func(r chi.Router) {
@@ -497,6 +504,12 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Get("/config/kie-video/examples", kieVideoConfigHandler.ListExamplesAdmin)
 				r.Post("/config/kie-video/examples", kieVideoConfigHandler.CreateExampleAdmin)
 				r.Delete("/config/kie-video/examples/{id}", kieVideoConfigHandler.DeleteExampleAdmin)
+				r.Get("/ad-studio/templates", adStudioHandler.AdminList)
+				r.Post("/ad-studio/templates", adStudioHandler.AdminCreate)
+				r.Put("/ad-studio/templates/{id}", adStudioHandler.AdminUpdate)
+				r.Delete("/ad-studio/templates/{id}", adStudioHandler.AdminDelete)
+				r.Get("/ad-studio/templates/{id}/preview", adStudioHandler.AdminPreview)
+				r.Post("/ad-studio/templates/{id}/preview", adStudioHandler.AdminUploadPreview)
 				r.Get("/settings/upload-files", uploadFileSettingsHandler.GetAdmin)
 				r.Put("/settings/upload-files", uploadFileSettingsHandler.UpdateAdmin)
 				r.Get("/telegram", telegramHandler.GetAdmin)

@@ -18,6 +18,7 @@ import { AdminPaymentSettingsPage } from "@/components/admin/AdminPaymentSetting
 import { AdminTelegramPage } from "@/components/admin/AdminTelegramPage";
 import { AdminMetrikaPage } from "@/components/admin/AdminMetrikaPage";
 import { AdminYandexGptPage } from "@/components/admin/AdminYandexGptPage";
+import { AdminAdStudioPage } from "@/components/admin/AdminAdStudioPage";
 // Hidden until agents return: import { AdminAgentTemplatesPage } from "@/components/admin/AdminAgentTemplatesPage";
 import { cn } from "@/lib/utils";
 
@@ -31,6 +32,7 @@ type SettingsKey =
   | "ai-agents" // Hidden until agents return
   | "ai-kie"
   | "ai-kie-video"
+  | "ai-ad-studio"
   | "analytics-metrika";
 
 const SETTINGS_MENU: { key: SettingsKey; label: string; description: string }[] = [
@@ -79,6 +81,11 @@ const SETTINGS_MENU: { key: SettingsKey; label: string; description: string }[] 
     key: "ai-kie-video",
     label: "AI — KIE.ai (видео)",
     description: "Видео, модели и примеры",
+  },
+  {
+    key: "ai-ad-studio",
+    label: "AI — Студия рекламы",
+    description: "Шаблоны: товар, движение, UGC, реклама",
   },
   {
     key: "analytics-metrika",
@@ -242,6 +249,9 @@ function SettingsSectionContent({
   }
   if (selected === "ai-kie-video") {
     return <AdminKieVideoPage embedded />;
+  }
+  if (selected === "ai-ad-studio") {
+    return <AdminAdStudioPage embedded />;
   }
   if (selected === "analytics-metrika") {
     return <AdminMetrikaPage embedded />;

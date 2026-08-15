@@ -1,0 +1,545 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { ImagePlus, Sparkles, UserRound } from "lucide-react";
+import { ProtectedMediaImage } from "@/components/media/ProtectedMediaImage";
+import { ProtectedMediaVideo } from "@/components/media/ProtectedMediaVideo";
+import { GenerationProgressPanel } from "@/components/generation/GenerationProgressPanel";
+import { ApiError } from "@/lib/api";
+import {
+  AD_STUDIO_CATEGORIES,
+  adStudioCategoryLabel,
+  fetchAdStudioTemplates,
+  generateFromAdStudioTemplate,
+  type AdStudioCategoryId,
+  type AdStudioTemplate,
+} from "@/lib/ad-studio";
+import {
+  fetchGenerationPricing,
+  generationCostForMode,
+  generationWalletRubForMode,
+  uploadGenerationMedia,
+  type GenerationPricing,
+} from "@/lib/generation-api";
+import {
+  hasMediaCredits,
+  useGenerationCreditsStore,
+  useMediaCreditsRemaining,
+} from "@/lib/generation-credits-store";
+import { useGenerationJobStore } from "@/lib/generation-job-store";
+import type { GenerationUpload } from "@/lib/generation-data";
+import {
+  fetchVideoGenerationPricing,
+  type VideoGenerationJob,
+  type VideoGenerationPricing,
+} from "@/lib/video-generation-api";
+import { useVideoGenerationJobStore } from "@/lib/video-generation-job-store";
+import { cn } from "@/lib/utils";
+
+type FilterId = "all" | AdStudioCategoryId;
+
+const FILTERS: { id: FilterId; label: string }[] = [
+  { id: "all", label: "Все" },
+  ...AD_STUDIO_CATEGORIES,
+];
+
+function aspectClass(ratio: string): string {
+  switch (ratio) {
+    case "9:16":
+      return "aspect-[9/16]";
+    case "4:5":
+      return "aspect-[4/5]";
+    case "16:9":
+      return "aspect-video";
+    default:
+      return "aspect-square";
+  }
+}
+
+function UploadSlot({
+  label,
+  hint,
+  photo,
+  disabled,
+  onPick,
+  onClear,
+}: {
+  label: string;
+  hint: string;
+  photo: GenerationUpload | null;
+  disabled?: boolean;
+  onPick: (file: File) => void;
+  onClear: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  return (
+    <div>
+      <p className="mb-2 text-[12px] font-medium text-text">{label}</p>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => inputRef.current?.click()}
+        className={cn(
+          "relative flex min-h-[132px] w-full flex-col items-center justify-center overflow-hidden rounded-xl border border-dashed px-3 py-4 text-center transition-colors",
+          photo
+            ? "border-border bg-zinc-50"
+            : "border-zinc-300 bg-zinc-50 hover:border-zinc-400 hover:bg-zinc-100",
+          disabled && "cursor-not-allowed opacity-60",
+        )}
+      >
+        {photo ? (
+          <>
+            <ProtectedMediaImage
+              url={photo.previewUrl}
+              alt=""
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+            <span className="relative z-10 rounded-md bg-black/55 px-2 py-1 text-[11px] text-white">
+              Заменить
+            </span>
+          </>
+        ) : (
+          <>
+            <ImagePlus size={22} className="mb-2 text-zinc-400" />
+            <span className="text-[13px] font-medium text-text">{hint}</span>
+            <span className="mt-1 text-[12px] text-muted">JPG, PNG или WebP</span>
+          </>
+        )}
+      </button>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = "";
+          if (file) onPick(file);
+        }}
+      />
+      {photo ? (
+        <button
+          type="button"
+          onClick={onClear}
+          className="mt-2 text-[12px] text-muted hover:text-text"
+        >
+          Убрать
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function TemplateCard({
+  item,
+  active,
+  onSelect,
+}: {
+  item: AdStudioTemplate;
+  active?: boolean;
+  onSelect: (item: AdStudioTemplate) => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onSelect(item)}
+      className={cn(
+        "group overflow-hidden rounded-xl border bg-surface text-left shadow-sm transition-colors",
+        active ? "border-accent ring-2 ring-accent/20" : "border-border hover:border-zinc-300",
+      )}
+    >
+      <div className={cn("relative bg-zinc-100", aspectClass(item.aspect_ratio))}>
+        {item.preview_url ? (
+          <ProtectedMediaImage
+            url={item.preview_url}
+            alt={item.title}
+            className="h-full w-full object-cover"
+          />
+        ) : (
+          <div className="flex h-full items-center justify-center px-3 text-center text-[13px] text-muted">
+            {item.title}
+          </div>
+        )}
+        <span className="absolute left-2 top-2 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-white">
+          {item.media_kind === "video" ? "Видео" : "Фото"}
+        </span>
+      </div>
+      <div className="px-3 py-2.5">
+        <p className="truncate text-[13px] font-medium text-text">{item.title}</p>
+        <p className="mt-0.5 text-[11px] text-muted">
+          {adStudioCategoryLabel(item.category)}
+        </p>
+      </div>
+    </button>
+  );
+}
+
+export function AdStudioPage() {
+  const router = useRouter();
+  const [filter, setFilter] = useState<FilterId>("all");
+  const [items, setItems] = useState<AdStudioTemplate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [listError, setListError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<AdStudioTemplate | null>(null);
+  const [product, setProduct] = useState<GenerationUpload | null>(null);
+  const [avatar, setAvatar] = useState<GenerationUpload | null>(null);
+  const [edit, setEdit] = useState("");
+  const [uploading, setUploading] = useState<"product" | "avatar" | null>(null);
+  const [imagePricing, setImagePricing] = useState<GenerationPricing | null>(null);
+  const [videoPricing, setVideoPricing] = useState<VideoGenerationPricing | null>(null);
+  const creditsRemaining = useMediaCreditsRemaining();
+  const setCreditsRemaining = useGenerationCreditsStore((s) => s.setCreditsRemaining);
+
+  const imageGenerating = useGenerationJobStore((s) => s.running);
+  const imageJob = useGenerationJobStore((s) => s.job);
+  const imageError = useGenerationJobStore((s) => s.error);
+  const imageResultUrl = useGenerationJobStore((s) => s.resultUrl);
+  const imageResultId = useGenerationJobStore((s) => s.resultGenerationId);
+  const beginImageJob = useGenerationJobStore((s) => s.beginJob);
+  const clearImageError = useGenerationJobStore((s) => s.clearError);
+  const clearImageResult = useGenerationJobStore((s) => s.clearResult);
+
+  const videoGenerating = useVideoGenerationJobStore((s) => s.running);
+  const videoJob = useVideoGenerationJobStore((s) => s.job);
+  const videoError = useVideoGenerationJobStore((s) => s.error);
+  const videoResultUrl = useVideoGenerationJobStore((s) => s.resultUrl);
+  const videoResultId = useVideoGenerationJobStore((s) => s.resultGenerationId);
+  const beginVideoJob = useVideoGenerationJobStore((s) => s.beginJob);
+  const clearVideoError = useVideoGenerationJobStore((s) => s.clearError);
+  const clearVideoResult = useVideoGenerationJobStore((s) => s.clearResult);
+
+  const isVideo = selected?.media_kind === "video";
+  const generating = isVideo ? videoGenerating : imageGenerating;
+  const generateError = isVideo ? videoError : imageError;
+  const resultUrl = isVideo ? videoResultUrl : imageResultUrl;
+  const resultId = isVideo ? videoResultId : imageResultId;
+  const activeJob = isVideo ? videoJob : imageJob;
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setListError(null);
+    try {
+      const res = await fetchAdStudioTemplates(filter === "all" ? undefined : filter);
+      setItems(res.items ?? []);
+    } catch (err) {
+      setListError(err instanceof ApiError ? err.message : "Не удалось загрузить шаблоны");
+    } finally {
+      setLoading(false);
+    }
+  }, [filter]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  useEffect(() => {
+    void fetchGenerationPricing()
+      .then((res) => {
+        setImagePricing(res.pricing);
+        if (res.pricing.credits_remaining !== undefined) {
+          setCreditsRemaining(res.pricing.credits_remaining ?? null);
+        }
+      })
+      .catch(() => undefined);
+    void fetchVideoGenerationPricing()
+      .then((res) => setVideoPricing(res.pricing))
+      .catch(() => undefined);
+  }, [setCreditsRemaining]);
+
+  const selectTemplate = (item: AdStudioTemplate) => {
+    setSelected(item);
+    setEdit("");
+    clearImageError();
+    clearVideoError();
+    clearImageResult();
+    clearVideoResult();
+  };
+
+  const pickUpload = async (slot: "product" | "avatar", file: File) => {
+    setUploading(slot);
+    try {
+      const uploaded = await uploadGenerationMedia(file);
+      const next: GenerationUpload = {
+        uploadId: uploaded.id,
+        previewUrl: URL.createObjectURL(file),
+      };
+      if (slot === "product") setProduct(next);
+      else setAvatar(next);
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : "Не удалось загрузить фото";
+      if (isVideo) {
+        useVideoGenerationJobStore.getState().failJob(msg);
+      } else {
+        useGenerationJobStore.getState().failJob(msg);
+      }
+    } finally {
+      setUploading(null);
+    }
+  };
+
+  const creditCost = useMemo(() => {
+    if (!selected) return 0;
+    if (selected.media_kind === "video") {
+      if (!videoPricing) return 0;
+      const perSec = videoPricing.credits_per_second_image_to_video || 1;
+      return Math.max(1, perSec * (selected.duration || 5));
+    }
+    if (!imagePricing) return 0;
+    const mode = selected.requires_avatar && avatar ? "combine" : "image-to-image";
+    return generationCostForMode(imagePricing, mode);
+  }, [selected, imagePricing, videoPricing, avatar]);
+
+  const walletRub = useMemo(() => {
+    if (!selected || selected.media_kind === "video" || !imagePricing) return 0;
+    const mode = selected.requires_avatar && avatar ? "combine" : "image-to-image";
+    return generationWalletRubForMode(imagePricing, mode);
+  }, [selected, imagePricing, avatar]);
+
+  const canGenerate = Boolean(
+    selected &&
+      !generating &&
+      !uploading &&
+      (!selected.requires_product || product) &&
+      (!selected.requires_avatar || avatar) &&
+      hasMediaCredits(creditsRemaining),
+  );
+
+  const recreate = async () => {
+    if (!selected || !canGenerate) return;
+    clearImageError();
+    clearVideoError();
+    try {
+      const { job, media_kind } = await generateFromAdStudioTemplate(selected.id, {
+        product_upload_id: product?.uploadId,
+        avatar_upload_id: avatar?.uploadId,
+        edit: edit.trim(),
+      });
+      if (media_kind === "video") {
+        beginVideoJob(job as VideoGenerationJob, Date.now());
+      } else {
+        beginImageJob(job, Date.now());
+      }
+    } catch (err) {
+      const msg =
+        err instanceof ApiError
+          ? err.message
+          : "Не удалось запустить генерацию. Кредиты не были списаны.";
+      if (selected.media_kind === "video") {
+        useVideoGenerationJobStore.getState().failJob(msg);
+      } else {
+        useGenerationJobStore.getState().failJob(msg);
+      }
+    }
+  };
+
+  const makePost = () => {
+    if (!resultId) return;
+    router.push(`/posts/new?generation=${encodeURIComponent(resultId)}`);
+  };
+
+  const explore = selected
+    ? items.filter((item) => item.id !== selected.id).slice(0, 12)
+    : items;
+
+  return (
+    <div className="flex flex-col gap-6">
+      {selected ? (
+        <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.15fr)_340px]">
+          <div className="overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
+            <div className={cn("relative bg-zinc-100", aspectClass(selected.aspect_ratio))}>
+              {generating || (!resultUrl && activeJob) ? (
+                <div className="absolute inset-0">
+                  <GenerationProgressPanel
+                    progress={activeJob?.progress ?? 0}
+                    status={activeJob?.status ?? "preparing"}
+                    active={generating}
+                    variant={isVideo ? "video" : "image"}
+                  />
+                </div>
+              ) : resultUrl ? (
+                isVideo ? (
+                  <ProtectedMediaVideo
+                    url={resultUrl}
+                    className="h-full w-full object-cover"
+                    controls
+                    autoPlay
+                    muted
+                    loop
+                  />
+                ) : (
+                  <ProtectedMediaImage
+                    url={resultUrl}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                )
+              ) : selected.preview_url ? (
+                <ProtectedMediaImage
+                  url={selected.preview_url}
+                  alt={selected.title}
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                <div className="flex h-full items-center justify-center text-sm text-muted">
+                  {selected.title}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-4 rounded-xl border border-border bg-surface p-4 shadow-sm">
+            <div>
+              <p className="text-[11px] font-medium uppercase tracking-[0.04em] text-muted">
+                Пересоздать шаблон
+              </p>
+              <h2 className="mt-1 text-base font-semibold text-text">{selected.title}</h2>
+              <p className="mt-1 text-[12px] text-muted">
+                {adStudioCategoryLabel(selected.category)} · {selected.aspect_ratio}
+                {isVideo ? ` · ${selected.duration} с` : ""}
+              </p>
+            </div>
+
+            {selected.requires_product ? (
+              <UploadSlot
+                label="Товар"
+                hint="Загрузить товар"
+                photo={product}
+                disabled={generating || uploading === "product"}
+                onPick={(file) => void pickUpload("product", file)}
+                onClear={() => setProduct(null)}
+              />
+            ) : null}
+
+            {selected.requires_avatar ? (
+              <UploadSlot
+                label="Модель"
+                hint="Загрузить модель"
+                photo={avatar}
+                disabled={generating || uploading === "avatar"}
+                onPick={(file) => void pickUpload("avatar", file)}
+                onClear={() => setAvatar(null)}
+              />
+            ) : null}
+
+            <label className="block">
+              <span className="mb-2 flex items-center gap-1.5 text-[12px] font-medium text-text">
+                <UserRound size={13} className="text-muted" />
+                Что изменить
+              </span>
+              <textarea
+                value={edit}
+                onChange={(e) => setEdit(e.target.value)}
+                disabled={generating}
+                rows={4}
+                placeholder="Необязательно: уберите текст, смените фон, добавьте слоган…"
+                className="w-full resize-none rounded-xl border border-border bg-bg px-3 py-2.5 text-[13px] outline-none focus:border-zinc-400"
+              />
+            </label>
+
+            {generateError ? (
+              <p className="rounded-lg bg-red-50 px-3 py-2 text-[12px] text-red-800">
+                {generateError}
+              </p>
+            ) : null}
+
+            <button
+              type="button"
+              disabled={!canGenerate}
+              onClick={() => void recreate()}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-accent px-4 py-3 text-[14px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Sparkles size={16} />
+              {generating ? "Создаём…" : "Создать"}
+              {creditCost > 0 ? (
+                <span className="text-[12px] font-normal opacity-80">
+                  · {creditCost} кред.
+                  {walletRub > 0 ? ` / ${walletRub} ₽` : ""}
+                </span>
+              ) : null}
+            </button>
+
+            {resultId ? (
+              <button
+                type="button"
+                onClick={makePost}
+                className="rounded-xl border border-border px-4 py-2.5 text-[13px] font-medium text-text hover:bg-zinc-50"
+              >
+                В пост
+              </button>
+            ) : null}
+
+            <button
+              type="button"
+              onClick={() => setSelected(null)}
+              className="text-[12px] text-muted hover:text-text"
+            >
+              Назад к библиотеке
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      <div>
+        <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-medium uppercase tracking-[0.04em] text-muted">
+              {selected ? "Ещё шаблоны" : "Библиотека"}
+            </p>
+            <h2 className="mt-1 text-base font-semibold text-text">
+              {selected ? "Попробуйте другой стиль" : "Готовые рекламные решения"}
+            </h2>
+          </div>
+        </div>
+
+        <div className="mb-4 flex flex-wrap gap-1.5">
+          {FILTERS.map((item) => {
+            const active = filter === item.id;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => setFilter(item.id)}
+                className={cn(
+                  "rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors",
+                  active
+                    ? "bg-text text-white"
+                    : "bg-zinc-100 text-muted hover:bg-zinc-200 hover:text-text",
+                )}
+              >
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {listError ? (
+          <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{listError}</p>
+        ) : null}
+
+        {loading ? (
+          <p className="text-sm text-muted">Загрузка шаблонов…</p>
+        ) : explore.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-6 py-12 text-center">
+            <p className="text-sm font-medium text-text">Пока нет шаблонов</p>
+            <p className="mt-1 text-[13px] text-muted">
+              Администратор добавит их в настройках платформы — «AI — Студия рекламы».
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            {(selected ? explore : items).map((item) => (
+              <TemplateCard
+                key={item.id}
+                item={item}
+                active={selected?.id === item.id}
+                onSelect={selectTemplate}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

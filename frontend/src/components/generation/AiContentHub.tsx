@@ -2,14 +2,16 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Film, ImageIcon } from "lucide-react";
+import { Film, ImageIcon, LayoutGrid } from "lucide-react";
+import { AdStudioPage } from "@/components/generation/AdStudioPage";
 import { GenerationPageContent } from "@/components/generation/GenerationPageContent";
 import { VideoGenerationPageContent } from "@/components/generation/VideoGenerationPageContent";
 import { cn } from "@/lib/utils";
 
-type AiTab = "photo" | "video";
+type AiTab = "studio" | "photo" | "video";
 
 const tabs: { id: AiTab; label: string; icon: typeof ImageIcon }[] = [
+  { id: "studio", label: "Студия", icon: LayoutGrid },
   { id: "photo", label: "Фото", icon: ImageIcon },
   { id: "video", label: "Видео", icon: Film },
 ];
@@ -19,17 +21,18 @@ export function AiContentHub() {
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
   const [tab, setTab] = useState<AiTab>(
-    tabParam === "video" ? "video" : "photo",
+    tabParam === "video" ? "video" : tabParam === "photo" ? "photo" : "studio",
   );
 
   useEffect(() => {
-    setTab(tabParam === "video" ? "video" : "photo");
+    setTab(tabParam === "video" ? "video" : tabParam === "photo" ? "photo" : "studio");
   }, [tabParam]);
 
   const switchTab = useCallback(
     (next: AiTab) => {
       setTab(next);
-      const qs = next === "video" ? "?tab=video" : "";
+      const qs =
+        next === "video" ? "?tab=video" : next === "photo" ? "?tab=photo" : "";
       router.replace(`/ai${qs}`, { scroll: false });
     },
     [router],
@@ -60,7 +63,9 @@ export function AiContentHub() {
         })}
       </div>
 
-      {tab === "photo" ? (
+      {tab === "studio" ? (
+        <AdStudioPage />
+      ) : tab === "photo" ? (
         <GenerationPageContent />
       ) : (
         <VideoGenerationPageContent />
