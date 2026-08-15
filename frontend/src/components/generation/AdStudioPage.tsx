@@ -68,13 +68,13 @@ function aspectClass(ratio: string): string {
 function selectedPreviewClass(ratio: string): string {
   switch (ratio) {
     case "9:16":
-      return "h-64 w-[144px]";
+      return "aspect-[9/16] w-[min(100%,17.5rem)]";
     case "4:5":
-      return "h-64 w-[205px]";
+      return "aspect-[4/5] w-[min(100%,20rem)]";
     case "16:9":
-      return "h-36 w-64";
+      return "aspect-video w-[min(100%,28rem)]";
     default:
-      return "h-56 w-56";
+      return "aspect-square w-[min(100%,22rem)]";
   }
 }
 
@@ -429,50 +429,52 @@ export function AdStudioPage() {
   return (
     <div className="flex flex-col gap-6">
       {selected ? (
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-          <div className="mx-auto shrink-0 overflow-hidden rounded-xl border border-border bg-zinc-100 shadow-sm lg:mx-0">
-            <div className={cn("relative", selectedPreviewClass(selected.aspect_ratio))}>
-              {generating || (!resultUrl && activeJob) ? (
-                <div className="absolute inset-0">
-                  <GenerationProgressPanel
-                    progress={activeJob?.progress ?? 0}
-                    status={activeJob?.status ?? "preparing"}
-                    active={generating}
-                    variant={isVideo ? "video" : "image"}
-                  />
-                </div>
-              ) : resultUrl ? (
-                isVideo ? (
-                  <ProtectedMediaVideo
-                    url={resultUrl}
-                    className="h-full w-full object-contain"
-                    controls
-                    autoPlay
-                    muted
-                    loop
+        <div className="grid w-full max-w-4xl grid-cols-1 items-start gap-5 lg:grid-cols-2">
+          <div className="flex justify-center lg:justify-start">
+            <div className="overflow-hidden rounded-2xl border border-border bg-zinc-100 shadow-sm">
+              <div className={cn("relative", selectedPreviewClass(selected.aspect_ratio))}>
+                {generating || (!resultUrl && activeJob) ? (
+                  <div className="absolute inset-0">
+                    <GenerationProgressPanel
+                      progress={activeJob?.progress ?? 0}
+                      status={activeJob?.status ?? "preparing"}
+                      active={generating}
+                      variant={isVideo ? "video" : "image"}
+                    />
+                  </div>
+                ) : resultUrl ? (
+                  isVideo ? (
+                    <ProtectedMediaVideo
+                      url={resultUrl}
+                      className="h-full w-full object-cover"
+                      controls
+                      autoPlay
+                      muted
+                      loop
+                    />
+                  ) : (
+                    <ProtectedMediaImage
+                      url={resultUrl}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                  )
+                ) : selected.preview_url ? (
+                  <ProtectedMediaImage
+                    url={selected.preview_url}
+                    alt={selected.title}
+                    className="h-full w-full object-cover"
                   />
                 ) : (
-                  <ProtectedMediaImage
-                    url={resultUrl}
-                    alt=""
-                    className="h-full w-full object-contain"
-                  />
-                )
-              ) : selected.preview_url ? (
-                <ProtectedMediaImage
-                  url={selected.preview_url}
-                  alt={selected.title}
-                  className="h-full w-full object-contain"
-                />
-              ) : (
-                <div className="flex h-full items-center justify-center px-2 text-center text-sm text-muted">
-                  {selected.title}
-                </div>
-              )}
+                  <div className="flex h-full items-center justify-center px-3 text-center text-sm text-muted">
+                    {selected.title}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
-          <div className="flex w-full max-w-md flex-col gap-4 rounded-xl border border-border bg-surface p-4 shadow-sm">
+          <div className="flex w-full flex-col gap-4 rounded-xl border border-border bg-surface p-4 shadow-sm">
             <div>
               <p className="text-[11px] font-medium uppercase tracking-[0.04em] text-muted">
                 Пересоздать шаблон
