@@ -1,13 +1,13 @@
 package service
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
-	"path"
 	"strings"
 
 	"github.com/google/uuid"
@@ -25,6 +25,7 @@ var (
 	ErrAdStudioPromptRequired  = errors.New("ad studio prompt required")
 	ErrAdStudioPreviewInvalid  = errors.New("ad studio preview invalid")
 	ErrAdStudioPreviewRequired = errors.New("ad studio preview required")
+	ErrAdStudioPreviewProcess  = errors.New("ad studio preview process failed")
 	ErrAdStudioInvalidMode     = errors.New("ad studio invalid generation mode")
 )
 
@@ -161,9 +162,7 @@ func (s *AdStudioService) DeleteAdmin(ctx context.Context, id string) error {
 	if err := s.repo.Delete(ctx, id); err != nil {
 		return err
 	}
-	if key := strings.TrimSpace(current.PreviewS3Key); key != "" {
-		_ = s.objectStore.DeleteObject(ctx, key)
-	}
+	s.deletePreviewObjects(ctx, current)
 	return nil
 }
 
@@ -195,30 +194,32 @@ func (s *AdStudioService) UploadPreview(ctx context.Context, id string, file mul
 		return model.AdStudioTemplateAdminView{}, ErrAdStudioPreviewInvalid
 	}
 
-	ext := path.Ext(header.Filename)
-	if ext == "" {
-		switch contentType {
-		case "image/png":
-			ext = ".png"
-		case "image/webp":
-			ext = ".webp"
-		default:
-			ext = ".jpg"
-		}
+	master, err := encodeAdStudioMasterJPEG(data)
+	if err != nil || len(master) == 0 {
+		return model.AdStudioTemplateAdminView{}, ErrAdStudioPreviewProcess
 	}
-	key := fmt.Sprintf("postilka/ad-studio/previews/%s%s", uuid.NewString(), ext)
-	if err := s.objectStore.PutObject(ctx, key, contentType, data); err != nil {
+	thumb, err := encodeAdStudioDisplayWebP(data)
+	if err != nil || len(thumb) == 0 {
+		return model.AdStudioTemplateAdminView{}, ErrAdStudioPreviewProcess
+	}
+
+	masterKey := fmt.Sprintf("postilka/ad-studio/previews/%s.jpg", uuid.NewString())
+	thumbKey := fmt.Sprintf("postilka/ad-studio/previews/%s.webp", uuid.NewString())
+	if err := s.objectStore.PutObject(ctx, masterKey, "image/jpeg", master); err != nil {
+		return model.AdStudioTemplateAdminView{}, err
+	}
+	if err := s.objectStore.PutObject(ctx, thumbKey, "image/webp", thumb); err != nil {
+		_ = s.objectStore.DeleteObject(ctx, masterKey)
 		return model.AdStudioTemplateAdminView{}, err
 	}
 
-	updated, err := s.repo.UpdatePreview(ctx, current.ID, key, contentType)
+	updated, err := s.repo.UpdatePreview(ctx, current.ID, masterKey, "image/jpeg", thumbKey)
 	if err != nil {
-		_ = s.objectStore.DeleteObject(ctx, key)
+		_ = s.objectStore.DeleteObject(ctx, masterKey)
+		_ = s.objectStore.DeleteObject(ctx, thumbKey)
 		return model.AdStudioTemplateAdminView{}, err
 	}
-	if old := strings.TrimSpace(current.PreviewS3Key); old != "" && old != key {
-		_ = s.objectStore.DeleteObject(ctx, old)
-	}
+	s.deletePreviewObjects(ctx, current)
 	return updated.ToAdminView(), nil
 }
 
@@ -242,6 +243,18 @@ func (s *AdStudioService) PreviewObject(ctx context.Context, id string, publishe
 	if strings.TrimSpace(t.PreviewS3Key) == "" {
 		return nil, "", repository.ErrNotFound
 	}
+	if thumbKey := strings.TrimSpace(t.PreviewThumbS3Key); thumbKey != "" {
+		body, contentType, err := s.objectStore.GetObject(ctx, thumbKey)
+		if err == nil {
+			if contentType == "" {
+				contentType = "image/webp"
+			}
+			return body, contentType, nil
+		}
+	}
+	if body, contentType, err := s.ensurePreviewThumb(ctx, t); err == nil {
+		return body, contentType, nil
+	}
 	body, contentType, err := s.objectStore.GetObject(ctx, t.PreviewS3Key)
 	if err != nil {
 		return nil, "", err
@@ -250,6 +263,39 @@ func (s *AdStudioService) PreviewObject(ctx context.Context, id string, publishe
 		contentType = t.PreviewContentType
 	}
 	return body, contentType, nil
+}
+
+func (s *AdStudioService) ensurePreviewThumb(ctx context.Context, t model.AdStudioTemplate) (io.ReadCloser, string, error) {
+	src, _, err := s.objectStore.GetObject(ctx, t.PreviewS3Key)
+	if err != nil {
+		return nil, "", err
+	}
+	defer src.Close()
+	data, err := io.ReadAll(src)
+	if err != nil {
+		return nil, "", err
+	}
+	thumb, err := encodeAdStudioDisplayWebP(data)
+	if err != nil || len(thumb) == 0 {
+		return nil, "", ErrAdStudioPreviewProcess
+	}
+	thumbKey := fmt.Sprintf("postilka/ad-studio/previews/%s.webp", uuid.NewString())
+	if err := s.objectStore.PutObject(ctx, thumbKey, "image/webp", thumb); err != nil {
+		return nil, "", err
+	}
+	if _, err := s.repo.UpdatePreviewThumb(ctx, t.ID, thumbKey); err != nil {
+		_ = s.objectStore.DeleteObject(ctx, thumbKey)
+		return nil, "", err
+	}
+	return io.NopCloser(bytes.NewReader(thumb)), "image/webp", nil
+}
+
+func (s *AdStudioService) deletePreviewObjects(ctx context.Context, t model.AdStudioTemplate) {
+	for _, key := range []string{t.PreviewS3Key, t.PreviewThumbS3Key} {
+		if k := strings.TrimSpace(key); k != "" {
+			_ = s.objectStore.DeleteObject(ctx, k)
+		}
+	}
 }
 
 func (s *AdStudioService) Generate(

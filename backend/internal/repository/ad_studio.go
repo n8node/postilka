@@ -21,7 +21,7 @@ func NewAdStudioRepository(pool *pgxpool.Pool) *AdStudioRepository {
 
 const adStudioSelect = `
 	SELECT id, title, description, category, media_kind, generation_mode, aspect_ratio, duration,
-	       system_prompt, preview_s3_key, preview_content_type,
+	       system_prompt, preview_s3_key, preview_content_type, preview_thumb_s3_key,
 	       requires_product, requires_avatar, sort_order, is_published,
 	       created_at, updated_at
 	FROM ad_studio_templates
@@ -29,7 +29,7 @@ const adStudioSelect = `
 
 const adStudioReturning = `
 		RETURNING id, title, description, category, media_kind, generation_mode, aspect_ratio, duration,
-		          system_prompt, preview_s3_key, preview_content_type,
+		          system_prompt, preview_s3_key, preview_content_type, preview_thumb_s3_key,
 		          requires_product, requires_avatar, sort_order, is_published,
 		          created_at, updated_at
 `
@@ -38,7 +38,7 @@ func scanAdStudioTemplate(row pgx.Row) (model.AdStudioTemplate, error) {
 	var t model.AdStudioTemplate
 	err := row.Scan(
 		&t.ID, &t.Title, &t.Description, &t.Category, &t.MediaKind, &t.GenerationMode, &t.AspectRatio, &t.Duration,
-		&t.SystemPrompt, &t.PreviewS3Key, &t.PreviewContentType,
+		&t.SystemPrompt, &t.PreviewS3Key, &t.PreviewContentType, &t.PreviewThumbS3Key,
 		&t.RequiresProduct, &t.RequiresAvatar, &t.SortOrder, &t.IsPublished,
 		&t.CreatedAt, &t.UpdatedAt,
 	)
@@ -93,14 +93,14 @@ func (r *AdStudioRepository) Create(ctx context.Context, t model.AdStudioTemplat
 	return scanAdStudioTemplate(r.pool.QueryRow(ctx, `
 		INSERT INTO ad_studio_templates (
 			id, title, description, category, media_kind, generation_mode, aspect_ratio, duration,
-			system_prompt, preview_s3_key, preview_content_type,
+			system_prompt, preview_s3_key, preview_content_type, preview_thumb_s3_key,
 			requires_product, requires_avatar, sort_order, is_published
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7, $8,
-			$9, $10, $11,
-			$12, $13, $14, $15
+			$9, $10, $11, $12,
+			$13, $14, $15, $16
 		)`+adStudioReturning, t.ID, t.Title, t.Description, t.Category, t.MediaKind, t.GenerationMode, t.AspectRatio, t.Duration,
-		t.SystemPrompt, t.PreviewS3Key, t.PreviewContentType,
+		t.SystemPrompt, t.PreviewS3Key, t.PreviewContentType, t.PreviewThumbS3Key,
 		t.RequiresProduct, t.RequiresAvatar, t.SortOrder, t.IsPublished,
 	))
 }
@@ -127,13 +127,22 @@ func (r *AdStudioRepository) Update(ctx context.Context, t model.AdStudioTemplat
 	))
 }
 
-func (r *AdStudioRepository) UpdatePreview(ctx context.Context, id, s3Key, contentType string) (model.AdStudioTemplate, error) {
+func (r *AdStudioRepository) UpdatePreview(ctx context.Context, id, s3Key, contentType, thumbKey string) (model.AdStudioTemplate, error) {
 	return scanAdStudioTemplate(r.pool.QueryRow(ctx, `
 		UPDATE ad_studio_templates SET
 			preview_s3_key = $2,
 			preview_content_type = $3,
+			preview_thumb_s3_key = $4,
 			updated_at = NOW()
-		WHERE id = $1`+adStudioReturning, id, s3Key, contentType))
+		WHERE id = $1`+adStudioReturning, id, s3Key, contentType, thumbKey))
+}
+
+func (r *AdStudioRepository) UpdatePreviewThumb(ctx context.Context, id, thumbKey string) (model.AdStudioTemplate, error) {
+	return scanAdStudioTemplate(r.pool.QueryRow(ctx, `
+		UPDATE ad_studio_templates SET
+			preview_thumb_s3_key = $2,
+			updated_at = NOW()
+		WHERE id = $1`+adStudioReturning, id, thumbKey))
 }
 
 func (r *AdStudioRepository) Delete(ctx context.Context, id string) error {

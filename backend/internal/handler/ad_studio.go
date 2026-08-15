@@ -211,6 +211,8 @@ func (h *AdStudioHandler) mapError(w http.ResponseWriter, err error) {
 		writeErrorWithCode(w, http.StatusBadRequest, "invalid_prompt", "Укажите системный промпт")
 	case errors.Is(err, service.ErrAdStudioPreviewInvalid):
 		writeErrorWithCode(w, http.StatusBadRequest, "preview_invalid", "Загрузите изображение превью")
+	case errors.Is(err, service.ErrAdStudioPreviewProcess):
+		writeErrorWithCode(w, http.StatusBadRequest, "preview_process_failed", "Не удалось обработать превью. Загрузите обычное фото.")
 	case errors.Is(err, service.ErrAdStudioPreviewRequired):
 		writeErrorWithCode(w, http.StatusBadRequest, "preview_required", "У шаблона нет превью. Загрузите его в админке.")
 	case errors.Is(err, service.ErrInsufficientAICredits):

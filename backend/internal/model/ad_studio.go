@@ -73,6 +73,7 @@ type AdStudioTemplate struct {
 	SystemPrompt       string
 	PreviewS3Key       string
 	PreviewContentType string
+	PreviewThumbS3Key  string
 	RequiresProduct    bool
 	RequiresAvatar     bool
 	SortOrder          int
