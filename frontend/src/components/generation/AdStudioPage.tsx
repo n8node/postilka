@@ -3,9 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ImagePlus, Sparkles, UserRound } from "lucide-react";
+import { FileThumbnail } from "@/components/files/FileThumbnail";
 import { ProtectedMediaImage } from "@/components/media/ProtectedMediaImage";
 import { ProtectedMediaVideo } from "@/components/media/ProtectedMediaVideo";
 import { GenerationProgressPanel } from "@/components/generation/GenerationProgressPanel";
+import { MediaSourcePickerModal } from "@/components/generation/MediaSourcePickerModal";
 import { ApiError } from "@/lib/api";
 import {
   AD_STUDIO_CATEGORIES,
@@ -24,8 +26,10 @@ import {
   generationCostForMode,
   generationWalletRubForMode,
   uploadGenerationMedia,
+  uploadGenerationMediaFromWorkspace,
   type GenerationPricing,
 } from "@/lib/generation-api";
+import type { WorkspaceFile } from "@/lib/files-api";
 import {
   hasMediaCredits,
   useGenerationCreditsStore,
@@ -66,25 +70,23 @@ function UploadSlot({
   hint,
   photo,
   disabled,
-  onPick,
+  onOpen,
   onClear,
 }: {
   label: string;
   hint: string;
   photo: GenerationUpload | null;
   disabled?: boolean;
-  onPick: (file: File) => void;
+  onOpen: () => void;
   onClear: () => void;
 }) {
-  const inputRef = useRef<HTMLInputElement>(null);
-
   return (
     <div>
       <p className="mb-2 text-[12px] font-medium text-text">{label}</p>
       <button
         type="button"
         disabled={disabled}
-        onClick={() => inputRef.current?.click()}
+        onClick={onOpen}
         className={cn(
           "relative flex min-h-[132px] w-full flex-col items-center justify-center overflow-hidden rounded-xl border border-dashed px-3 py-4 text-center transition-colors",
           photo
@@ -93,7 +95,20 @@ function UploadSlot({
           disabled && "cursor-not-allowed opacity-60",
         )}
       >
-        {photo ? (
+        {photo?.workspaceFileId ? (
+          <>
+            <FileThumbnail
+              fileId={photo.workspaceFileId}
+              name={photo.fileName ?? ""}
+              mimeType={photo.mimeType ?? "image/jpeg"}
+              size="lg"
+              className="absolute inset-0 h-full w-full rounded-none border-0"
+            />
+            <span className="relative z-10 rounded-md bg-black/55 px-2 py-1 text-[11px] text-white">
+              Заменить
+            </span>
+          </>
+        ) : photo?.previewUrl ? (
           <>
             <ProtectedMediaImage
               url={photo.previewUrl}
@@ -108,21 +123,12 @@ function UploadSlot({
           <>
             <ImagePlus size={22} className="mb-2 text-zinc-400" />
             <span className="text-[13px] font-medium text-text">{hint}</span>
-            <span className="mt-1 text-[12px] text-muted">JPG, PNG или WebP</span>
+            <span className="mt-1 text-[12px] text-muted">
+              С компьютера или с диска проекта
+            </span>
           </>
         )}
       </button>
-      <input
-        ref={inputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          e.target.value = "";
-          if (file) onPick(file);
-        }}
-      />
       {photo ? (
         <button
           type="button"
@@ -191,6 +197,18 @@ export function AdStudioPage() {
   const [avatar, setAvatar] = useState<GenerationUpload | null>(null);
   const [edit, setEdit] = useState("");
   const [uploading, setUploading] = useState<"product" | "avatar" | null>(null);
+  const [pickerSlot, setPickerSlot] = useState<"product" | "avatar" | null>(null);
+  const pickerSlotRef = useRef<"product" | "avatar" | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const openPicker = (slot: "product" | "avatar") => {
+    pickerSlotRef.current = slot;
+    setPickerSlot(slot);
+  };
+
+  const closePicker = () => {
+    setPickerSlot(null);
+  };
   const [imagePricing, setImagePricing] = useState<GenerationPricing | null>(null);
   const [videoPricing, setVideoPricing] = useState<VideoGenerationPricing | null>(null);
   const creditsRemaining = useMediaCreditsRemaining();
@@ -266,23 +284,51 @@ export function AdStudioPage() {
     clearVideoResult();
   };
 
+  const applyUpload = (slot: "product" | "avatar", next: GenerationUpload) => {
+    if (slot === "product") setProduct(next);
+    else setAvatar(next);
+  };
+
+  const failUpload = (msg: string) => {
+    if (isVideo) {
+      useVideoGenerationJobStore.getState().failJob(msg);
+    } else {
+      useGenerationJobStore.getState().failJob(msg);
+    }
+  };
+
   const pickUpload = async (slot: "product" | "avatar", file: File) => {
     setUploading(slot);
     try {
       const uploaded = await uploadGenerationMedia(file);
-      const next: GenerationUpload = {
+      applyUpload(slot, {
         uploadId: uploaded.id,
         previewUrl: URL.createObjectURL(file),
-      };
-      if (slot === "product") setProduct(next);
-      else setAvatar(next);
+      });
     } catch (err) {
-      const msg = err instanceof ApiError ? err.message : "Не удалось загрузить фото";
-      if (isVideo) {
-        useVideoGenerationJobStore.getState().failJob(msg);
-      } else {
-        useGenerationJobStore.getState().failJob(msg);
-      }
+      failUpload(err instanceof ApiError ? err.message : "Не удалось загрузить фото");
+    } finally {
+      setUploading(null);
+    }
+  };
+
+  const pickWorkspace = async (slot: "product" | "avatar", file: WorkspaceFile) => {
+    if (!file.mime_type.startsWith("image/")) {
+      failUpload("Нужен файл изображения");
+      return;
+    }
+    setUploading(slot);
+    try {
+      const uploaded = await uploadGenerationMediaFromWorkspace(file.id);
+      applyUpload(slot, {
+        uploadId: uploaded.id,
+        previewUrl: "",
+        workspaceFileId: file.id,
+        fileName: file.name,
+        mimeType: file.mime_type,
+      });
+    } catch (err) {
+      failUpload(err instanceof ApiError ? err.message : "Не удалось взять файл с диска");
     } finally {
       setUploading(null);
     }
@@ -449,7 +495,7 @@ export function AdStudioPage() {
                 hint="Загрузить товар"
                 photo={product}
                 disabled={generating || uploading === "product"}
-                onPick={(file) => void pickUpload("product", file)}
+                onOpen={() => openPicker("product")}
                 onClear={() => setProduct(null)}
               />
             ) : null}
@@ -460,7 +506,7 @@ export function AdStudioPage() {
                 hint="Загрузить модель"
                 photo={avatar}
                 disabled={generating || uploading === "avatar"}
-                onPick={(file) => void pickUpload("avatar", file)}
+                onOpen={() => openPicker("avatar")}
                 onClear={() => setAvatar(null)}
               />
             ) : null}
@@ -582,6 +628,33 @@ export function AdStudioPage() {
           </div>
         )}
       </div>
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          const slot = pickerSlotRef.current;
+          e.target.value = "";
+          if (file && slot) void pickUpload(slot, file);
+          closePicker();
+        }}
+      />
+      <MediaSourcePickerModal
+        open={pickerSlot !== null}
+        title={pickerSlot === "avatar" ? "Фото модели" : "Фото товара"}
+        subtitle="С компьютера или с диска проекта"
+        mediaKind="image"
+        onClose={closePicker}
+        onPickComputer={() => fileInputRef.current?.click()}
+        onPickDiskFile={(file) => {
+          const slot = pickerSlotRef.current;
+          closePicker();
+          if (slot) void pickWorkspace(slot, file);
+        }}
+      />
     </div>
   );
 }

@@ -258,6 +258,28 @@ export async function uploadGenerationMedia(file: File): Promise<GenerationUploa
   };
 }
 
+export async function uploadGenerationMediaFromWorkspace(
+  fileId: string,
+): Promise<GenerationUploadResult> {
+  const res = await apiFetch<{ upload?: RawGenerationUpload } & RawGenerationUpload>(
+    "/generation/upload/from-file",
+    {
+      method: "POST",
+      body: JSON.stringify({ file_id: fileId }),
+    },
+  );
+  const raw = res.upload ?? res;
+  if (!raw.id) {
+    throw new ApiError(0, "Некорректный ответ сервера при загрузке с диска");
+  }
+  return {
+    id: raw.id,
+    url: raw.url ?? "",
+    thumb_url: raw.thumb_url,
+    content_type: raw.content_type ?? "",
+  };
+}
+
 /** Downloads a generated image (auth via cookie) for attaching to sources. */
 export async function fetchGenerationImageBlob(generationId: string): Promise<Blob> {
   const res = await fetch(

@@ -7,6 +7,9 @@ export const COMBINE_PHOTO_SLOTS = 6;
 export type GenerationUpload = {
   uploadId: string;
   previewUrl: string;
+  workspaceFileId?: string;
+  fileName?: string;
+  mimeType?: string;
 };
 
 export const generationModes = [
