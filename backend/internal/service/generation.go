@@ -410,6 +410,58 @@ func (s *GenerationService) UploadSource(ctx context.Context, userID string, r *
 	return upload.ToView(), nil
 }
 
+func (s *GenerationService) ImportSourceFromObject(ctx context.Context, userID string, r *http.Request, srcKey, contentType string) (model.GenerationSourceUploadView, error) {
+	ws, err := s.resolveWorkspace(ctx, userID, r)
+	if err != nil {
+		return model.GenerationSourceUploadView{}, err
+	}
+	srcKey = strings.TrimSpace(srcKey)
+	if srcKey == "" {
+		return model.GenerationSourceUploadView{}, ErrGenerationUploadInvalid
+	}
+	contentType = strings.Split(strings.TrimSpace(contentType), ";")[0]
+	if contentType == "" {
+		contentType = "image/jpeg"
+	}
+	ext := ".jpg"
+	switch contentType {
+	case "image/png":
+		ext = ".png"
+	case "image/webp":
+		ext = ".webp"
+	}
+	key := fmt.Sprintf("postilka/generation-sources/%s/%s%s", ws.ID, uuid.NewString(), ext)
+	if err := s.objectStore.CopyObject(ctx, srcKey, key); err != nil {
+		body, detected, getErr := s.objectStore.GetObject(ctx, srcKey)
+		if getErr != nil {
+			return model.GenerationSourceUploadView{}, err
+		}
+		data, readErr := io.ReadAll(io.LimitReader(body, 15<<20+1))
+		_ = body.Close()
+		if readErr != nil {
+			return model.GenerationSourceUploadView{}, readErr
+		}
+		if detected != "" {
+			contentType = strings.Split(detected, ";")[0]
+		}
+		if putErr := s.objectStore.PutObject(ctx, key, contentType, data); putErr != nil {
+			return model.GenerationSourceUploadView{}, putErr
+		}
+	}
+
+	upload, err := s.uploadRepo.Create(ctx, model.GenerationSourceUpload{
+		UserID:      userID,
+		WorkspaceID: ws.ID,
+		S3Key:       key,
+		ContentType: contentType,
+	})
+	if err != nil {
+		_ = s.objectStore.DeleteObject(ctx, key)
+		return model.GenerationSourceUploadView{}, err
+	}
+	return upload.ToView(), nil
+}
+
 func (s *GenerationService) UploadVideoGenerationSource(ctx context.Context, userID string, r *http.Request, file multipart.File, header *multipart.FileHeader) (model.GenerationSourceUploadView, error) {
 	ws, err := s.resolveWorkspace(ctx, userID, r)
 	if err != nil {

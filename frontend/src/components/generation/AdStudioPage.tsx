@@ -287,18 +287,20 @@ export function AdStudioPage() {
       return Math.max(1, perSec * (selected.duration || 5));
     }
     if (!imagePricing) return 0;
-    const mode = selected.requires_avatar && avatar ? "combine" : "image-to-image";
-    return generationCostForMode(imagePricing, mode);
-  }, [selected, imagePricing, videoPricing, avatar]);
+    return generationCostForMode(imagePricing, selected.preview_url ? "combine" : "image-to-image");
+  }, [selected, imagePricing, videoPricing]);
 
   const walletRub = useMemo(() => {
     if (!selected || selected.media_kind === "video" || !imagePricing) return 0;
-    const mode = selected.requires_avatar && avatar ? "combine" : "image-to-image";
-    return generationWalletRubForMode(imagePricing, mode);
-  }, [selected, imagePricing, avatar]);
+    return generationWalletRubForMode(
+      imagePricing,
+      selected.preview_url ? "combine" : "image-to-image",
+    );
+  }, [selected, imagePricing]);
 
   const canGenerate = Boolean(
     selected &&
+      selected.preview_url &&
       !generating &&
       !uploading &&
       (!selected.requires_product || product) &&
@@ -399,6 +401,15 @@ export function AdStudioPage() {
                 {adStudioCategoryLabel(selected.category)} · {selected.aspect_ratio}
                 {isVideo ? ` · ${selected.duration} с` : ""}
               </p>
+              {!selected.preview_url ? (
+                <p className="mt-2 text-[12px] text-red-700">
+                  У шаблона нет превью сцены. Загрузите его в админке — иначе товар некуда вставлять.
+                </p>
+              ) : (
+                <p className="mt-2 text-[12px] text-muted">
+                  Товар встанет в сцену шаблона. Исходное фото само по себе не станет постером.
+                </p>
+              )}
             </div>
 
             {selected.requires_product ? (

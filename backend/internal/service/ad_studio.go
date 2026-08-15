@@ -24,6 +24,7 @@ var (
 	ErrAdStudioTitleRequired   = errors.New("ad studio title required")
 	ErrAdStudioPromptRequired  = errors.New("ad studio prompt required")
 	ErrAdStudioPreviewInvalid  = errors.New("ad studio preview invalid")
+	ErrAdStudioPreviewRequired = errors.New("ad studio preview required")
 )
 
 type AdStudioService struct {
@@ -222,22 +223,37 @@ func (s *AdStudioService) Generate(
 	if t.RequiresAvatar && avatarID == "" {
 		return StartGenerateResult{}, "", ErrAdStudioAvatarRequired
 	}
+	if strings.TrimSpace(t.PreviewS3Key) == "" {
+		return StartGenerateResult{}, "", ErrAdStudioPreviewRequired
+	}
+
+	templateUpload, err := s.generation.ImportSourceFromObject(ctx, userID, r, t.PreviewS3Key, t.PreviewContentType)
+	if err != nil {
+		return StartGenerateResult{}, "", err
+	}
+	templateID := templateUpload.ID
 
 	prompt := composeAdStudioPrompt(t, req.Edit)
+	refs := []string{templateID}
+	if productID != "" {
+		refs = append(refs, productID)
+	}
+	if avatarID != "" {
+		refs = append(refs, avatarID)
+	}
+
 	if t.MediaKind == model.AdStudioMediaVideo {
 		in := GenerateVideoInput{
 			Prompt:      prompt,
 			AspectRatio: t.AspectRatio,
 			Duration:    t.Duration,
 		}
-		if productID != "" && avatarID != "" {
+		if len(refs) >= 2 {
 			in.Mode = model.KieVideoModeReferenceToVideo
-			in.ReferenceUploadIDs = []string{productID, avatarID}
-		} else if productID != "" {
-			in.Mode = model.KieVideoModeImageToVideo
-			in.SourceUploadID = productID
+			in.ReferenceUploadIDs = refs
 		} else {
-			in.Mode = model.KieVideoModeTextToVideo
+			in.Mode = model.KieVideoModeImageToVideo
+			in.SourceUploadID = templateID
 		}
 		result, err := s.generation.StartGenerateVideo(ctx, userID, r, in)
 		return result, t.MediaKind, err
@@ -247,14 +263,12 @@ func (s *AdStudioService) Generate(
 		Prompt:      prompt,
 		AspectRatio: normalizeAdStudioImageRatio(t.AspectRatio),
 	}
-	if productID != "" && avatarID != "" {
+	if len(refs) >= 2 {
 		in.Mode = "combine"
-		in.CombineUploadIDs = []string{productID, avatarID}
-	} else if productID != "" {
-		in.Mode = "image-to-image"
-		in.SourceUploadID = productID
+		in.CombineUploadIDs = refs
 	} else {
-		in.Mode = "text-to-image"
+		in.Mode = "image-to-image"
+		in.SourceUploadID = templateID
 	}
 	result, err := s.generation.StartGenerate(ctx, userID, r, in)
 	return result, t.MediaKind, err
@@ -262,10 +276,12 @@ func (s *AdStudioService) Generate(
 
 func composeAdStudioPrompt(t model.AdStudioTemplate, edit string) string {
 	var b strings.Builder
-	b.WriteString("Recreate this advertising template. Keep the same composition, lighting, typography style, and mood.\n")
-	b.WriteString("Replace the original product with the uploaded product photo. Preserve the product identity, labels, and shape.\n")
+	b.WriteString("You are given reference images in this exact order.\n")
+	b.WriteString("Image 1 is the advertising TEMPLATE. Recreate that exact scene: background, setting, camera angle, lighting, composition, typography placement, graphic shapes, and mood.\n")
+	b.WriteString("Image 2 is the NEW PRODUCT photo. Replace only the original product from image 1 with this product. Keep the new product's real shape, materials, labels, colors, and proportions.\n")
+	b.WriteString("Do not keep the original product from the template. Do not return image 2 unchanged. Do not invent a marketplace card or a new layout. The result must look like image 1 after a product swap.\n")
 	if strings.TrimSpace(t.SystemPrompt) != "" {
-		b.WriteString("\nTemplate style:\n")
+		b.WriteString("\nTemplate notes:\n")
 		b.WriteString(strings.TrimSpace(t.SystemPrompt))
 		b.WriteString("\n")
 	}
