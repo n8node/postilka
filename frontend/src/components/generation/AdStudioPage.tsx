@@ -65,6 +65,19 @@ function aspectClass(ratio: string): string {
   }
 }
 
+function selectedPreviewClass(ratio: string): string {
+  switch (ratio) {
+    case "9:16":
+      return "h-64 w-[144px]";
+    case "4:5":
+      return "h-64 w-[205px]";
+    case "16:9":
+      return "h-36 w-64";
+    default:
+      return "h-56 w-56";
+  }
+}
+
 function UploadSlot({
   label,
   hint,
@@ -416,9 +429,9 @@ export function AdStudioPage() {
   return (
     <div className="flex flex-col gap-6">
       {selected ? (
-        <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.15fr)_340px]">
-          <div className="overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
-            <div className={cn("relative bg-zinc-100", aspectClass(selected.aspect_ratio))}>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+          <div className="mx-auto shrink-0 overflow-hidden rounded-xl border border-border bg-zinc-100 shadow-sm lg:mx-0">
+            <div className={cn("relative", selectedPreviewClass(selected.aspect_ratio))}>
               {generating || (!resultUrl && activeJob) ? (
                 <div className="absolute inset-0">
                   <GenerationProgressPanel
@@ -432,7 +445,7 @@ export function AdStudioPage() {
                 isVideo ? (
                   <ProtectedMediaVideo
                     url={resultUrl}
-                    className="h-full w-full object-cover"
+                    className="h-full w-full object-contain"
                     controls
                     autoPlay
                     muted
@@ -442,24 +455,24 @@ export function AdStudioPage() {
                   <ProtectedMediaImage
                     url={resultUrl}
                     alt=""
-                    className="h-full w-full object-cover"
+                    className="h-full w-full object-contain"
                   />
                 )
               ) : selected.preview_url ? (
                 <ProtectedMediaImage
                   url={selected.preview_url}
                   alt={selected.title}
-                  className="h-full w-full object-cover"
+                  className="h-full w-full object-contain"
                 />
               ) : (
-                <div className="flex h-full items-center justify-center text-sm text-muted">
+                <div className="flex h-full items-center justify-center px-2 text-center text-sm text-muted">
                   {selected.title}
                 </div>
               )}
             </div>
           </div>
 
-          <div className="flex flex-col gap-4 rounded-xl border border-border bg-surface p-4 shadow-sm">
+          <div className="flex w-full max-w-md flex-col gap-4 rounded-xl border border-border bg-surface p-4 shadow-sm">
             <div>
               <p className="text-[11px] font-medium uppercase tracking-[0.04em] text-muted">
                 Пересоздать шаблон
