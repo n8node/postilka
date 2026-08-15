@@ -1,6 +1,6 @@
 "use client";
 
-// Hidden until agents return: import Link from "next/link";
+import Link from "next/link";
 import {
   Ban,
   Copy,

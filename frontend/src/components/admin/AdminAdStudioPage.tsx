@@ -79,19 +79,16 @@ export function AdminAdStudioPage({ embedded = false }: { embedded?: boolean }) 
         if (prev && res.items.some((item) => item.id === prev)) return prev;
         return res.items[0]?.id ?? "";
       });
-      if (res.items[0] && !selectedId) {
-        setForm(toForm(res.items[0]));
-      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Не удалось загрузить шаблоны");
     } finally {
       setLoading(false);
     }
-  }, [filter, selectedId]);
+  }, [filter]);
 
   useEffect(() => {
     void load();
-  }, [filter]);
+  }, [load]);
 
   useEffect(() => {
     const item = items.find((x) => x.id === selectedId);
