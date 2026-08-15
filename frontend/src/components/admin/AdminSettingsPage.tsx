@@ -18,7 +18,7 @@ import { AdminPaymentSettingsPage } from "@/components/admin/AdminPaymentSetting
 import { AdminTelegramPage } from "@/components/admin/AdminTelegramPage";
 import { AdminMetrikaPage } from "@/components/admin/AdminMetrikaPage";
 import { AdminYandexGptPage } from "@/components/admin/AdminYandexGptPage";
-import { AdminAgentTemplatesPage } from "@/components/admin/AdminAgentTemplatesPage";
+// Hidden until agents return: import { AdminAgentTemplatesPage } from "@/components/admin/AdminAgentTemplatesPage";
 import { cn } from "@/lib/utils";
 
 type SettingsKey =
@@ -28,7 +28,7 @@ type SettingsKey =
   | "payment"
   | "email-smtp"
   | "ai-yandex-gpt"
-  | "ai-agents"
+  | "ai-agents" // Hidden until agents return
   | "ai-kie"
   | "ai-kie-video"
   | "analytics-metrika";
@@ -64,11 +64,12 @@ const SETTINGS_MENU: { key: SettingsKey; label: string; description: string }[] 
     label: "AI — Yandex GPT",
     description: "Текст, модели и цены",
   },
-  {
-    key: "ai-agents",
-    label: "AI — агенты",
-    description: "Системные промпты Ai агентов",
-  },
+  // Hidden until agents return:
+  // {
+  //   key: "ai-agents",
+  //   label: "AI — агенты",
+  //   description: "Системные промпты Ai агентов",
+  // },
   {
     key: "ai-kie",
     label: "AI — KIE.ai",
@@ -232,9 +233,10 @@ function SettingsSectionContent({
   if (selected === "ai-yandex-gpt") {
     return <AdminYandexGptPage embedded />;
   }
-  if (selected === "ai-agents") {
-    return <AdminAgentTemplatesPage embedded />;
-  }
+  // Hidden until agents return:
+  // if (selected === "ai-agents") {
+  //   return <AdminAgentTemplatesPage embedded />;
+  // }
   if (selected === "ai-kie") {
     return <AdminKiePage embedded />;
   }

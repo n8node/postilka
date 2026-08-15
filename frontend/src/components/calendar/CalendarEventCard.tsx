@@ -1,6 +1,7 @@
 "use client";
 
-import { GripVertical, Repeat, AlertCircle, Bot } from "lucide-react";
+import { GripVertical, Repeat, AlertCircle } from "lucide-react";
+// Hidden until agents return: import { Bot } from "lucide-react";
 import { ChannelAvatar } from "@/components/channels/ChannelAvatar";
 import type { ChannelListItem } from "@/lib/api";
 import { channelDisplayName } from "@/lib/channelPresentation";
@@ -77,7 +78,7 @@ export function CalendarEventCard({
         "group calendar-event-card relative flex w-full items-start gap-1 rounded-md border px-1.5 py-1 text-left transition-all duration-150",
         "hover:scale-[1.02] hover:shadow-md active:scale-[0.99]",
         POST_STATUS_CLASS[post.status],
-        post.origin === "agent" && "border-l-2 border-l-violet-500",
+        // Hidden until agents return: post.origin === "agent" && "border-l-2 border-l-violet-500",
         selected && "ring-2 ring-accent ring-offset-1",
         dragging && "scale-[1.03] opacity-60 shadow-lg",
         hasConflict && "border-red-300 ring-1 ring-red-200",
@@ -100,9 +101,11 @@ export function CalendarEventCard({
             <span className="shrink-0 font-semibold tabular-nums">{formatTime(at.toISOString(), timeZone)}</span>
           ) : null}
           {recurrence ? <Repeat className="h-2.5 w-2.5 shrink-0 opacity-60" aria-label="Повтор" /> : null}
+          {/* Hidden until agents return:
           {post.origin === "agent" ? (
             <Bot className="h-2.5 w-2.5 shrink-0 text-violet-600" aria-label="Агент" />
           ) : null}
+          */}
           {hasConflict ? <AlertCircle className="h-2.5 w-2.5 shrink-0 text-red-600" aria-label="Конфликт" /> : null}
           {post.last_error ? (
             <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-red-500" title={post.last_error} />
@@ -131,7 +134,7 @@ export function CalendarEventCard({
         {!compact ? (
           <span className="mt-0.5 inline-block truncate text-[9px] opacity-70">
             {POST_STATUS_LABEL[post.status]}
-            {post.origin === "agent" ? " · Агент" : ""}
+            {/* Hidden until agents return: {post.origin === "agent" ? " · Агент" : ""} */}
             {post.plan_manually_changed ? " · правлен вручную" : ""}
             {targetChannels.length === 1
               ? ` · ${channelDisplayName({ name: targetChannels[0]!.name, metadata: targetChannels[0]!.metadata })}`

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+// Hidden until agents return: import Link from "next/link";
 import {
   Ban,
   Copy,
@@ -66,9 +66,10 @@ export function CalendarInspector({
         <p className="font-medium leading-snug">{postPreviewText(post)}</p>
         <p className="mt-1 text-[11px] text-muted">
           {postFormatLabel(post.content.format)} · {POST_STATUS_LABEL[post.status]}
-          {post.origin === "agent" ? " · Агент" : " · Вручную"}
-          {post.plan_manually_changed ? " · ход изменён вручную" : ""}
+          {/* Hidden until agents return: {post.origin === "agent" ? " · Агент" : " · Вручную"} */}
+          {/* Hidden until agents return: {post.plan_manually_changed ? " · ход изменён вручную" : ""} */}
         </p>
+        {/* Hidden until agents return:
         {post.mission_id ? (
           <Link
             href={`/missions/${post.mission_id}`}
@@ -77,6 +78,7 @@ export function CalendarInspector({
             Открыть Ai агента
           </Link>
         ) : null}
+        */}
       </div>
 
       <div>

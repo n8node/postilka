@@ -43,6 +43,8 @@ export function CalendarFiltersBar({
   onHidePublishedChange,
   onOriginChange,
 }: CalendarFiltersBarProps) {
+  void origin;
+  void onOriginChange;
   return (
     <div className="mb-3 flex flex-wrap items-center gap-2">
       <div className="relative min-w-[10rem] flex-1 sm:max-w-xs">
@@ -78,6 +80,7 @@ export function CalendarFiltersBar({
           </option>
         ))}
       </select>
+      {/* Hidden until agents return:
       <select
         value={origin}
         onChange={(e) => onOriginChange(e.target.value as "" | "user" | "agent")}
@@ -87,6 +90,7 @@ export function CalendarFiltersBar({
         <option value="user">Мои</option>
         <option value="agent">Агент</option>
       </select>
+      */}
       <label className="flex cursor-pointer items-center gap-1.5 text-xs text-muted">
         <input
           type="checkbox"

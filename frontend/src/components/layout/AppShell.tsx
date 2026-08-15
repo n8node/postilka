@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
-  Bot,
   LayoutDashboard,
   Radio,
   PenSquare,
@@ -42,7 +41,7 @@ const mainNav: NavItem[] = [
   { href: "/dashboard", label: "Обзор", icon: LayoutDashboard },
   { href: "/channels", label: "Каналы", icon: Radio },
   { href: "/posts", label: "Посты", icon: PenSquare },
-  { href: "/missions", label: "Ai агенты", icon: Bot },
+  // Hidden until agents return: { href: "/missions", label: "Ai агенты", icon: Bot },
   { href: "/calendar", label: "Календарь", icon: CalendarDays },
   { href: "/files", label: "Файлы", icon: ImageIcon },
   { href: "/ai", label: "Ai контент", icon: Sparkles },

@@ -1,5 +1,7 @@
-import { MissionsListPage } from "@/components/missions/MissionsListPage";
+import { redirect } from "next/navigation";
+
+// Hidden until agents return: import { MissionsListPage } from "@/components/missions/MissionsListPage";
 
 export default function Page() {
-  return <MissionsListPage />;
+  redirect("/dashboard");
 }
