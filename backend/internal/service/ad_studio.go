@@ -25,6 +25,7 @@ var (
 	ErrAdStudioPromptRequired  = errors.New("ad studio prompt required")
 	ErrAdStudioPreviewInvalid  = errors.New("ad studio preview invalid")
 	ErrAdStudioPreviewRequired = errors.New("ad studio preview required")
+	ErrAdStudioInvalidMode     = errors.New("ad studio invalid generation mode")
 )
 
 type AdStudioService struct {
@@ -215,71 +216,122 @@ func (s *AdStudioService) Generate(
 		return StartGenerateResult{}, "", ErrAdStudioNotPublished
 	}
 
+	mode := model.NormalizeAdStudioGenerationMode(t.GenerationMode)
+	if mode == "" {
+		if t.MediaKind == model.AdStudioMediaVideo {
+			mode = model.AdStudioModeReferenceToVideo
+		} else {
+			mode = model.AdStudioModeCombine
+		}
+	}
+
 	productID := strings.TrimSpace(req.ProductUploadID)
 	avatarID := strings.TrimSpace(req.AvatarUploadID)
-	if t.RequiresProduct && productID == "" {
+	needsProduct := t.RequiresProduct || model.AdStudioModeNeedsProduct(mode)
+	if needsProduct && productID == "" {
 		return StartGenerateResult{}, "", ErrAdStudioProductRequired
 	}
 	if t.RequiresAvatar && avatarID == "" {
 		return StartGenerateResult{}, "", ErrAdStudioAvatarRequired
 	}
-	if strings.TrimSpace(t.PreviewS3Key) == "" {
+
+	usesTemplate := model.AdStudioModeUsesTemplateInput(mode)
+	if usesTemplate && strings.TrimSpace(t.PreviewS3Key) == "" {
 		return StartGenerateResult{}, "", ErrAdStudioPreviewRequired
 	}
 
-	templateUpload, err := s.generation.ImportSourceFromObject(ctx, userID, r, t.PreviewS3Key, t.PreviewContentType)
-	if err != nil {
-		return StartGenerateResult{}, "", err
-	}
-	templateID := templateUpload.ID
-
-	prompt := composeAdStudioPrompt(t, req.Edit)
-	refs := []string{templateID}
-	if productID != "" {
-		refs = append(refs, productID)
-	}
-	if avatarID != "" {
-		refs = append(refs, avatarID)
+	var templateID string
+	if usesTemplate {
+		templateUpload, err := s.generation.ImportSourceFromObject(ctx, userID, r, t.PreviewS3Key, t.PreviewContentType)
+		if err != nil {
+			return StartGenerateResult{}, "", err
+		}
+		templateID = templateUpload.ID
 	}
 
-	if t.MediaKind == model.AdStudioMediaVideo {
-		in := GenerateVideoInput{
+	prompt := composeAdStudioPrompt(t, mode, req.Edit)
+	kind := model.AdStudioMediaKindForMode(mode)
+
+	switch mode {
+	case model.AdStudioModeTextToVideo:
+		result, err := s.generation.StartGenerateVideo(ctx, userID, r, GenerateVideoInput{
+			Mode:        model.KieVideoModeTextToVideo,
 			Prompt:      prompt,
 			AspectRatio: t.AspectRatio,
 			Duration:    t.Duration,
+		})
+		return result, kind, err
+	case model.AdStudioModeImageToVideo:
+		result, err := s.generation.StartGenerateVideo(ctx, userID, r, GenerateVideoInput{
+			Mode:           model.KieVideoModeImageToVideo,
+			Prompt:         prompt,
+			AspectRatio:    t.AspectRatio,
+			Duration:       t.Duration,
+			SourceUploadID: productID,
+		})
+		return result, kind, err
+	case model.AdStudioModeReferenceToVideo:
+		refs := []string{templateID}
+		if productID != "" {
+			refs = append(refs, productID)
 		}
-		if len(refs) >= 2 {
-			in.Mode = model.KieVideoModeReferenceToVideo
-			in.ReferenceUploadIDs = refs
-		} else {
-			in.Mode = model.KieVideoModeImageToVideo
-			in.SourceUploadID = templateID
+		if avatarID != "" {
+			refs = append(refs, avatarID)
 		}
-		result, err := s.generation.StartGenerateVideo(ctx, userID, r, in)
-		return result, t.MediaKind, err
+		result, err := s.generation.StartGenerateVideo(ctx, userID, r, GenerateVideoInput{
+			Mode:               model.KieVideoModeReferenceToVideo,
+			Prompt:             prompt,
+			AspectRatio:        t.AspectRatio,
+			Duration:           t.Duration,
+			ReferenceUploadIDs: refs,
+		})
+		return result, kind, err
+	case model.AdStudioModeTextToImage:
+		result, err := s.generation.StartGenerate(ctx, userID, r, GenerateImageInput{
+			Mode:        model.AdStudioModeTextToImage,
+			Prompt:      prompt,
+			AspectRatio: normalizeAdStudioImageRatio(t.AspectRatio),
+		})
+		return result, kind, err
+	case model.AdStudioModeImageToImage:
+		result, err := s.generation.StartGenerate(ctx, userID, r, GenerateImageInput{
+			Mode:           model.AdStudioModeImageToImage,
+			Prompt:         prompt,
+			AspectRatio:    normalizeAdStudioImageRatio(t.AspectRatio),
+			SourceUploadID: productID,
+		})
+		return result, kind, err
+	default:
+		refs := []string{templateID}
+		if productID != "" {
+			refs = append(refs, productID)
+		}
+		if avatarID != "" {
+			refs = append(refs, avatarID)
+		}
+		result, err := s.generation.StartGenerate(ctx, userID, r, GenerateImageInput{
+			Mode:             model.AdStudioModeCombine,
+			Prompt:           prompt,
+			AspectRatio:      normalizeAdStudioImageRatio(t.AspectRatio),
+			CombineUploadIDs: refs,
+		})
+		return result, kind, err
 	}
-
-	in := GenerateImageInput{
-		Prompt:      prompt,
-		AspectRatio: normalizeAdStudioImageRatio(t.AspectRatio),
-	}
-	if len(refs) >= 2 {
-		in.Mode = "combine"
-		in.CombineUploadIDs = refs
-	} else {
-		in.Mode = "image-to-image"
-		in.SourceUploadID = templateID
-	}
-	result, err := s.generation.StartGenerate(ctx, userID, r, in)
-	return result, t.MediaKind, err
 }
 
-func composeAdStudioPrompt(t model.AdStudioTemplate, edit string) string {
+func composeAdStudioPrompt(t model.AdStudioTemplate, mode, edit string) string {
 	var b strings.Builder
-	b.WriteString("You are given reference images in this exact order.\n")
-	b.WriteString("Image 1 is the advertising TEMPLATE. Recreate that exact scene: background, setting, camera angle, lighting, composition, typography placement, graphic shapes, and mood.\n")
-	b.WriteString("Image 2 is the NEW PRODUCT photo. Replace only the original product from image 1 with this product. Keep the new product's real shape, materials, labels, colors, and proportions.\n")
-	b.WriteString("Do not keep the original product from the template. Do not return image 2 unchanged. Do not invent a marketplace card or a new layout. The result must look like image 1 after a product swap.\n")
+	switch mode {
+	case model.AdStudioModeCombine, model.AdStudioModeReferenceToVideo:
+		b.WriteString("You are given reference images in this exact order.\n")
+		b.WriteString("Image 1 is the advertising TEMPLATE. Recreate that exact scene: background, setting, camera angle, lighting, composition, typography placement, graphic shapes, and mood.\n")
+		b.WriteString("Image 2 is the NEW PRODUCT photo. Replace only the original product from image 1 with this product. Keep the new product's real shape, materials, labels, colors, and proportions.\n")
+		b.WriteString("Do not keep the original product from the template. Do not return image 2 unchanged. Do not invent a marketplace card or a new layout. The result must look like image 1 after a product swap.\n")
+	case model.AdStudioModeImageToImage, model.AdStudioModeImageToVideo:
+		b.WriteString("Edit the uploaded product photo according to the template notes. Keep the product identity, labels, and shape.\n")
+	default:
+		b.WriteString("Create advertising content from the template notes.\n")
+	}
 	if strings.TrimSpace(t.SystemPrompt) != "" {
 		b.WriteString("\nTemplate notes:\n")
 		b.WriteString(strings.TrimSpace(t.SystemPrompt))
@@ -316,16 +368,24 @@ func templateFromWrite(base model.AdStudioTemplate, req model.AdStudioTemplateWr
 	if err := validateAdStudioCategory(category, false); err != nil {
 		return model.AdStudioTemplate{}, err
 	}
-	kind := strings.TrimSpace(req.MediaKind)
-	if kind == "" {
-		if category == model.AdStudioCategoryMotion || category == model.AdStudioCategoryUGC {
-			kind = model.AdStudioMediaVideo
-		} else {
-			kind = model.AdStudioMediaImage
+	mode := model.NormalizeAdStudioGenerationMode(req.GenerationMode)
+	if mode == "" {
+		if creating {
+			if category == model.AdStudioCategoryMotion || category == model.AdStudioCategoryUGC {
+				mode = model.AdStudioModeReferenceToVideo
+			} else {
+				mode = model.AdStudioModeCombine
+			}
+		} else if base.GenerationMode != "" {
+			mode = model.NormalizeAdStudioGenerationMode(base.GenerationMode)
 		}
 	}
-	if kind != model.AdStudioMediaImage && kind != model.AdStudioMediaVideo {
-		return model.AdStudioTemplate{}, ErrAdStudioInvalidKind
+	if mode == "" {
+		return model.AdStudioTemplate{}, ErrAdStudioInvalidMode
+	}
+	kind := model.AdStudioMediaKindForMode(mode)
+	if reqKind := strings.TrimSpace(req.MediaKind); reqKind != "" && reqKind != kind {
+		kind = model.AdStudioMediaKindForMode(mode)
 	}
 	ratio := strings.TrimSpace(req.AspectRatio)
 	if ratio == "" {
@@ -347,13 +407,14 @@ func templateFromWrite(base model.AdStudioTemplate, req model.AdStudioTemplateWr
 	t.Description = strings.TrimSpace(req.Description)
 	t.Category = category
 	t.MediaKind = kind
+	t.GenerationMode = mode
 	t.AspectRatio = ratio
 	t.Duration = duration
 	t.SystemPrompt = prompt
 	if req.RequiresProduct != nil {
 		t.RequiresProduct = *req.RequiresProduct
 	} else if creating {
-		t.RequiresProduct = true
+		t.RequiresProduct = model.AdStudioModeNeedsProduct(mode)
 	}
 	if req.RequiresAvatar != nil {
 		t.RequiresAvatar = *req.RequiresAvatar

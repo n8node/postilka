@@ -1,6 +1,9 @@
 package model
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 const (
 	AdStudioCategoryProductShot = "product_shot"
@@ -12,7 +15,51 @@ const (
 
 	AdStudioMediaImage = "image"
 	AdStudioMediaVideo = "video"
+
+	AdStudioModeTextToImage      = "text-to-image"
+	AdStudioModeImageToImage     = "image-to-image"
+	AdStudioModeCombine          = "combine"
+	AdStudioModeTextToVideo      = "text-to-video"
+	AdStudioModeImageToVideo     = "image-to-video"
+	AdStudioModeReferenceToVideo = "reference-to-video"
 )
+
+func NormalizeAdStudioGenerationMode(mode string) string {
+	switch strings.TrimSpace(mode) {
+	case AdStudioModeTextToImage, AdStudioModeImageToImage, AdStudioModeCombine,
+		AdStudioModeTextToVideo, AdStudioModeImageToVideo, AdStudioModeReferenceToVideo:
+		return strings.TrimSpace(mode)
+	default:
+		return ""
+	}
+}
+
+func AdStudioMediaKindForMode(mode string) string {
+	switch NormalizeAdStudioGenerationMode(mode) {
+	case AdStudioModeTextToVideo, AdStudioModeImageToVideo, AdStudioModeReferenceToVideo:
+		return AdStudioMediaVideo
+	default:
+		return AdStudioMediaImage
+	}
+}
+
+func AdStudioModeNeedsProduct(mode string) bool {
+	switch NormalizeAdStudioGenerationMode(mode) {
+	case AdStudioModeImageToImage, AdStudioModeCombine, AdStudioModeImageToVideo, AdStudioModeReferenceToVideo:
+		return true
+	default:
+		return false
+	}
+}
+
+func AdStudioModeUsesTemplateInput(mode string) bool {
+	switch NormalizeAdStudioGenerationMode(mode) {
+	case AdStudioModeCombine, AdStudioModeReferenceToVideo:
+		return true
+	default:
+		return false
+	}
+}
 
 type AdStudioTemplate struct {
 	ID                 string
@@ -20,6 +67,7 @@ type AdStudioTemplate struct {
 	Description        string
 	Category           string
 	MediaKind          string
+	GenerationMode     string
 	AspectRatio        string
 	Duration           int
 	SystemPrompt       string
@@ -39,6 +87,7 @@ type AdStudioTemplatePublicView struct {
 	Description     string `json:"description"`
 	Category        string `json:"category"`
 	MediaKind       string `json:"media_kind"`
+	GenerationMode  string `json:"generation_mode"`
 	AspectRatio     string `json:"aspect_ratio"`
 	Duration        int    `json:"duration"`
 	RequiresProduct bool   `json:"requires_product"`
@@ -61,6 +110,7 @@ type AdStudioTemplateWriteRequest struct {
 	Description     string `json:"description"`
 	Category        string `json:"category"`
 	MediaKind       string `json:"media_kind"`
+	GenerationMode  string `json:"generation_mode"`
 	AspectRatio     string `json:"aspect_ratio"`
 	Duration        int    `json:"duration"`
 	SystemPrompt    string `json:"system_prompt"`
@@ -90,6 +140,7 @@ func (t AdStudioTemplate) ToPublicView() AdStudioTemplatePublicView {
 		Description:     t.Description,
 		Category:        t.Category,
 		MediaKind:       t.MediaKind,
+		GenerationMode:  t.GenerationMode,
 		AspectRatio:     t.AspectRatio,
 		Duration:        t.Duration,
 		RequiresProduct: t.RequiresProduct,

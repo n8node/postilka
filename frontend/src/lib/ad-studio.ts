@@ -14,6 +14,57 @@ export const AD_STUDIO_CATEGORIES = [
 
 export type AdStudioCategoryId = (typeof AD_STUDIO_CATEGORIES)[number]["id"];
 export type AdStudioMediaKind = "image" | "video";
+export type AdStudioGenerationMode =
+  | "text-to-image"
+  | "image-to-image"
+  | "combine"
+  | "text-to-video"
+  | "image-to-video"
+  | "reference-to-video";
+
+export const AD_STUDIO_GENERATION_MODES: {
+  id: AdStudioGenerationMode;
+  label: string;
+  desc: string;
+  mediaKind: AdStudioMediaKind;
+}[] = [
+  {
+    id: "text-to-image",
+    label: "Текст → фото",
+    desc: "Только описание. Превью шаблона не уходит в модель.",
+    mediaKind: "image",
+  },
+  {
+    id: "image-to-image",
+    label: "Фото → фото",
+    desc: "На входе фото товара. Стиль берётся из промпта шаблона.",
+    mediaKind: "image",
+  },
+  {
+    id: "combine",
+    label: "Комбинация фото",
+    desc: "Превью шаблона + фото товара. Товар встаёт в сцену шаблона.",
+    mediaKind: "image",
+  },
+  {
+    id: "text-to-video",
+    label: "Текст → видео",
+    desc: "Только описание. Превью шаблона не уходит в модель.",
+    mediaKind: "video",
+  },
+  {
+    id: "image-to-video",
+    label: "Фото → видео",
+    desc: "На входе фото товара. Из него собирается ролик.",
+    mediaKind: "video",
+  },
+  {
+    id: "reference-to-video",
+    label: "Референс → видео",
+    desc: "Превью шаблона + фото товара как референсы сцены.",
+    mediaKind: "video",
+  },
+];
 
 export type AdStudioTemplate = {
   id: string;
@@ -21,6 +72,7 @@ export type AdStudioTemplate = {
   description: string;
   category: AdStudioCategoryId;
   media_kind: AdStudioMediaKind;
+  generation_mode: AdStudioGenerationMode;
   aspect_ratio: string;
   duration: number;
   requires_product: boolean;
@@ -42,6 +94,7 @@ export type AdStudioWritePayload = {
   description: string;
   category: AdStudioCategoryId;
   media_kind: AdStudioMediaKind;
+  generation_mode: AdStudioGenerationMode;
   aspect_ratio: string;
   duration: number;
   system_prompt: string;
@@ -56,7 +109,41 @@ export function adStudioCategoryLabel(id: string): string {
 }
 
 export function defaultAdStudioKind(category: AdStudioCategoryId): AdStudioMediaKind {
-  return category === "motion" || category === "ugc" ? "video" : "image";
+  return adStudioMediaKindForMode(defaultAdStudioMode(category));
+}
+
+export function defaultAdStudioMode(category: AdStudioCategoryId): AdStudioGenerationMode {
+  return category === "motion" || category === "ugc" ? "reference-to-video" : "combine";
+}
+
+export function adStudioMediaKindForMode(mode: AdStudioGenerationMode): AdStudioMediaKind {
+  return AD_STUDIO_GENERATION_MODES.find((item) => item.id === mode)?.mediaKind ?? "image";
+}
+
+export function adStudioModeLabel(mode: string): string {
+  return AD_STUDIO_GENERATION_MODES.find((item) => item.id === mode)?.label ?? mode;
+}
+
+export function adStudioModeNeedsProduct(mode: AdStudioGenerationMode): boolean {
+  return (
+    mode === "image-to-image" ||
+    mode === "combine" ||
+    mode === "image-to-video" ||
+    mode === "reference-to-video"
+  );
+}
+
+export function adStudioModeUsesTemplateInput(mode: AdStudioGenerationMode): boolean {
+  return mode === "combine" || mode === "reference-to-video";
+}
+
+export function resolveAdStudioMode(item: {
+  generation_mode?: string;
+  media_kind?: string;
+}): AdStudioGenerationMode {
+  const mode = AD_STUDIO_GENERATION_MODES.find((m) => m.id === item.generation_mode)?.id;
+  if (mode) return mode;
+  return item.media_kind === "video" ? "reference-to-video" : "combine";
 }
 
 export function defaultAdStudioRatio(

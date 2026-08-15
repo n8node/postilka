@@ -20,17 +20,24 @@ func NewAdStudioRepository(pool *pgxpool.Pool) *AdStudioRepository {
 }
 
 const adStudioSelect = `
-	SELECT id, title, description, category, media_kind, aspect_ratio, duration,
+	SELECT id, title, description, category, media_kind, generation_mode, aspect_ratio, duration,
 	       system_prompt, preview_s3_key, preview_content_type,
 	       requires_product, requires_avatar, sort_order, is_published,
 	       created_at, updated_at
 	FROM ad_studio_templates
 `
 
+const adStudioReturning = `
+		RETURNING id, title, description, category, media_kind, generation_mode, aspect_ratio, duration,
+		          system_prompt, preview_s3_key, preview_content_type,
+		          requires_product, requires_avatar, sort_order, is_published,
+		          created_at, updated_at
+`
+
 func scanAdStudioTemplate(row pgx.Row) (model.AdStudioTemplate, error) {
 	var t model.AdStudioTemplate
 	err := row.Scan(
-		&t.ID, &t.Title, &t.Description, &t.Category, &t.MediaKind, &t.AspectRatio, &t.Duration,
+		&t.ID, &t.Title, &t.Description, &t.Category, &t.MediaKind, &t.GenerationMode, &t.AspectRatio, &t.Duration,
 		&t.SystemPrompt, &t.PreviewS3Key, &t.PreviewContentType,
 		&t.RequiresProduct, &t.RequiresAvatar, &t.SortOrder, &t.IsPublished,
 		&t.CreatedAt, &t.UpdatedAt,
@@ -85,19 +92,14 @@ func (r *AdStudioRepository) Create(ctx context.Context, t model.AdStudioTemplat
 	}
 	return scanAdStudioTemplate(r.pool.QueryRow(ctx, `
 		INSERT INTO ad_studio_templates (
-			id, title, description, category, media_kind, aspect_ratio, duration,
+			id, title, description, category, media_kind, generation_mode, aspect_ratio, duration,
 			system_prompt, preview_s3_key, preview_content_type,
 			requires_product, requires_avatar, sort_order, is_published
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7,
-			$8, $9, $10,
-			$11, $12, $13, $14
-		)
-		RETURNING id, title, description, category, media_kind, aspect_ratio, duration,
-		          system_prompt, preview_s3_key, preview_content_type,
-		          requires_product, requires_avatar, sort_order, is_published,
-		          created_at, updated_at
-	`, t.ID, t.Title, t.Description, t.Category, t.MediaKind, t.AspectRatio, t.Duration,
+			$1, $2, $3, $4, $5, $6, $7, $8,
+			$9, $10, $11,
+			$12, $13, $14, $15
+		)`+adStudioReturning, t.ID, t.Title, t.Description, t.Category, t.MediaKind, t.GenerationMode, t.AspectRatio, t.Duration,
 		t.SystemPrompt, t.PreviewS3Key, t.PreviewContentType,
 		t.RequiresProduct, t.RequiresAvatar, t.SortOrder, t.IsPublished,
 	))
@@ -110,20 +112,17 @@ func (r *AdStudioRepository) Update(ctx context.Context, t model.AdStudioTemplat
 			description = $3,
 			category = $4,
 			media_kind = $5,
-			aspect_ratio = $6,
-			duration = $7,
-			system_prompt = $8,
-			requires_product = $9,
-			requires_avatar = $10,
-			sort_order = $11,
-			is_published = $12,
+			generation_mode = $6,
+			aspect_ratio = $7,
+			duration = $8,
+			system_prompt = $9,
+			requires_product = $10,
+			requires_avatar = $11,
+			sort_order = $12,
+			is_published = $13,
 			updated_at = NOW()
-		WHERE id = $1
-		RETURNING id, title, description, category, media_kind, aspect_ratio, duration,
-		          system_prompt, preview_s3_key, preview_content_type,
-		          requires_product, requires_avatar, sort_order, is_published,
-		          created_at, updated_at
-	`, t.ID, t.Title, t.Description, t.Category, t.MediaKind, t.AspectRatio, t.Duration,
+		WHERE id = $1`+adStudioReturning,
+		t.ID, t.Title, t.Description, t.Category, t.MediaKind, t.GenerationMode, t.AspectRatio, t.Duration,
 		t.SystemPrompt, t.RequiresProduct, t.RequiresAvatar, t.SortOrder, t.IsPublished,
 	))
 }
@@ -134,12 +133,7 @@ func (r *AdStudioRepository) UpdatePreview(ctx context.Context, id, s3Key, conte
 			preview_s3_key = $2,
 			preview_content_type = $3,
 			updated_at = NOW()
-		WHERE id = $1
-		RETURNING id, title, description, category, media_kind, aspect_ratio, duration,
-		          system_prompt, preview_s3_key, preview_content_type,
-		          requires_product, requires_avatar, sort_order, is_published,
-		          created_at, updated_at
-	`, id, s3Key, contentType))
+		WHERE id = $1`+adStudioReturning, id, s3Key, contentType))
 }
 
 func (r *AdStudioRepository) Delete(ctx context.Context, id string) error {

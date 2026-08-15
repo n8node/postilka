@@ -178,6 +178,8 @@ func (h *AdStudioHandler) mapError(w http.ResponseWriter, err error) {
 		writeErrorWithCode(w, http.StatusBadRequest, "invalid_category", "Некорректный режим шаблона")
 	case errors.Is(err, service.ErrAdStudioInvalidKind):
 		writeErrorWithCode(w, http.StatusBadRequest, "invalid_media_kind", "Укажите фото или видео")
+	case errors.Is(err, service.ErrAdStudioInvalidMode):
+		writeErrorWithCode(w, http.StatusBadRequest, "invalid_generation_mode", "Укажите режим генерации")
 	case errors.Is(err, service.ErrAdStudioTitleRequired):
 		writeErrorWithCode(w, http.StatusBadRequest, "invalid_title", "Укажите название шаблона")
 	case errors.Is(err, service.ErrAdStudioPromptRequired):

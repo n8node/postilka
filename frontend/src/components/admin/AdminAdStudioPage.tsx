@@ -6,17 +6,21 @@ import { ProtectedMediaImage } from "@/components/media/ProtectedMediaImage";
 import { ApiError } from "@/lib/api";
 import {
   AD_STUDIO_CATEGORIES,
+  AD_STUDIO_GENERATION_MODES,
   adminAdStudioPreviewUrl,
   adStudioCategoryLabel,
+  adStudioMediaKindForMode,
+  adStudioModeLabel,
+  adStudioModeNeedsProduct,
   createAdminAdStudioTemplate,
-  defaultAdStudioKind,
+  defaultAdStudioMode,
   defaultAdStudioRatio,
   deleteAdminAdStudioTemplate,
   fetchAdminAdStudioTemplates,
   updateAdminAdStudioTemplate,
   uploadAdminAdStudioPreview,
   type AdStudioCategoryId,
-  type AdStudioMediaKind,
+  type AdStudioGenerationMode,
   type AdStudioTemplateAdmin,
   type AdStudioWritePayload,
 } from "@/lib/ad-studio";
@@ -25,16 +29,18 @@ const IMAGE_RATIOS = ["1:1", "4:5", "9:16", "16:9"];
 const VIDEO_RATIOS = ["9:16", "16:9", "1:1"];
 
 const emptyForm = (category: AdStudioCategoryId = "ads"): AdStudioWritePayload => {
-  const kind = defaultAdStudioKind(category);
+  const mode = defaultAdStudioMode(category);
+  const kind = adStudioMediaKindForMode(mode);
   return {
     title: "",
     description: "",
     category,
     media_kind: kind,
+    generation_mode: mode,
     aspect_ratio: defaultAdStudioRatio(category, kind),
     duration: 5,
     system_prompt: "",
-    requires_product: true,
+    requires_product: adStudioModeNeedsProduct(mode),
     requires_avatar: category === "ugc",
     sort_order: 0,
     is_published: false,
@@ -47,6 +53,7 @@ function toForm(item: AdStudioTemplateAdmin): AdStudioWritePayload {
     description: item.description,
     category: item.category,
     media_kind: item.media_kind,
+    generation_mode: item.generation_mode,
     aspect_ratio: item.aspect_ratio,
     duration: item.duration,
     system_prompt: item.system_prompt,
@@ -100,13 +107,20 @@ export function AdminAdStudioPage({ embedded = false }: { embedded?: boolean }) 
       const next = { ...prev, [key]: value };
       if (key === "category") {
         const category = value as AdStudioCategoryId;
-        const kind = defaultAdStudioKind(category);
+        const mode = defaultAdStudioMode(category);
+        const kind = adStudioMediaKindForMode(mode);
+        next.generation_mode = mode;
         next.media_kind = kind;
         next.aspect_ratio = defaultAdStudioRatio(category, kind);
+        next.requires_product = adStudioModeNeedsProduct(mode);
         next.requires_avatar = category === "ugc";
       }
-      if (key === "media_kind") {
-        next.aspect_ratio = defaultAdStudioRatio(prev.category, value as AdStudioMediaKind);
+      if (key === "generation_mode") {
+        const mode = value as AdStudioGenerationMode;
+        const kind = adStudioMediaKindForMode(mode);
+        next.media_kind = kind;
+        next.aspect_ratio = defaultAdStudioRatio(prev.category, kind);
+        next.requires_product = adStudioModeNeedsProduct(mode);
       }
       return next;
     });
@@ -243,7 +257,7 @@ export function AdminAdStudioPage({ embedded = false }: { embedded?: boolean }) 
                 >
                   <span className="block truncate font-medium">{item.title}</span>
                   <span className={`block text-xs ${selectedId === item.id ? "text-slate-300" : "text-slate-400"}`}>
-                    {adStudioCategoryLabel(item.category)}
+                    {adStudioCategoryLabel(item.category)} · {adStudioModeLabel(item.generation_mode)}
                     {item.is_published ? " · опубликован" : " · черновик"}
                   </span>
                 </button>
@@ -271,7 +285,7 @@ export function AdminAdStudioPage({ embedded = false }: { embedded?: boolean }) 
             </label>
             <div className="grid gap-3 sm:grid-cols-2">
               <label className="block text-sm">
-                Режим
+                Категория
                 <select
                   value={form.category}
                   onChange={(e) => patch("category", e.target.value as AdStudioCategoryId)}
@@ -284,16 +298,24 @@ export function AdminAdStudioPage({ embedded = false }: { embedded?: boolean }) 
                   ))}
                 </select>
               </label>
-              <label className="block text-sm">
-                Тип
+              <label className="block text-sm sm:col-span-2">
+                Режим генерации
                 <select
-                  value={form.media_kind}
-                  onChange={(e) => patch("media_kind", e.target.value as AdStudioMediaKind)}
+                  value={form.generation_mode}
+                  onChange={(e) =>
+                    patch("generation_mode", e.target.value as AdStudioGenerationMode)
+                  }
                   className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
                 >
-                  <option value="image">Фото</option>
-                  <option value="video">Видео</option>
+                  {AD_STUDIO_GENERATION_MODES.map((mode) => (
+                    <option key={mode.id} value={mode.id}>
+                      {mode.label}
+                    </option>
+                  ))}
                 </select>
+                <span className="mt-1 block text-xs text-slate-500">
+                  {AD_STUDIO_GENERATION_MODES.find((m) => m.id === form.generation_mode)?.desc}
+                </span>
               </label>
               <label className="block text-sm">
                 Формат

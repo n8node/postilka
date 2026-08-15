@@ -10,8 +10,12 @@ import { ApiError } from "@/lib/api";
 import {
   AD_STUDIO_CATEGORIES,
   adStudioCategoryLabel,
+  adStudioModeLabel,
+  adStudioModeNeedsProduct,
+  adStudioModeUsesTemplateInput,
   fetchAdStudioTemplates,
   generateFromAdStudioTemplate,
+  resolveAdStudioMode,
   type AdStudioCategoryId,
   type AdStudioTemplate,
 } from "@/lib/ad-studio";
@@ -169,7 +173,7 @@ function TemplateCard({
       <div className="px-3 py-2.5">
         <p className="truncate text-[13px] font-medium text-text">{item.title}</p>
         <p className="mt-0.5 text-[11px] text-muted">
-          {adStudioCategoryLabel(item.category)}
+          {adStudioCategoryLabel(item.category)} · {adStudioModeLabel(resolveAdStudioMode(item))}
         </p>
       </div>
     </button>
@@ -210,7 +214,12 @@ export function AdStudioPage() {
   const clearVideoError = useVideoGenerationJobStore((s) => s.clearError);
   const clearVideoResult = useVideoGenerationJobStore((s) => s.clearResult);
 
-  const isVideo = selected?.media_kind === "video";
+  const selectedMode = selected ? resolveAdStudioMode(selected) : null;
+  const isVideo = selectedMode
+    ? selectedMode === "text-to-video" ||
+      selectedMode === "image-to-video" ||
+      selectedMode === "reference-to-video"
+    : false;
   const generating = isVideo ? videoGenerating : imageGenerating;
   const generateError = isVideo ? videoError : imageError;
   const resultUrl = isVideo ? videoResultUrl : imageResultUrl;
@@ -281,29 +290,42 @@ export function AdStudioPage() {
 
   const creditCost = useMemo(() => {
     if (!selected) return 0;
-    if (selected.media_kind === "video") {
+    if (isVideo) {
       if (!videoPricing) return 0;
-      const perSec = videoPricing.credits_per_second_image_to_video || 1;
-      return Math.max(1, perSec * (selected.duration || 5));
+      const perSec =
+        selectedMode === "text-to-video"
+          ? videoPricing.credits_per_second_text_to_video
+          : selectedMode === "reference-to-video"
+            ? videoPricing.credits_per_second_reference_to_video
+            : videoPricing.credits_per_second_image_to_video;
+      return Math.max(1, (perSec || 1) * (selected.duration || 5));
     }
-    if (!imagePricing) return 0;
-    return generationCostForMode(imagePricing, selected.preview_url ? "combine" : "image-to-image");
-  }, [selected, imagePricing, videoPricing]);
+    if (!imagePricing || !selectedMode) return 0;
+    if (selectedMode === "combine") return generationCostForMode(imagePricing, "combine");
+    if (selectedMode === "image-to-image") return generationCostForMode(imagePricing, "image-to-image");
+    return generationCostForMode(imagePricing, "text-to-image");
+  }, [selected, selectedMode, isVideo, imagePricing, videoPricing]);
 
   const walletRub = useMemo(() => {
-    if (!selected || selected.media_kind === "video" || !imagePricing) return 0;
-    return generationWalletRubForMode(
-      imagePricing,
-      selected.preview_url ? "combine" : "image-to-image",
-    );
-  }, [selected, imagePricing]);
+    if (!selected || !selectedMode || isVideo || !imagePricing) return 0;
+    if (selectedMode === "combine") return generationWalletRubForMode(imagePricing, "combine");
+    if (selectedMode === "image-to-image") {
+      return generationWalletRubForMode(imagePricing, "image-to-image");
+    }
+    return generationWalletRubForMode(imagePricing, "text-to-image");
+  }, [selected, selectedMode, isVideo, imagePricing]);
 
+  const needsProduct = Boolean(
+    selected && (selected.requires_product || (selectedMode && adStudioModeNeedsProduct(selectedMode))),
+  );
+  const needsTemplateInput = Boolean(selectedMode && adStudioModeUsesTemplateInput(selectedMode));
   const canGenerate = Boolean(
     selected &&
-      selected.preview_url &&
+      selectedMode &&
+      (!needsTemplateInput || selected.preview_url) &&
       !generating &&
       !uploading &&
-      (!selected.requires_product || product) &&
+      (!needsProduct || product) &&
       (!selected.requires_avatar || avatar) &&
       hasMediaCredits(creditsRemaining),
   );
@@ -398,21 +420,30 @@ export function AdStudioPage() {
               </p>
               <h2 className="mt-1 text-base font-semibold text-text">{selected.title}</h2>
               <p className="mt-1 text-[12px] text-muted">
-                {adStudioCategoryLabel(selected.category)} · {selected.aspect_ratio}
+                {adStudioCategoryLabel(selected.category)} · {adStudioModeLabel(selectedMode ?? "")} ·{" "}
+                {selected.aspect_ratio}
                 {isVideo ? ` · ${selected.duration} с` : ""}
               </p>
-              {!selected.preview_url ? (
+              {needsTemplateInput && !selected.preview_url ? (
                 <p className="mt-2 text-[12px] text-red-700">
-                  У шаблона нет превью сцены. Загрузите его в админке — иначе товар некуда вставлять.
+                  Для этого режима нужно превью сцены. Загрузите его в админке.
+                </p>
+              ) : needsTemplateInput ? (
+                <p className="mt-2 text-[12px] text-muted">
+                  В модель уйдут превью шаблона и ваше фото товара.
+                </p>
+              ) : needsProduct ? (
+                <p className="mt-2 text-[12px] text-muted">
+                  В модель уйдёт ваше фото товара. Превью шаблона только задаёт стиль в промпте.
                 </p>
               ) : (
                 <p className="mt-2 text-[12px] text-muted">
-                  Товар встанет в сцену шаблона. Исходное фото само по себе не станет постером.
+                  В модель уйдёт только текст шаблона и ваша правка.
                 </p>
               )}
             </div>
 
-            {selected.requires_product ? (
+            {needsProduct ? (
               <UploadSlot
                 label="Товар"
                 hint="Загрузить товар"
