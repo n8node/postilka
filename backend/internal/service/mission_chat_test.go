@@ -1,6 +1,8 @@
 package service
 
 import (
+	"errors"
+	"strings"
 	"testing"
 
 	"github.com/postilka/postilka/internal/model"
@@ -99,6 +101,23 @@ func TestBuildPlanDraftRequestButtons(t *testing.T) {
 	}, []model.Channel{tg, vk}, "mission-test", false)
 	if len(mixed.Content.Buttons) != 0 {
 		t.Fatalf("mixed channels should drop buttons, got %+v", mixed.Content.Buttons)
+	}
+}
+
+func TestWrapYandexChatTimeout(t *testing.T) {
+	err := wrapYandexChatError(errors.New(`Post "https://llm.api.cloud.yandex.net/v1/chat/completions": context deadline exceeded (Client.Timeout exceeded while awaiting headers)`))
+	if !errors.Is(err, ErrYandexGptTimeout) {
+		t.Fatalf("want timeout, got %v", err)
+	}
+	if strings.Contains(err.Error(), "llm.api.cloud") {
+		t.Fatalf("must not leak provider url: %v", err)
+	}
+}
+
+func TestWrapYandexChatOther(t *testing.T) {
+	err := wrapYandexChatError(errors.New("empty chat content"))
+	if !errors.Is(err, ErrYandexGptConnectionFailed) {
+		t.Fatalf("want connection failed, got %v", err)
 	}
 }
 

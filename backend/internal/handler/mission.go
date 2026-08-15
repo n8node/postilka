@@ -299,6 +299,10 @@ func writeMissionError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusNotFound, "Агент или шаблон не найдены")
 	case errors.Is(err, service.ErrYandexGptNotConfigured):
 		writeError(w, http.StatusServiceUnavailable, "Yandex GPT не настроен")
+	case errors.Is(err, service.ErrYandexGptTimeout):
+		writeError(w, http.StatusGatewayTimeout, "Агент отвечает дольше обычного. Отправьте сообщение ещё раз")
+	case errors.Is(err, service.ErrYandexGptConnectionFailed):
+		writeError(w, http.StatusBadGateway, "Агент не ответил. Попробуйте ещё раз")
 	case errors.Is(err, service.ErrMissionConflict):
 		message := strings.TrimPrefix(err.Error(), service.ErrMissionConflict.Error()+": ")
 		writeError(w, http.StatusConflict, message)

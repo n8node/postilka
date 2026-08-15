@@ -106,7 +106,7 @@ func (s *MissionService) Chat(ctx context.Context, userID string, r *http.Reques
 
 	result, err := client.Chat(ctx, modelID, chatMsgs)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrInvalidMission, err)
+		return nil, wrapYandexChatError(err)
 	}
 	payload, replyText := parseAgentChat(result.Content)
 	if replyText == "" {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"strings"
 	"time"
 
@@ -15,8 +16,9 @@ import (
 
 var (
 	ErrInvalidYandexGptConfig   = errors.New("invalid yandex gpt config")
-	ErrYandexGptNotConfigured   = errors.New("yandex gpt not configured")
+	ErrYandexGptNotConfigured    = errors.New("yandex gpt not configured")
 	ErrYandexGptConnectionFailed = errors.New("yandex gpt connection failed")
+	ErrYandexGptTimeout          = errors.New("yandex gpt timeout")
 )
 
 type YandexGptConfigService struct {
@@ -328,4 +330,29 @@ func (s *YandexGptConfigService) Client(ctx context.Context) (*ai.YandexGPTClien
 		return nil, model.YandexGptStoredConfig{}, err
 	}
 	return ai.NewYandexGPTClient(baseURL, apiKey, folderID), rec.Config, nil
+}
+
+func isTimeoutErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return true
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "timeout") || strings.Contains(msg, "deadline exceeded")
+}
+
+func wrapYandexChatError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if isTimeoutErr(err) {
+		return fmt.Errorf("%w: агент отвечает дольше обычного. Отправьте сообщение ещё раз", ErrYandexGptTimeout)
+	}
+	return fmt.Errorf("%w: агент не ответил. Попробуйте ещё раз", ErrYandexGptConnectionFailed)
 }

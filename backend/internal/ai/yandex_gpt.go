@@ -35,7 +35,7 @@ func NewYandexGPTClient(baseURL, apiKey, folderID string) *YandexGPTClient {
 		apiKey:   strings.TrimSpace(apiKey),
 		folderID: strings.TrimSpace(folderID),
 		client: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout: 90 * time.Second,
 		},
 	}
 }
