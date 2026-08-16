@@ -165,7 +165,7 @@ function TemplateCard({
       type="button"
       onClick={() => onSelect(item)}
       className={cn(
-        "group overflow-hidden rounded-xl border bg-surface text-left shadow-sm transition-colors",
+        "group mb-3 w-full break-inside-avoid overflow-hidden rounded-xl border bg-surface text-left shadow-sm transition-colors",
         active ? "border-accent ring-2 ring-accent/20" : "border-border hover:border-zinc-300",
       )}
     >
@@ -684,7 +684,7 @@ export function AdStudioPage() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          <div className="columns-2 gap-3 sm:columns-3 lg:columns-4">
             {(selected ? explore : items).map((item) => (
               <TemplateCard
                 key={item.id}
