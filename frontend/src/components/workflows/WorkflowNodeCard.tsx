@@ -23,19 +23,46 @@ import {
   Check,
 } from "lucide-react";
 import type { WorkflowNode } from "@/lib/workflows-api";
-import { NODE_DEFINITIONS } from "./nodeTypes";
+import {
+  NODE_DEFINITIONS,
+  PORT_TYPE_COLORS,
+  isPortCompatible,
+} from "./nodeTypes";
 
 interface WorkflowNodeCardProps {
   node: WorkflowNode;
   isSelected: boolean;
   scale: number;
   runStatus?: "pending" | "running" | "completed" | "failed";
+  connectingFrom?: {
+    nodeId: string;
+    handleId: string;
+    isOutput: boolean;
+    portType: string;
+  } | null;
+  onRegisterPort?: (
+    nodeId: string,
+    handleId: string,
+    isOutput: boolean,
+    el: HTMLElement | null
+  ) => void;
   onSelect: () => void;
   onDelete: () => void;
   onDuplicate: () => void;
   onTestNode: () => void;
-  onStartConnect: (nodeId: string, handleId: string, isOutput: boolean, e: React.MouseEvent) => void;
-  onEndConnect: (nodeId: string, handleId: string, isOutput: boolean) => void;
+  onStartConnect: (
+    nodeId: string,
+    handleId: string,
+    isOutput: boolean,
+    portType: string,
+    e: React.MouseEvent
+  ) => void;
+  onEndConnect: (
+    nodeId: string,
+    handleId: string,
+    isOutput: boolean,
+    portType: string
+  ) => void;
 }
 
 const ICON_MAP: Record<string, React.ElementType> = {
@@ -58,6 +85,8 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
   node,
   isSelected,
   runStatus,
+  connectingFrom,
+  onRegisterPort,
   onSelect,
   onDelete,
   onDuplicate,
@@ -267,56 +296,154 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
       </div>
 
       {/* Ports / Handles Section */}
-      <div className="relative border-t border-zinc-100 dark:border-zinc-800 px-3 py-2 text-[10px]">
+      <div className="relative border-t border-zinc-100 dark:border-zinc-800/80 px-3 py-2 text-[10px] space-y-1">
         {/* Input Ports (Left) */}
-        {def.inputs.map((inp, idx) => (
-          <div
-            key={inp.id}
-            className="group/port relative my-1 flex items-center gap-1.5"
-            style={{ minHeight: "16px" }}
-          >
+        {def.inputs.map((inp) => {
+          const color = PORT_TYPE_COLORS[inp.type] || PORT_TYPE_COLORS.any;
+          let isCompatible = false;
+          let isConnecting = false;
+          let isSourceOfDrag = false;
+
+          if (connectingFrom) {
+            isConnecting = true;
+            if (
+              connectingFrom.nodeId === node.id &&
+              connectingFrom.handleId === inp.id &&
+              !connectingFrom.isOutput
+            ) {
+              isSourceOfDrag = true;
+            } else if (connectingFrom.isOutput) {
+              isCompatible =
+                isPortCompatible(connectingFrom.portType, inp.type) &&
+                connectingFrom.nodeId !== node.id;
+            }
+          }
+
+          return (
             <div
-              title={`Вход: ${inp.label} (${inp.type})`}
-              onMouseDown={(e) => {
-                e.stopPropagation();
-                onStartConnect(node.id, inp.id, false, e);
-              }}
-              onMouseUp={(e) => {
-                e.stopPropagation();
-                onEndConnect(node.id, inp.id, false);
-              }}
-              className="absolute -left-[19px] flex h-3.5 w-3.5 cursor-crosshair items-center justify-center rounded-full border-2 border-zinc-400 bg-white dark:bg-zinc-900 transition hover:scale-125 hover:border-indigo-600 hover:bg-indigo-500"
-            />
-            <span className="text-zinc-500 group-hover/port:text-zinc-800 dark:group-hover/port:text-zinc-200">
-              {inp.label}
-            </span>
-          </div>
-        ))}
+              key={inp.id}
+              className={`group/port relative my-1.5 flex items-center gap-2 transition-all ${
+                isConnecting && !isCompatible && !isSourceOfDrag
+                  ? "opacity-35"
+                  : "opacity-100"
+              }`}
+              style={{ minHeight: "20px" }}
+            >
+              <div
+                ref={(el) => onRegisterPort?.(node.id, inp.id, false, el)}
+                title={`Вход: ${inp.label} (${color.label})`}
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  onStartConnect(node.id, inp.id, false, inp.type, e);
+                }}
+                onMouseUp={(e) => {
+                  e.stopPropagation();
+                  onEndConnect(node.id, inp.id, false, inp.type);
+                }}
+                className={`absolute -left-[20px] flex h-4 w-4 cursor-crosshair items-center justify-center rounded-full border-2 ${
+                  color.dotBorder
+                } ${color.dot} transition-all duration-150 ${
+                  isCompatible
+                    ? "scale-125 ring-4 ring-emerald-500/40 border-emerald-400 bg-emerald-500 animate-pulse z-10"
+                    : isSourceOfDrag
+                    ? "scale-125 ring-2 ring-indigo-500 z-10"
+                    : "hover:scale-125 hover:ring-2 hover:ring-indigo-400"
+                }`}
+              >
+                <div className="h-1.5 w-1.5 rounded-full bg-white dark:bg-zinc-900" />
+              </div>
+
+              <span
+                className={`text-[11px] font-medium transition ${
+                  isCompatible
+                    ? "text-emerald-600 dark:text-emerald-400 font-semibold"
+                    : "text-zinc-600 dark:text-zinc-400 group-hover/port:text-zinc-900 dark:group-hover/port:text-zinc-100"
+                }`}
+              >
+                {inp.label}
+              </span>
+              <span
+                className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${color.badge}`}
+              >
+                {color.label}
+              </span>
+            </div>
+          );
+        })}
 
         {/* Output Ports (Right) */}
-        {def.outputs.map((out, idx) => (
-          <div
-            key={out.id}
-            className="group/port relative my-1 flex items-center justify-end gap-1.5"
-            style={{ minHeight: "16px" }}
-          >
-            <span className="text-zinc-500 group-hover/port:text-zinc-800 dark:group-hover/port:text-zinc-200">
-              {out.label}
-            </span>
+        {def.outputs.map((out) => {
+          const color = PORT_TYPE_COLORS[out.type] || PORT_TYPE_COLORS.any;
+          let isCompatible = false;
+          let isConnecting = false;
+          let isSourceOfDrag = false;
+
+          if (connectingFrom) {
+            isConnecting = true;
+            if (
+              connectingFrom.nodeId === node.id &&
+              connectingFrom.handleId === out.id &&
+              connectingFrom.isOutput
+            ) {
+              isSourceOfDrag = true;
+            } else if (!connectingFrom.isOutput) {
+              isCompatible =
+                isPortCompatible(out.type, connectingFrom.portType) &&
+                connectingFrom.nodeId !== node.id;
+            }
+          }
+
+          return (
             <div
-              title={`Выход: ${out.label} (${out.type})`}
-              onMouseDown={(e) => {
-                e.stopPropagation();
-                onStartConnect(node.id, out.id, true, e);
-              }}
-              onMouseUp={(e) => {
-                e.stopPropagation();
-                onEndConnect(node.id, out.id, true);
-              }}
-              className="absolute -right-[19px] flex h-3.5 w-3.5 cursor-crosshair items-center justify-center rounded-full border-2 border-zinc-400 bg-white dark:bg-zinc-900 transition hover:scale-125 hover:border-indigo-600 hover:bg-indigo-500"
-            />
-          </div>
-        ))}
+              key={out.id}
+              className={`group/port relative my-1.5 flex items-center justify-end gap-2 transition-all ${
+                isConnecting && !isCompatible && !isSourceOfDrag
+                  ? "opacity-35"
+                  : "opacity-100"
+              }`}
+              style={{ minHeight: "20px" }}
+            >
+              <span
+                className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${color.badge}`}
+              >
+                {color.label}
+              </span>
+              <span
+                className={`text-[11px] font-medium transition ${
+                  isCompatible
+                    ? "text-emerald-600 dark:text-emerald-400 font-semibold"
+                    : "text-zinc-600 dark:text-zinc-400 group-hover/port:text-zinc-900 dark:group-hover/port:text-zinc-100"
+                }`}
+              >
+                {out.label}
+              </span>
+
+              <div
+                ref={(el) => onRegisterPort?.(node.id, out.id, true, el)}
+                title={`Выход: ${out.label} (${color.label})`}
+                onMouseDown={(e) => {
+                  e.stopPropagation();
+                  onStartConnect(node.id, out.id, true, out.type, e);
+                }}
+                onMouseUp={(e) => {
+                  e.stopPropagation();
+                  onEndConnect(node.id, out.id, true, out.type);
+                }}
+                className={`absolute -right-[20px] flex h-4 w-4 cursor-crosshair items-center justify-center rounded-full border-2 ${
+                  color.dotBorder
+                } ${color.dot} transition-all duration-150 ${
+                  isCompatible
+                    ? "scale-125 ring-4 ring-emerald-500/40 border-emerald-400 bg-emerald-500 animate-pulse z-10"
+                    : isSourceOfDrag
+                    ? "scale-125 ring-2 ring-indigo-500 z-10"
+                    : "hover:scale-125 hover:ring-2 hover:ring-indigo-400"
+                }`}
+              >
+                <div className="h-1.5 w-1.5 rounded-full bg-white dark:bg-zinc-900" />
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       {/* Node Hover Actions Bar */}

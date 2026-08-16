@@ -360,3 +360,78 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
     },
   },
 };
+
+export const PORT_TYPE_COLORS: Record<string, {
+  dot: string;
+  dotBorder: string;
+  badge: string;
+  text: string;
+  stroke: string;
+  label: string;
+}> = {
+  string: {
+    dot: "bg-sky-500",
+    dotBorder: "border-sky-300 dark:border-sky-600",
+    badge: "bg-sky-50 dark:bg-sky-950/60 text-sky-700 dark:text-sky-300 border border-sky-200 dark:border-sky-800",
+    text: "text-sky-600 dark:text-sky-400",
+    stroke: "#0ea5e9",
+    label: "Текст",
+  },
+  number: {
+    dot: "bg-amber-500",
+    dotBorder: "border-amber-300 dark:border-amber-600",
+    badge: "bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800",
+    text: "text-amber-600 dark:text-amber-400",
+    stroke: "#f59e0b",
+    label: "Число",
+  },
+  boolean: {
+    dot: "bg-emerald-500",
+    dotBorder: "border-emerald-300 dark:border-emerald-600",
+    badge: "bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800",
+    text: "text-emerald-600 dark:text-emerald-400",
+    stroke: "#10b981",
+    label: "Логический",
+  },
+  image: {
+    dot: "bg-purple-500",
+    dotBorder: "border-purple-300 dark:border-purple-600",
+    badge: "bg-purple-50 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800",
+    text: "text-purple-600 dark:text-purple-400",
+    stroke: "#a855f7",
+    label: "Изображение",
+  },
+  video: {
+    dot: "bg-pink-500",
+    dotBorder: "border-pink-300 dark:border-pink-600",
+    badge: "bg-pink-50 dark:bg-pink-950/60 text-pink-700 dark:text-pink-300 border border-pink-200 dark:border-pink-800",
+    text: "text-pink-600 dark:text-pink-400",
+    stroke: "#ec4899",
+    label: "Видео",
+  },
+  any: {
+    dot: "bg-indigo-500",
+    dotBorder: "border-indigo-300 dark:border-indigo-600",
+    badge: "bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800",
+    text: "text-indigo-600 dark:text-indigo-400",
+    stroke: "#6366f1",
+    label: "Медиа / Любой",
+  },
+};
+
+export function isPortCompatible(sourceType: string, targetType: string): boolean {
+  if (!sourceType || !targetType) return true;
+  if (sourceType === "any" || targetType === "any") return true;
+  if (sourceType === targetType) return true;
+  if (sourceType === "number" && targetType === "string") return true;
+  if (sourceType === "image" && (targetType === "image" || targetType === "any")) return true;
+  if (sourceType === "video" && (targetType === "video" || targetType === "any")) return true;
+  return false;
+}
+
+export function getPortDefinition(nodeType: string, portId: string, isOutput: boolean): NodePort | undefined {
+  const def = NODE_DEFINITIONS[nodeType];
+  if (!def) return undefined;
+  const list = isOutput ? def.outputs : def.inputs;
+  return list.find((p) => p.id === portId);
+}

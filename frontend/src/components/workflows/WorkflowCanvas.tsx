@@ -27,7 +27,11 @@ import type {
 import { WorkflowNodeCard } from "./WorkflowNodeCard";
 import { NodePalette } from "./NodePalette";
 import { NodeInspector } from "./NodeInspector";
-import { NODE_DEFINITIONS } from "./nodeTypes";
+import {
+  NODE_DEFINITIONS,
+  PORT_TYPE_COLORS,
+  isPortCompatible,
+} from "./nodeTypes";
 
 interface WorkflowCanvasProps {
   workflow: Workflow;
@@ -76,10 +80,63 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
     nodeId: string;
     handleId: string;
     isOutput: boolean;
-    x: number;
-    y: number;
+    portType: string;
+    startX: number;
+    startY: number;
   } | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const [warningToast, setWarningToast] = useState<string | null>(null);
+
+  // Registered Port DOM Elements for exact anchor coordinates
+  const portElementsRef = useRef<Map<string, HTMLElement>>(new Map());
+  const [, setPortVersion] = useState(0);
+
+  const handleRegisterPort = useCallback(
+    (
+      nodeId: string,
+      handleId: string,
+      isOutput: boolean,
+      el: HTMLElement | null
+    ) => {
+      const key = `${nodeId}:${isOutput ? "out" : "in"}:${handleId}`;
+      if (el) {
+        portElementsRef.current.set(key, el);
+      } else {
+        portElementsRef.current.delete(key);
+      }
+    },
+    []
+  );
+
+  const getPortAnchor = useCallback(
+    (node: WorkflowNode, portId?: string, isOutput = false) => {
+      const def = NODE_DEFINITIONS[node.type];
+      const ports = isOutput ? def?.outputs : def?.inputs;
+      const actualPortId = portId || ports?.[0]?.id;
+      const key = `${node.id}:${isOutput ? "out" : "in"}:${actualPortId}`;
+      const portEl = portElementsRef.current.get(key);
+      const canvasEl = canvasRef.current;
+
+      if (portEl && canvasEl) {
+        const portRect = portEl.getBoundingClientRect();
+        const canvasRect = canvasEl.getBoundingClientRect();
+        const graphX =
+          (portRect.left + portRect.width / 2 - canvasRect.left - pan.x) / zoom;
+        const graphY =
+          (portRect.top + portRect.height / 2 - canvasRect.top - pan.y) / zoom;
+        return { x: graphX, y: graphY };
+      }
+
+      // Mathematical fallback based on port index if DOM element not yet mounted
+      const portIndex = ports?.findIndex((p) => p.id === actualPortId) ?? 0;
+      const safeIdx = portIndex >= 0 ? portIndex : 0;
+      return {
+        x: isOutput ? node.position.x + 288 + 8 : node.position.x - 8,
+        y: node.position.y + 130 + safeIdx * 28,
+      };
+    },
+    [pan.x, pan.y, zoom]
+  );
 
   // Sync state if initial prop changes
   useEffect(() => {
@@ -87,6 +144,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
     setEdges(workflow.graph.edges || []);
     setName(workflow.name);
     setIsActive(workflow.is_active);
+    setPortVersion((v) => v + 1);
   }, [workflow]);
 
   // Handle Canvas Pan (Mouse Drag)
@@ -182,38 +240,90 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
     nodeId: string,
     handleId: string,
     isOutput: boolean,
+    portType: string,
     e: React.MouseEvent
   ) => {
+    const node = nodes.find((n) => n.id === nodeId);
+    if (!node) return;
+    const anchor = getPortAnchor(node, handleId, isOutput);
     setConnectingFrom({
       nodeId,
       handleId,
       isOutput,
-      x: e.clientX,
-      y: e.clientY,
+      portType,
+      startX: anchor.x,
+      startY: anchor.y,
     });
   };
 
   // Complete connecting wire
-  const handleEndConnect = (nodeId: string, handleId: string, isOutput: boolean) => {
+  const handleEndConnect = (
+    nodeId: string,
+    handleId: string,
+    isOutput: boolean,
+    portType: string
+  ) => {
     if (!connectingFrom) return;
-    if (connectingFrom.nodeId === nodeId) return; // don't self-connect
 
-    const source = connectingFrom.isOutput ? connectingFrom.nodeId : nodeId;
-    const target = connectingFrom.isOutput ? nodeId : connectingFrom.nodeId;
-    const sourceHandle = connectingFrom.isOutput ? connectingFrom.handleId : handleId;
-    const targetHandle = connectingFrom.isOutput ? handleId : connectingFrom.handleId;
+    // Don't connect same node or same direction (out-to-out or in-to-in)
+    if (
+      connectingFrom.nodeId === nodeId ||
+      connectingFrom.isOutput === isOutput
+    ) {
+      setConnectingFrom(null);
+      return;
+    }
 
-    // Check if edge already exists
+    const sourceNodeId = connectingFrom.isOutput
+      ? connectingFrom.nodeId
+      : nodeId;
+    const sourceHandleId = connectingFrom.isOutput
+      ? connectingFrom.handleId
+      : handleId;
+    const sourcePortType = connectingFrom.isOutput
+      ? connectingFrom.portType
+      : portType;
+
+    const targetNodeId = connectingFrom.isOutput
+      ? nodeId
+      : connectingFrom.nodeId;
+    const targetHandleId = connectingFrom.isOutput
+      ? handleId
+      : connectingFrom.handleId;
+    const targetPortType = connectingFrom.isOutput
+      ? portType
+      : connectingFrom.portType;
+
+    // Strict Type Compatibility Validation
+    if (!isPortCompatible(sourcePortType, targetPortType)) {
+      const srcLabel =
+        PORT_TYPE_COLORS[sourcePortType]?.label || sourcePortType;
+      const tgtLabel =
+        PORT_TYPE_COLORS[targetPortType]?.label || targetPortType;
+      setWarningToast(
+        `Несовместимый тип: «${srcLabel}» нельзя подключить к «${tgtLabel}»`
+      );
+      setTimeout(() => setWarningToast(null), 3500);
+      setConnectingFrom(null);
+      return;
+    }
+
+    // Check if edge already exists with exact handles
     const exists = edges.some(
-      (edge) => edge.source === source && edge.target === target
+      (edge) =>
+        edge.source === sourceNodeId &&
+        edge.target === targetNodeId &&
+        edge.sourceHandle === sourceHandleId &&
+        edge.targetHandle === targetHandleId
     );
+
     if (!exists) {
       const newEdge: WorkflowEdge = {
-        id: `e_${source}_${target}_${Date.now()}`,
-        source,
-        target,
-        sourceHandle,
-        targetHandle,
+        id: `e_${sourceNodeId}_${targetNodeId}_${Date.now()}`,
+        source: sourceNodeId,
+        target: targetNodeId,
+        sourceHandle: sourceHandleId,
+        targetHandle: targetHandleId,
       };
       setEdges((prev) => [...prev, newEdge]);
     }
@@ -363,6 +473,14 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
 
   return (
     <div className="relative flex h-[calc(100vh-3.5rem)] w-full flex-col overflow-hidden bg-zinc-50 dark:bg-zinc-950">
+      {/* Type mismatch warning toast */}
+      {warningToast && (
+        <div className="absolute top-16 left-1/2 z-50 -translate-x-1/2 flex items-center gap-2 rounded-2xl border border-red-300 dark:border-red-800 bg-red-600/95 dark:bg-red-900/95 px-4 py-2.5 text-xs font-semibold text-white shadow-2xl backdrop-blur-md animate-in fade-in zoom-in-95">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          <span>{warningToast}</span>
+        </div>
+      )}
+
       {/* Top Action Bar */}
       <header className="z-20 flex h-14 shrink-0 items-center justify-between border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4">
         {/* Left: Back & Name */}
@@ -491,14 +609,28 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
               const targetNode = nodes.find((n) => n.id === edge.target);
               if (!sourceNode || !targetNode) return null;
 
-              // Compute port anchors
-              const x1 = sourceNode.position.x + 288; // width of node card
-              const y1 = sourceNode.position.y + 110;
-              const x2 = targetNode.position.x;
-              const y2 = targetNode.position.y + 110;
+              const sourceDef = NODE_DEFINITIONS[sourceNode.type];
+              const targetDef = NODE_DEFINITIONS[targetNode.type];
 
-              const dx = Math.abs(x2 - x1) * 0.5;
-              const pathD = `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
+              const sourceHandleId =
+                edge.sourceHandle || sourceDef?.outputs[0]?.id;
+              const targetHandleId =
+                edge.targetHandle || targetDef?.inputs[0]?.id;
+
+              const sourcePort =
+                sourceDef?.outputs.find((p) => p.id === sourceHandleId) ||
+                sourceDef?.outputs[0];
+              const strokeColor =
+                PORT_TYPE_COLORS[sourcePort?.type || "any"]?.stroke ||
+                "#6366f1";
+
+              const p1 = getPortAnchor(sourceNode, sourceHandleId, true);
+              const p2 = getPortAnchor(targetNode, targetHandleId, false);
+
+              const dx = Math.max(Math.abs(p2.x - p1.x) * 0.5, 40);
+              const pathD = `M ${p1.x} ${p1.y} C ${p1.x + dx} ${p1.y}, ${
+                p2.x - dx
+              } ${p2.y}, ${p2.x} ${p2.y}`;
               const isEdgeSelected = selectedEdgeId === edge.id;
 
               return (
@@ -508,7 +640,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                     d={pathD}
                     fill="none"
                     stroke="transparent"
-                    strokeWidth="16"
+                    strokeWidth="18"
                     className="cursor-pointer"
                     onClick={(e) => {
                       e.stopPropagation();
@@ -520,33 +652,75 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                   <path
                     d={pathD}
                     fill="none"
-                    stroke={
-                      isEdgeSelected
-                        ? "#6366f1"
-                        : "currentColor"
-                    }
-                    strokeWidth={isEdgeSelected ? "3" : "2"}
-                    className={`${
-                      isEdgeSelected
-                        ? "text-indigo-600"
-                        : "text-zinc-300 dark:text-zinc-700 hover:text-indigo-400"
-                    } transition`}
+                    stroke={isEdgeSelected ? "#6366f1" : strokeColor}
+                    strokeWidth={isEdgeSelected ? "3.5" : "2"}
+                    strokeOpacity={isEdgeSelected ? "1" : "0.9"}
+                    className="transition-all hover:stroke-[3.5] hover:stroke-opacity-100"
+                  />
+                  {/* Anchor Dots */}
+                  <circle
+                    cx={p1.x}
+                    cy={p1.y}
+                    r="3.5"
+                    fill={isEdgeSelected ? "#6366f1" : strokeColor}
+                  />
+                  <circle
+                    cx={p2.x}
+                    cy={p2.y}
+                    r="3.5"
+                    fill={isEdgeSelected ? "#6366f1" : strokeColor}
                   />
                 </g>
               );
             })}
 
             {/* Connecting Wire in progress */}
-            {connectingFrom && (
-              <path
-                d={`M ${(connectingFrom.x - (canvasRef.current?.getBoundingClientRect().left || 0) - pan.x) / zoom} ${(connectingFrom.y - (canvasRef.current?.getBoundingClientRect().top || 0) - pan.y) / zoom} L ${(mousePos.x - (canvasRef.current?.getBoundingClientRect().left || 0) - pan.x) / zoom} ${(mousePos.y - (canvasRef.current?.getBoundingClientRect().top || 0) - pan.y) / zoom}`}
-                fill="none"
-                stroke="#6366f1"
-                strokeWidth="2.5"
-                strokeDasharray="4 4"
-                className="animate-pulse"
-              />
-            )}
+            {connectingFrom && (() => {
+              const canvasRect = canvasRef.current?.getBoundingClientRect();
+              const mouseCanvasX = canvasRect
+                ? (mousePos.x - canvasRect.left - pan.x) / zoom
+                : mousePos.x;
+              const mouseCanvasY = canvasRect
+                ? (mousePos.y - canvasRect.top - pan.y) / zoom
+                : mousePos.y;
+
+              const color =
+                PORT_TYPE_COLORS[connectingFrom.portType] ||
+                PORT_TYPE_COLORS.any;
+
+              let x1: number, y1: number, x2: number, y2: number;
+              if (connectingFrom.isOutput) {
+                x1 = connectingFrom.startX;
+                y1 = connectingFrom.startY;
+                x2 = mouseCanvasX;
+                y2 = mouseCanvasY;
+              } else {
+                x1 = mouseCanvasX;
+                y1 = mouseCanvasY;
+                x2 = connectingFrom.startX;
+                y2 = connectingFrom.startY;
+              }
+
+              const dx = Math.max(Math.abs(x2 - x1) * 0.5, 30);
+              const pathD = `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${
+                x2 - dx
+              } ${y2}, ${x2} ${y2}`;
+
+              return (
+                <g>
+                  <path
+                    d={pathD}
+                    fill="none"
+                    stroke={color.stroke}
+                    strokeWidth="2.5"
+                    strokeDasharray="6 4"
+                    className="animate-pulse"
+                  />
+                  <circle cx={x1} cy={y1} r="4" fill={color.stroke} />
+                  <circle cx={x2} cy={y2} r="4" fill={color.stroke} />
+                </g>
+              );
+            })()}
           </svg>
 
           {/* Node Cards Layer */}
@@ -564,6 +738,8 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                 node={node}
                 isSelected={selectedNodeId === node.id}
                 scale={zoom}
+                connectingFrom={connectingFrom}
+                onRegisterPort={handleRegisterPort}
                 onSelect={() => {
                   setSelectedNodeId(node.id);
                   setSelectedEdgeId(null);
