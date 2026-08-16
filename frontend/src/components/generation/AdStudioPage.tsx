@@ -170,7 +170,17 @@ function TemplateCard({
       )}
     >
       <div className={cn("relative bg-zinc-100", aspectClass(item.aspect_ratio))}>
-        {item.preview_url ? (
+        {item.preview_kind === "video" && item.preview_source_url ? (
+          <ProtectedMediaVideo
+            url={item.preview_source_url}
+            poster={item.preview_url}
+            className="h-full w-full object-cover"
+            autoPlay
+            loop
+            muted
+            controls={false}
+          />
+        ) : item.preview_url ? (
           <ProtectedMediaImage
             url={item.preview_url}
             alt={item.title}

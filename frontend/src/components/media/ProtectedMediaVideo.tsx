@@ -34,7 +34,7 @@ export function ProtectedMediaVideo({
       muted={muted}
       poster={poster}
       playsInline
-      preload="metadata"
+      preload={autoPlay ? "auto" : "metadata"}
     />
   );
 }
