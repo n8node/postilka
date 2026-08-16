@@ -66,6 +66,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
 
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+  const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null);
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
@@ -696,6 +697,8 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                 p2.x - dx
               } ${p2.y}, ${p2.x} ${p2.y}`;
               const isEdgeSelected = selectedEdgeId === edge.id;
+              const isEdgeHovered = hoveredEdgeId === edge.id;
+              const showDeleteBtn = isEdgeSelected || isEdgeHovered;
 
               const c1x = p1.x + dx;
               const c1y = p1.y;
@@ -705,14 +708,26 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
               const midY = 0.125 * p1.y + 0.375 * c1y + 0.375 * c2y + 0.125 * p2.y;
 
               return (
-                <g key={edge.id} className="pointer-events-auto">
-                  {/* Invisible wide stroke for easy clicking */}
+                <g
+                  key={edge.id}
+                  className="pointer-events-auto"
+                  onMouseEnter={() => setHoveredEdgeId(edge.id)}
+                  onMouseLeave={() =>
+                    setHoveredEdgeId((prev) => (prev === edge.id ? null : prev))
+                  }
+                >
+                  {/* Invisible wide stroke (36px width) for ultra-easy clicking */}
                   <path
                     d={pathD}
                     fill="none"
                     stroke="transparent"
-                    strokeWidth="20"
+                    strokeWidth="36"
                     className="cursor-pointer"
+                    onMouseDown={(e) => {
+                      e.stopPropagation();
+                      setSelectedEdgeId(edge.id);
+                      setSelectedNodeId(null);
+                    }}
                     onClick={(e) => {
                       e.stopPropagation();
                       setSelectedEdgeId(edge.id);
@@ -723,10 +738,21 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                   <path
                     d={pathD}
                     fill="none"
-                    stroke={isEdgeSelected ? "#6366f1" : strokeColor}
-                    strokeWidth={isEdgeSelected ? "3.5" : "2"}
-                    strokeOpacity={isEdgeSelected ? "1" : "0.9"}
-                    className="transition-all hover:stroke-[3.5] hover:stroke-opacity-100 cursor-pointer"
+                    stroke={
+                      isEdgeSelected
+                        ? "#6366f1"
+                        : isEdgeHovered
+                        ? "#818cf8"
+                        : strokeColor
+                    }
+                    strokeWidth={isEdgeSelected || isEdgeHovered ? "3.5" : "2"}
+                    strokeOpacity={isEdgeSelected || isEdgeHovered ? "1" : "0.9"}
+                    className="transition-all cursor-pointer"
+                    onMouseDown={(e) => {
+                      e.stopPropagation();
+                      setSelectedEdgeId(edge.id);
+                      setSelectedNodeId(null);
+                    }}
                     onClick={(e) => {
                       e.stopPropagation();
                       setSelectedEdgeId(edge.id);
@@ -737,37 +763,66 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                   <circle
                     cx={p1.x}
                     cy={p1.y}
-                    r="3.5"
+                    r="4"
                     fill={isEdgeSelected ? "#6366f1" : strokeColor}
                   />
                   <circle
                     cx={p2.x}
                     cy={p2.y}
-                    r="3.5"
+                    r="4"
                     fill={isEdgeSelected ? "#6366f1" : strokeColor}
                   />
 
-                  {/* Delete Edge Button on Midpoint when selected */}
-                  {isEdgeSelected && (
-                    <foreignObject
-                      x={midX - 13}
-                      y={midY - 13}
-                      width={26}
-                      height={26}
-                      className="overflow-visible"
+                  {/* SVG Delete Edge Button on Midpoint (Native SVG for 100% reliable click detection) */}
+                  {showDeleteBtn && (
+                    <g
+                      className="cursor-pointer group/del"
+                      onMouseDown={(e) => {
+                        e.stopPropagation();
+                      }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteEdge(edge.id);
+                      }}
                     >
-                      <button
-                        type="button"
-                        title="Удалить связь (Delete)"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteEdge(edge.id);
-                        }}
-                        className="flex h-6 w-6 items-center justify-center rounded-full bg-red-600 text-white shadow-xl hover:bg-red-500 hover:scale-125 active:scale-95 transition-all border-2 border-white dark:border-zinc-900 cursor-pointer animate-in zoom-in-75"
+                      {/* Generous invisible hit target (48px diameter) */}
+                      <circle
+                        cx={midX}
+                        cy={midY}
+                        r="24"
+                        fill="transparent"
+                        className="cursor-pointer"
+                      />
+
+                      {/* Visible delete badge circle */}
+                      <circle
+                        cx={midX}
+                        cy={midY}
+                        r="14"
+                        fill="#ef4444"
+                        stroke="#ffffff"
+                        strokeWidth="2.5"
+                        className="transition-transform duration-150 hover:scale-125"
+                      />
+
+                      {/* Trash icon paths */}
+                      <g
+                        transform={`translate(${midX - 6}, ${midY - 6})`}
+                        stroke="#ffffff"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        fill="none"
+                        className="pointer-events-none"
                       >
-                        <Trash2 className="h-3 w-3" />
-                      </button>
-                    </foreignObject>
+                        <path d="M2 3.5h8" />
+                        <path d="M7.5 3.5v-1a.8.8 0 0 0-.8-.8H5.3a.8.8 0 0 0-.8.8v1" />
+                        <path d="M3 3.5v6.5a1 1 0 0 0 1 1h4a1 1 0 0 0 1-1V3.5" />
+                        <line x1="5" y1="5.5" x2="5" y2="8.5" />
+                        <line x1="7" y1="5.5" x2="7" y2="8.5" />
+                      </g>
+                      <title>Удалить связь (Delete / Backspace)</title>
+                    </g>
                   )}
                 </g>
               );
