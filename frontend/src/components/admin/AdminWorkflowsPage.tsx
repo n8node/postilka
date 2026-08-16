@@ -119,7 +119,7 @@ export function AdminWorkflowsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">
-            Управление сценариями (Workflow Builder)
+            Управление процессами
           </h1>
           <p className="text-xs text-zinc-500">
             Системные шаблоны процессов, аналитика запусков и глобальные настройки

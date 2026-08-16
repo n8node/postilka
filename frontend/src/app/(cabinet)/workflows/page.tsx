@@ -90,7 +90,7 @@ export default function WorkflowsPage() {
               Автоматизированные процессы
             </h1>
             <span className="rounded-full bg-indigo-50 dark:bg-indigo-950/50 px-2.5 py-0.5 text-xs font-semibold text-indigo-600 dark:text-indigo-400">
-              Workflow Builder
+              Автоматизация
             </span>
           </div>
           <p className="mt-1 text-sm text-zinc-500">

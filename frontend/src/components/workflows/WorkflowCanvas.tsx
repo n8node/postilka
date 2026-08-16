@@ -591,7 +591,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         <div className="flex items-center gap-2">
           <button
             onClick={() => setShowEconomicsModal(true)}
-            title="Расчёт стоимости и ресурсов воркфлоу"
+            title="Расчёт стоимости и ресурсов процесса"
             className="flex items-center gap-1.5 rounded-xl border border-emerald-300/80 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/50 px-2.5 py-1.5 text-xs font-semibold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 shadow-sm transition"
           >
             <Coins className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />

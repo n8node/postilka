@@ -46,7 +46,7 @@ const mainNav: NavItem[] = [
   { href: "/calendar", label: "Календарь", icon: CalendarDays },
   { href: "/files", label: "Файлы", icon: ImageIcon },
   { href: "/ai", label: "Ai контент", icon: Sparkles },
-  { href: "/workflows", label: "Процессы (Workflow)", icon: GitBranch },
+  { href: "/workflows", label: "Процессы", icon: GitBranch },
   { href: "/plans", label: "Тариф и кошелёк", icon: Wallet },
   { href: "/team", label: "Команда", icon: Users },
   { href: "/analytics", label: "Аналитика", icon: BarChart3 },

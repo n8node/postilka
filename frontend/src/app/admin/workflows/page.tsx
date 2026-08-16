@@ -1,7 +1,7 @@
 import { AdminWorkflowsPage } from "@/components/admin/AdminWorkflowsPage";
 
 export const metadata = {
-  title: "Управление сценариями (Workflows) — Админ-панель",
+  title: "Управление процессами — Админ-панель",
 };
 
 export default function AdminWorkflowsRoute() {
