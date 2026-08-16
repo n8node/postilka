@@ -267,14 +267,8 @@ function TemplateCard({
           </div>
         )}
         <span className="absolute left-2 top-2 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-white">
-          {item.media_kind === "video" ? "Видео" : "Фото"}
+          {adStudioCategoryLabel(item.category)}
         </span>
-      </div>
-      <div className="px-3 py-2.5">
-        <p className="truncate text-[13px] font-medium text-text">{item.title}</p>
-        <p className="mt-0.5 text-[11px] text-muted">
-          {adStudioCategoryLabel(item.category)} · {adStudioModeLabel(resolveAdStudioMode(item))}
-        </p>
       </div>
     </button>
   );
