@@ -843,11 +843,11 @@ func (s *WorkflowService) getNodeTitle(node model.WorkflowNode) string {
 	case "trigger":
 		return "Запуск процесса"
 	case "ai_text":
-		return "Yandex GPT Генерация"
+		return "AI Генерация текста"
 	case "ai_image":
-		return "KIE.ai Изображение"
+		return "AI Изображение"
 	case "ai_video":
-		return "KIE.ai Видео"
+		return "AI Видео"
 	case "social_telegram":
 		return "Telegram Пост"
 	case "social_vk":

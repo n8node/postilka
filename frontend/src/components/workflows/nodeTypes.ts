@@ -54,8 +54,8 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
   },
   ai_text: {
     type: "ai_text",
-    title: "Yandex GPT Текст",
-    description: "Генерация постов, рерайт, сценарии и хештеги",
+    title: "AI Генерация текста",
+    description: "Генерация постов, рерайт, сценарии и хештеги (Нейросеть)",
     category: "ai",
     icon: "sparkles",
     color: {
@@ -72,7 +72,7 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       { id: "tokens", label: "Токены", type: "number" },
     ],
     defaultData: {
-      title: "Yandex GPT Генерация",
+      title: "AI Генерация текста",
       prompt: "Напиши вовлекающий пост для соцсетей на тему трендов 2026 года.",
       role: "Опытный SMM-копирайтер",
       temperature: 0.7,
@@ -80,8 +80,8 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
   },
   ai_image: {
     type: "ai_image",
-    title: "Image Generation",
-    description: "Генерация графики и фотореалистичных обложек (KIE.ai / Flux)",
+    title: "AI Изображение",
+    description: "Генерация фотореалистичных иллюстраций и обложек (Нейросеть)",
     category: "ai",
     icon: "image",
     color: {
@@ -98,17 +98,17 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       { id: "image_url", label: "Изображение", type: "image" },
     ],
     defaultData: {
-      title: "Image Generation",
+      title: "AI Изображение",
       prompt: "Modern aesthetic digital portrait, cinematic lighting, 4k",
       aspectRatio: "1:1",
-      model: "GPT Image 2",
+      model: "AI Studio Pro",
       resolution: "2k",
     },
   },
   ai_video: {
     type: "ai_video",
-    title: "Video Generation",
-    description: "Генерация динамических видеороликов и анимаций (KIE.ai)",
+    title: "AI Видео / Shorts",
+    description: "Генерация динамических видеороликов и анимаций (Нейросеть)",
     category: "ai",
     icon: "video",
     color: {
@@ -125,7 +125,7 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       { id: "video_url", label: "Видео (MP4)", type: "video" },
     ],
     defaultData: {
-      title: "Video Generation",
+      title: "AI Видеоролик",
       prompt: "Cinematic drone shot flying through modern futuristic skyscraper city",
       aspectRatio: "9:16",
       durationSeconds: 5,
@@ -442,3 +442,116 @@ export function getPortDefinition(nodeType: string, portId: string, isOutput: bo
   const list = isOutput ? def.outputs : def.inputs;
   return list.find((p) => p.id === portId);
 }
+
+export interface WorkflowEconomicsItem {
+  id: string;
+  nodeTitle: string;
+  category: string;
+  unit: string;
+  quotaLabel: string;
+  walletRubles: number;
+}
+
+export interface WorkflowEconomicsSummary {
+  textCount: number;
+  imageCount: number;
+  videoCount: number;
+  socialCount: number;
+  totalNodes: number;
+  estimatedTokens: number;
+  estimatedImageCredits: number;
+  estimatedVideoCredits: number;
+  totalWalletRubles: number;
+  items: WorkflowEconomicsItem[];
+}
+
+export function calculateWorkflowCost(
+  nodes: Array<{ id: string; type: string; data: Record<string, any> }>
+): WorkflowEconomicsSummary {
+  let textCount = 0;
+  let imageCount = 0;
+  let videoCount = 0;
+  let socialCount = 0;
+  let estimatedTokens = 0;
+  let estimatedImageCredits = 0;
+  let estimatedVideoCredits = 0;
+  let totalWalletRubles = 0;
+  const items: WorkflowEconomicsItem[] = [];
+
+  nodes.forEach((n) => {
+    const title = (n.data?.title as string) || n.type;
+    if (n.type === "ai_text") {
+      textCount++;
+      estimatedTokens += 500;
+      const rubles = 0.5; // ~0.50 ₽ за генерацию текста при исчерпании квоты
+      totalWalletRubles += rubles;
+      items.push({
+        id: n.id,
+        nodeTitle: title,
+        category: "Текст AI",
+        unit: "1 генерация (~500 токенов)",
+        quotaLabel: "1 генерация из квоты тарифа",
+        walletRubles: rubles,
+      });
+    } else if (n.type === "ai_image") {
+      imageCount++;
+      estimatedImageCredits += 1;
+      const rubles = 5.0; // ~5.00 ₽ за изображение при исчерпании квоты
+      totalWalletRubles += rubles;
+      items.push({
+        id: n.id,
+        nodeTitle: title,
+        category: "Изображение AI",
+        unit: "1 изображение (2k)",
+        quotaLabel: "1 кредит из квоты тарифа",
+        walletRubles: rubles,
+      });
+    } else if (n.type === "ai_video") {
+      videoCount++;
+      const duration = (n.data?.durationSeconds as number) || 5;
+      const credits = duration <= 5 ? 5 : 10;
+      estimatedVideoCredits += credits;
+      const rubles = duration <= 5 ? 25.0 : 50.0;
+      totalWalletRubles += rubles;
+      items.push({
+        id: n.id,
+        nodeTitle: title,
+        category: "Видео AI",
+        unit: `${duration} сек видео (${credits} кредитов)`,
+        quotaLabel: `${credits} кредитов из квоты тарифа`,
+        walletRubles: rubles,
+      });
+    } else if (
+      n.type === "social_telegram" ||
+      n.type === "social_vk" ||
+      n.type === "social_youtube" ||
+      n.type === "social_rutube" ||
+      n.type === "social_max" ||
+      n.type === "social_dzen"
+    ) {
+      socialCount++;
+      items.push({
+        id: n.id,
+        nodeTitle: title,
+        category: "Публикация",
+        unit: "1 публикация",
+        quotaLabel: "Лимит постов тарифа",
+        walletRubles: 0,
+      });
+    }
+  });
+
+  return {
+    textCount,
+    imageCount,
+    videoCount,
+    socialCount,
+    totalNodes: nodes.length,
+    estimatedTokens,
+    estimatedImageCredits,
+    estimatedVideoCredits,
+    totalWalletRubles: Math.round(totalWalletRubles * 100) / 100,
+    items,
+  };
+}
+

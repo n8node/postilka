@@ -214,7 +214,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
           </div>
         )}
 
-        {/* 3. AI IMAGE (KIE) */}
+        {/* 3. AI IMAGE */}
         {node.type === "ai_image" && (
           <div className="space-y-3">
             <div>
@@ -268,7 +268,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
           </div>
         )}
 
-        {/* 4. AI VIDEO (KIE) */}
+        {/* 4. AI VIDEO */}
         {node.type === "ai_video" && (
           <div className="space-y-3">
             <div>

@@ -147,7 +147,7 @@ export const WorkflowRunHistoryModal: React.FC<WorkflowRunHistoryModalProps> = (
                     </p>
                   </div>
                   <div className="rounded-2xl border border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/40 p-3">
-                    <span className="text-[10px] text-zinc-500">Кредиты KIE</span>
+                    <span className="text-[10px] text-zinc-500">Кредиты AI</span>
                     <p className="mt-0.5 font-bold text-zinc-900 dark:text-zinc-100 text-xs">
                       {selectedRun.credits_used}
                     </p>

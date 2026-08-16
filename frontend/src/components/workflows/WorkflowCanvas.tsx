@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import {
   Play,
   Save,
@@ -16,6 +16,11 @@ import {
   Check,
   AlertCircle,
   FileCode2,
+  Coins,
+  CreditCard,
+  Trash2,
+  Info,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import type {
@@ -34,6 +39,7 @@ import {
   NODE_DEFINITIONS,
   PORT_TYPE_COLORS,
   isPortCompatible,
+  calculateWorkflowCost,
 } from "./nodeTypes";
 
 interface WorkflowCanvasProps {
@@ -89,11 +95,15 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   } | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [warningToast, setWarningToast] = useState<string | null>(null);
+  const [showEconomicsModal, setShowEconomicsModal] = useState(false);
   const [mediaPickerTarget, setMediaPickerTarget] = useState<{
     nodeId: string;
     field: string;
     mediaKind?: "image" | "video";
   } | null>(null);
+
+  // Workflow economic cost calculation
+  const costSummary = useMemo(() => calculateWorkflowCost(nodes), [nodes]);
 
   // Registered Port DOM Elements for exact anchor coordinates
   const portElementsRef = useRef<Map<string, HTMLElement>>(new Map());
@@ -382,13 +392,45 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   };
 
   // Delete node
-  const handleDeleteNode = (nodeId: string) => {
+  const handleDeleteNode = useCallback((nodeId: string) => {
     setNodes((prev) => prev.filter((n) => n.id !== nodeId));
     setEdges((prev) =>
       prev.filter((e) => e.source !== nodeId && e.target !== nodeId)
     );
     if (selectedNodeId === nodeId) setSelectedNodeId(null);
-  };
+  }, [selectedNodeId]);
+
+  // Delete edge (connection)
+  const handleDeleteEdge = useCallback((edgeId: string) => {
+    setEdges((prev) => prev.filter((e) => e.id !== edgeId));
+    if (selectedEdgeId === edgeId) setSelectedEdgeId(null);
+  }, [selectedEdgeId]);
+
+  // Keyboard shortcut listener (Delete / Backspace)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement;
+      const isInput =
+        activeEl instanceof HTMLInputElement ||
+        activeEl instanceof HTMLTextAreaElement ||
+        activeEl instanceof HTMLSelectElement ||
+        activeEl?.getAttribute("contenteditable") === "true";
+      if (isInput) return;
+
+      if (e.key === "Delete" || e.key === "Backspace") {
+        if (selectedEdgeId) {
+          e.preventDefault();
+          handleDeleteEdge(selectedEdgeId);
+        } else if (selectedNodeId) {
+          e.preventDefault();
+          handleDeleteNode(selectedNodeId);
+        }
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedEdgeId, selectedNodeId, handleDeleteEdge, handleDeleteNode]);
 
   // Update node data from inspector
   const handleUpdateNodeData = (nodeId: string, newData: Record<string, any>) => {
@@ -545,8 +587,22 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
           </button>
         </div>
 
-        {/* Right: History, Test Run & Save */}
+        {/* Right: Economics, History, Test Run & Save */}
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowEconomicsModal(true)}
+            title="Расчёт стоимости и ресурсов воркфлоу"
+            className="flex items-center gap-1.5 rounded-xl border border-emerald-300/80 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/50 px-2.5 py-1.5 text-xs font-semibold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 shadow-sm transition"
+          >
+            <Coins className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+            <span className="hidden sm:inline">Стоимость:</span>
+            <span>
+              {costSummary.totalWalletRubles > 0
+                ? `0 ₽ тариф (~${costSummary.totalWalletRubles.toFixed(1)} ₽)`
+                : "0 ₽ (квота)"}
+            </span>
+          </button>
+
           <button
             onClick={onOpenHistory}
             className="flex items-center gap-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
@@ -641,6 +697,13 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
               } ${p2.y}, ${p2.x} ${p2.y}`;
               const isEdgeSelected = selectedEdgeId === edge.id;
 
+              const c1x = p1.x + dx;
+              const c1y = p1.y;
+              const c2x = p2.x - dx;
+              const c2y = p2.y;
+              const midX = 0.125 * p1.x + 0.375 * c1x + 0.375 * c2x + 0.125 * p2.x;
+              const midY = 0.125 * p1.y + 0.375 * c1y + 0.375 * c2y + 0.125 * p2.y;
+
               return (
                 <g key={edge.id} className="pointer-events-auto">
                   {/* Invisible wide stroke for easy clicking */}
@@ -648,7 +711,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                     d={pathD}
                     fill="none"
                     stroke="transparent"
-                    strokeWidth="18"
+                    strokeWidth="20"
                     className="cursor-pointer"
                     onClick={(e) => {
                       e.stopPropagation();
@@ -663,7 +726,12 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                     stroke={isEdgeSelected ? "#6366f1" : strokeColor}
                     strokeWidth={isEdgeSelected ? "3.5" : "2"}
                     strokeOpacity={isEdgeSelected ? "1" : "0.9"}
-                    className="transition-all hover:stroke-[3.5] hover:stroke-opacity-100"
+                    className="transition-all hover:stroke-[3.5] hover:stroke-opacity-100 cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedEdgeId(edge.id);
+                      setSelectedNodeId(null);
+                    }}
                   />
                   {/* Anchor Dots */}
                   <circle
@@ -678,6 +746,29 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                     r="3.5"
                     fill={isEdgeSelected ? "#6366f1" : strokeColor}
                   />
+
+                  {/* Delete Edge Button on Midpoint when selected */}
+                  {isEdgeSelected && (
+                    <foreignObject
+                      x={midX - 13}
+                      y={midY - 13}
+                      width={26}
+                      height={26}
+                      className="overflow-visible"
+                    >
+                      <button
+                        type="button"
+                        title="Удалить связь (Delete)"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteEdge(edge.id);
+                        }}
+                        className="flex h-6 w-6 items-center justify-center rounded-full bg-red-600 text-white shadow-xl hover:bg-red-500 hover:scale-125 active:scale-95 transition-all border-2 border-white dark:border-zinc-900 cursor-pointer animate-in zoom-in-75"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </foreignObject>
+                  )}
                 </g>
               );
             })}
@@ -853,6 +944,157 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
             <Maximize2 className="h-4 w-4" />
           </button>
         </div>
+
+        {/* Economics & Cost Modal */}
+        {showEconomicsModal && (
+          <div
+            onWheel={(e) => e.stopPropagation()}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in"
+          >
+            <div
+              onClick={(e) => e.stopPropagation()}
+              className="relative w-full max-w-lg rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 shadow-2xl"
+            >
+              <div className="mb-4 flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 pb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                    <Coins className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                      Экономика и стоимость запуска
+                    </h3>
+                    <p className="text-[11px] text-zinc-500">
+                      Полный расчёт расхода квот тарифа и баланса кошелька
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowEconomicsModal(false)}
+                  className="rounded-lg p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-zinc-900"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Summary Cards */}
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div className="rounded-xl border border-emerald-200/60 dark:border-emerald-900/40 bg-emerald-50/50 dark:bg-emerald-950/20 p-3">
+                  <span className="text-[10px] font-semibold uppercase text-emerald-700 dark:text-emerald-400">
+                    По тарифу (Included)
+                  </span>
+                  <p className="mt-1 text-xl font-bold text-emerald-900 dark:text-emerald-200">
+                    0 ₽
+                  </p>
+                  <p className="text-[10px] text-emerald-700/80 dark:text-emerald-400/80 mt-0.5">
+                    Списывается из квоты тарифа при наличии
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-850/40 p-3">
+                  <span className="text-[10px] font-semibold uppercase text-zinc-500">
+                    С кошелька (overage)
+                  </span>
+                  <p className="mt-1 text-xl font-bold text-zinc-900 dark:text-zinc-100">
+                    ~{costSummary.totalWalletRubles.toFixed(2)} ₽
+                  </p>
+                  <p className="text-[10px] text-zinc-500 mt-0.5">
+                    Только при исчерпании квоты тарифа
+                  </p>
+                </div>
+              </div>
+
+              {/* Resource Summary Counters */}
+              <div className="grid grid-cols-4 gap-2 mb-4">
+                <div className="rounded-lg bg-zinc-100/70 dark:bg-zinc-800/40 p-2 text-center">
+                  <span className="text-[10px] text-zinc-500 block">AI Текст</span>
+                  <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
+                    {costSummary.textCount}
+                  </span>
+                </div>
+                <div className="rounded-lg bg-zinc-100/70 dark:bg-zinc-800/40 p-2 text-center">
+                  <span className="text-[10px] text-zinc-500 block">AI Фото</span>
+                  <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
+                    {costSummary.imageCount}
+                  </span>
+                </div>
+                <div className="rounded-lg bg-zinc-100/70 dark:bg-zinc-800/40 p-2 text-center">
+                  <span className="text-[10px] text-zinc-500 block">AI Видео</span>
+                  <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
+                    {costSummary.videoCount}
+                  </span>
+                </div>
+                <div className="rounded-lg bg-zinc-100/70 dark:bg-zinc-800/40 p-2 text-center">
+                  <span className="text-[10px] text-zinc-500 block">Посты</span>
+                  <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
+                    {costSummary.socialCount}
+                  </span>
+                </div>
+              </div>
+
+              {/* Breakdown by Node */}
+              <div className="space-y-1.5 mb-4 max-h-48 overflow-y-auto pr-1">
+                <h4 className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider mb-2">
+                  Детализация шагов ({costSummary.totalNodes} узлов):
+                </h4>
+
+                {costSummary.items.length === 0 ? (
+                  <p className="text-xs text-zinc-400 py-2">
+                    На холсте нет узлов с расходом генераций или публикаций
+                  </p>
+                ) : (
+                  costSummary.items.map((item, idx) => (
+                    <div
+                      key={`${item.id}-${idx}`}
+                      className="flex items-center justify-between rounded-xl border border-zinc-100 dark:border-zinc-800/80 bg-zinc-50/70 dark:bg-zinc-800/30 px-3 py-2 text-xs"
+                    >
+                      <div className="min-w-0 pr-2">
+                        <span className="font-semibold text-zinc-900 dark:text-zinc-100 block truncate">
+                          {item.nodeTitle}
+                        </span>
+                        <p className="text-[10px] text-zinc-500">
+                          {item.category}: {item.unit}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className="font-medium text-emerald-600 dark:text-emerald-400 text-[11px] block">
+                          {item.quotaLabel}
+                        </span>
+                        {item.walletRubles > 0 && (
+                          <p className="text-[10px] text-zinc-400">
+                            или ~{item.walletRubles.toFixed(2)} ₽
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Economy Rules Notice */}
+              <div className="rounded-xl border border-indigo-100 dark:border-indigo-950 bg-indigo-50/60 dark:bg-indigo-950/20 p-3 text-[11px] text-indigo-900 dark:text-indigo-200">
+                <div className="font-semibold mb-0.5 flex items-center gap-1.5">
+                  <Info className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
+                  <span>Принцип расчёта экономики:</span>
+                </div>
+                <p className="text-[10px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                  1. Сначала расходуются включенные квоты действующего тарифа.
+                  2. При нуле квоты расходуется баланс кошелька по тарифам генераций.
+                  3. Социальные посты не списывают баланс кошелька и используют только лимит постов тарифа.
+                </p>
+              </div>
+
+              <div className="mt-4 flex justify-end">
+                <button
+                  onClick={() => setShowEconomicsModal(false)}
+                  className="rounded-xl bg-zinc-900 dark:bg-zinc-100 px-4 py-2 text-xs font-semibold text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200 transition"
+                >
+                  Закрыть
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

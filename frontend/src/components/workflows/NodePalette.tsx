@@ -29,7 +29,7 @@ interface NodePaletteProps {
 
 const CATEGORY_NAMES: Record<NodeCategory, string> = {
   trigger: "Триггеры и запуск",
-  ai: "AI генерация (Yandex & KIE)",
+  ai: "AI генерация контента",
   social: "Социальные сети (Постинг)",
   media: "Медиатека и файлы",
   logic: "Логика и форматирование",

@@ -78,7 +78,7 @@ INSERT INTO workflow_templates (name, description, category, icon, is_system, is
 VALUES
 (
     'Кросс-постинг с AI: Telegram и VK',
-    'Генерация рекламного или информационного поста через Yandex GPT и автоматическая публикация в Telegram и ВКонтакте',
+    'Генерация рекламного или информационного поста через AI и автоматическая публикация в Telegram и ВКонтакте',
     'social',
     'share-2',
     true,
@@ -93,11 +93,11 @@ VALUES
                 "data": {"title": "Ручной запуск", "triggerType": "manual"}
             },
             {
-                "id": "yandex_gpt_1",
+                "id": "ai_text_1",
                 "type": "ai_text",
                 "position": {"x": 350, "y": 150},
                 "data": {
-                    "title": "Yandex GPT Генерация",
+                    "title": "AI Генерация текста",
                     "prompt": "Напиши полезный пост для соцсетей на тему: тренды маркетинга в 2026 году. Добавь призыв к действию и хештеги.",
                     "role": "SMM-копирайтер",
                     "temperature": 0.7
@@ -109,7 +109,7 @@ VALUES
                 "position": {"x": 700, "y": 50},
                 "data": {
                     "title": "Telegram Канал",
-                    "text": "{{ yandex_gpt_1.text }}",
+                    "text": "{{ ai_text_1.text }}",
                     "format": "message",
                     "silent": false,
                     "pin": false
@@ -121,22 +121,22 @@ VALUES
                 "position": {"x": 700, "y": 280},
                 "data": {
                     "title": "ВКонтакте Стена",
-                    "text": "{{ yandex_gpt_1.text }}",
+                    "text": "{{ ai_text_1.text }}",
                     "fromGroup": true,
                     "signed": false
                 }
             }
         ],
         "edges": [
-            {"id": "e1", "source": "trigger_1", "target": "yandex_gpt_1"},
-            {"id": "e2", "source": "yandex_gpt_1", "target": "telegram_1"},
-            {"id": "e3", "source": "yandex_gpt_1", "target": "vk_1"}
+            {"id": "e1", "source": "trigger_1", "target": "ai_text_1"},
+            {"id": "e2", "source": "ai_text_1", "target": "telegram_1"},
+            {"id": "e3", "source": "ai_text_1", "target": "vk_1"}
         ]
     }'::jsonb
 ),
 (
     'Генерация и публикация YouTube Shorts',
-    'Создание сценария ролика, генерация видео через KIE.ai и публикация в YouTube Shorts',
+    'Создание сценария ролика, генерация видео через нейросеть и публикация в YouTube Shorts',
     'video',
     'video',
     true,
@@ -151,7 +151,7 @@ VALUES
                 "data": {"title": "Запуск процесса", "triggerType": "manual"}
             },
             {
-                "id": "yandex_gpt_1",
+                "id": "ai_text_1",
                 "type": "ai_text",
                 "position": {"x": 350, "y": 150},
                 "data": {
@@ -161,12 +161,12 @@ VALUES
                 }
             },
             {
-                "id": "kie_video_1",
+                "id": "ai_video_1",
                 "type": "ai_video",
                 "position": {"x": 680, "y": 150},
                 "data": {
-                    "title": "KIE.ai Видео",
-                    "prompt": "{{ yandex_gpt_1.text }}",
+                    "title": "AI Видео",
+                    "prompt": "{{ ai_text_1.text }}",
                     "aspectRatio": "9:16",
                     "durationSeconds": 5
                 }
@@ -178,23 +178,23 @@ VALUES
                 "data": {
                     "title": "YouTube Shorts",
                     "titleText": "Космические открытия 2026 #shorts",
-                    "description": "{{ yandex_gpt_1.text }}\n\nПодписывайтесь на канал!",
+                    "description": "{{ ai_text_1.text }}\n\nПодписывайтесь на канал!",
                     "format": "shorts",
                     "privacyStatus": "public",
-                    "videoUrl": "{{ kie_video_1.video_url }}"
+                    "videoUrl": "{{ ai_video_1.video_url }}"
                 }
             }
         ],
         "edges": [
-            {"id": "e1", "source": "trigger_1", "target": "yandex_gpt_1"},
-            {"id": "e2", "source": "yandex_gpt_1", "target": "kie_video_1"},
-            {"id": "e3", "source": "kie_video_1", "target": "youtube_1"}
+            {"id": "e1", "source": "trigger_1", "target": "ai_text_1"},
+            {"id": "e2", "source": "ai_text_1", "target": "ai_video_1"},
+            {"id": "e3", "source": "ai_video_1", "target": "youtube_1"}
         ]
     }'::jsonb
 ),
 (
     'Пост с AI-картинкой и инлайн-кнопкой',
-    'Текст от Yandex GPT, генерация обложки через KIE Image и публикация в Telegram с красивой кнопкой перехода',
+    'Генерация текста и фотореалистичной обложки нейросетью с публикацией в Telegram с интерактивной кнопкой',
     'ai',
     'sparkles',
     true,
@@ -209,7 +209,7 @@ VALUES
                 "data": {"title": "Ручной пуск", "triggerType": "manual"}
             },
             {
-                "id": "yandex_gpt_1",
+                "id": "ai_text_1",
                 "type": "ai_text",
                 "position": {"x": 350, "y": 80},
                 "data": {
@@ -219,7 +219,7 @@ VALUES
                 }
             },
             {
-                "id": "kie_image_1",
+                "id": "ai_image_1",
                 "type": "ai_image",
                 "position": {"x": 350, "y": 300},
                 "data": {
@@ -234,8 +234,8 @@ VALUES
                 "position": {"x": 750, "y": 180},
                 "data": {
                     "title": "Telegram с кнопкой",
-                    "text": "{{ yandex_gpt_1.text }}",
-                    "mediaUrl": "{{ kie_image_1.image_url }}",
+                    "text": "{{ ai_text_1.text }}",
+                    "mediaUrl": "{{ ai_image_1.image_url }}",
                     "buttons": [
                         {"text": "Зарегистрироваться 🚀", "url": "https://postilka.ru"}
                     ]
@@ -243,10 +243,10 @@ VALUES
             }
         ],
         "edges": [
-            {"id": "e1", "source": "trigger_1", "target": "yandex_gpt_1"},
-            {"id": "e2", "source": "trigger_1", "target": "kie_image_1"},
-            {"id": "e3", "source": "yandex_gpt_1", "target": "telegram_1"},
-            {"id": "e4", "source": "kie_image_1", "target": "telegram_1"}
+            {"id": "e1", "source": "trigger_1", "target": "ai_text_1"},
+            {"id": "e2", "source": "trigger_1", "target": "ai_image_1"},
+            {"id": "e3", "source": "ai_text_1", "target": "telegram_1"},
+            {"id": "e4", "source": "ai_image_1", "target": "telegram_1"}
         ]
     }'::jsonb
 );
