@@ -346,7 +346,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   const selectedNode = nodes.find((n) => n.id === selectedNodeId) || null;
 
   return (
-    <div className="relative flex h-[calc(100vh-64px)] w-full flex-col overflow-hidden bg-zinc-50 dark:bg-zinc-950">
+    <div className="relative flex h-[calc(100vh-3.5rem)] w-full flex-col overflow-hidden bg-zinc-50 dark:bg-zinc-950">
       {/* Top Action Bar */}
       <header className="z-20 flex h-14 shrink-0 items-center justify-between border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4">
         {/* Left: Back & Name */}

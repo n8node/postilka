@@ -76,7 +76,7 @@ export default function WorkflowDetailPage({ params }: PageProps) {
 
   if (loading) {
     return (
-      <div className="flex h-[calc(100vh-64px)] w-full items-center justify-center bg-zinc-50 dark:bg-zinc-950 text-zinc-400">
+      <div className="flex h-[calc(100vh-3.5rem)] w-full items-center justify-center bg-zinc-50 dark:bg-zinc-950 text-zinc-400">
         <Loader2 className="h-8 w-8 animate-spin mr-3 text-indigo-600" />
         <span className="text-sm font-medium">Загрузка холста процесса...</span>
       </div>
@@ -85,7 +85,7 @@ export default function WorkflowDetailPage({ params }: PageProps) {
 
   if (error || !workflow) {
     return (
-      <div className="flex h-[calc(100vh-64px)] w-full flex-col items-center justify-center bg-zinc-50 dark:bg-zinc-950 p-6 text-center">
+      <div className="flex h-[calc(100vh-3.5rem)] w-full flex-col items-center justify-center bg-zinc-50 dark:bg-zinc-950 p-6 text-center">
         <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-100 mb-2">
           {error || "Процесс не найден"}
         </h2>

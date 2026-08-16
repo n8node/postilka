@@ -236,7 +236,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <main
           className={cn(
             "min-w-0 flex-1",
-            isActive(pathname, "/posts") || isActive(pathname, "/ai")
+            isActive(pathname, "/posts") ||
+            isActive(pathname, "/ai") ||
+            isActive(pathname, "/workflows")
               ? "overflow-x-visible"
               : "overflow-x-clip",
           )}
@@ -244,12 +246,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div
             key={workspaceId}
             className={cn(
-              "mx-auto px-4 py-6 sm:px-6 lg:px-8",
-              isActive(pathname, "/files") ||
-              isActive(pathname, "/settings") ||
-              isActive(pathname, "/ai")
-                ? "max-w-none"
-                : "max-w-7xl",
+              "mx-auto",
+              pathname.startsWith("/workflows/")
+                ? "max-w-none p-0 sm:p-0 lg:p-0"
+                : isActive(pathname, "/workflows") ||
+                  isActive(pathname, "/files") ||
+                  isActive(pathname, "/settings") ||
+                  isActive(pathname, "/ai")
+                ? "max-w-none px-4 py-6 sm:px-6 lg:px-8"
+                : "max-w-7xl px-4 py-6 sm:px-6 lg:px-8",
             )}
           >
             {children}
