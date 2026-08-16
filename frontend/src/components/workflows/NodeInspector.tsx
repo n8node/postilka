@@ -74,9 +74,13 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
   };
 
   return (
-    <aside className="absolute right-6 top-16 z-30 flex h-[calc(100%-80px)] w-96 flex-col rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-900/95 shadow-2xl backdrop-blur-md">
+    <aside
+      onWheel={(e) => e.stopPropagation()}
+      data-panel="inspector"
+      className="absolute right-3 top-3 bottom-3 z-30 flex w-96 sm:w-[440px] max-h-[calc(100%-1.5rem)] flex-col rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-900/95 shadow-2xl backdrop-blur-md"
+    >
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-zinc-100 dark:border-zinc-800 px-4 py-3">
+      <div className="flex shrink-0 items-center justify-between border-b border-zinc-100 dark:border-zinc-800 px-4 py-3">
         <div className="flex items-center gap-2">
           <div
             className={`flex h-6 w-6 items-center justify-center rounded-md ${
@@ -101,7 +105,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
       </div>
 
       {/* Form Content */}
-      <div className="flex-1 space-y-4 overflow-y-auto p-4 text-xs">
+      <div className="flex-1 min-h-0 space-y-4 overflow-y-auto p-4 text-xs">
         {/* Title Field */}
         <div>
           <label className="mb-1 block font-medium text-zinc-700 dark:text-zinc-300">
@@ -694,12 +698,12 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
       </div>
 
       {/* Footer / Test Button */}
-      <div className="border-t border-zinc-100 dark:border-zinc-800 p-3">
+      <div className="shrink-0 border-t border-zinc-100 dark:border-zinc-800 p-3">
         <button
           type="button"
           onClick={handleTest}
           disabled={testing}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-zinc-900 dark:bg-zinc-100 py-2 text-xs font-semibold text-white dark:text-zinc-900 shadow-md hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50 transition"
+          className="flex w-full items-center justify-center gap-2 rounded-xl bg-zinc-900 dark:bg-zinc-100 py-2.5 text-xs font-semibold text-white dark:text-zinc-900 shadow-md hover:bg-zinc-800 dark:hover:bg-zinc-200 disabled:opacity-50 transition"
         >
           {testing ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />

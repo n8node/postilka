@@ -84,9 +84,13 @@ export const NodePalette: React.FC<NodePaletteProps> = ({
   ];
 
   return (
-    <div className="absolute left-6 top-16 z-30 w-80 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-900/95 p-4 shadow-2xl backdrop-blur-md">
+    <div
+      onWheel={(e) => e.stopPropagation()}
+      data-panel="palette"
+      className="absolute left-3 top-3 bottom-3 z-30 flex w-80 sm:w-96 max-h-[calc(100%-1.5rem)] flex-col rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-900/95 p-4 shadow-2xl backdrop-blur-md"
+    >
       {/* Header */}
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex shrink-0 items-center justify-between">
         <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
           Добавить узел на холст
         </h3>
@@ -99,7 +103,7 @@ export const NodePalette: React.FC<NodePaletteProps> = ({
       </div>
 
       {/* Search Bar */}
-      <div className="relative mb-3">
+      <div className="relative mb-3 shrink-0">
         <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-zinc-400" />
         <input
           type="text"
@@ -111,7 +115,7 @@ export const NodePalette: React.FC<NodePaletteProps> = ({
       </div>
 
       {/* Categories Filter Tabs */}
-      <div className="mb-3 flex flex-wrap gap-1 border-b border-zinc-100 dark:border-zinc-800 pb-2">
+      <div className="mb-3 flex shrink-0 flex-wrap gap-1 border-b border-zinc-100 dark:border-zinc-800 pb-2">
         {categories.map((cat) => (
           <button
             key={cat}
@@ -128,7 +132,7 @@ export const NodePalette: React.FC<NodePaletteProps> = ({
       </div>
 
       {/* Node List */}
-      <div className="max-h-80 space-y-1.5 overflow-y-auto pr-1">
+      <div className="flex-1 min-h-0 space-y-1.5 overflow-y-auto pr-1">
         {filteredNodes.length === 0 ? (
           <div className="py-6 text-center text-xs text-zinc-400">
             Ничего не найдено

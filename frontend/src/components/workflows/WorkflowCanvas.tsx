@@ -135,6 +135,22 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
 
   // Zoom with wheel
   const handleWheel = (e: React.WheelEvent) => {
+    // Prevent canvas zooming when scrolling inside panels, inspectors or inputs
+    const target = e.target as HTMLElement | null;
+    if (
+      target &&
+      (target.closest("aside") ||
+        target.closest("[data-panel]") ||
+        target.closest("input") ||
+        target.closest("textarea") ||
+        target.closest("select") ||
+        target.closest("pre") ||
+        target.closest(".overflow-y-auto") ||
+        target.closest(".overflow-auto"))
+    ) {
+      return;
+    }
+
     e.preventDefault();
     const zoomFactor = e.deltaY < 0 ? 1.08 : 0.92;
     const newZoom = Math.min(Math.max(zoom * zoomFactor, 0.3), 2.0);
@@ -584,7 +600,10 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         )}
 
         {/* Zoom & Canvas Controls (Bottom Left) */}
-        <div className="absolute bottom-6 left-6 z-20 flex items-center gap-1 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-900/95 p-1.5 shadow-lg backdrop-blur-md">
+        <div
+          onWheel={(e) => e.stopPropagation()}
+          className="absolute bottom-6 left-6 z-20 flex items-center gap-1 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-900/95 p-1.5 shadow-lg backdrop-blur-md"
+        >
           <button
             onClick={() => setZoom((z) => Math.min(z + 0.15, 2.0))}
             title="Приблизить"
