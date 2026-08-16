@@ -499,6 +499,16 @@ export function AdStudioPage() {
                   className="absolute inset-0 h-full w-full object-cover"
                 />
               )
+            ) : selected.preview_kind === "video" && selected.preview_source_url ? (
+              <ProtectedMediaVideo
+                url={selected.preview_source_url}
+                poster={selected.preview_url}
+                className="absolute inset-0 h-full w-full object-cover"
+                controls
+                autoPlay
+                muted
+                loop
+              />
             ) : selected.preview_url ? (
               <ProtectedMediaImage
                 url={selected.preview_url}
@@ -532,7 +542,9 @@ export function AdStudioPage() {
                 </p>
               ) : needsTemplateInput ? (
                 <p className="mt-2 text-[12px] text-muted">
-                  В модель уйдут превью шаблона и ваше фото товара.
+                  {selected.preview_kind === "video"
+                    ? "В модель уйдут видео шаблона и ваше фото товара."
+                    : "В модель уйдут превью шаблона и ваше фото товара."}
                 </p>
               ) : needsProduct ? (
                 <p className="mt-2 text-[12px] text-muted">

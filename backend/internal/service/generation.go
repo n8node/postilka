@@ -462,6 +462,56 @@ func (s *GenerationService) ImportSourceFromObject(ctx context.Context, userID s
 	return upload.ToView(), nil
 }
 
+func (s *GenerationService) ImportVideoSourceFromObject(ctx context.Context, userID string, r *http.Request, srcKey, contentType string) (model.GenerationSourceUploadView, error) {
+	ws, err := s.resolveWorkspace(ctx, userID, r)
+	if err != nil {
+		return model.GenerationSourceUploadView{}, err
+	}
+	srcKey = strings.TrimSpace(srcKey)
+	if srcKey == "" {
+		return model.GenerationSourceUploadView{}, ErrGenerationUploadInvalid
+	}
+	contentType = strings.Split(strings.TrimSpace(contentType), ";")[0]
+	if !strings.HasPrefix(strings.ToLower(contentType), "video/") {
+		return model.GenerationSourceUploadView{}, ErrGenerationUploadInvalid
+	}
+
+	body, detected, err := s.objectStore.GetObject(ctx, srcKey)
+	if err != nil {
+		return model.GenerationSourceUploadView{}, err
+	}
+	defer body.Close()
+	data, err := io.ReadAll(io.LimitReader(body, (50<<20)+1))
+	if err != nil {
+		return model.GenerationSourceUploadView{}, err
+	}
+	if detected != "" {
+		contentType = strings.Split(detected, ";")[0]
+	}
+	dur, err := validateKieReferenceVideoUpload(contentType, data)
+	if err != nil {
+		return model.GenerationSourceUploadView{}, err
+	}
+
+	ext := adStudioVideoExt(contentType)
+	key := fmt.Sprintf("postilka/generation-sources/%s/%s%s", ws.ID, uuid.NewString(), ext)
+	if err := s.objectStore.PutObject(ctx, key, contentType, data); err != nil {
+		return model.GenerationSourceUploadView{}, err
+	}
+
+	upload, err := s.uploadRepo.Create(ctx, model.GenerationSourceUpload{
+		UserID:      userID,
+		WorkspaceID: ws.ID,
+		S3Key:       key,
+		ContentType: contentType,
+	})
+	if err != nil {
+		_ = s.objectStore.DeleteObject(ctx, key)
+		return model.GenerationSourceUploadView{}, err
+	}
+	return upload.ToViewWithDuration(dur), nil
+}
+
 func (s *GenerationService) UploadVideoGenerationSource(ctx context.Context, userID string, r *http.Request, file multipart.File, header *multipart.FileHeader) (model.GenerationSourceUploadView, error) {
 	ws, err := s.resolveWorkspace(ctx, userID, r)
 	if err != nil {

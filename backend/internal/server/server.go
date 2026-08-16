@@ -448,6 +448,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Get("/ad-studio/templates", adStudioHandler.List)
 			r.Get("/ad-studio/templates/{id}", adStudioHandler.Get)
 			r.Get("/ad-studio/templates/{id}/preview", adStudioHandler.Preview)
+			r.Get("/ad-studio/templates/{id}/preview/source", adStudioHandler.PreviewSource)
 			r.Post("/ad-studio/templates/{id}/generate", adStudioHandler.Generate)
 		})
 
@@ -511,6 +512,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Put("/ad-studio/templates/{id}", adStudioHandler.AdminUpdate)
 				r.Delete("/ad-studio/templates/{id}", adStudioHandler.AdminDelete)
 				r.Get("/ad-studio/templates/{id}/preview", adStudioHandler.AdminPreview)
+				r.Get("/ad-studio/templates/{id}/preview/source", adStudioHandler.AdminPreviewSource)
 				r.Post("/ad-studio/templates/{id}/preview", adStudioHandler.AdminUploadPreview)
 				r.Get("/settings/upload-files", uploadFileSettingsHandler.GetAdmin)
 				r.Put("/settings/upload-files", uploadFileSettingsHandler.UpdateAdmin)

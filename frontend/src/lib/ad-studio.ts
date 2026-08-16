@@ -2,6 +2,11 @@ import { ApiError, apiFetch } from "@/lib/api";
 import { postGenerationMultipart } from "@/lib/generation-upload";
 import type { GenerationJob } from "@/lib/generation-api";
 import type { VideoGenerationJob } from "@/lib/video-generation-api";
+import {
+  REFERENCE_VIDEO_MAX_BYTES,
+  isReferenceVideoDurationValid,
+  referenceVideoMaxAllowedSeconds,
+} from "@/lib/video-generation-data";
 
 export const AD_STUDIO_CATEGORIES = [
   { id: "product_shot", label: "Съёмка товара" },
@@ -77,7 +82,9 @@ export type AdStudioTemplate = {
   duration: number;
   requires_product: boolean;
   requires_avatar: boolean;
+  preview_kind?: AdStudioMediaKind;
   preview_url?: string;
+  preview_source_url?: string;
   sort_order: number;
 };
 
@@ -242,4 +249,59 @@ export async function uploadAdminAdStudioPreview(id: string, file: File) {
 export function adminAdStudioPreviewUrl(item: AdStudioTemplateAdmin): string {
   if (!item.has_preview) return "";
   return `/admin/ad-studio/templates/${encodeURIComponent(item.id)}/preview?t=${encodeURIComponent(item.updated_at)}`;
+}
+
+export function adminAdStudioPreviewSourceUrl(item: AdStudioTemplateAdmin): string {
+  if (!item.has_preview || item.preview_kind !== "video") return "";
+  return `/admin/ad-studio/templates/${encodeURIComponent(item.id)}/preview/source?t=${encodeURIComponent(item.updated_at)}`;
+}
+
+export function validateAdStudioPreviewFile(
+  file: File,
+  mediaKind: AdStudioMediaKind,
+): string | null {
+  if (file.type.startsWith("video/")) {
+    if (mediaKind !== "video") {
+      return "Видео-превью доступно только для видео-шаблонов";
+    }
+    if (file.size > REFERENCE_VIDEO_MAX_BYTES) {
+      return "Видео должно быть не больше 50 МБ";
+    }
+    return null;
+  }
+  if (file.type.startsWith("image/")) {
+    if (file.size > 15 * 1024 * 1024) {
+      return "Изображение должно быть не больше 15 МБ";
+    }
+    return null;
+  }
+  return "Поддерживаются фото (JPEG, PNG, WebP) или видео (MP4, MOV, WebM)";
+}
+
+export async function probeAdStudioVideoDuration(file: File): Promise<number | null> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.onloadedmetadata = () => {
+      URL.revokeObjectURL(url);
+      resolve(Number.isFinite(video.duration) ? video.duration : null);
+    };
+    video.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(null);
+    };
+    video.src = url;
+  });
+}
+
+export async function validateAdStudioPreviewVideoDuration(file: File): Promise<string | null> {
+  const seconds = await probeAdStudioVideoDuration(file);
+  if (seconds == null) {
+    return "Не удалось определить длительность видео";
+  }
+  if (!isReferenceVideoDurationValid(seconds)) {
+    return `Видео должно быть от 2 до ${referenceVideoMaxAllowedSeconds()} сек (сейчас ${seconds.toFixed(1)} сек)`;
+  }
+  return null;
 }

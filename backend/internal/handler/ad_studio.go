@@ -68,6 +68,26 @@ func (h *AdStudioHandler) Preview(w http.ResponseWriter, r *http.Request) {
 	_, _ = io.Copy(w, body)
 }
 
+func (h *AdStudioHandler) PreviewSource(w http.ResponseWriter, r *http.Request) {
+	if _, ok := middleware.UserIDFromContext(r.Context()); !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
+		return
+	}
+	body, contentType, err := h.svc.PreviewSourceObject(r.Context(), chi.URLParam(r, "id"), true)
+	if err != nil {
+		h.mapError(w, err)
+		return
+	}
+	defer body.Close()
+	if contentType == "" {
+		contentType = "video/mp4"
+	}
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Cache-Control", "private, max-age=3600")
+	w.WriteHeader(http.StatusOK)
+	_, _ = io.Copy(w, body)
+}
+
 func (h *AdStudioHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
@@ -173,8 +193,24 @@ func (h *AdStudioHandler) AdminPreview(w http.ResponseWriter, r *http.Request) {
 	_, _ = io.Copy(w, body)
 }
 
+func (h *AdStudioHandler) AdminPreviewSource(w http.ResponseWriter, r *http.Request) {
+	body, contentType, err := h.svc.PreviewSourceObject(r.Context(), chi.URLParam(r, "id"), false)
+	if err != nil {
+		h.mapError(w, err)
+		return
+	}
+	defer body.Close()
+	if contentType == "" {
+		contentType = "video/mp4"
+	}
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Cache-Control", "private, max-age=60")
+	w.WriteHeader(http.StatusOK)
+	_, _ = io.Copy(w, body)
+}
+
 func (h *AdStudioHandler) AdminUploadPreview(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseMultipartForm(16 << 20); err != nil {
+	if err := r.ParseMultipartForm(52 << 20); err != nil {
 		writeError(w, http.StatusBadRequest, "Некорректная загрузка файла")
 		return
 	}
@@ -210,9 +246,11 @@ func (h *AdStudioHandler) mapError(w http.ResponseWriter, err error) {
 	case errors.Is(err, service.ErrAdStudioPromptRequired):
 		writeErrorWithCode(w, http.StatusBadRequest, "invalid_prompt", "Укажите системный промпт")
 	case errors.Is(err, service.ErrAdStudioPreviewInvalid):
-		writeErrorWithCode(w, http.StatusBadRequest, "preview_invalid", "Загрузите изображение превью")
+		writeErrorWithCode(w, http.StatusBadRequest, "preview_invalid", "Загрузите фото или видео превью (MP4/MOV/WebM, 2–15 сек, до 50 МБ для видео)")
+	case errors.Is(err, service.ErrReferenceVideoDuration):
+		writeErrorWithCode(w, http.StatusBadRequest, "reference_video_duration", service.ReferenceVideoDurationHTTPMessage(err))
 	case errors.Is(err, service.ErrAdStudioPreviewProcess):
-		writeErrorWithCode(w, http.StatusBadRequest, "preview_process_failed", "Не удалось обработать превью. Загрузите обычное фото.")
+		writeErrorWithCode(w, http.StatusBadRequest, "preview_process_failed", "Не удалось обработать превью. Загрузите обычное фото или короткое видео.")
 	case errors.Is(err, service.ErrAdStudioPreviewRequired):
 		writeErrorWithCode(w, http.StatusBadRequest, "preview_required", "У шаблона нет превью. Загрузите его в админке.")
 	case errors.Is(err, service.ErrInsufficientAICredits):

@@ -3,10 +3,12 @@
 import { Loader2, Plus, Save, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { ProtectedMediaImage } from "@/components/media/ProtectedMediaImage";
+import { ProtectedMediaVideo } from "@/components/media/ProtectedMediaVideo";
 import { ApiError } from "@/lib/api";
 import {
   AD_STUDIO_CATEGORIES,
   AD_STUDIO_GENERATION_MODES,
+  adminAdStudioPreviewSourceUrl,
   adminAdStudioPreviewUrl,
   adStudioCategoryLabel,
   adStudioMediaKindForMode,
@@ -21,6 +23,8 @@ import {
   updateAdminAdStudioCategories,
   updateAdminAdStudioTemplate,
   uploadAdminAdStudioPreview,
+  validateAdStudioPreviewFile,
+  validateAdStudioPreviewVideoDuration,
   type AdStudioCategoryId,
   type AdStudioGenerationMode,
   type AdStudioTemplateAdmin,
@@ -187,6 +191,18 @@ export function AdminAdStudioPage({ embedded = false }: { embedded?: boolean }) 
     if (!selectedId) {
       setError("Сначала сохраните шаблон, затем загрузите превью");
       return;
+    }
+    const basicError = validateAdStudioPreviewFile(file, form.media_kind);
+    if (basicError) {
+      setError(basicError);
+      return;
+    }
+    if (file.type.startsWith("video/")) {
+      const durationError = await validateAdStudioPreviewVideoDuration(file);
+      if (durationError) {
+        setError(durationError);
+        return;
+      }
     }
     setBusy(true);
     setError(null);
@@ -441,19 +457,35 @@ export function AdminAdStudioPage({ embedded = false }: { embedded?: boolean }) 
             <div>
               <p className="mb-2 text-sm">Превью</p>
               {selected?.has_preview ? (
-                <ProtectedMediaImage
-                  url={adminAdStudioPreviewUrl(selected)}
-                  alt=""
-                  className="mb-2 h-40 w-40 rounded-md object-cover"
-                />
+                selected.preview_kind === "video" && adminAdStudioPreviewSourceUrl(selected) ? (
+                  <ProtectedMediaVideo
+                    url={adminAdStudioPreviewSourceUrl(selected)}
+                    poster={adminAdStudioPreviewUrl(selected)}
+                    className="mb-2 h-40 w-40 rounded-md object-cover"
+                    controls
+                    muted
+                    loop
+                  />
+                ) : (
+                  <ProtectedMediaImage
+                    url={adminAdStudioPreviewUrl(selected)}
+                    alt=""
+                    className="mb-2 h-40 w-40 rounded-md object-cover"
+                  />
+                )
               ) : (
                 <p className="mb-2 text-xs text-slate-500">
                   {selectedId ? "Превью ещё не загружено" : "Сохраните шаблон, затем загрузите превью"}
                 </p>
               )}
+              <p className="mb-2 text-xs text-slate-500">
+                {form.media_kind === "video"
+                  ? "Фото или MP4/MOV/WebM · 2–15 сек · до 50 МБ для видео"
+                  : "JPEG, PNG или WebP · до 15 МБ"}
+              </p>
               <input
                 type="file"
-                accept="image/*"
+                accept={form.media_kind === "video" ? "image/*,video/*" : "image/*"}
                 disabled={!selectedId || busy}
                 onChange={(e) => {
                   const file = e.target.files?.[0];

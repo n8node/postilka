@@ -83,18 +83,20 @@ type AdStudioTemplate struct {
 }
 
 type AdStudioTemplatePublicView struct {
-	ID              string `json:"id"`
-	Title           string `json:"title"`
-	Description     string `json:"description"`
-	Category        string `json:"category"`
-	MediaKind       string `json:"media_kind"`
-	GenerationMode  string `json:"generation_mode"`
-	AspectRatio     string `json:"aspect_ratio"`
-	Duration        int    `json:"duration"`
-	RequiresProduct bool   `json:"requires_product"`
-	RequiresAvatar  bool   `json:"requires_avatar"`
-	PreviewURL      string `json:"preview_url,omitempty"`
-	SortOrder       int    `json:"sort_order"`
+	ID               string `json:"id"`
+	Title            string `json:"title"`
+	Description      string `json:"description"`
+	Category         string `json:"category"`
+	MediaKind        string `json:"media_kind"`
+	GenerationMode   string `json:"generation_mode"`
+	AspectRatio      string `json:"aspect_ratio"`
+	Duration         int    `json:"duration"`
+	RequiresProduct  bool   `json:"requires_product"`
+	RequiresAvatar   bool   `json:"requires_avatar"`
+	PreviewKind      string `json:"preview_kind,omitempty"`
+	PreviewURL       string `json:"preview_url,omitempty"`
+	PreviewSourceURL string `json:"preview_source_url,omitempty"`
+	SortOrder        int    `json:"sort_order"`
 }
 
 type AdStudioTemplateAdminView struct {
@@ -127,6 +129,10 @@ type AdStudioGenerateRequest struct {
 	Edit            string `json:"edit"`
 }
 
+func AdStudioPreviewIsVideo(contentType string) bool {
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(contentType)), "video/")
+}
+
 func (t AdStudioTemplate) PreviewPath() string {
 	if t.PreviewS3Key == "" {
 		return ""
@@ -134,8 +140,19 @@ func (t AdStudioTemplate) PreviewPath() string {
 	return "/ad-studio/templates/" + t.ID + "/preview"
 }
 
+func (t AdStudioTemplate) PreviewSourcePath() string {
+	if t.PreviewS3Key == "" || !AdStudioPreviewIsVideo(t.PreviewContentType) {
+		return ""
+	}
+	return "/ad-studio/templates/" + t.ID + "/preview/source"
+}
+
 func (t AdStudioTemplate) ToPublicView() AdStudioTemplatePublicView {
-	return AdStudioTemplatePublicView{
+	previewKind := AdStudioMediaImage
+	if AdStudioPreviewIsVideo(t.PreviewContentType) {
+		previewKind = AdStudioMediaVideo
+	}
+	view := AdStudioTemplatePublicView{
 		ID:              t.ID,
 		Title:           t.Title,
 		Description:     t.Description,
@@ -146,9 +163,14 @@ func (t AdStudioTemplate) ToPublicView() AdStudioTemplatePublicView {
 		Duration:        t.Duration,
 		RequiresProduct: t.RequiresProduct,
 		RequiresAvatar:  t.RequiresAvatar,
+		PreviewKind:     previewKind,
 		PreviewURL:      t.PreviewPath(),
 		SortOrder:       t.SortOrder,
 	}
+	if previewKind == AdStudioMediaVideo {
+		view.PreviewSourceURL = t.PreviewSourcePath()
+	}
+	return view
 }
 
 func (t AdStudioTemplate) ToAdminView() AdStudioTemplateAdminView {

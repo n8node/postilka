@@ -176,12 +176,13 @@ func (s *AdStudioService) UploadPreview(ctx context.Context, id string, file mul
 	}
 	defer file.Close()
 
-	const maxSize = 15 << 20
-	data, err := io.ReadAll(io.LimitReader(file, maxSize+1))
+	const imageMaxSize = 15 << 20
+	const videoReadLimit = (50 << 20) + 1
+	data, err := io.ReadAll(io.LimitReader(file, videoReadLimit))
 	if err != nil {
 		return model.AdStudioTemplateAdminView{}, err
 	}
-	if len(data) == 0 || len(data) > maxSize {
+	if len(data) == 0 {
 		return model.AdStudioTemplateAdminView{}, ErrAdStudioPreviewInvalid
 	}
 
@@ -190,7 +191,45 @@ func (s *AdStudioService) UploadPreview(ctx context.Context, id string, file mul
 		contentType = http.DetectContentType(data)
 	}
 	contentType = strings.Split(contentType, ";")[0]
+
+	if isKieReferenceVideoContentType(contentType) {
+		if current.MediaKind != model.AdStudioMediaVideo {
+			return model.AdStudioTemplateAdminView{}, ErrAdStudioPreviewInvalid
+		}
+		if _, err := validateKieReferenceVideoUpload(contentType, data); err != nil {
+			if errors.Is(err, ErrReferenceVideoDuration) {
+				return model.AdStudioTemplateAdminView{}, err
+			}
+			return model.AdStudioTemplateAdminView{}, ErrAdStudioPreviewInvalid
+		}
+		thumb, err := extractVideoPosterWebP(data)
+		if err != nil || len(thumb) == 0 {
+			return model.AdStudioTemplateAdminView{}, ErrAdStudioPreviewProcess
+		}
+		ext := adStudioVideoExt(contentType)
+		masterKey := fmt.Sprintf("postilka/ad-studio/previews/%s%s", uuid.NewString(), ext)
+		thumbKey := fmt.Sprintf("postilka/ad-studio/previews/%s.webp", uuid.NewString())
+		if err := s.objectStore.PutObject(ctx, masterKey, contentType, data); err != nil {
+			return model.AdStudioTemplateAdminView{}, err
+		}
+		if err := s.objectStore.PutObject(ctx, thumbKey, "image/webp", thumb); err != nil {
+			_ = s.objectStore.DeleteObject(ctx, masterKey)
+			return model.AdStudioTemplateAdminView{}, err
+		}
+		updated, err := s.repo.UpdatePreview(ctx, current.ID, masterKey, contentType, thumbKey)
+		if err != nil {
+			_ = s.objectStore.DeleteObject(ctx, masterKey)
+			_ = s.objectStore.DeleteObject(ctx, thumbKey)
+			return model.AdStudioTemplateAdminView{}, err
+		}
+		s.deletePreviewObjects(ctx, current)
+		return updated.ToAdminView(), nil
+	}
+
 	if !strings.HasPrefix(contentType, "image/") {
+		return model.AdStudioTemplateAdminView{}, ErrAdStudioPreviewInvalid
+	}
+	if len(data) > imageMaxSize {
 		return model.AdStudioTemplateAdminView{}, ErrAdStudioPreviewInvalid
 	}
 
@@ -265,17 +304,59 @@ func (s *AdStudioService) PreviewObject(ctx context.Context, id string, publishe
 	return body, contentType, nil
 }
 
+func (s *AdStudioService) PreviewSourceObject(ctx context.Context, id string, publishedOnly bool) (io.ReadCloser, string, error) {
+	t, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, "", err
+	}
+	if publishedOnly && !t.IsPublished {
+		return nil, "", ErrAdStudioNotPublished
+	}
+	if publishedOnly {
+		hidden, err := s.categoryIsHidden(ctx, t.Category)
+		if err != nil {
+			return nil, "", err
+		}
+		if hidden {
+			return nil, "", ErrAdStudioNotPublished
+		}
+	}
+	if strings.TrimSpace(t.PreviewS3Key) == "" {
+		return nil, "", repository.ErrNotFound
+	}
+	if !model.AdStudioPreviewIsVideo(t.PreviewContentType) {
+		return nil, "", repository.ErrNotFound
+	}
+	body, contentType, err := s.objectStore.GetObject(ctx, t.PreviewS3Key)
+	if err != nil {
+		return nil, "", err
+	}
+	if contentType == "" {
+		contentType = t.PreviewContentType
+	}
+	return body, contentType, nil
+}
+
 func (s *AdStudioService) ensurePreviewThumb(ctx context.Context, t model.AdStudioTemplate) (io.ReadCloser, string, error) {
 	src, _, err := s.objectStore.GetObject(ctx, t.PreviewS3Key)
 	if err != nil {
 		return nil, "", err
 	}
 	defer src.Close()
-	data, err := io.ReadAll(src)
+	readLimit := int64(15<<20) + 1
+	if model.AdStudioPreviewIsVideo(t.PreviewContentType) {
+		readLimit = (50 << 20) + 1
+	}
+	data, err := io.ReadAll(io.LimitReader(src, readLimit))
 	if err != nil {
 		return nil, "", err
 	}
-	thumb, err := encodeAdStudioDisplayWebP(data)
+	var thumb []byte
+	if model.AdStudioPreviewIsVideo(t.PreviewContentType) {
+		thumb, err = extractVideoPosterWebP(data)
+	} else {
+		thumb, err = encodeAdStudioDisplayWebP(data)
+	}
 	if err != nil || len(thumb) == 0 {
 		return nil, "", ErrAdStudioPreviewProcess
 	}
@@ -343,12 +424,21 @@ func (s *AdStudioService) Generate(
 	}
 
 	var templateID string
+	var templateVideoID string
 	if usesTemplate {
-		templateUpload, err := s.generation.ImportSourceFromObject(ctx, userID, r, t.PreviewS3Key, t.PreviewContentType)
-		if err != nil {
-			return StartGenerateResult{}, "", err
+		if model.AdStudioPreviewIsVideo(t.PreviewContentType) {
+			templateUpload, err := s.generation.ImportVideoSourceFromObject(ctx, userID, r, t.PreviewS3Key, t.PreviewContentType)
+			if err != nil {
+				return StartGenerateResult{}, "", err
+			}
+			templateVideoID = templateUpload.ID
+		} else {
+			templateUpload, err := s.generation.ImportSourceFromObject(ctx, userID, r, t.PreviewS3Key, t.PreviewContentType)
+			if err != nil {
+				return StartGenerateResult{}, "", err
+			}
+			templateID = templateUpload.ID
 		}
-		templateID = templateUpload.ID
 	}
 
 	prompt := composeAdStudioPrompt(t, mode, req.Edit)
@@ -373,19 +463,26 @@ func (s *AdStudioService) Generate(
 		})
 		return result, kind, err
 	case model.AdStudioModeReferenceToVideo:
-		refs := []string{templateID}
+		refImages := make([]string, 0, 2)
+		refVideos := make([]string, 0, 1)
+		if templateVideoID != "" {
+			refVideos = append(refVideos, templateVideoID)
+		} else if templateID != "" {
+			refImages = append(refImages, templateID)
+		}
 		if productID != "" {
-			refs = append(refs, productID)
+			refImages = append(refImages, productID)
 		}
 		if avatarID != "" {
-			refs = append(refs, avatarID)
+			refImages = append(refImages, avatarID)
 		}
 		result, err := s.generation.StartGenerateVideo(ctx, userID, r, GenerateVideoInput{
-			Mode:               model.KieVideoModeReferenceToVideo,
-			Prompt:             prompt,
-			AspectRatio:        t.AspectRatio,
-			Duration:           t.Duration,
-			ReferenceUploadIDs: refs,
+			Mode:                    model.KieVideoModeReferenceToVideo,
+			Prompt:                  prompt,
+			AspectRatio:             t.AspectRatio,
+			Duration:                t.Duration,
+			ReferenceUploadIDs:      refImages,
+			ReferenceVideoUploadIDs: refVideos,
 		})
 		return result, kind, err
 	case model.AdStudioModeTextToImage:
@@ -424,11 +521,23 @@ func (s *AdStudioService) Generate(
 func composeAdStudioPrompt(t model.AdStudioTemplate, mode, edit string) string {
 	var b strings.Builder
 	switch mode {
-	case model.AdStudioModeCombine, model.AdStudioModeReferenceToVideo:
+	case model.AdStudioModeCombine:
 		b.WriteString("You are given reference images in this exact order.\n")
 		b.WriteString("Image 1 is the advertising TEMPLATE. Recreate that exact scene: background, setting, camera angle, lighting, composition, typography placement, graphic shapes, and mood.\n")
 		b.WriteString("Image 2 is the NEW PRODUCT photo. Replace only the original product from image 1 with this product. Keep the new product's real shape, materials, labels, colors, and proportions.\n")
 		b.WriteString("Do not keep the original product from the template. Do not return image 2 unchanged. Do not invent a marketplace card or a new layout. The result must look like image 1 after a product swap.\n")
+	case model.AdStudioModeReferenceToVideo:
+		if model.AdStudioPreviewIsVideo(t.PreviewContentType) {
+			b.WriteString("You are given reference media in this exact order.\n")
+			b.WriteString("Video 1 is the advertising TEMPLATE. Recreate that exact scene: background, setting, camera angle, lighting, composition, motion, typography placement, graphic shapes, and mood.\n")
+			b.WriteString("Image 2 is the NEW PRODUCT photo. Replace only the original product from video 1 with this product. Keep the new product's real shape, materials, labels, colors, and proportions.\n")
+			b.WriteString("Do not keep the original product from the template. Do not return image 2 unchanged. The result must look like video 1 after a product swap.\n")
+		} else {
+			b.WriteString("You are given reference images in this exact order.\n")
+			b.WriteString("Image 1 is the advertising TEMPLATE. Recreate that exact scene: background, setting, camera angle, lighting, composition, typography placement, graphic shapes, and mood.\n")
+			b.WriteString("Image 2 is the NEW PRODUCT photo. Replace only the original product from image 1 with this product. Keep the new product's real shape, materials, labels, colors, and proportions.\n")
+			b.WriteString("Do not keep the original product from the template. Do not return image 2 unchanged. Do not invent a marketplace card or a new layout. The result must look like image 1 after a product swap.\n")
+		}
 	case model.AdStudioModeImageToImage, model.AdStudioModeImageToVideo:
 		b.WriteString("Edit the uploaded product photo according to the template notes. Keep the product identity, labels, and shape.\n")
 	default:
