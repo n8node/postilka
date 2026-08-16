@@ -44,9 +44,13 @@ export function VideoExamplesStrip({ onSelect }: VideoExamplesStripProps) {
               {example.video_url ? (
                 <ProtectedMediaVideo
                   url={example.video_url}
+                  poster={example.source_image_urls?.[0]}
                   className="h-full w-full object-cover"
                   muted
                   loop
+                  autoPlay
+                  controls={false}
+                  lazy
                 />
               ) : null}
             </div>

@@ -243,12 +243,15 @@ function TemplateCard({
             loop
             muted
             controls={false}
+            lazy
           />
         ) : item.preview_url ? (
           <ProtectedMediaImage
             url={item.preview_url}
             alt={item.title}
             className="h-full w-full object-cover"
+            loading="lazy"
+            decoding="async"
           />
         ) : (
           <div className="flex h-full items-center justify-center px-3 text-center text-[13px] text-muted">
@@ -560,7 +563,8 @@ export function AdStudioPage() {
               isVideo ? (
                 <ProtectedMediaVideo
                   url={resultUrl}
-                  className="absolute inset-0 h-full w-full object-cover"
+                  wrapperClassName="absolute inset-0"
+                  className="h-full w-full object-cover"
                   controls
                   autoPlay
                   muted
@@ -577,7 +581,8 @@ export function AdStudioPage() {
               <ProtectedMediaVideo
                 url={selected.preview_source_url}
                 poster={selected.preview_url}
-                className="absolute inset-0 h-full w-full object-cover"
+                wrapperClassName="absolute inset-0"
+                className="h-full w-full object-cover"
                 controls
                 autoPlay
                 muted
