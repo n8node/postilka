@@ -78,17 +78,25 @@ function useMasonryColumnCount(): number {
   const [count, setCount] = useState(2);
 
   useEffect(() => {
+    const mq2xl = window.matchMedia("(min-width: 1536px)");
+    const mqXl = window.matchMedia("(min-width: 1280px)");
     const mqLg = window.matchMedia("(min-width: 1024px)");
     const mqSm = window.matchMedia("(min-width: 640px)");
     const update = () => {
-      if (mqLg.matches) setCount(4);
+      if (mq2xl.matches) setCount(6);
+      else if (mqXl.matches) setCount(5);
+      else if (mqLg.matches) setCount(4);
       else if (mqSm.matches) setCount(3);
       else setCount(2);
     };
     update();
+    mq2xl.addEventListener("change", update);
+    mqXl.addEventListener("change", update);
     mqLg.addEventListener("change", update);
     mqSm.addEventListener("change", update);
     return () => {
+      mq2xl.removeEventListener("change", update);
+      mqXl.removeEventListener("change", update);
       mqLg.removeEventListener("change", update);
       mqSm.removeEventListener("change", update);
     };
@@ -121,9 +129,9 @@ function TemplateMasonryGrid({
   );
 
   return (
-    <div className="flex items-start gap-3">
+    <div className="flex items-start gap-2 sm:gap-2.5 lg:gap-3">
       {columns.map((column, columnIndex) => (
-        <div key={columnIndex} className="flex min-w-0 flex-1 flex-col gap-3">
+        <div key={columnIndex} className="flex min-w-0 flex-1 flex-col gap-2 sm:gap-2.5 lg:gap-3">
           {column.map((item) => (
             <TemplateCard
               key={item.id}
@@ -716,60 +724,62 @@ export function AdStudioPage() {
         </div>
       ) : null}
 
-      <div>
-        <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <p className="text-[11px] font-medium uppercase tracking-[0.04em] text-muted">
-              {selected ? "Ещё шаблоны" : "Библиотека"}
-            </p>
-            <h2 className="mt-1 text-base font-semibold text-text">
-              {selected ? "Попробуйте другой стиль" : "Готовые рекламные решения"}
-            </h2>
+      <section className="-mx-4 w-[calc(100%+2rem)] sm:-mx-6 sm:w-[calc(100%+3rem)] lg:-mx-8 lg:w-[calc(100%+4rem)]">
+        <div className="px-3 sm:px-4 lg:px-5">
+          <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <p className="text-[11px] font-medium uppercase tracking-[0.04em] text-muted">
+                {selected ? "Ещё шаблоны" : "Библиотека"}
+              </p>
+              <h2 className="mt-1 text-base font-semibold text-text">
+                {selected ? "Попробуйте другой стиль" : "Готовые рекламные решения"}
+              </h2>
+            </div>
           </div>
-        </div>
 
-        <div className="mb-4 flex flex-wrap gap-1.5">
-          {filters.map((item) => {
-            const active = filter === item.id;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => setFilter(item.id)}
-                className={cn(
-                  "rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors",
-                  active
-                    ? "bg-text text-white"
-                    : "bg-zinc-100 text-muted hover:bg-zinc-200 hover:text-text",
-                )}
-              >
-                {item.label}
-              </button>
-            );
-          })}
-        </div>
-
-        {listError ? (
-          <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{listError}</p>
-        ) : null}
-
-        {loading ? (
-          <p className="text-sm text-muted">Загрузка шаблонов…</p>
-        ) : explore.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-6 py-12 text-center">
-            <p className="text-sm font-medium text-text">Пока нет шаблонов</p>
-            <p className="mt-1 text-[13px] text-muted">
-              Администратор добавит их в настройках платформы — «AI — Студия рекламы».
-            </p>
+          <div className="mb-4 flex flex-wrap gap-1.5">
+            {filters.map((item) => {
+              const active = filter === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setFilter(item.id)}
+                  className={cn(
+                    "rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors",
+                    active
+                      ? "bg-text text-white"
+                      : "bg-zinc-100 text-muted hover:bg-zinc-200 hover:text-text",
+                  )}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
           </div>
-        ) : (
-          <TemplateMasonryGrid
-            items={selected ? explore : items}
-            selectedId={selected?.id}
-            onSelect={selectTemplate}
-          />
-        )}
-      </div>
+
+          {listError ? (
+            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-800">{listError}</p>
+          ) : null}
+
+          {loading ? (
+            <p className="text-sm text-muted">Загрузка шаблонов…</p>
+          ) : explore.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-6 py-12 text-center">
+              <p className="text-sm font-medium text-text">Пока нет шаблонов</p>
+              <p className="mt-1 text-[13px] text-muted">
+                Администратор добавит их в настройках платформы — «AI — Студия рекламы».
+              </p>
+            </div>
+          ) : (
+            <TemplateMasonryGrid
+              items={selected ? explore : items}
+              selectedId={selected?.id}
+              onSelect={selectTemplate}
+            />
+          )}
+        </div>
+      </section>
 
       <input
         ref={fileInputRef}

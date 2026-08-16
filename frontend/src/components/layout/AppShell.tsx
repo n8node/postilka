@@ -234,14 +234,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <main
           className={cn(
             "min-w-0 flex-1",
-            isActive(pathname, "/posts") ? "overflow-x-visible" : "overflow-x-clip",
+            isActive(pathname, "/posts") || isActive(pathname, "/ai")
+              ? "overflow-x-visible"
+              : "overflow-x-clip",
           )}
         >
           <div
             key={workspaceId}
             className={cn(
               "mx-auto px-4 py-6 sm:px-6 lg:px-8",
-              isActive(pathname, "/files") || isActive(pathname, "/settings")
+              isActive(pathname, "/files") ||
+              isActive(pathname, "/settings") ||
+              isActive(pathname, "/ai")
                 ? "max-w-none"
                 : "max-w-7xl",
             )}
