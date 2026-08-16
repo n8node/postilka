@@ -74,6 +74,70 @@ function previewBoxSize(ratio: string, height: number): { width: number; height:
   }
 }
 
+function useMasonryColumnCount(): number {
+  const [count, setCount] = useState(2);
+
+  useEffect(() => {
+    const mqLg = window.matchMedia("(min-width: 1024px)");
+    const mqSm = window.matchMedia("(min-width: 640px)");
+    const update = () => {
+      if (mqLg.matches) setCount(4);
+      else if (mqSm.matches) setCount(3);
+      else setCount(2);
+    };
+    update();
+    mqLg.addEventListener("change", update);
+    mqSm.addEventListener("change", update);
+    return () => {
+      mqLg.removeEventListener("change", update);
+      mqSm.removeEventListener("change", update);
+    };
+  }, []);
+
+  return count;
+}
+
+function distributeMasonryColumns<T>(items: T[], columnCount: number): T[][] {
+  const columns = Array.from({ length: columnCount }, () => [] as T[]);
+  items.forEach((item, index) => {
+    columns[index % columnCount].push(item);
+  });
+  return columns;
+}
+
+function TemplateMasonryGrid({
+  items,
+  selectedId,
+  onSelect,
+}: {
+  items: AdStudioTemplate[];
+  selectedId?: string;
+  onSelect: (item: AdStudioTemplate) => void;
+}) {
+  const columnCount = useMasonryColumnCount();
+  const columns = useMemo(
+    () => distributeMasonryColumns(items, columnCount),
+    [items, columnCount],
+  );
+
+  return (
+    <div className="flex items-start gap-3">
+      {columns.map((column, columnIndex) => (
+        <div key={columnIndex} className="flex min-w-0 flex-1 flex-col gap-3">
+          {column.map((item) => (
+            <TemplateCard
+              key={item.id}
+              item={item}
+              active={selectedId === item.id}
+              onSelect={onSelect}
+            />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function UploadSlot({
   label,
   hint,
@@ -165,7 +229,7 @@ function TemplateCard({
       type="button"
       onClick={() => onSelect(item)}
       className={cn(
-        "group mb-3 w-full break-inside-avoid overflow-hidden rounded-xl border bg-surface text-left shadow-sm transition-colors",
+        "group w-full overflow-hidden rounded-xl border bg-surface text-left shadow-sm transition-colors",
         active ? "border-accent ring-2 ring-accent/20" : "border-border hover:border-zinc-300",
       )}
     >
@@ -694,16 +758,11 @@ export function AdStudioPage() {
             </p>
           </div>
         ) : (
-          <div className="columns-2 gap-3 sm:columns-3 lg:columns-4">
-            {(selected ? explore : items).map((item) => (
-              <TemplateCard
-                key={item.id}
-                item={item}
-                active={selected?.id === item.id}
-                onSelect={selectTemplate}
-              />
-            ))}
-          </div>
+          <TemplateMasonryGrid
+            items={selected ? explore : items}
+            selectedId={selected?.id}
+            onSelect={selectTemplate}
+          />
         )}
       </div>
 

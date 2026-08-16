@@ -175,14 +175,22 @@ export function fetchAdStudioTemplates(category?: string) {
 }
 
 export function fetchAdminAdStudioCategories() {
-  return apiFetch<{ hidden_categories: string[] }>("/admin/ad-studio/categories");
+  return apiFetch<{ hidden_categories: string[]; shuffle_templates?: boolean }>(
+    "/admin/ad-studio/categories",
+  );
 }
 
-export function updateAdminAdStudioCategories(hidden: string[]) {
-  return apiFetch<{ hidden_categories: string[] }>("/admin/ad-studio/categories", {
-    method: "PUT",
-    body: JSON.stringify({ hidden_categories: hidden }),
-  });
+export function updateAdminAdStudioCategories(hidden: string[], shuffleTemplates: boolean) {
+  return apiFetch<{ hidden_categories: string[]; shuffle_templates: boolean }>(
+    "/admin/ad-studio/categories",
+    {
+      method: "PUT",
+      body: JSON.stringify({
+        hidden_categories: hidden,
+        shuffle_templates: shuffleTemplates,
+      }),
+    },
+  );
 }
 
 export function generateFromAdStudioTemplate(

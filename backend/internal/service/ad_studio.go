@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/rand/v2"
 	"mime/multipart"
 	"net/http"
 	"strings"
@@ -68,6 +69,9 @@ func (s *AdStudioService) ListPublic(ctx context.Context, category string) ([]mo
 		}
 		out = append(out, t.ToPublicView())
 	}
+	if shuffle, err := s.ShuffleTemplatesEnabled(ctx); err == nil && shuffle {
+		shuffleAdStudioPublicViews(out)
+	}
 	return out, hidden, nil
 }
 
@@ -90,25 +94,77 @@ func (s *AdStudioService) GetPublic(ctx context.Context, id string) (model.AdStu
 }
 
 func (s *AdStudioService) HiddenCategories(ctx context.Context) ([]string, error) {
-	if s.settings == nil {
-		return nil, nil
-	}
-	hidden, err := s.settings.GetAdStudioHiddenCategories(ctx)
+	settings, err := s.CategorySettings(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return normalizeHiddenAdStudioCategories(hidden), nil
+	return settings.HiddenCategories, nil
+}
+
+type AdStudioCategorySettings struct {
+	HiddenCategories []string
+	ShuffleTemplates bool
+}
+
+func (s *AdStudioService) CategorySettings(ctx context.Context) (AdStudioCategorySettings, error) {
+	if s.settings == nil {
+		return AdStudioCategorySettings{}, nil
+	}
+	hidden, err := s.settings.GetAdStudioHiddenCategories(ctx)
+	if err != nil {
+		return AdStudioCategorySettings{}, err
+	}
+	shuffle, err := s.settings.GetAdStudioShuffleTemplates(ctx)
+	if err != nil {
+		return AdStudioCategorySettings{}, err
+	}
+	return AdStudioCategorySettings{
+		HiddenCategories: normalizeHiddenAdStudioCategories(hidden),
+		ShuffleTemplates: shuffle,
+	}, nil
+}
+
+func (s *AdStudioService) ShuffleTemplatesEnabled(ctx context.Context) (bool, error) {
+	settings, err := s.CategorySettings(ctx)
+	if err != nil {
+		return false, err
+	}
+	return settings.ShuffleTemplates, nil
 }
 
 func (s *AdStudioService) SetHiddenCategories(ctx context.Context, hidden []string) ([]string, error) {
+	current, err := s.CategorySettings(ctx)
+	if err != nil {
+		return nil, err
+	}
+	updated, err := s.SetCategorySettings(ctx, hidden, current.ShuffleTemplates)
+	if err != nil {
+		return nil, err
+	}
+	return updated.HiddenCategories, nil
+}
+
+func (s *AdStudioService) SetCategorySettings(ctx context.Context, hidden []string, shuffle bool) (AdStudioCategorySettings, error) {
 	if s.settings == nil {
-		return nil, errors.New("ad studio settings unavailable")
+		return AdStudioCategorySettings{}, errors.New("ad studio settings unavailable")
 	}
 	normalized := normalizeHiddenAdStudioCategories(hidden)
 	if err := s.settings.SetAdStudioHiddenCategories(ctx, normalized); err != nil {
-		return nil, err
+		return AdStudioCategorySettings{}, err
 	}
-	return normalized, nil
+	if err := s.settings.SetAdStudioShuffleTemplates(ctx, shuffle); err != nil {
+		return AdStudioCategorySettings{}, err
+	}
+	return AdStudioCategorySettings{
+		HiddenCategories: normalized,
+		ShuffleTemplates: shuffle,
+	}, nil
+}
+
+func shuffleAdStudioPublicViews(items []model.AdStudioTemplatePublicView) {
+	rand.Shuffle(len(items), func(i, j int) {
+		items[i], items[j] = items[j], items[i]
+	})
 }
 
 func (s *AdStudioService) ListAdmin(ctx context.Context, category string) ([]model.AdStudioTemplateAdminView, error) {

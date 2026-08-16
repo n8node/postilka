@@ -108,28 +108,35 @@ func (h *AdStudioHandler) Generate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AdStudioHandler) AdminGetCategories(w http.ResponseWriter, r *http.Request) {
-	hidden, err := h.svc.HiddenCategories(r.Context())
+	settings, err := h.svc.CategorySettings(r.Context())
 	if err != nil {
 		h.mapError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"hidden_categories": hidden})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"hidden_categories": settings.HiddenCategories,
+		"shuffle_templates": settings.ShuffleTemplates,
+	})
 }
 
 func (h *AdStudioHandler) AdminUpdateCategories(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		HiddenCategories []string `json:"hidden_categories"`
+		ShuffleTemplates bool     `json:"shuffle_templates"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "Некорректное тело запроса")
 		return
 	}
-	hidden, err := h.svc.SetHiddenCategories(r.Context(), req.HiddenCategories)
+	settings, err := h.svc.SetCategorySettings(r.Context(), req.HiddenCategories, req.ShuffleTemplates)
 	if err != nil {
 		h.mapError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"hidden_categories": hidden})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"hidden_categories": settings.HiddenCategories,
+		"shuffle_templates": settings.ShuffleTemplates,
+	})
 }
 
 func (h *AdStudioHandler) AdminList(w http.ResponseWriter, r *http.Request) {

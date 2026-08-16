@@ -80,6 +80,7 @@ export function AdminAdStudioPage({ embedded = false }: { embedded?: boolean }) 
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [hiddenCategories, setHiddenCategories] = useState<string[]>([]);
+  const [shuffleTemplates, setShuffleTemplates] = useState(false);
   const [savingSections, setSavingSections] = useState(false);
 
   const selected = items.find((item) => item.id === selectedId) ?? null;
@@ -94,6 +95,7 @@ export function AdminAdStudioPage({ embedded = false }: { embedded?: boolean }) 
       ]);
       setItems(res.items ?? []);
       setHiddenCategories(cats.hidden_categories ?? []);
+      setShuffleTemplates(Boolean(cats.shuffle_templates));
       setSelectedId((prev) => {
         if (prev && res.items.some((item) => item.id === prev)) return prev;
         return res.items[0]?.id ?? "";
@@ -224,11 +226,27 @@ export function AdminAdStudioPage({ embedded = false }: { embedded?: boolean }) 
     setSavingSections(true);
     setError(null);
     try {
-      const res = await updateAdminAdStudioCategories(next);
+      const res = await updateAdminAdStudioCategories(next, shuffleTemplates);
       setHiddenCategories(res.hidden_categories ?? next);
+      setShuffleTemplates(Boolean(res.shuffle_templates));
       setSaved(true);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Не удалось скрыть раздел");
+    } finally {
+      setSavingSections(false);
+    }
+  }
+
+  async function toggleShuffle(enabled: boolean) {
+    setSavingSections(true);
+    setError(null);
+    try {
+      const res = await updateAdminAdStudioCategories(hiddenCategories, enabled);
+      setHiddenCategories(res.hidden_categories ?? hiddenCategories);
+      setShuffleTemplates(Boolean(res.shuffle_templates));
+      setSaved(true);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Не удалось сохранить настройку");
     } finally {
       setSavingSections(false);
     }
@@ -273,6 +291,18 @@ export function AdminAdStudioPage({ embedded = false }: { embedded?: boolean }) 
             );
           })}
         </div>
+        <label className="mt-3 flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={shuffleTemplates}
+            disabled={savingSections}
+            onChange={(e) => void toggleShuffle(e.target.checked)}
+          />
+          Случайный порядок карточек в кабинете
+        </label>
+        <p className="mt-1 text-xs text-slate-500">
+          При включении шаблоны перемешиваются при каждой загрузке библиотеки у пользователей.
+        </p>
       </div>
 
       <div className="flex flex-wrap gap-2">

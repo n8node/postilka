@@ -104,6 +104,27 @@ func (r *SettingsRepository) SetAdStudioHiddenCategories(ctx context.Context, hi
 	return r.Set(ctx, adStudioHiddenCategoriesKey, string(raw))
 }
 
+const adStudioShuffleTemplatesKey = "ad_studio.shuffle_templates"
+
+func (r *SettingsRepository) GetAdStudioShuffleTemplates(ctx context.Context) (bool, error) {
+	value, err := r.Get(ctx, adStudioShuffleTemplatesKey)
+	if errors.Is(err, ErrNotFound) || strings.TrimSpace(value) == "" {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return value == "true", nil
+}
+
+func (r *SettingsRepository) SetAdStudioShuffleTemplates(ctx context.Context, enabled bool) error {
+	v := "false"
+	if enabled {
+		v = "true"
+	}
+	return r.Set(ctx, adStudioShuffleTemplatesKey, v)
+}
+
 func (r *SettingsRepository) SetOAuthLoginEnabled(ctx context.Context, provider string, enabled bool) error {
 	v := "false"
 	if enabled {
