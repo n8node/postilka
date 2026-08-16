@@ -21,12 +21,23 @@ func NewWorkflowHandler(svc *service.WorkflowService, wsSvc *service.WorkspaceSe
 	return &WorkflowHandler{svc: svc, wsSvc: wsSvc}
 }
 
+func (h *WorkflowHandler) resolveWorkspaceID(r *http.Request, userID string) (string, error) {
+	ws, _, err := h.wsSvc.ResolveActive(r.Context(), userID, r)
+	if err != nil {
+		return "", err
+	}
+	if ws == nil {
+		return "", service.ErrWorkspaceNotFound
+	}
+	return ws.ID, nil
+}
+
 func (h *WorkflowHandler) List(w http.ResponseWriter, r *http.Request) {
 	userID, ok := postUserID(w, r)
 	if !ok {
 		return
 	}
-	wsID, err := h.wsSvc.ResolveWorkspaceID(r.Context(), userID, r)
+	wsID, err := h.resolveWorkspaceID(r, userID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "Workspace не найден")
 		return
@@ -45,7 +56,7 @@ func (h *WorkflowHandler) Get(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	wsID, err := h.wsSvc.ResolveWorkspaceID(r.Context(), userID, r)
+	wsID, err := h.resolveWorkspaceID(r, userID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "Workspace не найден")
 		return
@@ -65,7 +76,7 @@ func (h *WorkflowHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	wsID, err := h.wsSvc.ResolveWorkspaceID(r.Context(), userID, r)
+	wsID, err := h.resolveWorkspaceID(r, userID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "Workspace не найден")
 		return
@@ -90,7 +101,7 @@ func (h *WorkflowHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	wsID, err := h.wsSvc.ResolveWorkspaceID(r.Context(), userID, r)
+	wsID, err := h.resolveWorkspaceID(r, userID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "Workspace не найден")
 		return
@@ -116,7 +127,7 @@ func (h *WorkflowHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	wsID, err := h.wsSvc.ResolveWorkspaceID(r.Context(), userID, r)
+	wsID, err := h.resolveWorkspaceID(r, userID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "Workspace не найден")
 		return
@@ -135,7 +146,7 @@ func (h *WorkflowHandler) Run(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	wsID, err := h.wsSvc.ResolveWorkspaceID(r.Context(), userID, r)
+	wsID, err := h.resolveWorkspaceID(r, userID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "Workspace не найден")
 		return
@@ -158,7 +169,7 @@ func (h *WorkflowHandler) TestNode(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	wsID, err := h.wsSvc.ResolveWorkspaceID(r.Context(), userID, r)
+	wsID, err := h.resolveWorkspaceID(r, userID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "Workspace не найден")
 		return
@@ -183,7 +194,7 @@ func (h *WorkflowHandler) ListRuns(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	wsID, err := h.wsSvc.ResolveWorkspaceID(r.Context(), userID, r)
+	wsID, err := h.resolveWorkspaceID(r, userID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "Workspace не найден")
 		return
@@ -210,7 +221,7 @@ func (h *WorkflowHandler) GetRun(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	wsID, err := h.wsSvc.ResolveWorkspaceID(r.Context(), userID, r)
+	wsID, err := h.resolveWorkspaceID(r, userID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "Workspace не найден")
 		return
@@ -239,7 +250,7 @@ func (h *WorkflowHandler) CloneTemplate(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
-	wsID, err := h.wsSvc.ResolveWorkspaceID(r.Context(), userID, r)
+	wsID, err := h.resolveWorkspaceID(r, userID)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "Workspace не найден")
 		return
