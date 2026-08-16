@@ -251,6 +251,30 @@ VALUES
     }'::jsonb
 );
 
+-- Update existing templates in case migration was already executed
+UPDATE workflow_templates
+SET 
+    description = 'Генерация рекламного или информационного поста через AI и автоматическая публикация в Telegram и ВКонтакте',
+    graph = regexp_replace(regexp_replace(graph::text, 'yandex_gpt_', 'ai_text_', 'g'), 'Yandex GPT Генерация', 'AI Генерация текста', 'g')::jsonb
+WHERE name = 'Кросс-постинг с AI: Telegram и VK';
+
+UPDATE workflow_templates
+SET 
+    description = 'Создание сценария ролика, генерация видео через нейросеть и публикация в YouTube Shorts',
+    graph = regexp_replace(regexp_replace(regexp_replace(graph::text, 'yandex_gpt_', 'ai_text_', 'g'), 'kie_video_', 'ai_video_', 'g'), 'KIE.ai Видео', 'AI Видео', 'g')::jsonb
+WHERE name = 'Генерация и публикация YouTube Shorts';
+
+UPDATE workflow_templates
+SET 
+    description = 'Генерация текста и фотореалистичной обложки нейросетью с публикацией в Telegram с интерактивной кнопкой',
+    graph = regexp_replace(regexp_replace(regexp_replace(graph::text, 'yandex_gpt_', 'ai_text_', 'g'), 'kie_image_', 'ai_image_', 'g'), 'KIE Image', 'AI Изображение', 'g')::jsonb
+WHERE name = 'Пост с AI-картинкой и инлайн-кнопкой';
+
+-- Update any user workflows created from old templates
+UPDATE workflows
+SET graph = regexp_replace(regexp_replace(regexp_replace(graph::text, 'yandex_gpt_', 'ai_text_', 'g'), 'kie_video_', 'ai_video_', 'g'), 'kie_image_', 'ai_image_', 'g')::jsonb
+WHERE graph::text LIKE '%yandex_gpt_%' OR graph::text LIKE '%kie_video_%' OR graph::text LIKE '%kie_image_%';
+
 -- +goose Down
 
 DROP TABLE IF EXISTS workflow_run_steps;

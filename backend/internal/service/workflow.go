@@ -762,11 +762,29 @@ func (s *WorkflowService) resolveVariables(raw string, outputs map[string]map[st
 		nodeID := sub[1]
 		prop := sub[2]
 
+		// 1. Direct exact lookup by nodeID
 		if nodeOutputs, ok := outputs[nodeID]; ok {
 			if val, valOk := nodeOutputs[prop]; valOk {
 				return fmt.Sprintf("%v", val)
 			}
 		}
+
+		// 2. Legacy alias fallback: map old yandex_gpt_1 / kie_video_1 aliases to ai_text_1 / ai_video_1
+		aliasNodeID := nodeID
+		if strings.HasPrefix(nodeID, "yandex_gpt_") {
+			aliasNodeID = strings.Replace(nodeID, "yandex_gpt_", "ai_text_", 1)
+		} else if strings.HasPrefix(nodeID, "kie_video_") {
+			aliasNodeID = strings.Replace(nodeID, "kie_video_", "ai_video_", 1)
+		} else if strings.HasPrefix(nodeID, "kie_image_") {
+			aliasNodeID = strings.Replace(nodeID, "kie_image_", "ai_image_", 1)
+		}
+
+		if aliasOutputs, ok := outputs[aliasNodeID]; ok {
+			if val, valOk := aliasOutputs[prop]; valOk {
+				return fmt.Sprintf("%v", val)
+			}
+		}
+
 		return match
 	})
 }
