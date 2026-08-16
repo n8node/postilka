@@ -3,7 +3,6 @@ package handler
 import (
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -276,20 +275,12 @@ func (h *GenerationHandler) ResultMedia(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	body, contentType, err := h.generation.ResultMediaObject(r.Context(), chi.URLParam(r, "id"), userID)
+	url, err := h.generation.ResultMediaPresignedURL(r.Context(), chi.URLParam(r, "id"), userID)
 	if err != nil {
 		h.mapError(w, err)
 		return
 	}
-	defer body.Close()
-
-	if contentType == "" {
-		contentType = "application/octet-stream"
-	}
-	w.Header().Set("Content-Type", contentType)
-	w.Header().Set("Cache-Control", "private, max-age=300")
-	w.WriteHeader(http.StatusOK)
-	_, _ = io.Copy(w, body)
+	redirectPresignedObject(w, r, url)
 }
 
 func (h *GenerationHandler) ResultPreviewMedia(w http.ResponseWriter, r *http.Request) {
@@ -299,20 +290,12 @@ func (h *GenerationHandler) ResultPreviewMedia(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	body, contentType, err := h.generation.ResultPreviewMediaObject(r.Context(), chi.URLParam(r, "id"), userID)
+	url, err := h.generation.ResultPreviewPresignedURL(r.Context(), chi.URLParam(r, "id"), userID)
 	if err != nil {
 		h.mapError(w, err)
 		return
 	}
-	defer body.Close()
-
-	if contentType == "" {
-		contentType = "image/jpeg"
-	}
-	w.Header().Set("Content-Type", contentType)
-	w.Header().Set("Cache-Control", "private, max-age=3600")
-	w.WriteHeader(http.StatusOK)
-	_, _ = io.Copy(w, body)
+	redirectPresignedObject(w, r, url)
 }
 
 func (h *GenerationHandler) mapError(w http.ResponseWriter, err error) {

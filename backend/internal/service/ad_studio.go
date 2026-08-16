@@ -10,6 +10,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/postilka/postilka/internal/model"
@@ -265,10 +266,10 @@ func (s *AdStudioService) UploadPreview(ctx context.Context, id string, file mul
 		ext := adStudioVideoExt(contentType)
 		masterKey := fmt.Sprintf("postilka/ad-studio/previews/%s%s", uuid.NewString(), ext)
 		thumbKey := fmt.Sprintf("postilka/ad-studio/previews/%s.webp", uuid.NewString())
-		if err := s.objectStore.PutObject(ctx, masterKey, contentType, data); err != nil {
+		if err := s.objectStore.PutObjectWithCacheControl(ctx, masterKey, contentType, adStudioMasterObjectCacheControl, data); err != nil {
 			return model.AdStudioTemplateAdminView{}, err
 		}
-		if err := s.objectStore.PutObject(ctx, thumbKey, "image/webp", thumb); err != nil {
+		if err := s.objectStore.PutObjectWithCacheControl(ctx, thumbKey, "image/webp", adStudioThumbObjectCacheControl, thumb); err != nil {
 			_ = s.objectStore.DeleteObject(ctx, masterKey)
 			return model.AdStudioTemplateAdminView{}, err
 		}
@@ -300,10 +301,10 @@ func (s *AdStudioService) UploadPreview(ctx context.Context, id string, file mul
 
 	masterKey := fmt.Sprintf("postilka/ad-studio/previews/%s.jpg", uuid.NewString())
 	thumbKey := fmt.Sprintf("postilka/ad-studio/previews/%s.webp", uuid.NewString())
-	if err := s.objectStore.PutObject(ctx, masterKey, "image/jpeg", master); err != nil {
+	if err := s.objectStore.PutObjectWithCacheControl(ctx, masterKey, "image/jpeg", adStudioMasterObjectCacheControl, master); err != nil {
 		return model.AdStudioTemplateAdminView{}, err
 	}
-	if err := s.objectStore.PutObject(ctx, thumbKey, "image/webp", thumb); err != nil {
+	if err := s.objectStore.PutObjectWithCacheControl(ctx, thumbKey, "image/webp", adStudioThumbObjectCacheControl, thumb); err != nil {
 		_ = s.objectStore.DeleteObject(ctx, masterKey)
 		return model.AdStudioTemplateAdminView{}, err
 	}
@@ -318,25 +319,133 @@ func (s *AdStudioService) UploadPreview(ctx context.Context, id string, file mul
 	return updated.ToAdminView(), nil
 }
 
-func (s *AdStudioService) PreviewObject(ctx context.Context, id string, publishedOnly bool) (io.ReadCloser, string, error) {
+const (
+	adStudioThumbObjectCacheControl  = "public, max-age=31536000, immutable"
+	adStudioMasterObjectCacheControl = "public, max-age=86400"
+)
+
+func (s *AdStudioService) previewAccess(ctx context.Context, id string, publishedOnly bool) (model.AdStudioTemplate, error) {
 	t, err := s.repo.GetByID(ctx, id)
 	if err != nil {
-		return nil, "", err
+		return model.AdStudioTemplate{}, err
 	}
 	if publishedOnly && !t.IsPublished {
-		return nil, "", ErrAdStudioNotPublished
+		return model.AdStudioTemplate{}, ErrAdStudioNotPublished
 	}
 	if publishedOnly {
 		hidden, err := s.categoryIsHidden(ctx, t.Category)
 		if err != nil {
-			return nil, "", err
+			return model.AdStudioTemplate{}, err
 		}
 		if hidden {
-			return nil, "", ErrAdStudioNotPublished
+			return model.AdStudioTemplate{}, ErrAdStudioNotPublished
 		}
 	}
 	if strings.TrimSpace(t.PreviewS3Key) == "" {
-		return nil, "", repository.ErrNotFound
+		return model.AdStudioTemplate{}, repository.ErrNotFound
+	}
+	return t, nil
+}
+
+func (s *AdStudioService) resolvePreviewObjectKey(ctx context.Context, t model.AdStudioTemplate, source bool) (string, string, error) {
+	if source {
+		if !model.AdStudioPreviewIsVideo(t.PreviewContentType) {
+			return "", "", repository.ErrNotFound
+		}
+		contentType := t.PreviewContentType
+		if contentType == "" {
+			contentType = "video/mp4"
+		}
+		return t.PreviewS3Key, contentType, nil
+	}
+	if thumbKey := strings.TrimSpace(t.PreviewThumbS3Key); thumbKey != "" {
+		return thumbKey, "image/webp", nil
+	}
+	body, _, err := s.ensurePreviewThumb(ctx, t)
+	if err == nil {
+		_ = body.Close()
+		refreshed, getErr := s.repo.GetByID(ctx, t.ID)
+		if getErr == nil {
+			if thumbKey := strings.TrimSpace(refreshed.PreviewThumbS3Key); thumbKey != "" {
+				return thumbKey, "image/webp", nil
+			}
+		}
+		return "", "", ErrAdStudioPreviewProcess
+	}
+	contentType := t.PreviewContentType
+	if contentType == "" {
+		contentType = "image/jpeg"
+	}
+	return t.PreviewS3Key, contentType, nil
+}
+
+func presignOptionsForAdStudioObject(contentType string, immutable bool) servicePresignOptions {
+	contentType = strings.ToLower(strings.TrimSpace(contentType))
+	opts := servicePresignOptions{
+		expires: time.Hour,
+		inline:  true,
+	}
+	if immutable || strings.Contains(contentType, "webp") {
+		opts.expires = 24 * time.Hour
+		opts.cacheControl = adStudioThumbObjectCacheControl
+		return opts
+	}
+	if strings.HasPrefix(contentType, "video/") {
+		opts.cacheControl = adStudioMasterObjectCacheControl
+		return opts
+	}
+	opts.expires = 24 * time.Hour
+	opts.cacheControl = adStudioMasterObjectCacheControl + ", stale-while-revalidate=604800"
+	return opts
+}
+
+type servicePresignOptions struct {
+	expires      time.Duration
+	inline       bool
+	cacheControl string
+}
+
+func (s *AdStudioService) PreviewPresignedURL(ctx context.Context, id string, publishedOnly, source bool) (string, error) {
+	t, err := s.previewAccess(ctx, id, publishedOnly)
+	if err != nil {
+		return "", err
+	}
+	key, contentType, err := s.resolvePreviewObjectKey(ctx, t, source)
+	if err != nil {
+		return "", err
+	}
+	opts := presignOptionsForAdStudioObject(contentType, strings.HasSuffix(strings.ToLower(key), ".webp"))
+	return s.objectStore.PresignGetWithOptions(ctx, key, PresignGetOptions{
+		Expires:      opts.expires,
+		Inline:       opts.inline,
+		CacheControl: opts.cacheControl,
+	})
+}
+
+func (s *AdStudioService) BackfillMissingPreviewThumbs(ctx context.Context) (ready int, failed int, err error) {
+	items, err := s.repo.List(ctx, "", false)
+	if err != nil {
+		return 0, 0, err
+	}
+	for _, t := range items {
+		if strings.TrimSpace(t.PreviewS3Key) == "" || strings.TrimSpace(t.PreviewThumbS3Key) != "" {
+			continue
+		}
+		body, _, thumbErr := s.ensurePreviewThumb(ctx, t)
+		if thumbErr != nil {
+			failed++
+			continue
+		}
+		_ = body.Close()
+		ready++
+	}
+	return ready, failed, nil
+}
+
+func (s *AdStudioService) PreviewObject(ctx context.Context, id string, publishedOnly bool) (io.ReadCloser, string, error) {
+	t, err := s.previewAccess(ctx, id, publishedOnly)
+	if err != nil {
+		return nil, "", err
 	}
 	if thumbKey := strings.TrimSpace(t.PreviewThumbS3Key); thumbKey != "" {
 		body, contentType, err := s.objectStore.GetObject(ctx, thumbKey)
@@ -417,7 +526,7 @@ func (s *AdStudioService) ensurePreviewThumb(ctx context.Context, t model.AdStud
 		return nil, "", ErrAdStudioPreviewProcess
 	}
 	thumbKey := fmt.Sprintf("postilka/ad-studio/previews/%s.webp", uuid.NewString())
-	if err := s.objectStore.PutObject(ctx, thumbKey, "image/webp", thumb); err != nil {
+	if err := s.objectStore.PutObjectWithCacheControl(ctx, thumbKey, "image/webp", adStudioThumbObjectCacheControl, thumb); err != nil {
 		return nil, "", err
 	}
 	if _, err := s.repo.UpdatePreviewThumb(ctx, t.ID, thumbKey); err != nil {

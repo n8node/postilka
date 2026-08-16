@@ -755,7 +755,37 @@ func (s *GenerationService) ResultMediaURL(ctx context.Context, id, userID strin
 	if err != nil {
 		return "", err
 	}
-	return s.objectStore.PresignGet(ctx, key, 15*time.Minute, "")
+	return s.objectStore.PresignGetWithOptions(ctx, key, PresignGetOptions{
+		Expires:      time.Hour,
+		Inline:       true,
+		CacheControl: "public, max-age=86400",
+	})
+}
+
+func (s *GenerationService) ResultPreviewPresignedURL(ctx context.Context, id, userID string) (string, error) {
+	gen, err := s.genRepo.GetByID(ctx, id, userID)
+	if err != nil {
+		return "", err
+	}
+	key := strings.TrimSpace(gen.PreviewS3Key)
+	if key == "" && isVideoGenerationRecord(gen) {
+		key, err = s.ensureVideoGenerationPreview(ctx, gen)
+		if err != nil {
+			return "", err
+		}
+	}
+	if key == "" {
+		return "", repository.ErrNotFound
+	}
+	return s.objectStore.PresignGetWithOptions(ctx, key, PresignGetOptions{
+		Expires:      24 * time.Hour,
+		Inline:       true,
+		CacheControl: "public, max-age=86400, stale-while-revalidate=604800",
+	})
+}
+
+func (s *GenerationService) ResultMediaPresignedURL(ctx context.Context, id, userID string) (string, error) {
+	return s.ResultMediaURL(ctx, id, userID)
 }
 
 func (s *GenerationService) ResultMediaObject(ctx context.Context, id, userID string) (io.ReadCloser, string, error) {
@@ -833,7 +863,7 @@ func (s *GenerationService) ensureVideoGenerationPreview(ctx context.Context, ge
 		return "", err
 	}
 	previewKey := videoGenerationPreviewS3Key(gen.WorkspaceID)
-	if err := s.objectStore.PutObject(ctx, previewKey, "image/jpeg", previewData); err != nil {
+	if err := s.objectStore.PutObjectWithCacheControl(ctx, previewKey, "image/jpeg", "public, max-age=86400", previewData); err != nil {
 		return "", err
 	}
 	if err := s.genRepo.UpdatePreviewS3Key(ctx, gen.ID, previewKey); err != nil {

@@ -10,6 +10,7 @@ import {
   AD_STUDIO_GENERATION_MODES,
   adminAdStudioPreviewSourceUrl,
   adminAdStudioPreviewUrl,
+  backfillAdminAdStudioPreviews,
   adStudioCategoryLabel,
   adStudioMediaKindForMode,
   adStudioModeLabel,
@@ -82,6 +83,7 @@ export function AdminAdStudioPage({ embedded = false }: { embedded?: boolean }) 
   const [hiddenCategories, setHiddenCategories] = useState<string[]>([]);
   const [shuffleTemplates, setShuffleTemplates] = useState(false);
   const [savingSections, setSavingSections] = useState(false);
+  const [backfillingPreviews, setBackfillingPreviews] = useState(false);
 
   const selected = items.find((item) => item.id === selectedId) ?? null;
 
@@ -237,6 +239,22 @@ export function AdminAdStudioPage({ embedded = false }: { embedded?: boolean }) 
     }
   }
 
+  async function backfillPreviews() {
+    setBackfillingPreviews(true);
+    setError(null);
+    try {
+      const res = await backfillAdminAdStudioPreviews();
+      setSaved(true);
+      if (res.failed > 0) {
+        setError(`Постеры: готово ${res.ready}, ошибок ${res.failed}`);
+      }
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Не удалось создать постеры");
+    } finally {
+      setBackfillingPreviews(false);
+    }
+  }
+
   async function toggleShuffle(enabled: boolean) {
     setSavingSections(true);
     setError(null);
@@ -303,6 +321,14 @@ export function AdminAdStudioPage({ embedded = false }: { embedded?: boolean }) 
         <p className="mt-1 text-xs text-slate-500">
           При включении шаблоны перемешиваются при каждой загрузке библиотеки у пользователей.
         </p>
+        <button
+          type="button"
+          disabled={backfillingPreviews || savingSections}
+          onClick={() => void backfillPreviews()}
+          className="mt-3 rounded-md border border-slate-200 px-3 py-1.5 text-sm hover:bg-white disabled:opacity-50"
+        >
+          {backfillingPreviews ? "Создаём постеры…" : "Создать WebP-постеры для старых шаблонов"}
+        </button>
       </div>
 
       <div className="flex flex-wrap gap-2">

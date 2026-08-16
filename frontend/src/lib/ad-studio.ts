@@ -254,6 +254,13 @@ export async function uploadAdminAdStudioPreview(id: string, file: File) {
   }
 }
 
+export async function backfillAdminAdStudioPreviews() {
+  return apiFetch<{ ok: boolean; ready: number; failed: number }>(
+    "/admin/ad-studio/templates/backfill-previews",
+    { method: "POST" },
+  );
+}
+
 export function adminAdStudioPreviewUrl(item: AdStudioTemplateAdmin): string {
   if (!item.has_preview) return "";
   return `/admin/ad-studio/templates/${encodeURIComponent(item.id)}/preview?t=${encodeURIComponent(item.updated_at)}`;

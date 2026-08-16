@@ -3,7 +3,6 @@ package handler
 import (
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"strings"
 
@@ -53,19 +52,12 @@ func (h *AdStudioHandler) Preview(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
 		return
 	}
-	body, contentType, err := h.svc.PreviewObject(r.Context(), chi.URLParam(r, "id"), true)
+	url, err := h.svc.PreviewPresignedURL(r.Context(), chi.URLParam(r, "id"), true, false)
 	if err != nil {
 		h.mapError(w, err)
 		return
 	}
-	defer body.Close()
-	if contentType == "" {
-		contentType = "image/jpeg"
-	}
-	w.Header().Set("Content-Type", contentType)
-	w.Header().Set("Cache-Control", "private, max-age=3600")
-	w.WriteHeader(http.StatusOK)
-	_, _ = io.Copy(w, body)
+	redirectPresignedObject(w, r, url)
 }
 
 func (h *AdStudioHandler) PreviewSource(w http.ResponseWriter, r *http.Request) {
@@ -73,19 +65,12 @@ func (h *AdStudioHandler) PreviewSource(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
 		return
 	}
-	body, contentType, err := h.svc.PreviewSourceObject(r.Context(), chi.URLParam(r, "id"), true)
+	url, err := h.svc.PreviewPresignedURL(r.Context(), chi.URLParam(r, "id"), true, true)
 	if err != nil {
 		h.mapError(w, err)
 		return
 	}
-	defer body.Close()
-	if contentType == "" {
-		contentType = "video/mp4"
-	}
-	w.Header().Set("Content-Type", contentType)
-	w.Header().Set("Cache-Control", "private, max-age=3600")
-	w.WriteHeader(http.StatusOK)
-	_, _ = io.Copy(w, body)
+	redirectPresignedObject(w, r, url)
 }
 
 func (h *AdStudioHandler) Generate(w http.ResponseWriter, r *http.Request) {
@@ -185,35 +170,21 @@ func (h *AdStudioHandler) AdminDelete(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AdStudioHandler) AdminPreview(w http.ResponseWriter, r *http.Request) {
-	body, contentType, err := h.svc.PreviewObject(r.Context(), chi.URLParam(r, "id"), false)
+	url, err := h.svc.PreviewPresignedURL(r.Context(), chi.URLParam(r, "id"), false, false)
 	if err != nil {
 		h.mapError(w, err)
 		return
 	}
-	defer body.Close()
-	if contentType == "" {
-		contentType = "image/jpeg"
-	}
-	w.Header().Set("Content-Type", contentType)
-	w.Header().Set("Cache-Control", "private, max-age=60")
-	w.WriteHeader(http.StatusOK)
-	_, _ = io.Copy(w, body)
+	redirectPresignedObject(w, r, url)
 }
 
 func (h *AdStudioHandler) AdminPreviewSource(w http.ResponseWriter, r *http.Request) {
-	body, contentType, err := h.svc.PreviewSourceObject(r.Context(), chi.URLParam(r, "id"), false)
+	url, err := h.svc.PreviewPresignedURL(r.Context(), chi.URLParam(r, "id"), false, true)
 	if err != nil {
 		h.mapError(w, err)
 		return
 	}
-	defer body.Close()
-	if contentType == "" {
-		contentType = "video/mp4"
-	}
-	w.Header().Set("Content-Type", contentType)
-	w.Header().Set("Cache-Control", "private, max-age=60")
-	w.WriteHeader(http.StatusOK)
-	_, _ = io.Copy(w, body)
+	redirectPresignedObject(w, r, url)
 }
 
 func (h *AdStudioHandler) AdminUploadPreview(w http.ResponseWriter, r *http.Request) {
@@ -232,6 +203,19 @@ func (h *AdStudioHandler) AdminUploadPreview(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"item": item})
+}
+
+func (h *AdStudioHandler) AdminBackfillPreviews(w http.ResponseWriter, r *http.Request) {
+	ready, failed, err := h.svc.BackfillMissingPreviewThumbs(r.Context())
+	if err != nil {
+		h.mapError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":     true,
+		"ready":  ready,
+		"failed": failed,
+	})
 }
 
 func (h *AdStudioHandler) mapError(w http.ResponseWriter, err error) {

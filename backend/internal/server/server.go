@@ -514,6 +514,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Get("/ad-studio/templates/{id}/preview", adStudioHandler.AdminPreview)
 				r.Get("/ad-studio/templates/{id}/preview/source", adStudioHandler.AdminPreviewSource)
 				r.Post("/ad-studio/templates/{id}/preview", adStudioHandler.AdminUploadPreview)
+				r.Post("/ad-studio/templates/backfill-previews", adStudioHandler.AdminBackfillPreviews)
 				r.Get("/settings/upload-files", uploadFileSettingsHandler.GetAdmin)
 				r.Put("/settings/upload-files", uploadFileSettingsHandler.UpdateAdmin)
 				r.Get("/telegram", telegramHandler.GetAdmin)
