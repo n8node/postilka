@@ -117,11 +117,11 @@ export type WorkflowStats = {
 // Client API calls
 
 export async function fetchWorkflows(): Promise<{ items: Workflow[] }> {
-  return apiFetch<{ items: Workflow[] }>("/api/v1/workflows");
+  return apiFetch<{ items: Workflow[] }>("/workflows");
 }
 
 export async function fetchWorkflow(id: string): Promise<Workflow> {
-  return apiFetch<Workflow>(`/api/v1/workflows/${id}`);
+  return apiFetch<Workflow>(`/workflows/${id}`);
 }
 
 export async function createWorkflow(data: {
@@ -132,7 +132,7 @@ export async function createWorkflow(data: {
   schedule_tz?: string;
   graph?: WorkflowGraph;
 }): Promise<Workflow> {
-  return apiFetch<Workflow>("/api/v1/workflows", {
+  return apiFetch<Workflow>("/workflows", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
@@ -151,7 +151,7 @@ export async function updateWorkflow(
     graph?: WorkflowGraph;
   }
 ): Promise<Workflow> {
-  return apiFetch<Workflow>(`/api/v1/workflows/${id}`, {
+  return apiFetch<Workflow>(`/workflows/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
@@ -159,7 +159,7 @@ export async function updateWorkflow(
 }
 
 export async function deleteWorkflow(id: string): Promise<{ ok: boolean }> {
-  return apiFetch<{ ok: boolean }>(`/api/v1/workflows/${id}`, {
+  return apiFetch<{ ok: boolean }>(`/workflows/${id}`, {
     method: "DELETE",
   });
 }
@@ -168,7 +168,7 @@ export async function runWorkflow(
   id: string,
   inputs?: Record<string, any>
 ): Promise<WorkflowRun> {
-  return apiFetch<WorkflowRun>(`/api/v1/workflows/${id}/run`, {
+  return apiFetch<WorkflowRun>(`/workflows/${id}/run`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ inputs: inputs || {} }),
@@ -181,7 +181,7 @@ export async function testWorkflowNode(
   inputs?: Record<string, any>
 ): Promise<{ outputs: Record<string, any> }> {
   return apiFetch<{ outputs: Record<string, any> }>(
-    `/api/v1/workflows/${workflowId}/test-node`,
+    `/workflows/${workflowId}/test-node`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -195,7 +195,7 @@ export async function fetchWorkflowRuns(
   limit = 30
 ): Promise<{ items: WorkflowRun[] }> {
   return apiFetch<{ items: WorkflowRun[] }>(
-    `/api/v1/workflows/${id}/runs?limit=${limit}`
+    `/workflows/${id}/runs?limit=${limit}`
   );
 }
 
@@ -203,19 +203,19 @@ export async function fetchWorkflowRun(
   workflowId: string,
   runId: string
 ): Promise<WorkflowRun> {
-  return apiFetch<WorkflowRun>(`/api/v1/workflows/${workflowId}/runs/${runId}`);
+  return apiFetch<WorkflowRun>(`/workflows/${workflowId}/runs/${runId}`);
 }
 
 export async function fetchWorkflowTemplates(): Promise<{
   items: WorkflowTemplate[];
 }> {
-  return apiFetch<{ items: WorkflowTemplate[] }>("/api/v1/workflows/templates");
+  return apiFetch<{ items: WorkflowTemplate[] }>("/workflows/templates");
 }
 
 export async function cloneWorkflowTemplate(
   templateId: string
 ): Promise<Workflow> {
-  return apiFetch<Workflow>(`/api/v1/workflows/templates/${templateId}/clone`, {
+  return apiFetch<Workflow>(`/workflows/templates/${templateId}/clone`, {
     method: "POST",
   });
 }
@@ -226,7 +226,7 @@ export async function fetchAdminWorkflowTemplates(): Promise<{
   items: WorkflowTemplate[];
 }> {
   return apiFetch<{ items: WorkflowTemplate[] }>(
-    "/api/v1/admin/workflows/templates"
+    "/admin/workflows/templates"
   );
 }
 
@@ -239,7 +239,7 @@ export async function createAdminWorkflowTemplate(data: {
   sort_order?: number;
   graph?: WorkflowGraph;
 }): Promise<WorkflowTemplate> {
-  return apiFetch<WorkflowTemplate>("/api/v1/admin/workflows/templates", {
+  return apiFetch<WorkflowTemplate>("/admin/workflows/templates", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
@@ -258,7 +258,7 @@ export async function updateAdminWorkflowTemplate(
     graph?: WorkflowGraph;
   }
 ): Promise<WorkflowTemplate> {
-  return apiFetch<WorkflowTemplate>(`/api/v1/admin/workflows/templates/${id}`, {
+  return apiFetch<WorkflowTemplate>(`/admin/workflows/templates/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
@@ -268,11 +268,11 @@ export async function updateAdminWorkflowTemplate(
 export async function deleteAdminWorkflowTemplate(
   id: string
 ): Promise<{ ok: boolean }> {
-  return apiFetch<{ ok: boolean }>(`/api/v1/admin/workflows/templates/${id}`, {
+  return apiFetch<{ ok: boolean }>(`/admin/workflows/templates/${id}`, {
     method: "DELETE",
   });
 }
 
 export async function fetchAdminWorkflowStats(): Promise<WorkflowStats> {
-  return apiFetch<WorkflowStats>("/api/v1/admin/workflows/stats");
+  return apiFetch<WorkflowStats>("/admin/workflows/stats");
 }
