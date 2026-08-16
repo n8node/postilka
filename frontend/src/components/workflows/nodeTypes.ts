@@ -80,8 +80,8 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
   },
   ai_image: {
     type: "ai_image",
-    title: "KIE.ai Изображение",
-    description: "Генерация графики и фотореалистичных обложек",
+    title: "Image Generation",
+    description: "Генерация графики и фотореалистичных обложек (KIE.ai / Flux)",
     category: "ai",
     icon: "image",
     color: {
@@ -91,21 +91,24 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       text: "text-purple-600 dark:text-purple-400",
     },
     inputs: [
-      { id: "prompt", label: "Промпт для картинки", type: "string" },
+      { id: "prompt", label: "Промпт / Описание", type: "string" },
+      { id: "referenceImage", label: "Референс (Image)", type: "image" },
     ],
     outputs: [
-      { id: "image_url", label: "URL изображения", type: "image" },
+      { id: "image_url", label: "Изображение", type: "image" },
     ],
     defaultData: {
-      title: "Генерация обложки",
-      prompt: "Modern abstract neon aesthetic 3d composition, 4k",
+      title: "Image Generation",
+      prompt: "Modern aesthetic digital portrait, cinematic lighting, 4k",
       aspectRatio: "1:1",
+      model: "GPT Image 2",
+      resolution: "2k",
     },
   },
   ai_video: {
     type: "ai_video",
-    title: "KIE.ai Видео / Shorts",
-    description: "Генерация динамических видеороликов и анимаций",
+    title: "Video Generation",
+    description: "Генерация динамических видеороликов и анимаций (KIE.ai)",
     category: "ai",
     icon: "video",
     color: {
@@ -116,12 +119,13 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
     },
     inputs: [
       { id: "prompt", label: "Сценарий / Промпт", type: "string" },
+      { id: "firstFrame", label: "Первый кадр", type: "image" },
     ],
     outputs: [
-      { id: "video_url", label: "URL видео", type: "video" },
+      { id: "video_url", label: "Видео (MP4)", type: "video" },
     ],
     defaultData: {
-      title: "Генерация видеоролика",
+      title: "Video Generation",
       prompt: "Cinematic drone shot flying through modern futuristic skyscraper city",
       aspectRatio: "9:16",
       durationSeconds: 5,
@@ -265,25 +269,28 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
   },
   files_media: {
     type: "files_media",
-    title: "Файл из медиатеки",
-    description: "Выбор брендированных шаблонов или файлов из S3",
+    title: "Image / Media",
+    description: "Загрузка изображения с диска/ПК или выбор из медиатеки S3",
     category: "media",
-    icon: "folder",
+    icon: "image",
     color: {
-      bg: "bg-teal-500/10 dark:bg-teal-500/20",
-      border: "border-teal-500/40",
-      badge: "bg-teal-600 text-white",
-      text: "text-teal-600 dark:text-teal-400",
+      bg: "bg-purple-500/10 dark:bg-purple-500/20",
+      border: "border-purple-500/40",
+      badge: "bg-purple-600 text-white",
+      text: "text-purple-600 dark:text-purple-400",
     },
     inputs: [],
     outputs: [
-      { id: "file_url", label: "URL файла", type: "any" },
-      { id: "file_id", label: "ID файла", type: "string" },
+      { id: "image_url", label: "Изображение", type: "image" },
+      { id: "video_url", label: "Видео", type: "video" },
+      { id: "file_url", label: "Файл", type: "any" },
     ],
     defaultData: {
-      title: "Медиафайл S3",
-      fileUrl: "https://postilka.ru/storage/demo-cover.jpg",
+      title: "Image",
+      fileUrl: "",
       fileId: "",
+      fileName: "",
+      mediaKind: "image",
     },
   },
   draft_approval: {

@@ -24,6 +24,9 @@ import type {
   WorkflowEdge,
   WorkflowGraph,
 } from "@/lib/workflows-api";
+import { WorkspaceMediaPickerModal } from "@/components/generation/WorkspaceMediaPickerModal";
+import { getCachedFileMediaUrl } from "@/lib/file-media-cache";
+import type { WorkspaceFile } from "@/lib/files-api";
 import { WorkflowNodeCard } from "./WorkflowNodeCard";
 import { NodePalette } from "./NodePalette";
 import { NodeInspector } from "./NodeInspector";
@@ -86,6 +89,11 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   } | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [warningToast, setWarningToast] = useState<string | null>(null);
+  const [mediaPickerTarget, setMediaPickerTarget] = useState<{
+    nodeId: string;
+    field: string;
+    mediaKind?: "image" | "video";
+  } | null>(null);
 
   // Registered Port DOM Elements for exact anchor coordinates
   const portElementsRef = useRef<Map<string, HTMLElement>>(new Map());
@@ -740,6 +748,10 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                 scale={zoom}
                 connectingFrom={connectingFrom}
                 onRegisterPort={handleRegisterPort}
+                onUpdateNodeData={handleUpdateNodeData}
+                onOpenMediaPicker={(nodeId, field) =>
+                  setMediaPickerTarget({ nodeId, field, mediaKind: "image" })
+                }
                 onSelect={() => {
                   setSelectedNodeId(node.id);
                   setSelectedEdgeId(null);
@@ -771,7 +783,39 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
             workflowId={workflow.id}
             onClose={() => setSelectedNodeId(null)}
             onUpdateNodeData={handleUpdateNodeData}
+            onOpenMediaPicker={(nodeId, field) =>
+              setMediaPickerTarget({ nodeId, field, mediaKind: "image" })
+            }
             onTestNode={onTestNode}
+          />
+        )}
+
+        {/* Workspace Media Library Picker Modal */}
+        {mediaPickerTarget && (
+          <WorkspaceMediaPickerModal
+            open={!!mediaPickerTarget}
+            mediaKind={mediaPickerTarget.mediaKind || "image"}
+            onClose={() => setMediaPickerTarget(null)}
+            onSelect={async (file: WorkspaceFile) => {
+              try {
+                const url = await getCachedFileMediaUrl(file.id, "preview");
+                const isVid =
+                  file.mime_type.startsWith("video/") ||
+                  file.name.endsWith(".mp4");
+                handleUpdateNodeData(mediaPickerTarget.nodeId, {
+                  [mediaPickerTarget.field]: url,
+                  imageUrl: !isVid ? url : undefined,
+                  videoUrl: isVid ? url : undefined,
+                  fileId: file.id,
+                  fileName: file.name,
+                  mediaKind: isVid ? "video" : "image",
+                });
+              } catch (err) {
+                console.error("Failed to fetch file media URL", err);
+              } finally {
+                setMediaPickerTarget(null);
+              }
+            }}
           />
         )}
 

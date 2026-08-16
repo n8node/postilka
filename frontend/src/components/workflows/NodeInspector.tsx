@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   X,
   Play,
@@ -11,8 +11,13 @@ import {
   CheckCircle2,
   AlertCircle,
   Sparkles,
+  UploadCloud,
+  Folder,
+  Image as ImageIcon,
 } from "lucide-react";
 import type { WorkflowNode } from "@/lib/workflows-api";
+import { uploadFile } from "@/lib/files-api";
+import { getCachedFileMediaUrl } from "@/lib/file-media-cache";
 import { NODE_DEFINITIONS } from "./nodeTypes";
 
 interface NodeInspectorProps {
@@ -21,6 +26,7 @@ interface NodeInspectorProps {
   workflowId?: string;
   onClose: () => void;
   onUpdateNodeData: (nodeId: string, newData: Record<string, any>) => void;
+  onOpenMediaPicker?: (nodeId: string, field: string) => void;
   onTestNode: (node: WorkflowNode) => Promise<{ outputs: Record<string, any> }>;
 }
 
@@ -30,8 +36,12 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
   workflowId,
   onClose,
   onUpdateNodeData,
+  onOpenMediaPicker,
   onTestNode,
 }) => {
+  const inspectorFileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{
     outputs?: Record<string, any>;
@@ -611,6 +621,106 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                 onChange={(e) => handleFieldChange("firstComment", e.target.value)}
                 className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none"
                 placeholder="Ссылка на источник или дополнительный материал..."
+              />
+            </div>
+          </div>
+        )}
+
+        {/* 7. FILES / MEDIA NODE */}
+        {node.type === "files_media" && (
+          <div className="space-y-3">
+            <input
+              type="file"
+              ref={inspectorFileInputRef}
+              accept="image/*,video/*"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                setIsUploading(true);
+                setUploadError(null);
+                const localUrl = URL.createObjectURL(file);
+                const isVid = file.type.startsWith("video/");
+                handleFieldChange("fileUrl", localUrl);
+                handleFieldChange("imageUrl", !isVid ? localUrl : undefined);
+                handleFieldChange("videoUrl", isVid ? localUrl : undefined);
+                handleFieldChange("fileName", file.name);
+                handleFieldChange("mediaKind", isVid ? "video" : "image");
+
+                try {
+                  const res = await uploadFile(file);
+                  const permUrl = await getCachedFileMediaUrl(res.id, "preview");
+                  handleFieldChange("fileUrl", permUrl);
+                  handleFieldChange("imageUrl", !isVid ? permUrl : undefined);
+                  handleFieldChange("videoUrl", isVid ? permUrl : undefined);
+                  handleFieldChange("fileId", res.id);
+                  handleFieldChange("fileName", res.name);
+                } catch (err: any) {
+                  setUploadError("Upload failed");
+                } finally {
+                  setIsUploading(false);
+                }
+              }}
+            />
+
+            {/* Media Preview Box */}
+            {data.fileUrl || data.imageUrl ? (
+              <div className="relative aspect-video w-full overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-950">
+                {data.mediaKind === "video" ? (
+                  <video
+                    src={(data.fileUrl as string) || (data.videoUrl as string)}
+                    controls
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <img
+                    src={(data.fileUrl as string) || (data.imageUrl as string)}
+                    alt="Preview"
+                    className="h-full w-full object-cover"
+                  />
+                )}
+              </div>
+            ) : null}
+
+            {/* Upload / Pick Actions */}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                disabled={isUploading}
+                onClick={() => inspectorFileInputRef.current?.click()}
+                className="flex items-center justify-center gap-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/80 px-3 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition"
+              >
+                {isUploading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <UploadCloud className="h-3.5 w-3.5 text-indigo-500" />
+                )}
+                <span>Загрузить с ПК</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onOpenMediaPicker?.(node.id, "fileUrl")}
+                className="flex items-center justify-center gap-1.5 rounded-xl border border-indigo-200 dark:border-indigo-900 bg-indigo-50 dark:bg-indigo-950/40 px-3 py-2 text-xs font-semibold text-indigo-700 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition"
+              >
+                <Folder className="h-3.5 w-3.5" />
+                <span>Медиатека</span>
+              </button>
+            </div>
+
+            <div>
+              <label className="mb-1 block font-medium text-zinc-700 dark:text-zinc-300">
+                Прямая ссылка на файл (URL)
+              </label>
+              <input
+                type="text"
+                value={data.fileUrl || ""}
+                onChange={(e) => {
+                  handleFieldChange("fileUrl", e.target.value);
+                  handleFieldChange("imageUrl", e.target.value);
+                }}
+                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none font-mono"
+                placeholder="https://..."
               />
             </div>
           </div>
