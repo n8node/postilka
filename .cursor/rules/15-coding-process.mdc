@@ -66,3 +66,5 @@ alwaysApply: true
 | Shell / git push | `20-no-shell.mdc` |
 | Multi-agent roadmap | `21-multi-agent-roadmap.mdc` |
 | Workspace tenancy | `22-workspace-tenancy.mdc` |
+| Content missions | `23-content-missions.mdc` |
+| Visual workflows | `24-visual-workflows.mdc` |

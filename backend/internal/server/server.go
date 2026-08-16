@@ -213,6 +213,12 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	adStudioSvc := service.NewAdStudioService(adStudioRepo, settingsRepo, generationSvc, objectStorage)
 	adStudioHandler := handler.NewAdStudioHandler(adStudioSvc)
 
+	workflowRepo := repository.NewWorkflowRepository(db.Pool)
+	workflowSvc := service.NewWorkflowService(
+		workflowRepo, channelRepo, postSvc, generationSvc, aiBillingSvc, yandexGptConfigSvc, wsSvc, fileStorageSvc, planRepo, notificationSvc, logger,
+	)
+	workflowHandler := handler.NewWorkflowHandler(workflowSvc, wsSvc)
+
 	publicationSvc.SetNotifier(notificationSvc)
 	postSvc.SetNotifier(notificationSvc)
 	channelSvc.SetNotifier(notificationSvc)
@@ -222,6 +228,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	checkoutSvc.SetNotifier(notificationSvc)
 	adminWalletSvc.SetNotifier(notificationSvc)
 	generationSvc.SetNotifier(notificationSvc)
+	workflowSvc.SetNotifier(notificationSvc)
 	fileStorageSvc.SetNotifier(notificationSvc)
 	wsInviteSvc.SetNotifier(notificationSvc)
 
@@ -450,6 +457,19 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Get("/ad-studio/templates/{id}/preview", adStudioHandler.Preview)
 			r.Get("/ad-studio/templates/{id}/preview/source", adStudioHandler.PreviewSource)
 			r.Post("/ad-studio/templates/{id}/generate", adStudioHandler.Generate)
+
+			r.Get("/workflows", workflowHandler.List)
+			r.Post("/workflows", workflowHandler.Create)
+			r.Get("/workflows/templates", workflowHandler.ListTemplates)
+			r.Post("/workflows/templates/{id}/clone", workflowHandler.CloneTemplate)
+			r.Get("/workflows/{id}", workflowHandler.Get)
+			r.Patch("/workflows/{id}", workflowHandler.Update)
+			r.Put("/workflows/{id}", workflowHandler.Update)
+			r.Delete("/workflows/{id}", workflowHandler.Delete)
+			r.Post("/workflows/{id}/run", workflowHandler.Run)
+			r.Post("/workflows/{id}/test-node", workflowHandler.TestNode)
+			r.Get("/workflows/{id}/runs", workflowHandler.ListRuns)
+			r.Get("/workflows/{id}/runs/{runId}", workflowHandler.GetRun)
 		})
 
 		r.Route("/admin", func(r chi.Router) {
@@ -548,6 +568,12 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Delete("/workspaces", adminHandler.DeleteAllWorkspaces)
 				r.Get("/workspaces/{workspaceID}", adminHandler.GetWorkspace)
 				r.Delete("/workspaces/{workspaceID}", adminHandler.DeleteWorkspace)
+
+				r.Get("/workflows/templates", workflowHandler.AdminListTemplates)
+				r.Post("/workflows/templates", workflowHandler.AdminCreateTemplate)
+				r.Put("/workflows/templates/{id}", workflowHandler.AdminUpdateTemplate)
+				r.Delete("/workflows/templates/{id}", workflowHandler.AdminDeleteTemplate)
+				r.Get("/workflows/stats", workflowHandler.AdminStats)
 
 				r.Get("/files", adminHandler.ListFiles)
 				r.Get("/files/folders", adminHandler.ListFileFolders)
