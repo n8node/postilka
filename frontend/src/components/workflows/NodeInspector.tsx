@@ -392,7 +392,8 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
               >
                 <option value="manual">Ручной запуск (по кнопке)</option>
                 <option value="schedule">По расписанию (Календарь / Cron)</option>
-                <option value="webhook">Входящий Webhook / RSS</option>
+                <option value="webhook">Входящий Webhook</option>
+                <option value="rss">RSS-лента (новые записи)</option>
               </select>
             </div>
 
@@ -588,23 +589,6 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                   )}
                 </div>
 
-                <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-850/40 p-3 space-y-2">
-                  <label className="flex items-center gap-1.5 font-semibold text-zinc-800 dark:text-zinc-200 text-xs">
-                    <Radio className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400" />
-                    <span>RSS-лента (опционально)</span>
-                  </label>
-                  <input
-                    type="url"
-                    value={data.rssFeedUrl || ""}
-                    onChange={(e) => handleFieldChange("rssFeedUrl", e.target.value)}
-                    className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none"
-                    placeholder="https://example.com/feed.xml"
-                  />
-                  <p className="text-[10px] text-zinc-500 leading-relaxed">
-                    Укажите RSS для автоматического опроса новых публикаций. Пока основной запуск — через webhook URL выше.
-                  </p>
-                </div>
-
                 <div className="rounded-xl border border-indigo-200 dark:border-indigo-900/50 bg-indigo-50/50 dark:bg-indigo-950/20 p-3 space-y-2">
                   <div className="flex items-center justify-between gap-2">
                     <label className="font-semibold text-zinc-800 dark:text-zinc-200 text-xs">
@@ -673,6 +657,57 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                       {webhookError}
                     </div>
                   )}
+                </div>
+              </div>
+            )}
+
+            {data.triggerType === "rss" && (
+              <div className="space-y-3 pt-1">
+                <div className="rounded-xl border border-orange-200 dark:border-orange-900/50 bg-orange-50/60 dark:bg-orange-950/20 p-3 space-y-2">
+                  <label className="flex items-center gap-1.5 font-semibold text-zinc-800 dark:text-zinc-200 text-xs">
+                    <Radio className="h-3.5 w-3.5 text-orange-600 dark:text-orange-400" />
+                    <span>URL RSS-ленты</span>
+                  </label>
+                  <input
+                    type="url"
+                    value={data.rssFeedUrl || ""}
+                    onChange={(e) => handleFieldChange("rssFeedUrl", e.target.value)}
+                    className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none"
+                    placeholder="https://example.com/feed.xml"
+                  />
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="mb-1 block text-[10px] text-zinc-500">Интервал опроса (мин)</label>
+                      <input
+                        type="number"
+                        min={5}
+                        max={1440}
+                        value={data.rssPollIntervalMinutes ?? 15}
+                        onChange={(e) =>
+                          handleFieldChange("rssPollIntervalMinutes", Number(e.target.value) || 15)
+                        }
+                        className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-3 py-1.5 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-[10px] text-zinc-500">Новых записей за раз</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={10}
+                        value={data.rssMaxItemsPerRun ?? 1}
+                        onChange={(e) =>
+                          handleFieldChange("rssMaxItemsPerRun", Number(e.target.value) || 1)
+                        }
+                        className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-3 py-1.5 text-xs"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-zinc-500 leading-relaxed">
+                    Worker опрашивает ленту и запускает процесс для новых записей. Доступны переменные{" "}
+                    <code className="font-mono text-[9px]">{`{{ trigger_1.title }}`}</code>,{" "}
+                    <code className="font-mono text-[9px]">{`{{ trigger_1.link }}`}</code>.
+                  </p>
                 </div>
               </div>
             )}
@@ -2296,6 +2331,157 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
             <p className="text-[10px] text-zinc-500">
               Поддерживает подстановку переменных вида <code className="font-mono text-[9px]">{`{{ node_id.output }}`}</code>.
             </p>
+          </div>
+        )}
+
+        {node.type === "merge" && (
+          <div className="space-y-3">
+            <div>
+              <label className="mb-1 block font-medium text-zinc-700 dark:text-zinc-300">Режим объединения</label>
+              <select
+                value={data.mode || "combine"}
+                onChange={(e) => handleFieldChange("mode", e.target.value)}
+                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs"
+              >
+                <option value="combine">Combine — слить все поля</option>
+                <option value="prefer_first">Prefer first — первый вход</option>
+                <option value="prefer_last">Prefer last — последний вход</option>
+              </select>
+            </div>
+            <p className="text-[10px] text-zinc-500">
+              Подключите несколько входов (текст, картинка, файлы). На выходе — единый набор полей для публикации.
+            </p>
+          </div>
+        )}
+
+        {node.type === "set_fields" && (
+          <div className="space-y-3">
+            {(Array.isArray(data.fields) ? data.fields : []).map(
+              (field: { key?: string; value?: string }, idx: number) => (
+                <div key={idx} className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-2.5 space-y-2">
+                  <input
+                    type="text"
+                    value={field.key || ""}
+                    onChange={(e) => {
+                      const next = [...(data.fields || [])];
+                      next[idx] = { ...next[idx], key: e.target.value };
+                      handleFieldChange("fields", next);
+                    }}
+                    placeholder="Имя поля (например client_name)"
+                    className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-2 py-1 text-xs"
+                  />
+                  <input
+                    type="text"
+                    value={field.value || ""}
+                    onChange={(e) => {
+                      const next = [...(data.fields || [])];
+                      next[idx] = { ...next[idx], value: e.target.value };
+                      handleFieldChange("fields", next);
+                    }}
+                    placeholder="{{ trigger_1.body.name }}"
+                    className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-2 py-1 text-xs font-mono"
+                  />
+                </div>
+              )
+            )}
+            <button
+              type="button"
+              onClick={() =>
+                handleFieldChange("fields", [
+                  ...(Array.isArray(data.fields) ? data.fields : []),
+                  { key: "", value: "" },
+                ])
+              }
+              className="text-[11px] font-medium text-indigo-600 hover:underline"
+            >
+              + Добавить поле
+            </button>
+          </div>
+        )}
+
+        {node.type === "loop_items" && (
+          <div className="space-y-3">
+            <div>
+              <label className="mb-1 block font-medium text-zinc-700 dark:text-zinc-300">Источник списка</label>
+              <select
+                value={data.itemsSource || "channels"}
+                onChange={(e) => handleFieldChange("itemsSource", e.target.value)}
+                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs"
+              >
+                <option value="channels">Каналы workspace</option>
+                <option value="static">Статический список</option>
+                <option value="upstream_field">Из предыдущей ноды</option>
+              </select>
+            </div>
+            {(data.itemsSource || "channels") === "channels" && (
+              <div>
+                <label className="mb-1 block text-[10px] text-zinc-500">Провайдеры (через запятую)</label>
+                <input
+                  type="text"
+                  value={(data.channelProviders || ["telegram", "vk"]).join(", ")}
+                  onChange={(e) =>
+                    handleFieldChange(
+                      "channelProviders",
+                      e.target.value.split(",").map((s) => s.trim()).filter(Boolean)
+                    )
+                  }
+                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs"
+                  placeholder="telegram, vk"
+                />
+              </div>
+            )}
+            <label className="flex items-center gap-2 text-xs text-zinc-600 dark:text-zinc-400">
+              <input
+                type="checkbox"
+                checked={!!data.stopOnError}
+                onChange={(e) => handleFieldChange("stopOnError", e.target.checked)}
+              />
+              Остановить процесс при ошибке итерации
+            </label>
+            <p className="text-[10px] text-zinc-500">
+              Следующие ноды после этой выполняются для каждого элемента. Используйте{" "}
+              <code className="font-mono text-[9px]">{`{{ __loop.current_item_channel_id }}`}</code>.
+            </p>
+          </div>
+        )}
+
+        {node.type === "http_request" && (
+          <div className="space-y-3">
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <label className="mb-1 block text-[10px] text-zinc-500">Метод</label>
+                <select
+                  value={data.method || "GET"}
+                  onChange={(e) => handleFieldChange("method", e.target.value)}
+                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-2 py-1.5 text-xs"
+                >
+                  <option value="GET">GET</option>
+                  <option value="POST">POST</option>
+                  <option value="PUT">PUT</option>
+                  <option value="PATCH">PATCH</option>
+                </select>
+              </div>
+              <div className="col-span-2">
+                <label className="mb-1 block text-[10px] text-zinc-500">URL</label>
+                <input
+                  type="url"
+                  value={data.url || ""}
+                  onChange={(e) => handleFieldChange("url", e.target.value)}
+                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-2 py-1.5 text-xs font-mono"
+                  placeholder="https://api.example.com/data"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="mb-1 block text-[10px] text-zinc-500">Тело запроса (JSON)</label>
+              <textarea
+                rows={4}
+                value={data.body || ""}
+                onChange={(e) => handleFieldChange("body", e.target.value)}
+                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 p-2 text-xs font-mono"
+                placeholder='{"key": "value"}'
+              />
+            </div>
           </div>
         )}
 

@@ -33,6 +33,11 @@ import {
   Calendar,
   Clock,
   Zap,
+  GitMerge,
+  Repeat,
+  Globe,
+  List,
+  Radio,
 } from "lucide-react";
 import type { WorkflowNode } from "@/lib/workflows-api";
 import { uploadFile } from "@/lib/files-api";
@@ -99,6 +104,10 @@ const ICON_MAP: Record<string, React.ElementType> = {
   "message-square": MessageSquare,
   type: Type,
   "align-left": AlignLeft,
+  "git-merge": GitMerge,
+  repeat: Repeat,
+  globe: Globe,
+  list: List,
 };
 
 function formatTriggerScheduleDate(dateStr: string): string {
@@ -531,9 +540,21 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
                 <Zap className="h-4 w-4" />
               </div>
               <span className="text-[10px] font-semibold text-zinc-800 dark:text-zinc-200">
-                Webhook / RSS
+                Webhook
               </span>
               <span className="text-[8px] text-zinc-400">Событие</span>
+            </div>
+          ) : node.data.triggerType === "rss" ? (
+            <div className="flex flex-col items-center justify-center gap-1">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/20 shadow-sm">
+                <Radio className="h-4 w-4" />
+              </div>
+              <span className="text-[10px] font-semibold text-zinc-800 dark:text-zinc-200">
+                RSS
+              </span>
+              <span className="text-[8px] text-zinc-400 truncate max-w-[120px]">
+                {(node.data.rssFeedUrl as string) || "Лента"}
+              </span>
             </div>
           ) : (
             <div className="flex flex-col items-center justify-center gap-1">

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -21,7 +22,8 @@ func NewWorkflowRepository(pool *pgxpool.Pool) *WorkflowRepository {
 
 const workflowColumns = `
 	id, workspace_id, created_by::text, name, description, is_active, trigger_type,
-	schedule_cron, schedule_tz, webhook_secret, next_run_at, graph, created_at, updated_at
+	schedule_cron, schedule_tz, webhook_secret, rss_feed_url, rss_poll_interval_minutes,
+	next_run_at, graph, created_at, updated_at
 `
 
 func scanWorkflow(row pgx.Row) (*model.Workflow, error) {
@@ -30,7 +32,8 @@ func scanWorkflow(row pgx.Row) (*model.Workflow, error) {
 	var graphRaw []byte
 	err := row.Scan(
 		&w.ID, &w.WorkspaceID, &createdBy, &w.Name, &w.Description, &w.IsActive, &w.TriggerType,
-		&w.ScheduleCron, &w.ScheduleTZ, &w.WebhookSecret, &w.NextRunAt, &graphRaw, &w.CreatedAt, &w.UpdatedAt,
+		&w.ScheduleCron, &w.ScheduleTZ, &w.WebhookSecret, &w.RSSFeedURL, &w.RSSPollIntervalMinutes,
+		&w.NextRunAt, &graphRaw, &w.CreatedAt, &w.UpdatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -107,16 +110,18 @@ func (r *WorkflowRepository) Create(ctx context.Context, w *model.Workflow) (*mo
 	query := fmt.Sprintf(`
 		INSERT INTO workflows (
 			workspace_id, created_by, name, description, is_active, trigger_type,
-			schedule_cron, schedule_tz, webhook_secret, next_run_at, graph
+			schedule_cron, schedule_tz, webhook_secret, rss_feed_url, rss_poll_interval_minutes,
+			next_run_at, graph
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
 		)
 		RETURNING %s
 	`, workflowColumns)
 
 	row := r.pool.QueryRow(ctx, query,
 		w.WorkspaceID, w.CreatedBy, w.Name, w.Description, w.IsActive, w.TriggerType,
-		w.ScheduleCron, w.ScheduleTZ, w.WebhookSecret, w.NextRunAt, graphBytes,
+		w.ScheduleCron, w.ScheduleTZ, w.WebhookSecret, w.RSSFeedURL, w.RSSPollIntervalMinutes,
+		w.NextRunAt, graphBytes,
 	)
 	return scanWorkflow(row)
 }
@@ -136,8 +141,10 @@ func (r *WorkflowRepository) Update(ctx context.Context, w *model.Workflow) (*mo
 			schedule_cron = $7,
 			schedule_tz = $8,
 			webhook_secret = $9,
-			next_run_at = $10,
-			graph = $11,
+			rss_feed_url = $10,
+			rss_poll_interval_minutes = $11,
+			next_run_at = $12,
+			graph = $13,
 			updated_at = NOW()
 		WHERE id = $1 AND workspace_id = $2
 		RETURNING %s
@@ -145,7 +152,8 @@ func (r *WorkflowRepository) Update(ctx context.Context, w *model.Workflow) (*mo
 
 	row := r.pool.QueryRow(ctx, query,
 		w.ID, w.WorkspaceID, w.Name, w.Description, w.IsActive, w.TriggerType,
-		w.ScheduleCron, w.ScheduleTZ, w.WebhookSecret, w.NextRunAt, graphBytes,
+		w.ScheduleCron, w.ScheduleTZ, w.WebhookSecret, w.RSSFeedURL, w.RSSPollIntervalMinutes,
+		w.NextRunAt, graphBytes,
 	)
 	return scanWorkflow(row)
 }
@@ -538,4 +546,72 @@ func (r *WorkflowRepository) GetStats(ctx context.Context) (*model.WorkflowStats
 		return nil, err
 	}
 	return &stats, nil
+}
+
+func (r *WorkflowRepository) ListDueRSSWorkflows(ctx context.Context, limit int) ([]model.Workflow, error) {
+	if limit <= 0 {
+		limit = 50
+	}
+	query := fmt.Sprintf(`
+		SELECT %s FROM workflows
+		WHERE is_active = true
+		  AND trigger_type = 'rss'
+		  AND rss_feed_url <> ''
+		  AND (next_run_at IS NULL OR next_run_at <= NOW())
+		ORDER BY next_run_at NULLS FIRST, created_at ASC
+		LIMIT $1
+	`, workflowColumns)
+
+	rows, err := r.pool.Query(ctx, query, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []model.Workflow
+	for rows.Next() {
+		w, err := scanWorkflow(rows)
+		if err != nil {
+			return nil, err
+		}
+		list = append(list, *w)
+	}
+	if list == nil {
+		list = make([]model.Workflow, 0)
+	}
+	return list, nil
+}
+
+func (r *WorkflowRepository) UpdateNextRunAt(ctx context.Context, workflowID string, nextRunAt *time.Time) error {
+	_, err := r.pool.Exec(ctx, `
+		UPDATE workflows SET next_run_at = $2, updated_at = NOW() WHERE id = $1
+	`, workflowID, nextRunAt)
+	return err
+}
+
+func (r *WorkflowRepository) IsRSSItemSeen(ctx context.Context, workflowID, itemKey string) (bool, error) {
+	var exists bool
+	err := r.pool.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM workflow_rss_seen WHERE workflow_id = $1 AND item_key = $2
+		)
+	`, workflowID, itemKey).Scan(&exists)
+	return exists, err
+}
+
+func (r *WorkflowRepository) MarkRSSItemSeen(ctx context.Context, workflowID, itemKey string) error {
+	_, err := r.pool.Exec(ctx, `
+		INSERT INTO workflow_rss_seen (workflow_id, item_key)
+		VALUES ($1, $2)
+		ON CONFLICT (workflow_id, item_key) DO NOTHING
+	`, workflowID, itemKey)
+	return err
+}
+
+func (r *WorkflowRepository) HasAnyRSSSeen(ctx context.Context, workflowID string) (bool, error) {
+	var exists bool
+	err := r.pool.QueryRow(ctx, `
+		SELECT EXISTS(SELECT 1 FROM workflow_rss_seen WHERE workflow_id = $1)
+	`, workflowID).Scan(&exists)
+	return exists, err
 }

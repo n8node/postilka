@@ -1,6 +1,6 @@
 import { apiFetch } from "@/lib/api";
 
-export type WorkflowTriggerType = "manual" | "schedule" | "webhook";
+export type WorkflowTriggerType = "manual" | "schedule" | "webhook" | "rss";
 
 export type WorkflowRunStatus =
   | "pending"
@@ -85,6 +85,8 @@ export type Workflow = {
   trigger_type: WorkflowTriggerType;
   schedule_cron: string;
   schedule_tz: string;
+  rss_feed_url?: string;
+  rss_poll_interval_minutes?: number;
   next_run_at?: string;
   graph: WorkflowGraph;
   created_at: string;
@@ -148,6 +150,8 @@ export async function updateWorkflow(
     trigger_type?: WorkflowTriggerType;
     schedule_cron?: string;
     schedule_tz?: string;
+    rss_feed_url?: string;
+    rss_poll_interval_minutes?: number;
     graph?: WorkflowGraph;
   }
 ): Promise<Workflow> {

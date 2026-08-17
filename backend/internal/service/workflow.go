@@ -144,17 +144,25 @@ func (s *WorkflowService) CreateWorkflow(ctx context.Context, workspaceID, userI
 		tz = "Europe/Moscow"
 	}
 
-	wf := &model.Workflow{
-		WorkspaceID:  workspaceID,
-		CreatedBy:    &userID,
-		Name:         name,
-		Description:  strings.TrimSpace(req.Description),
-		IsActive:     true,
-		TriggerType:  triggerType,
-		ScheduleCron: strings.TrimSpace(req.ScheduleCron),
-		ScheduleTZ:   tz,
-		Graph:        graph,
+	rssInterval := req.RSSPollIntervalMinutes
+	if rssInterval <= 0 {
+		rssInterval = 15
 	}
+
+	wf := &model.Workflow{
+		WorkspaceID:            workspaceID,
+		CreatedBy:              &userID,
+		Name:                   name,
+		Description:            strings.TrimSpace(req.Description),
+		IsActive:               true,
+		TriggerType:            triggerType,
+		ScheduleCron:           strings.TrimSpace(req.ScheduleCron),
+		ScheduleTZ:             tz,
+		RSSFeedURL:             strings.TrimSpace(req.RSSFeedURL),
+		RSSPollIntervalMinutes: rssInterval,
+		Graph:                  graph,
+	}
+	s.syncWorkflowMetaFromGraph(wf)
 
 	created, err := s.repo.Create(ctx, wf)
 	if err != nil {
@@ -163,6 +171,10 @@ func (s *WorkflowService) CreateWorkflow(ctx context.Context, workspaceID, userI
 	if created.TriggerType == model.WorkflowTriggerWebhook {
 		_ = s.ensureWebhookSecret(ctx, created)
 		created, _ = s.GetWorkflow(ctx, created.ID, workspaceID)
+	}
+	if created.TriggerType == model.WorkflowTriggerRSS && strings.TrimSpace(created.RSSFeedURL) != "" {
+		now := time.Now()
+		_ = s.repo.UpdateNextRunAt(ctx, created.ID, &now)
 	}
 	return created, nil
 }
@@ -194,9 +206,16 @@ func (s *WorkflowService) UpdateWorkflow(ctx context.Context, id, workspaceID st
 	if req.ScheduleTZ != nil && strings.TrimSpace(*req.ScheduleTZ) != "" {
 		w.ScheduleTZ = strings.TrimSpace(*req.ScheduleTZ)
 	}
+	if req.RSSFeedURL != nil {
+		w.RSSFeedURL = strings.TrimSpace(*req.RSSFeedURL)
+	}
+	if req.RSSPollIntervalMinutes != nil && *req.RSSPollIntervalMinutes > 0 {
+		w.RSSPollIntervalMinutes = *req.RSSPollIntervalMinutes
+	}
 	if req.Graph != nil {
 		w.Graph = *req.Graph
 	}
+	s.syncWorkflowMetaFromGraph(w)
 
 	updated, err := s.repo.Update(ctx, w)
 	if err != nil {
@@ -205,6 +224,10 @@ func (s *WorkflowService) UpdateWorkflow(ctx context.Context, id, workspaceID st
 	if updated.TriggerType == model.WorkflowTriggerWebhook {
 		_ = s.ensureWebhookSecret(ctx, updated)
 		updated, _ = s.GetWorkflow(ctx, updated.ID, workspaceID)
+	}
+	if updated.TriggerType == model.WorkflowTriggerRSS && strings.TrimSpace(updated.RSSFeedURL) != "" {
+		now := time.Now()
+		_ = s.repo.UpdateNextRunAt(ctx, updated.ID, &now)
 	}
 	return updated, nil
 }
@@ -306,14 +329,19 @@ func (s *WorkflowService) CloneTemplate(ctx context.Context, templateID, workspa
 	}
 
 	wf := &model.Workflow{
-		WorkspaceID:  workspaceID,
-		CreatedBy:    &userID,
-		Name:         tpl.Name,
-		Description:  tpl.Description,
-		IsActive:     true,
-		TriggerType:  model.WorkflowTriggerManual,
-		ScheduleTZ:   "Europe/Moscow",
-		Graph:        tpl.Graph,
+		WorkspaceID:            workspaceID,
+		CreatedBy:              &userID,
+		Name:                   tpl.Name,
+		Description:            tpl.Description,
+		IsActive:               true,
+		TriggerType:            model.WorkflowTriggerManual,
+		ScheduleTZ:             "Europe/Moscow",
+		RSSPollIntervalMinutes: 15,
+		Graph:                  tpl.Graph,
+	}
+	s.syncWorkflowMetaFromGraph(wf)
+	if wf.RSSPollIntervalMinutes <= 0 {
+		wf.RSSPollIntervalMinutes = 15
 	}
 	return s.repo.Create(ctx, wf)
 }
@@ -405,6 +433,14 @@ func (s *WorkflowService) executeWorkflowGraph(ctx context.Context, runID string
 		}
 		executionOutputs["trigger"][k] = v
 	}
+	if triggerNode := findTriggerNode(graph); triggerNode != nil && len(initialInputs) > 0 {
+		if executionOutputs[triggerNode.ID] == nil {
+			executionOutputs[triggerNode.ID] = make(map[string]interface{})
+		}
+		for k, v := range initialInputs {
+			executionOutputs[triggerNode.ID][k] = v
+		}
+	}
 
 	totalTokens := 0
 	totalCredits := 0
@@ -417,10 +453,16 @@ func (s *WorkflowService) executeWorkflowGraph(ctx context.Context, runID string
 		incomingEdgesMap[edge.Target] = append(incomingEdgesMap[edge.Target], edge)
 	}
 
+	loopChildSet := buildLoopChildSet(graph)
+	nodeMap := buildNodeMap(graph)
 	skippedNodes := make(map[string]bool)
 
 	// 2. Execute nodes sequentially
 	for _, node := range orderedNodes {
+		if _, isLoopChild := loopChildSet[node.ID]; isLoopChild {
+			continue
+		}
+
 		// Check if this node should be skipped due to branch filtering (e.g. Switch or Condition)
 		shouldSkip := false
 		incoming := incomingEdgesMap[node.ID]
@@ -463,6 +505,19 @@ func (s *WorkflowService) executeWorkflowGraph(ctx context.Context, runID string
 			StartedAt:  &stepNow,
 		}
 
+		if node.Type == "trigger" && len(initialInputs) > 0 {
+			for k, v := range initialInputs {
+				step.Inputs[k] = v
+			}
+		}
+		if node.Type == "merge" {
+			upstream := collectMergeInputs(incoming, executionOutputs, skippedNodes)
+			step.Inputs["__upstream"] = upstream
+		}
+		if node.Type == "http_request" {
+			step.Inputs = sanitizeHTTPInputsForLog(step.Inputs)
+		}
+
 		if shouldSkip {
 			skippedNodes[node.ID] = true
 			finished := time.Now()
@@ -503,6 +558,98 @@ func (s *WorkflowService) executeWorkflowGraph(ctx context.Context, runID string
 			run.FinishedAt = &finished
 			_ = s.repo.UpdateRun(ctx, run)
 			return
+		}
+
+		if node.Type == "loop_items" {
+			childIDs := getDirectChildNodeIDs(node.ID, graph)
+			stopOnError := getBool(createdStep.Inputs, "stopOnError", false)
+			items, itemsErr := resolveLoopItemsList(ctx, s, workspaceID, createdStep.Inputs)
+			if itemsErr != nil {
+				createdStep.Status = model.WorkflowStepStatusFailed
+				createdStep.ErrorMessage = itemsErr.Error()
+				_ = s.repo.UpdateRunStep(ctx, createdStep)
+				run.Status = model.WorkflowRunStatusFailed
+				run.ErrorMessage = fmt.Sprintf("Ошибка на шаге '%s': %v", createdStep.NodeTitle, itemsErr)
+				run.FinishedAt = &finished
+				_ = s.repo.UpdateRun(ctx, run)
+				return
+			}
+
+			var iterationResults []map[string]interface{}
+			for i, item := range items {
+				setLoopContext(executionOutputs, i, len(items), item)
+				if executionOutputs[node.ID] == nil {
+					executionOutputs[node.ID] = make(map[string]interface{})
+				}
+				for k, v := range outputs {
+					executionOutputs[node.ID][k] = v
+				}
+
+				for _, childID := range childIDs {
+					childNode, ok := nodeMap[childID]
+					if !ok {
+						continue
+					}
+					childNow := time.Now()
+					childInputs := s.resolveNodeData(childNode.Data, executionOutputs)
+					childStep := &model.WorkflowRunStep{
+						RunID:     runID,
+						NodeID:    fmt.Sprintf("%s#%d", childNode.ID, i),
+						NodeType:  childNode.Type,
+						NodeTitle: s.getNodeTitle(childNode) + fmt.Sprintf(" (итерация %d)", i+1),
+						Status:    model.WorkflowStepStatusRunning,
+						Inputs:    childInputs,
+						Outputs:   make(map[string]interface{}),
+						StartedAt: &childNow,
+					}
+					childCreated, childStepErr := s.repo.CreateRunStep(ctx, childStep)
+					if childStepErr != nil {
+						continue
+					}
+
+					childOut, cTokens, cCredits, cKopecks, childExecErr := s.executeNode(ctx, workspaceID, userID, childNode, childInputs, executionOutputs)
+					childFinished := time.Now()
+					childCreated.FinishedAt = &childFinished
+					childCreated.DurationMS = int(childFinished.Sub(childNow).Milliseconds())
+					totalTokens += cTokens
+					totalCredits += cCredits
+					totalKopecks += cKopecks
+
+					if childExecErr != nil {
+						childCreated.Status = model.WorkflowStepStatusFailed
+						childCreated.ErrorMessage = childExecErr.Error()
+						_ = s.repo.UpdateRunStep(ctx, childCreated)
+						iterationResults = append(iterationResults, map[string]interface{}{
+							"error": childExecErr.Error(),
+							"index": i,
+						})
+						if stopOnError {
+							run.Status = model.WorkflowRunStatusFailed
+							run.ErrorMessage = fmt.Sprintf("Ошибка на шаге '%s': %v", childCreated.NodeTitle, childExecErr)
+							run.TokensUsed = totalTokens
+							run.CreditsUsed = totalCredits
+							run.KopecksSpent = totalKopecks
+							run.FinishedAt = &childFinished
+							_ = s.repo.UpdateRun(ctx, run)
+							return
+						}
+						continue
+					}
+
+					childCreated.Status = model.WorkflowStepStatusCompleted
+					childCreated.Outputs = childOut
+					_ = s.repo.UpdateRunStep(ctx, childCreated)
+					executionOutputs[childNode.ID] = childOut
+					skippedNodes[childNode.ID] = true
+					iterationResults = append(iterationResults, childOut)
+				}
+			}
+			outputs["results"] = iterationResults
+			outputs["count"] = len(items)
+			if len(iterationResults) > 0 {
+				outputs["last_result"] = iterationResults[len(iterationResults)-1]
+			}
+			createdStep.Outputs = outputs
 		}
 
 		if node.Type == "draft_approval" || node.Type == "human_review" {
@@ -959,6 +1106,37 @@ func (s *WorkflowService) executeNode(
 		outputs["text"] = text
 		return outputs, 0, 0, 0, nil
 
+	case "merge":
+		merged := executeMergeNode(inputs)
+		for k, v := range merged {
+			outputs[k] = v
+		}
+		return outputs, 0, 0, 0, nil
+
+	case "set_fields":
+		fieldsOut := executeSetFieldsNode(inputs, nil)
+		for k, v := range fieldsOut {
+			outputs[k] = v
+		}
+		return outputs, 0, 0, 0, nil
+
+	case "http_request":
+		httpOut, httpErr := s.executeHTTPRequest(ctx, inputs)
+		if httpErr != nil {
+			return httpOut, 0, 0, 0, httpErr
+		}
+		for k, v := range httpOut {
+			outputs[k] = v
+		}
+		return outputs, 0, 0, 0, nil
+
+	case "loop_items":
+		for k, v := range inputs {
+			outputs[k] = v
+		}
+		outputs["status"] = "loop_ready"
+		return outputs, 0, 0, 0, nil
+
 	default:
 		// Generic pass-through node
 		for k, v := range inputs {
@@ -1067,6 +1245,9 @@ func (s *WorkflowService) resolveVariables(raw string, outputs map[string]map[st
 
 		// 1. Direct exact lookup by nodeID
 		if nodeOutputs, ok := outputs[nodeID]; ok {
+			if val, valOk := getNestedMapValue(nodeOutputs, prop); valOk {
+				return fmt.Sprintf("%v", val)
+			}
 			if val, valOk := nodeOutputs[prop]; valOk {
 				return fmt.Sprintf("%v", val)
 			}
@@ -1083,6 +1264,9 @@ func (s *WorkflowService) resolveVariables(raw string, outputs map[string]map[st
 		}
 
 		if aliasOutputs, ok := outputs[aliasNodeID]; ok {
+			if val, valOk := getNestedMapValue(aliasOutputs, prop); valOk {
+				return fmt.Sprintf("%v", val)
+			}
 			if val, valOk := aliasOutputs[prop]; valOk {
 				return fmt.Sprintf("%v", val)
 			}
@@ -1252,6 +1436,14 @@ func (s *WorkflowService) getNodeTitle(node model.WorkflowNode) string {
 		return "Проверка условия"
 	case "formatter":
 		return "Форматирование текста"
+	case "merge":
+		return "Объединение данных"
+	case "set_fields":
+		return "Сборка полей"
+	case "http_request":
+		return "HTTP запрос"
+	case "loop_items":
+		return "Цикл по списку"
 	case "draft_approval":
 		return "Модерация черновика"
 	default:

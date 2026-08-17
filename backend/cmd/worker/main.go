@@ -106,6 +106,26 @@ func main() {
 	)
 	logger.Info("worker started", "publish_concurrency", cfg.WorkerPublishConcurrency, "version", config.Version)
 
+	approvalRepo := repository.NewPostApprovalRepository(db.Pool)
+	postSvc := service.NewPostService(postRepo, channelRepo, wsSvc, publicationSvc, approvalRepo)
+	postSvc.SetNotifier(notificationSvc)
+
+	kieSettingsRepo := repository.NewKieSettingsRepository(db.Pool)
+	aiBillingSvc := service.NewAIBillingService(quotaSvc, usageRepo, walletRepo, kieSettingsRepo)
+	yandexGptConfigRepo := repository.NewYandexGptConfigRepository(db.Pool)
+	yandexGptConfigSvc := service.NewYandexGptConfigService(yandexGptConfigRepo, cfg, secretCipher)
+	genRepo := repository.NewAIGenerationRepository(db.Pool)
+	genJobRepo := repository.NewAIGenerationJobRepository(db.Pool)
+	genUploadRepo := repository.NewGenerationSourceUploadRepository(db.Pool)
+	generationSvc := service.NewGenerationService(
+		nil, nil, genRepo, genJobRepo, genUploadRepo, aiBillingSvc, objectStorage, fileStorageSvc, wsSvc, yandexGptConfigSvc, quotaSvc,
+	)
+	workflowRepo := repository.NewWorkflowRepository(db.Pool)
+	workflowSvc := service.NewWorkflowService(
+		workflowRepo, channelRepo, postSvc, generationSvc, aiBillingSvc, yandexGptConfigSvc, wsSvc, fileStorageSvc, planRepo, notificationSvc, logger,
+	)
+	workflowSvc.SetWorkflowConfig(cfg)
+
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 	var lastMetricsRun time.Time
@@ -138,6 +158,11 @@ func main() {
 				logger.Warn("purge trash tick failed", "error", err)
 			} else if n > 0 {
 				logger.Info("purged expired trash files", "count", n)
+			}
+			if n, err := workflowSvc.ProcessRSSFeeds(ctx); err != nil {
+				logger.Warn("workflow rss poll failed", "error", err)
+			} else if n > 0 {
+				logger.Info("started workflow runs from rss", "count", n)
 			}
 			if time.Since(lastMetricsRun) >= 15*time.Minute {
 				if n, err := metricsCollector.Process(ctx, 50); err != nil {

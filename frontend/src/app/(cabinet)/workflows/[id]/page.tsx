@@ -58,12 +58,17 @@ export default function WorkflowDetailPage({ params }: PageProps) {
     const triggerNode = graph.nodes.find((n) => n.type === "trigger");
     const triggerType = (triggerNode?.data?.triggerType as any) || "manual";
     const scheduleCron = (triggerNode?.data?.scheduleCron as string) || "";
+    const rssFeedUrl = (triggerNode?.data?.rssFeedUrl as string) || "";
+    const rssPollIntervalMinutes =
+      Number(triggerNode?.data?.rssPollIntervalMinutes) || 15;
     const updated = await updateWorkflow(workflow.id, {
       graph,
       name,
       is_active: isActive,
       trigger_type: triggerType,
       schedule_cron: scheduleCron,
+      rss_feed_url: rssFeedUrl,
+      rss_poll_interval_minutes: rssPollIntervalMinutes,
     });
     setWorkflow(updated);
   };

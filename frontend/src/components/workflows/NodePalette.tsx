@@ -21,6 +21,10 @@ import {
   MessageSquare,
   Type,
   AlignLeft,
+  GitMerge,
+  Repeat,
+  Globe,
+  List,
   X,
 } from "lucide-react";
 import { NODE_DEFINITIONS, NodeCategory, NodeTypeDefinition } from "./nodeTypes";
@@ -58,6 +62,10 @@ const ICON_MAP: Record<string, React.ElementType> = {
   "message-square": MessageSquare,
   type: Type,
   "align-left": AlignLeft,
+  "git-merge": GitMerge,
+  repeat: Repeat,
+  globe: Globe,
+  list: List,
 };
 
 export const NodePalette: React.FC<NodePaletteProps> = ({

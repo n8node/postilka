@@ -11,6 +11,7 @@ const (
 	WorkflowTriggerManual   WorkflowTriggerType = "manual"
 	WorkflowTriggerSchedule WorkflowTriggerType = "schedule"
 	WorkflowTriggerWebhook  WorkflowTriggerType = "webhook"
+	WorkflowTriggerRSS      WorkflowTriggerType = "rss"
 )
 
 type WorkflowRunStatus string
@@ -67,10 +68,12 @@ type Workflow struct {
 	Description  string              `json:"description"`
 	IsActive     bool                `json:"is_active"`
 	TriggerType  WorkflowTriggerType `json:"trigger_type"`
-	ScheduleCron  string              `json:"schedule_cron"`
-	ScheduleTZ    string              `json:"schedule_tz"`
-	WebhookSecret string              `json:"-"`
-	NextRunAt     *time.Time          `json:"next_run_at,omitempty"`
+	ScheduleCron             string              `json:"schedule_cron"`
+	ScheduleTZ               string              `json:"schedule_tz"`
+	WebhookSecret            string              `json:"-"`
+	RSSFeedURL               string              `json:"rss_feed_url"`
+	RSSPollIntervalMinutes   int                 `json:"rss_poll_interval_minutes"`
+	NextRunAt                *time.Time          `json:"next_run_at,omitempty"`
 	Graph        WorkflowGraph       `json:"graph"`
 	CreatedAt    time.Time           `json:"created_at"`
 	UpdatedAt    time.Time           `json:"updated_at"`
@@ -133,10 +136,12 @@ type WorkflowRunStep struct {
 type CreateWorkflowRequest struct {
 	Name         string              `json:"name"`
 	Description  string              `json:"description"`
-	TriggerType  WorkflowTriggerType `json:"trigger_type"`
-	ScheduleCron string              `json:"schedule_cron"`
-	ScheduleTZ   string              `json:"schedule_tz"`
-	Graph        *WorkflowGraph      `json:"graph,omitempty"`
+	TriggerType              WorkflowTriggerType `json:"trigger_type"`
+	ScheduleCron             string              `json:"schedule_cron"`
+	ScheduleTZ               string              `json:"schedule_tz"`
+	RSSFeedURL               string              `json:"rss_feed_url"`
+	RSSPollIntervalMinutes   int                 `json:"rss_poll_interval_minutes"`
+	Graph                    *WorkflowGraph      `json:"graph,omitempty"`
 }
 
 type UpdateWorkflowRequest struct {
@@ -144,9 +149,11 @@ type UpdateWorkflowRequest struct {
 	Description  *string              `json:"description,omitempty"`
 	IsActive     *bool                `json:"is_active,omitempty"`
 	TriggerType  *WorkflowTriggerType `json:"trigger_type,omitempty"`
-	ScheduleCron *string              `json:"schedule_cron,omitempty"`
-	ScheduleTZ   *string              `json:"schedule_tz,omitempty"`
-	Graph        *WorkflowGraph       `json:"graph,omitempty"`
+	ScheduleCron           *string              `json:"schedule_cron,omitempty"`
+	ScheduleTZ             *string              `json:"schedule_tz,omitempty"`
+	RSSFeedURL             *string              `json:"rss_feed_url,omitempty"`
+	RSSPollIntervalMinutes *int                 `json:"rss_poll_interval_minutes,omitempty"`
+	Graph                  *WorkflowGraph       `json:"graph,omitempty"`
 }
 
 type RunWorkflowRequest struct {
