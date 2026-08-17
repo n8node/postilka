@@ -12,6 +12,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/postilka/postilka/internal/ai"
+	"github.com/postilka/postilka/internal/config"
 	"github.com/postilka/postilka/internal/model"
 	"github.com/postilka/postilka/internal/repository"
 )
@@ -38,6 +39,8 @@ type WorkflowService struct {
 	planRepo       *repository.PlanRepository
 	notify         *NotificationService
 	logger         *slog.Logger
+	cfg            *config.Config
+	webhookTests   *workflowWebhookRegistry
 }
 
 func NewWorkflowService(
@@ -156,6 +159,10 @@ func (s *WorkflowService) CreateWorkflow(ctx context.Context, workspaceID, userI
 	if err != nil {
 		return nil, err
 	}
+	if created.TriggerType == model.WorkflowTriggerWebhook {
+		_ = s.ensureWebhookSecret(ctx, created)
+		created, _ = s.GetWorkflow(ctx, created.ID, workspaceID)
+	}
 	return created, nil
 }
 
@@ -193,6 +200,10 @@ func (s *WorkflowService) UpdateWorkflow(ctx context.Context, id, workspaceID st
 	updated, err := s.repo.Update(ctx, w)
 	if err != nil {
 		return nil, err
+	}
+	if updated.TriggerType == model.WorkflowTriggerWebhook {
+		_ = s.ensureWebhookSecret(ctx, updated)
+		updated, _ = s.GetWorkflow(ctx, updated.ID, workspaceID)
 	}
 	return updated, nil
 }

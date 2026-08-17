@@ -21,7 +21,7 @@ func NewWorkflowRepository(pool *pgxpool.Pool) *WorkflowRepository {
 
 const workflowColumns = `
 	id, workspace_id, created_by::text, name, description, is_active, trigger_type,
-	schedule_cron, schedule_tz, next_run_at, graph, created_at, updated_at
+	schedule_cron, schedule_tz, webhook_secret, next_run_at, graph, created_at, updated_at
 `
 
 func scanWorkflow(row pgx.Row) (*model.Workflow, error) {
@@ -30,7 +30,7 @@ func scanWorkflow(row pgx.Row) (*model.Workflow, error) {
 	var graphRaw []byte
 	err := row.Scan(
 		&w.ID, &w.WorkspaceID, &createdBy, &w.Name, &w.Description, &w.IsActive, &w.TriggerType,
-		&w.ScheduleCron, &w.ScheduleTZ, &w.NextRunAt, &graphRaw, &w.CreatedAt, &w.UpdatedAt,
+		&w.ScheduleCron, &w.ScheduleTZ, &w.WebhookSecret, &w.NextRunAt, &graphRaw, &w.CreatedAt, &w.UpdatedAt,
 	)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -107,16 +107,16 @@ func (r *WorkflowRepository) Create(ctx context.Context, w *model.Workflow) (*mo
 	query := fmt.Sprintf(`
 		INSERT INTO workflows (
 			workspace_id, created_by, name, description, is_active, trigger_type,
-			schedule_cron, schedule_tz, next_run_at, graph
+			schedule_cron, schedule_tz, webhook_secret, next_run_at, graph
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
 		)
 		RETURNING %s
 	`, workflowColumns)
 
 	row := r.pool.QueryRow(ctx, query,
 		w.WorkspaceID, w.CreatedBy, w.Name, w.Description, w.IsActive, w.TriggerType,
-		w.ScheduleCron, w.ScheduleTZ, w.NextRunAt, graphBytes,
+		w.ScheduleCron, w.ScheduleTZ, w.WebhookSecret, w.NextRunAt, graphBytes,
 	)
 	return scanWorkflow(row)
 }
@@ -135,8 +135,9 @@ func (r *WorkflowRepository) Update(ctx context.Context, w *model.Workflow) (*mo
 			trigger_type = $6,
 			schedule_cron = $7,
 			schedule_tz = $8,
-			next_run_at = $9,
-			graph = $10,
+			webhook_secret = $9,
+			next_run_at = $10,
+			graph = $11,
 			updated_at = NOW()
 		WHERE id = $1 AND workspace_id = $2
 		RETURNING %s
@@ -144,8 +145,18 @@ func (r *WorkflowRepository) Update(ctx context.Context, w *model.Workflow) (*mo
 
 	row := r.pool.QueryRow(ctx, query,
 		w.ID, w.WorkspaceID, w.Name, w.Description, w.IsActive, w.TriggerType,
-		w.ScheduleCron, w.ScheduleTZ, w.NextRunAt, graphBytes,
+		w.ScheduleCron, w.ScheduleTZ, w.WebhookSecret, w.NextRunAt, graphBytes,
 	)
+	return scanWorkflow(row)
+}
+
+func (r *WorkflowRepository) GetByWebhook(ctx context.Context, id, secret string) (*model.Workflow, error) {
+	query := fmt.Sprintf(`
+		SELECT %s FROM workflows
+		WHERE id = $1 AND webhook_secret = $2 AND webhook_secret <> ''
+	`, workflowColumns)
+
+	row := r.pool.QueryRow(ctx, query, id, secret)
 	return scanWorkflow(row)
 }
 

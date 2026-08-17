@@ -51,6 +51,7 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       triggerType: "manual",
       scheduleDateTime: "",
       scheduleCron: "",
+      rssFeedUrl: "",
     },
   },
   ai_text: {

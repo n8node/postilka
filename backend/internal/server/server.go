@@ -217,6 +217,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	workflowSvc := service.NewWorkflowService(
 		workflowRepo, channelRepo, postSvc, generationSvc, aiBillingSvc, yandexGptConfigSvc, wsSvc, fileStorageSvc, planRepo, notificationSvc, logger,
 	)
+	workflowSvc.SetWorkflowConfig(cfg)
 	workflowHandler := handler.NewWorkflowHandler(workflowSvc, wsSvc)
 
 	publicationSvc.SetNotifier(notificationSvc)
@@ -280,6 +281,10 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Post("/robokassa/result", paymentWebhookHandler.RobokassaResult)
 			r.Post("/robokassa/result2", paymentWebhookHandler.RobokassaResult2)
 			r.Post("/telegram/business/{registrationID}", telegramBusinessHandler.Webhook)
+			r.Get("/workflows/{workflowID}/{secret}", workflowHandler.IncomingWebhook)
+			r.Post("/workflows/{workflowID}/{secret}", workflowHandler.IncomingWebhook)
+			r.Put("/workflows/{workflowID}/{secret}", workflowHandler.IncomingWebhook)
+			r.Patch("/workflows/{workflowID}/{secret}", workflowHandler.IncomingWebhook)
 		})
 
 		r.With(authMW.Required).Get("/user/invites", inviteHandler.UserInvites)
@@ -468,6 +473,10 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Delete("/workflows/{id}", workflowHandler.Delete)
 			r.Post("/workflows/{id}/run", workflowHandler.Run)
 			r.Post("/workflows/{id}/test-node", workflowHandler.TestNode)
+			r.Get("/workflows/{id}/webhook", workflowHandler.GetWebhook)
+			r.Post("/workflows/{id}/webhook/test/start", workflowHandler.StartWebhookTest)
+			r.Post("/workflows/{id}/webhook/test/stop", workflowHandler.StopWebhookTest)
+			r.Get("/workflows/{id}/webhook/test", workflowHandler.GetWebhookTestStatus)
 			r.Get("/workflows/{id}/runs", workflowHandler.ListRuns)
 			r.Get("/workflows/{id}/runs/{runId}", workflowHandler.GetRun)
 		})

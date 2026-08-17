@@ -67,6 +67,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null);
+  const [hoveredDeleteEdgeId, setHoveredDeleteEdgeId] = useState<string | null>(null);
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isRunning, setIsRunning] = useState(false);
@@ -701,7 +702,10 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
               } ${p2.y}, ${p2.x} ${p2.y}`;
               const isEdgeSelected = selectedEdgeId === edge.id;
               const isEdgeHovered = hoveredEdgeId === edge.id;
-              const showDeleteBtn = isEdgeSelected || isEdgeHovered;
+              const showDeleteBtn =
+                isEdgeSelected ||
+                isEdgeHovered ||
+                hoveredDeleteEdgeId === edge.id;
 
               const c1x = p1.x + dx;
               const c1y = p1.y;
@@ -779,13 +783,23 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                   {/* SVG Delete Edge Button on Midpoint (Native SVG for 100% reliable click detection) */}
                   {showDeleteBtn && (
                     <g
-                      className="cursor-pointer group/del"
+                      className="cursor-pointer"
+                      onMouseEnter={() => {
+                        setHoveredEdgeId(edge.id);
+                        setHoveredDeleteEdgeId(edge.id);
+                      }}
+                      onMouseLeave={() => {
+                        setHoveredDeleteEdgeId((prev) =>
+                          prev === edge.id ? null : prev
+                        );
+                      }}
                       onMouseDown={(e) => {
                         e.stopPropagation();
                       }}
                       onClick={(e) => {
                         e.stopPropagation();
                         handleDeleteEdge(edge.id);
+                        setHoveredDeleteEdgeId(null);
                       }}
                     >
                       {/* Generous invisible hit target (48px diameter) */}
@@ -805,7 +819,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                         fill="#ef4444"
                         stroke="#ffffff"
                         strokeWidth="2.5"
-                        className="transition-transform duration-150 hover:scale-125"
+                        className="pointer-events-none"
                       />
 
                       {/* Trash icon paths */}

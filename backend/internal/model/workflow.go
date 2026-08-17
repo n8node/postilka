@@ -67,9 +67,10 @@ type Workflow struct {
 	Description  string              `json:"description"`
 	IsActive     bool                `json:"is_active"`
 	TriggerType  WorkflowTriggerType `json:"trigger_type"`
-	ScheduleCron string              `json:"schedule_cron"`
-	ScheduleTZ   string              `json:"schedule_tz"`
-	NextRunAt    *time.Time          `json:"next_run_at,omitempty"`
+	ScheduleCron  string              `json:"schedule_cron"`
+	ScheduleTZ    string              `json:"schedule_tz"`
+	WebhookSecret string              `json:"-"`
+	NextRunAt     *time.Time          `json:"next_run_at,omitempty"`
 	Graph        WorkflowGraph       `json:"graph"`
 	CreatedAt    time.Time           `json:"created_at"`
 	UpdatedAt    time.Time           `json:"updated_at"`
@@ -155,6 +156,19 @@ type RunWorkflowRequest struct {
 type TestNodeRequest struct {
 	Node   WorkflowNode           `json:"node"`
 	Inputs map[string]interface{} `json:"inputs,omitempty"`
+}
+
+type WorkflowWebhookInfoResponse struct {
+	WebhookURL       string `json:"webhook_url"`
+	WebhookSecretSet bool   `json:"webhook_secret_set"`
+}
+
+type WorkflowWebhookTestStatusResponse struct {
+	Listening  bool                   `json:"listening"`
+	ExpiresAt  *time.Time             `json:"expires_at,omitempty"`
+	Received   map[string]interface{} `json:"received,omitempty"`
+	ReceivedAt *time.Time             `json:"received_at,omitempty"`
+	Error      string                 `json:"error,omitempty"`
 }
 
 type SaveTemplateRequest struct {

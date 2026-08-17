@@ -190,6 +190,51 @@ export async function testWorkflowNode(
   );
 }
 
+export type WorkflowWebhookInfo = {
+  webhook_url: string;
+  webhook_secret_set: boolean;
+};
+
+export type WorkflowWebhookTestStatus = {
+  listening: boolean;
+  expires_at?: string;
+  received?: Record<string, any>;
+  received_at?: string;
+  error?: string;
+};
+
+export async function fetchWorkflowWebhook(
+  workflowId: string
+): Promise<WorkflowWebhookInfo> {
+  return apiFetch<WorkflowWebhookInfo>(`/workflows/${workflowId}/webhook`);
+}
+
+export async function startWorkflowWebhookTest(
+  workflowId: string
+): Promise<WorkflowWebhookTestStatus> {
+  return apiFetch<WorkflowWebhookTestStatus>(
+    `/workflows/${workflowId}/webhook/test/start`,
+    { method: "POST" }
+  );
+}
+
+export async function stopWorkflowWebhookTest(
+  workflowId: string
+): Promise<WorkflowWebhookTestStatus> {
+  return apiFetch<WorkflowWebhookTestStatus>(
+    `/workflows/${workflowId}/webhook/test/stop`,
+    { method: "POST" }
+  );
+}
+
+export async function fetchWorkflowWebhookTestStatus(
+  workflowId: string
+): Promise<WorkflowWebhookTestStatus> {
+  return apiFetch<WorkflowWebhookTestStatus>(
+    `/workflows/${workflowId}/webhook/test`
+  );
+}
+
 export async function fetchWorkflowRuns(
   id: string,
   limit = 30

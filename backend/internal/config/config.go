@@ -69,6 +69,10 @@ func (c *Config) TelegramBusinessWebhookURL(registrationID string) string {
 	return c.PublicAppURLNormalized() + "/api/v1/webhooks/telegram/business/" + registrationID
 }
 
+func (c *Config) WorkflowWebhookURL(workflowID, secret string) string {
+	return c.PublicAppURLNormalized() + "/api/v1/webhooks/workflows/" + workflowID + "/" + secret
+}
+
 func (c *Config) PublicAppURLNormalized() string {
 	return strings.TrimSuffix(c.PublicAppURL, "/")
 }

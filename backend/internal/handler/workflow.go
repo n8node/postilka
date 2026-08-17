@@ -189,6 +189,101 @@ func (h *WorkflowHandler) TestNode(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{"outputs": outputs})
 }
 
+func (h *WorkflowHandler) GetWebhook(w http.ResponseWriter, r *http.Request) {
+	userID, ok := postUserID(w, r)
+	if !ok {
+		return
+	}
+	wsID, err := h.resolveWorkspaceID(r, userID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "Workspace не найден")
+		return
+	}
+
+	id := chi.URLParam(r, "id")
+	info, err := h.svc.GetWorkflowWebhookInfo(r.Context(), id, wsID)
+	if err != nil {
+		writeWorkflowError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, info)
+}
+
+func (h *WorkflowHandler) StartWebhookTest(w http.ResponseWriter, r *http.Request) {
+	userID, ok := postUserID(w, r)
+	if !ok {
+		return
+	}
+	wsID, err := h.resolveWorkspaceID(r, userID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "Workspace не найден")
+		return
+	}
+
+	id := chi.URLParam(r, "id")
+	status, err := h.svc.StartWorkflowWebhookTest(r.Context(), id, wsID, userID)
+	if err != nil {
+		writeWorkflowError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, status)
+}
+
+func (h *WorkflowHandler) StopWebhookTest(w http.ResponseWriter, r *http.Request) {
+	userID, ok := postUserID(w, r)
+	if !ok {
+		return
+	}
+	wsID, err := h.resolveWorkspaceID(r, userID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "Workspace не найден")
+		return
+	}
+
+	id := chi.URLParam(r, "id")
+	status, err := h.svc.StopWorkflowWebhookTest(r.Context(), id, wsID)
+	if err != nil {
+		writeWorkflowError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, status)
+}
+
+func (h *WorkflowHandler) GetWebhookTestStatus(w http.ResponseWriter, r *http.Request) {
+	userID, ok := postUserID(w, r)
+	if !ok {
+		return
+	}
+	wsID, err := h.resolveWorkspaceID(r, userID)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "Workspace не найден")
+		return
+	}
+
+	id := chi.URLParam(r, "id")
+	status, err := h.svc.GetWorkflowWebhookTestStatus(r.Context(), id, wsID)
+	if err != nil {
+		writeWorkflowError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, status)
+}
+
+func (h *WorkflowHandler) IncomingWebhook(w http.ResponseWriter, r *http.Request) {
+	workflowID := chi.URLParam(r, "workflowID")
+	secret := chi.URLParam(r, "secret")
+	result, err := h.svc.HandleWorkflowWebhook(r.Context(), workflowID, secret, r)
+	if err != nil {
+		if errors.Is(err, service.ErrWorkflowWebhookInvalid) {
+			writeError(w, http.StatusNotFound, "Webhook не найден")
+			return
+		}
+		writeWorkflowError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
 func (h *WorkflowHandler) ListRuns(w http.ResponseWriter, r *http.Request) {
 	userID, ok := postUserID(w, r)
 	if !ok {
@@ -331,6 +426,10 @@ func writeWorkflowError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusBadRequest, "Граф содержит циклические зависимости")
 	case errors.Is(err, service.ErrWorkflowInvalidGraph):
 		writeError(w, http.StatusBadRequest, "Некорректная структура графа")
+	case errors.Is(err, service.ErrWorkflowWebhookTestBusy):
+		writeError(w, http.StatusConflict, "Прослушивание webhook уже активно")
+	case errors.Is(err, service.ErrWorkflowWebhookInvalid):
+		writeError(w, http.StatusNotFound, "Webhook не найден")
 	default:
 		writeError(w, http.StatusInternalServerError, err.Error())
 	}
