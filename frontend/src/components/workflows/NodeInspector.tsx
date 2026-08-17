@@ -14,6 +14,9 @@ import {
   UploadCloud,
   Folder,
   Image as ImageIcon,
+  Calendar,
+  Clock,
+  Info,
 } from "lucide-react";
 import type { WorkflowNode } from "@/lib/workflows-api";
 import { uploadFile } from "@/lib/files-api";
@@ -145,25 +148,155 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                 className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none"
               >
                 <option value="manual">Ручной запуск (по кнопке)</option>
-                <option value="schedule">По расписанию (Cron)</option>
+                <option value="schedule">По расписанию (Календарь / Cron)</option>
                 <option value="webhook">Входящий Webhook / RSS</option>
               </select>
             </div>
+
             {data.triggerType === "schedule" && (
-              <div>
-                <label className="mb-1 block font-medium text-zinc-700 dark:text-zinc-300">
-                  Расписание (Cron выражение)
-                </label>
-                <input
-                  type="text"
-                  value={data.scheduleCron || "0 9 * * *"}
-                  onChange={(e) => handleFieldChange("scheduleCron", e.target.value)}
-                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none"
-                  placeholder="0 9 * * *"
-                />
-                <p className="mt-1 text-[10px] text-zinc-500">
-                  Например: каждый день в 09:00 МСК (0 9 * * *)
-                </p>
+              <div className="space-y-3 pt-1">
+                {/* 1.1 Calendar Date/Time Picker */}
+                <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-850/40 p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-1.5 font-semibold text-zinc-800 dark:text-zinc-200 text-xs">
+                      <Calendar className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+                      <span>Выбор в календаре (Дата и время)</span>
+                    </label>
+                    {data.scheduleDateTime && (
+                      <button
+                        type="button"
+                        onClick={() => handleFieldChange("scheduleDateTime", "")}
+                        className="text-[10px] text-zinc-400 hover:text-red-500 transition"
+                      >
+                        Очистить
+                      </button>
+                    )}
+                  </div>
+
+                  <input
+                    type="datetime-local"
+                    value={data.scheduleDateTime || ""}
+                    onChange={(e) => handleFieldChange("scheduleDateTime", e.target.value)}
+                    className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none"
+                  />
+
+                  {/* Quick Date Presets */}
+                  <div className="flex flex-wrap gap-1 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const d = new Date();
+                        d.setDate(d.getDate() + 1);
+                        d.setHours(9, 0, 0, 0);
+                        const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}T09:00`;
+                        handleFieldChange("scheduleDateTime", iso);
+                      }}
+                      className="rounded-lg bg-zinc-200/80 dark:bg-zinc-800 hover:bg-zinc-300 dark:hover:bg-zinc-700 px-2 py-0.5 text-[10px] text-zinc-700 dark:text-zinc-300 transition"
+                    >
+                      Завтра в 09:00
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const d = new Date();
+                        d.setHours(d.getHours() + 1);
+                        const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}T${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+                        handleFieldChange("scheduleDateTime", iso);
+                      }}
+                      className="rounded-lg bg-zinc-200/80 dark:bg-zinc-800 hover:bg-zinc-300 dark:hover:bg-zinc-700 px-2 py-0.5 text-[10px] text-zinc-700 dark:text-zinc-300 transition"
+                    >
+                      Через 1 час
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const d = new Date();
+                        d.setDate(d.getDate() + 1);
+                        const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}T${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+                        handleFieldChange("scheduleDateTime", iso);
+                      }}
+                      className="rounded-lg bg-zinc-200/80 dark:bg-zinc-800 hover:bg-zinc-300 dark:hover:bg-zinc-700 px-2 py-0.5 text-[10px] text-zinc-700 dark:text-zinc-300 transition"
+                    >
+                      Через 24 часа
+                    </button>
+                  </div>
+                </div>
+
+                {/* 1.2 Cron Expression */}
+                <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-850/40 p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="flex items-center gap-1.5 font-semibold text-zinc-800 dark:text-zinc-200 text-xs">
+                      <Clock className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
+                      <span>Cron выражение (периодический запуск)</span>
+                    </label>
+                    {data.scheduleCron && (
+                      <button
+                        type="button"
+                        onClick={() => handleFieldChange("scheduleCron", "")}
+                        className="text-[10px] text-zinc-400 hover:text-red-500 transition"
+                      >
+                        Очистить
+                      </button>
+                    )}
+                  </div>
+
+                  <input
+                    type="text"
+                    value={data.scheduleCron || ""}
+                    onChange={(e) => handleFieldChange("scheduleCron", e.target.value)}
+                    className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none font-mono"
+                    placeholder="0 9 * * *"
+                  />
+
+                  {/* Quick Cron Presets */}
+                  <div className="flex flex-wrap gap-1 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => handleFieldChange("scheduleCron", "0 9 * * *")}
+                      className="rounded-lg bg-zinc-200/80 dark:bg-zinc-800 hover:bg-zinc-300 dark:hover:bg-zinc-700 px-2 py-0.5 text-[10px] text-zinc-700 dark:text-zinc-300 transition"
+                    >
+                      Каждый день в 09:00
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleFieldChange("scheduleCron", "0 12 * * 1-5")}
+                      className="rounded-lg bg-zinc-200/80 dark:bg-zinc-800 hover:bg-zinc-300 dark:hover:bg-zinc-700 px-2 py-0.5 text-[10px] text-zinc-700 dark:text-zinc-300 transition"
+                    >
+                      По будням в 12:00
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleFieldChange("scheduleCron", "0 * * * *")}
+                      className="rounded-lg bg-zinc-200/80 dark:bg-zinc-800 hover:bg-zinc-300 dark:hover:bg-zinc-700 px-2 py-0.5 text-[10px] text-zinc-700 dark:text-zinc-300 transition"
+                    >
+                      Раз в час
+                    </button>
+                  </div>
+                </div>
+
+                {/* 1.3 Conflict Banner (if both are specified) */}
+                {data.scheduleDateTime && data.scheduleCron && (
+                  <div className="rounded-xl border border-amber-300 dark:border-amber-800/80 bg-amber-50 dark:bg-amber-950/40 p-3 text-xs text-amber-900 dark:text-amber-200 animate-in fade-in">
+                    <div className="flex items-center gap-1.5 font-semibold text-[11px] mb-1 text-amber-800 dark:text-amber-300">
+                      <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+                      <span>Конфликт расписания: заданы календарь и cron</span>
+                    </div>
+                    <p className="text-[10px] leading-relaxed text-amber-700 dark:text-amber-300">
+                      <strong>Приоритет: Календарь.</strong> Если в кроне выставлено одно расписание, а в календаре выбрана дата — запуск будет произведён по календарю.
+                    </p>
+                  </div>
+                )}
+
+                {/* 1.4 Explanatory Hint */}
+                <div className="rounded-xl border border-emerald-100 dark:border-emerald-950 bg-emerald-50/50 dark:bg-emerald-950/20 p-2.5 text-[11px] text-emerald-900 dark:text-emerald-300">
+                  <div className="flex items-center gap-1.5 font-medium mb-0.5">
+                    <Info className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <span className="font-semibold">Правило приоритета:</span>
+                  </div>
+                  <p className="text-[10px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                    Если в кроне выставлено одно, а в календаре выставлено другое — приоритет всегда имеет календарь.
+                  </p>
+                </div>
               </div>
             )}
           </div>

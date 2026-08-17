@@ -26,6 +26,9 @@ import {
   Layers,
   ExternalLink,
   ChevronDown,
+  Calendar,
+  Clock,
+  Zap,
 } from "lucide-react";
 import type { WorkflowNode } from "@/lib/workflows-api";
 import { uploadFile } from "@/lib/files-api";
@@ -89,6 +92,22 @@ const ICON_MAP: Record<string, React.ElementType> = {
   "git-branch": GitBranch,
   type: Type,
 };
+
+function formatTriggerScheduleDate(dateStr: string): string {
+  if (!dateStr) return "";
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleString("ru-RU", {
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return dateStr;
+  }
+}
 
 export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
   node,
@@ -172,6 +191,7 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
     node.type === "files_media" ||
     node.type === "ai_image" ||
     node.type === "ai_video";
+  const isTrigger = node.type === "trigger";
 
   return (
     <div
@@ -180,7 +200,11 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
         onSelect();
       }}
       className={`group relative select-none rounded-2xl border bg-white/95 dark:bg-zinc-900/95 text-zinc-900 dark:text-zinc-100 shadow-xl backdrop-blur-xl transition-all ${
-        isVisualNode ? "w-72 sm:w-80" : "w-72 sm:w-80"
+        isTrigger
+          ? "w-36 h-36 flex flex-col justify-between"
+          : isVisualNode
+          ? "w-72 sm:w-80"
+          : "w-72 sm:w-80"
       } ${
         isSelected
           ? "border-blue-500 ring-2 ring-blue-500/30 shadow-blue-500/10"
@@ -222,7 +246,7 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
         }
 
         const totalInputs = def.inputs.length;
-        const topPercent = Math.round(((idx + 1) / (totalInputs + 1)) * 100);
+        const topPercent = totalInputs === 1 ? 50 : Math.round(((idx + 1) / (totalInputs + 1)) * 100);
 
         return (
           <div
@@ -306,7 +330,7 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
         }
 
         const totalOutputs = def.outputs.length;
-        const topPercent = Math.round(((idx + 1) / (totalOutputs + 1)) * 100);
+        const topPercent = totalOutputs === 1 ? 50 : Math.round(((idx + 1) / (totalOutputs + 1)) * 100);
 
         return (
           <div
@@ -368,51 +392,155 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
       })}
 
       {/* Node Header */}
-      <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-850/60 rounded-t-2xl">
-        <div className="flex items-center gap-2 overflow-hidden">
-          <div
-            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md ${def.color.badge} text-[10px] shadow-sm`}
-          >
-            <Icon className="h-3 w-3" />
+      {isTrigger ? (
+        <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-850/60 rounded-t-2xl">
+          <div className="flex items-center gap-1.5 overflow-hidden">
+            <div
+              className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-md ${def.color.badge} text-[9px] shadow-sm`}
+            >
+              <PlayCircle className="h-2.5 w-2.5" />
+            </div>
+            <span className="truncate text-[11px] font-semibold text-zinc-800 dark:text-zinc-200">
+              {title}
+            </span>
           </div>
-          <span className="truncate text-xs font-semibold text-zinc-800 dark:text-zinc-200">
-            {title}
-          </span>
+
+          <div className="flex items-center gap-0.5">
+            {runStatus === "running" && (
+              <span className="flex items-center rounded-full bg-amber-500/20 p-0.5 text-amber-600 dark:text-amber-400">
+                <Loader2 className="h-2.5 w-2.5 animate-spin" />
+              </span>
+            )}
+            {runStatus === "completed" && (
+              <span className="flex items-center rounded-full bg-emerald-500/20 p-0.5 text-emerald-600 dark:text-emerald-400">
+                <Check className="h-2.5 w-2.5" />
+              </span>
+            )}
+            {runStatus === "failed" && (
+              <span className="flex items-center rounded-full bg-red-500/20 p-0.5 text-red-600 dark:text-red-400">
+                <AlertCircle className="h-2.5 w-2.5" />
+              </span>
+            )}
+            <button
+              title="Протестировать запуск"
+              onClick={(e) => {
+                e.stopPropagation();
+                onTestNode();
+              }}
+              className="rounded p-0.5 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-emerald-600 transition"
+            >
+              <Play className="h-2.5 w-2.5" />
+            </button>
+          </div>
         </div>
+      ) : (
+        <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-850/60 rounded-t-2xl">
+          <div className="flex items-center gap-2 overflow-hidden">
+            <div
+              className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md ${def.color.badge} text-[10px] shadow-sm`}
+            >
+              <Icon className="h-3 w-3" />
+            </div>
+            <span className="truncate text-xs font-semibold text-zinc-800 dark:text-zinc-200">
+              {title}
+            </span>
+          </div>
 
-        {/* Status / Quick Action Badge */}
-        <div className="flex items-center gap-1">
-          {runStatus === "running" && (
-            <span className="flex items-center gap-1 rounded-full bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
-              <Loader2 className="h-3 w-3 animate-spin" />
-            </span>
-          )}
-          {runStatus === "completed" && (
-            <span className="flex items-center gap-1 rounded-full bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
-              <Check className="h-3 w-3" />
-            </span>
-          )}
-          {runStatus === "failed" && (
-            <span className="flex items-center gap-1 rounded-full bg-red-500/20 px-1.5 py-0.5 text-[10px] font-medium text-red-600 dark:text-red-400">
-              <AlertCircle className="h-3 w-3" />
-            </span>
-          )}
+          {/* Status / Quick Action Badge */}
+          <div className="flex items-center gap-1">
+            {runStatus === "running" && (
+              <span className="flex items-center gap-1 rounded-full bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400">
+                <Loader2 className="h-3 w-3 animate-spin" />
+              </span>
+            )}
+            {runStatus === "completed" && (
+              <span className="flex items-center gap-1 rounded-full bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+                <Check className="h-3 w-3" />
+              </span>
+            )}
+            {runStatus === "failed" && (
+              <span className="flex items-center gap-1 rounded-full bg-red-500/20 px-1.5 py-0.5 text-[10px] font-medium text-red-600 dark:text-red-400">
+                <AlertCircle className="h-3 w-3" />
+              </span>
+            )}
 
-          <button
-            title="Протестировать этот узел"
-            onClick={(e) => {
-              e.stopPropagation();
-              onTestNode();
-            }}
-            className="rounded p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-indigo-600 transition"
-          >
-            <Play className="h-3 w-3" />
-          </button>
+            <button
+              title="Протестировать этот узел"
+              onClick={(e) => {
+                e.stopPropagation();
+                onTestNode();
+              }}
+              className="rounded p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-indigo-600 transition"
+            >
+              <Play className="h-3 w-3" />
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Node Body (Specialized Higgsfield Visual Layout) */}
-      <div className="p-3">
+      {/* Node Body */}
+      {isTrigger ? (
+        <div className="flex-1 flex flex-col items-center justify-center p-2 text-center select-none">
+          {node.data.triggerType === "schedule" ? (
+            <div className="flex flex-col items-center justify-center gap-1">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shadow-sm">
+                {node.data.scheduleDateTime ? (
+                  <Calendar className="h-4 w-4" />
+                ) : (
+                  <Clock className="h-4 w-4" />
+                )}
+              </div>
+              {node.data.scheduleDateTime ? (
+                <div className="flex flex-col items-center leading-tight">
+                  <span className="text-[10px] font-bold text-zinc-800 dark:text-zinc-200 line-clamp-1 max-w-[110px]">
+                    {formatTriggerScheduleDate(node.data.scheduleDateTime)}
+                  </span>
+                  <span className="text-[8px] text-emerald-600 dark:text-emerald-400 font-semibold uppercase tracking-wider">
+                    {node.data.scheduleCron ? "Календарь (приор.)" : "Календарь"}
+                  </span>
+                </div>
+              ) : node.data.scheduleCron ? (
+                <div className="flex flex-col items-center leading-tight">
+                  <span className="text-[10px] font-mono font-bold text-zinc-800 dark:text-zinc-200">
+                    {node.data.scheduleCron}
+                  </span>
+                  <span className="text-[8px] text-zinc-400 font-medium uppercase tracking-wider">
+                    Cron
+                  </span>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center leading-tight">
+                  <span className="text-[10px] font-semibold text-zinc-700 dark:text-zinc-300">
+                    Расписание
+                  </span>
+                  <span className="text-[8px] text-zinc-400">Не задано</span>
+                </div>
+              )}
+            </div>
+          ) : node.data.triggerType === "webhook" ? (
+            <div className="flex flex-col items-center justify-center gap-1">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20 shadow-sm">
+                <Zap className="h-4 w-4" />
+              </div>
+              <span className="text-[10px] font-semibold text-zinc-800 dark:text-zinc-200">
+                Webhook / RSS
+              </span>
+              <span className="text-[8px] text-zinc-400">Событие</span>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center gap-1">
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shadow-sm">
+                <PlayCircle className="h-4 w-4" />
+              </div>
+              <span className="text-[10px] font-semibold text-zinc-800 dark:text-zinc-200">
+                Ручной пуск
+              </span>
+              <span className="text-[8px] text-zinc-400">По кнопке</span>
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="p-3">
         {/* 1. IMAGE / MEDIA FROM DISK OR PC */}
         {node.type === "files_media" && (
           <div className="space-y-2">
@@ -707,19 +835,7 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
           </div>
         )}
 
-        {/* 8. TRIGGER */}
-        {node.type === "trigger" && (
-          <div className="rounded-xl border border-emerald-100 dark:border-emerald-900/40 bg-emerald-50/60 dark:bg-emerald-950/20 p-2.5 text-xs flex items-center justify-between">
-            <span className="text-zinc-500 text-[11px]">Тип:</span>
-            <span className="font-semibold text-emerald-700 dark:text-emerald-400 text-[11px]">
-              {node.data.triggerType === "schedule"
-                ? "По расписанию"
-                : "Ручной запуск"}
-            </span>
-          </div>
-        )}
-
-        {/* 9. APPROVAL */}
+        {/* 8. APPROVAL */}
         {node.type === "draft_approval" && (
           <div className="rounded-xl border border-amber-100 dark:border-amber-900/40 bg-amber-50/60 dark:bg-amber-950/20 p-2.5 text-xs flex items-center gap-1.5 text-amber-700 dark:text-amber-400 text-[11px]">
             <CheckCircle2 className="h-4 w-4 shrink-0" />

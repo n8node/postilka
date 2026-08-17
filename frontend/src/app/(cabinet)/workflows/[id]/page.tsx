@@ -55,10 +55,15 @@ export default function WorkflowDetailPage({ params }: PageProps) {
     isActive?: boolean
   ) => {
     if (!workflow) return;
+    const triggerNode = graph.nodes.find((n) => n.type === "trigger");
+    const triggerType = (triggerNode?.data?.triggerType as any) || "manual";
+    const scheduleCron = (triggerNode?.data?.scheduleCron as string) || "";
     const updated = await updateWorkflow(workflow.id, {
       graph,
       name,
       is_active: isActive,
+      trigger_type: triggerType,
+      schedule_cron: scheduleCron,
     });
     setWorkflow(updated);
   };

@@ -146,13 +146,16 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         return { x: graphX, y: graphY };
       }
 
-      // Mathematical fallback based on port index if DOM element not yet mounted
-      const portIndex = ports?.findIndex((p) => p.id === actualPortId) ?? 0;
-      const safeIdx = portIndex >= 0 ? portIndex : 0;
-      return {
-        x: isOutput ? node.position.x + 288 + 8 : node.position.x - 8,
-        y: node.position.y + 130 + safeIdx * 28,
-      };
+    // Mathematical fallback based on port index if DOM element not yet mounted
+    const isTrigger = node.type === "trigger";
+    const nodeWidth = isTrigger ? 144 : 288;
+    const portIndex = ports?.findIndex((p) => p.id === actualPortId) ?? 0;
+    const safeIdx = portIndex >= 0 ? portIndex : 0;
+    const nodeYOffset = isTrigger ? 72 : 130 + safeIdx * 28;
+    return {
+      x: isOutput ? node.position.x + nodeWidth + 8 : node.position.x - 8,
+      y: node.position.y + nodeYOffset,
+    };
     },
     [pan.x, pan.y, zoom]
   );

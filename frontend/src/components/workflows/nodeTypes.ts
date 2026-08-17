@@ -45,11 +45,12 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
     inputs: [],
     outputs: [
       { id: "timestamp", label: "Время запуска", type: "string" },
-      { id: "workspace_id", label: "Workspace ID", type: "string" },
     ],
     defaultData: {
       title: "Запуск процесса",
       triggerType: "manual",
+      scheduleDateTime: "",
+      scheduleCron: "",
     },
   },
   ai_text: {
