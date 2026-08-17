@@ -111,7 +111,7 @@ class SimpleBrush implements HarmonyBrush {
   destroy() {}
 }
 
-class PointsBrushBase implements HarmonyBrush {
+abstract class PointsBrushBase implements HarmonyBrush {
   protected prevX = 0;
   protected prevY = 0;
   protected points: [number, number][] = [];
@@ -130,6 +130,8 @@ class PointsBrushBase implements HarmonyBrush {
     this.points = [];
     this.count = 0;
   }
+
+  abstract stroke(x: number, y: number): void;
 
   strokeEnd() {}
 
