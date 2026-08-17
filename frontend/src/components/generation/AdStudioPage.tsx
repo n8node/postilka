@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ImagePlus, Sparkles, UserRound } from "lucide-react";
 import { FileThumbnail } from "@/components/files/FileThumbnail";
 import { ProtectedMediaImage } from "@/components/media/ProtectedMediaImage";
@@ -276,6 +276,8 @@ function TemplateCard({
 
 export function AdStudioPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const templateParam = searchParams.get("template");
   const [filter, setFilter] = useState<FilterId>("all");
   const [items, setItems] = useState<AdStudioTemplate[]>([]);
   const [loading, setLoading] = useState(true);
@@ -397,14 +399,31 @@ export function AdStudioPage() {
     };
   }, [selected]);
 
-  const selectTemplate = (item: AdStudioTemplate) => {
-    setSelected(item);
-    setEdit("");
-    clearImageError();
-    clearVideoError();
-    clearImageResult();
-    clearVideoResult();
-  };
+  const selectTemplate = useCallback(
+    (item: AdStudioTemplate) => {
+      setSelected(item);
+      setEdit("");
+      clearImageError();
+      clearVideoError();
+      clearImageResult();
+      clearVideoResult();
+      router.replace(`/ai?template=${encodeURIComponent(item.id)}`, { scroll: false });
+    },
+    [
+      clearImageError,
+      clearImageResult,
+      clearVideoError,
+      clearVideoResult,
+      router,
+    ],
+  );
+
+  useEffect(() => {
+    if (!templateParam || loading || items.length === 0) return;
+    const match = items.find((item) => item.id === templateParam);
+    if (!match || selected?.id === match.id) return;
+    selectTemplate(match);
+  }, [templateParam, loading, items, selected?.id, selectTemplate]);
 
   const applyUpload = (slot: "product" | "avatar", next: GenerationUpload) => {
     if (slot === "product") setProduct(next);
@@ -709,7 +728,12 @@ export function AdStudioPage() {
 
             <button
               type="button"
-              onClick={() => setSelected(null)}
+              onClick={() => {
+                setSelected(null);
+                if (templateParam) {
+                  router.replace("/ai", { scroll: false });
+                }
+              }}
               className="text-[12px] text-muted hover:text-text"
             >
               Назад к библиотеке

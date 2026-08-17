@@ -67,7 +67,7 @@ function StudioVideoCard({ template }: { template: AdStudioTemplate }) {
 
   return (
     <Link
-      href="/ai"
+      href={`/ai?template=${encodeURIComponent(template.id)}`}
       className="group relative min-w-0 overflow-hidden rounded-2xl bg-zinc-100 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
     >
       <div className={cn("relative overflow-hidden", templateAspectClass(template.aspect_ratio))}>
