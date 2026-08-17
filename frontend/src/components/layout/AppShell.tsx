@@ -247,7 +247,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             key={workspaceId}
             className={cn(
               "mx-auto",
-              pathname.startsWith("/workflows/")
+              pathname === "/dashboard" || pathname.startsWith("/workflows/")
                 ? "max-w-none p-0 sm:p-0 lg:p-0"
                 : isActive(pathname, "/workflows") ||
                   isActive(pathname, "/files") ||
