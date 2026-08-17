@@ -149,6 +149,7 @@ func executeMergeNode(inputs map[string]interface{}) map[string]interface{} {
 	normalizeMergeMediaAliases(merged)
 	outputs := shallowCopyMap(merged)
 	outputs["merged"] = merged
+	outputs["output"] = merged
 	return outputs
 }
 

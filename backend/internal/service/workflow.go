@@ -1426,7 +1426,7 @@ func (s *WorkflowService) getNodeTitle(node model.WorkflowNode) string {
 	case "formatter":
 		return "Форматирование текста"
 	case "merge":
-		return "Объединение данных"
+		return "Merge"
 	case "set_fields":
 		return "Сборка полей"
 	case "http_request":

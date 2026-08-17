@@ -32,7 +32,7 @@ VALUES
             {"id": "trigger_1", "type": "trigger", "position": {"x": 80, "y": 200}, "data": {"title": "По расписанию", "triggerType": "schedule", "scheduleCron": "0 10 * * 1-5"}},
             {"id": "ai_text_1", "type": "ai_text", "position": {"x": 320, "y": 120}, "data": {"title": "Текст поста", "prompt": "Напиши короткий пост для Telegram на тему трендов маркетинга 2026. Добавь хештеги.", "role": "SMM-копирайтер", "temperature": 0.7}},
             {"id": "ai_image_1", "type": "ai_image", "position": {"x": 320, "y": 280}, "data": {"title": "Обложка", "prompt": "Минималистичная иллюстрация к посту о маркетинге, 4k", "aspectRatio": "1:1"}},
-            {"id": "merge_1", "type": "merge", "position": {"x": 560, "y": 200}, "data": {"title": "Сборка контента", "mode": "combine"}},
+            {"id": "merge_1", "type": "merge", "position": {"x": 560, "y": 200}, "data": {"title": "Merge", "mode": "combine"}},
             {"id": "formatter_1", "type": "formatter", "position": {"x": 800, "y": 200}, "data": {"title": "Финальный текст", "template": "{{ merge_1.text }}\n\n#postilka"}},
             {"id": "if_1", "type": "logic_condition", "position": {"x": 1040, "y": 200}, "data": {"title": "Текст не пустой", "leftValue": "{{ merge_1.text }}", "operator": "not_empty", "rightValue": ""}},
             {"id": "draft_1", "type": "draft_approval", "position": {"x": 1280, "y": 120}, "data": {"title": "На проверку", "text": "{{ formatter_1.result }}", "notifyOwner": true}},

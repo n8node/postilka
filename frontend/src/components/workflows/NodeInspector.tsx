@@ -2336,20 +2336,53 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
 
         {node.type === "merge" && (
           <div className="space-y-3">
+            <div className="rounded-xl border border-teal-100 dark:border-teal-900/40 bg-teal-50/60 dark:bg-teal-950/20 p-3 text-[11px] leading-relaxed text-zinc-700 dark:text-zinc-300 space-y-2">
+              <p className="font-medium text-teal-800 dark:text-teal-300">
+                Работает как Merge в n8n
+              </p>
+              <ul className="list-disc pl-4 space-y-1 text-[10px]">
+                <li>
+                  <span className="font-semibold">Input 1</span> и{" "}
+                  <span className="font-semibold">Input 2</span> — две параллельные
+                  ветки (например, AI текст и AI картинка).
+                </li>
+                <li>
+                  Нода выполняется, когда данные пришли с обоих входов.
+                </li>
+                <li>
+                  <span className="font-semibold">Output</span> — один объединённый
+                  результат; поля доступны как{" "}
+                  <code className="font-mono text-[9px]">{`{{ ${node.id}.text }}`}</code>
+                  ,{" "}
+                  <code className="font-mono text-[9px]">{`{{ ${node.id}.mediaUrl }}`}</code>
+                  .
+                </li>
+              </ul>
+            </div>
             <div>
-              <label className="mb-1 block font-medium text-zinc-700 dark:text-zinc-300">Режим объединения</label>
+              <label className="mb-1 block font-medium text-zinc-700 dark:text-zinc-300">
+                Mode (режим)
+              </label>
               <select
                 value={data.mode || "combine"}
                 onChange={(e) => handleFieldChange("mode", e.target.value)}
                 className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs"
               >
-                <option value="combine">Combine — слить все поля</option>
-                <option value="prefer_first">Prefer first — первый вход</option>
-                <option value="prefer_last">Prefer last — последний вход</option>
+                <option value="combine">
+                  Combine — объединить поля Input 1 и Input 2 в один item
+                </option>
+                <option value="prefer_first">
+                  Choose Branch — передать только Input 1
+                </option>
+                <option value="prefer_last">
+                  Choose Branch — передать только Input 2
+                </option>
               </select>
             </div>
             <p className="text-[10px] text-zinc-500">
-              Подключите несколько входов (текст, картинка, файлы). На выходе — единый набор полей для публикации.
+              В режиме Combine поля с одинаковыми именами сливаются; если ключ
+              уже заполнен, берётся первое непустое значение. Это аналог n8n
+              Combine → By Position для одного item на каждый вход.
             </p>
           </div>
         )}

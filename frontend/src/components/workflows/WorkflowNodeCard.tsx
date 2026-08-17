@@ -1031,22 +1031,32 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
 
         {node.type === "merge" && (
           <div className="space-y-2">
-            <div className="rounded-xl border border-teal-100 dark:border-teal-900/40 bg-teal-50/60 dark:bg-teal-950/20 p-3 text-xs">
-              <div className="line-clamp-2 text-[11px] text-zinc-800 dark:text-zinc-200">
-                Объединяет параллельные ветки: текст, медиа и другие поля в один поток
-              </div>
+            <div className="rounded-xl border border-teal-100 dark:border-teal-900/40 bg-teal-50/60 dark:bg-teal-950/20 p-3 text-[11px] leading-relaxed text-zinc-800 dark:text-zinc-200">
+              <p className="font-medium text-teal-800 dark:text-teal-300 mb-1.5">
+                Как Merge в n8n
+              </p>
+              <p>
+                Ждёт <span className="font-semibold">Input 1</span> и{" "}
+                <span className="font-semibold">Input 2</span>, затем отдаёт{" "}
+                <span className="font-semibold">один объект</span> на Output.
+              </p>
+              <p className="mt-1.5 text-[10px] text-zinc-600 dark:text-zinc-400">
+                Пример: текст с Input 1 + картинка с Input 2 →{" "}
+                <code className="font-mono">{`{{ ${node.id}.text }}`}</code>,{" "}
+                <code className="font-mono">{`{{ ${node.id}.mediaUrl }}`}</code>
+              </p>
             </div>
             <div className="flex flex-wrap items-center gap-1 pt-0.5">
               <span className="rounded bg-teal-100 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800/40 px-1.5 py-0.5 text-[9px] text-teal-700 dark:text-teal-300 font-medium">
                 {(node.data.mode as string) === "prefer_first"
-                  ? "Первый вход"
+                  ? "Choose Branch → Input 1"
                   : (node.data.mode as string) === "prefer_last"
-                  ? "Последний вход"
+                  ? "Choose Branch → Input 2"
                   : "Combine"}
               </span>
               {node.data.waitForAll !== false && (
                 <span className="rounded bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 text-[9px] text-zinc-600 dark:text-zinc-400">
-                  Ждать все входы
+                  Ждёт оба входа
                 </span>
               )}
             </div>
