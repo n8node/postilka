@@ -17,6 +17,7 @@ import {
   CheckCircle2,
   GitBranch,
   Type,
+  AlignLeft,
   X,
 } from "lucide-react";
 import { NODE_DEFINITIONS, NodeCategory, NodeTypeDefinition } from "./nodeTypes";
@@ -50,6 +51,7 @@ const ICON_MAP: Record<string, React.ElementType> = {
   "check-circle-2": CheckCircle2,
   "git-branch": GitBranch,
   type: Type,
+  "align-left": AlignLeft,
 };
 
 export const NodePalette: React.FC<NodePaletteProps> = ({

@@ -80,6 +80,27 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       temperature: 0.7,
     },
   },
+  plain_text: {
+    type: "plain_text",
+    title: "Текст",
+    description: "Готовый текст поста без AI — пишете сами или через переменные",
+    category: "logic",
+    icon: "align-left",
+    color: {
+      bg: "bg-slate-500/10 dark:bg-slate-500/20",
+      border: "border-slate-500/40",
+      badge: "bg-slate-600 text-white",
+      text: "text-slate-600 dark:text-slate-400",
+    },
+    inputs: [],
+    outputs: [
+      { id: "text", label: "Текст", type: "string" },
+    ],
+    defaultData: {
+      title: "Текст",
+      text: "",
+    },
+  },
   ai_image: {
     type: "ai_image",
     title: "AI Изображение",

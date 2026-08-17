@@ -591,6 +591,42 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
           </div>
         )}
 
+        {/* 2b. PLAIN TEXT (без AI) */}
+        {node.type === "plain_text" && (
+          <div className="space-y-2">
+            <div>
+              <div className="mb-1 flex items-center justify-between">
+                <label className="font-medium text-zinc-700 dark:text-zinc-300">
+                  Текст поста
+                </label>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setShowVariablePickerFor(
+                      showVariablePickerFor === "text" ? null : "text"
+                    )
+                  }
+                  className="flex items-center gap-1 rounded bg-slate-100 dark:bg-slate-800/60 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700"
+                >
+                  <Variable className="h-3 w-3" />
+                  Переменная
+                </button>
+              </div>
+              <textarea
+                rows={8}
+                value={data.text || ""}
+                onChange={(e) => handleFieldChange("text", e.target.value)}
+                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 p-2.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none whitespace-pre-wrap"
+                placeholder="Напишите текст публикации вручную. Можно использовать переменные: {{ ai_text_1.text }}"
+              />
+            </div>
+            <p className="text-[10px] text-zinc-500 leading-relaxed">
+              Без списания AI-квоты. Текст передаётся на выход как есть; переменные вида{" "}
+              <code className="font-mono text-[9px]">{`{{ node_id.field }}`}</code> подставляются при запуске процесса.
+            </p>
+          </div>
+        )}
+
         {/* 3. AI IMAGE */}
         {node.type === "ai_image" && (
           <div className="space-y-3">

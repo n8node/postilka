@@ -15,6 +15,7 @@ import {
   CheckCircle2,
   GitBranch,
   Type,
+  AlignLeft,
   Trash2,
   Copy,
   Play,
@@ -91,6 +92,7 @@ const ICON_MAP: Record<string, React.ElementType> = {
   "check-circle-2": CheckCircle2,
   "git-branch": GitBranch,
   type: Type,
+  "align-left": AlignLeft,
 };
 
 function formatTriggerScheduleDate(dateStr: string): string {
@@ -766,6 +768,15 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
               </span>
               <span>T: {(node.data.temperature as number) || 0.7}</span>
             </div>
+          </div>
+        )}
+
+        {/* 4b. PLAIN TEXT */}
+        {node.type === "plain_text" && (
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/40 p-3">
+            <p className="line-clamp-4 text-[11px] text-zinc-800 dark:text-zinc-200 whitespace-pre-wrap">
+              {(node.data.text as string) || "Введите текст поста..."}
+            </p>
           </div>
         )}
 

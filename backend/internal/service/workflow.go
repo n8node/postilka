@@ -690,6 +690,11 @@ func (s *WorkflowService) executeNode(
 		outputs["result"] = templateStr
 		return outputs, 0, 0, 0, nil
 
+	case "plain_text":
+		text := getString(inputs, "text", "")
+		outputs["text"] = text
+		return outputs, 0, 0, 0, nil
+
 	default:
 		// Generic pass-through node
 		for k, v := range inputs {
@@ -873,6 +878,8 @@ func (s *WorkflowService) getNodeTitle(node model.WorkflowNode) string {
 		return "Запуск процесса"
 	case "ai_text":
 		return "AI Генерация текста"
+	case "plain_text":
+		return "Текст"
 	case "ai_image":
 		return "AI Изображение"
 	case "ai_video":
