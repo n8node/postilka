@@ -859,6 +859,7 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
           </div>
         )}
       </div>
+      )}
 
       {/* Node Hover Actions Bar */}
       <div className="absolute -top-3.5 right-2 hidden group-hover:flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-0.5 shadow-md z-30">
