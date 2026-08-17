@@ -123,6 +123,30 @@ export function SketchInspector({
       </div>
 
       <div className="flex-1 min-h-0 space-y-4 overflow-y-auto p-4 text-xs">
+        <div>
+          <div className="mb-1 flex items-center justify-between">
+            <label className="font-medium text-zinc-700 dark:text-zinc-300">
+              Влияние наброска
+            </label>
+            <span className="text-[10px] text-zinc-500">{Math.round(strength * 100)}%</span>
+          </div>
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={Math.round(strength * 100)}
+            onChange={(e) => onStrengthChange(Number(e.target.value) / 100)}
+            className="w-full accent-indigo-600"
+          />
+        </div>
+
+        <div>
+          <label className="mb-1.5 block font-medium text-zinc-700 dark:text-zinc-300">
+            Формат
+          </label>
+          <AspectRatioPicker value={aspectRatio} onChange={onAspectRatioChange} />
+        </div>
+
         {/* Brushes toolbar */}
         <div>
           <label className="mb-1.5 block font-medium text-zinc-700 dark:text-zinc-300">
@@ -265,30 +289,6 @@ export function SketchInspector({
             placeholder="Например: чашка кофе на деревянном столе, утренний свет…"
             className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-xs text-zinc-900 focus:border-indigo-500 focus:outline-none dark:border-zinc-800 dark:bg-zinc-800/60 dark:text-zinc-100"
           />
-        </div>
-
-        <div>
-          <div className="mb-1 flex items-center justify-between">
-            <label className="font-medium text-zinc-700 dark:text-zinc-300">
-              Влияние наброска
-            </label>
-            <span className="text-[10px] text-zinc-500">{Math.round(strength * 100)}%</span>
-          </div>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            value={Math.round(strength * 100)}
-            onChange={(e) => onStrengthChange(Number(e.target.value) / 100)}
-            className="w-full accent-indigo-600"
-          />
-        </div>
-
-        <div>
-          <label className="mb-1.5 block font-medium text-zinc-700 dark:text-zinc-300">
-            Формат
-          </label>
-          <AspectRatioPicker value={aspectRatio} onChange={onAspectRatioChange} />
         </div>
 
         <div>
