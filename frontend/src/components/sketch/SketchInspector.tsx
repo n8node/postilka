@@ -16,7 +16,7 @@ import {
   SKETCH_BRUSHES,
   SKETCH_COLORS,
   type SketchBrushId,
-} from "@/lib/sketch-brushes";
+} from "@/lib/harmony-brushes";
 import type { SketchStyle } from "@/lib/sketch-api";
 import type { AspectRatioId } from "@/lib/generation-data";
 import { formatMediaCreditCost } from "@/lib/generation-format";

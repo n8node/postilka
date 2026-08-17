@@ -5,15 +5,14 @@ import React, {
   useEffect,
   useImperativeHandle,
   useRef,
-  useState,
   forwardRef,
 } from "react";
 import {
-  redrawSketchCanvas,
+  createHarmonyBrush,
+  parseSketchColor,
+  type HarmonyBrush,
   type SketchBrushId,
-  type SketchPoint,
-  type SketchStroke,
-} from "@/lib/sketch-brushes";
+} from "@/lib/harmony-brushes";
 
 export type SketchCanvasHandle = {
   exportPNG: () => Promise<Blob>;
@@ -34,6 +33,31 @@ type SketchCanvasProps = {
   onHistoryChange?: () => void;
 };
 
+function paintBaseLayer(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  backgroundImage: HTMLImageElement | null,
+  backgroundOpacity: number,
+) {
+  ctx.clearRect(0, 0, width, height);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, width, height);
+
+  if (backgroundImage) {
+    ctx.save();
+    ctx.globalAlpha = backgroundOpacity;
+    const scale = Math.max(
+      width / backgroundImage.width,
+      height / backgroundImage.height,
+    );
+    const w = backgroundImage.width * scale;
+    const h = backgroundImage.height * scale;
+    ctx.drawImage(backgroundImage, (width - w) / 2, (height - h) / 2, w, h);
+    ctx.restore();
+  }
+}
+
 export const SketchCanvas = forwardRef<SketchCanvasHandle, SketchCanvasProps>(
   function SketchCanvas(
     {
@@ -48,44 +72,118 @@ export const SketchCanvas = forwardRef<SketchCanvasHandle, SketchCanvasProps>(
     },
     ref,
   ) {
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-    const containerRef = useRef<HTMLDivElement>(null);
-    const strokesRef = useRef<SketchStroke[]>([]);
-    const undoStackRef = useRef<SketchStroke[][]>([]);
+    const displayRef = useRef<HTMLCanvasElement>(null);
+    const baseRef = useRef<HTMLCanvasElement | null>(null);
+    const strokeRef = useRef<HTMLCanvasElement | null>(null);
+    const brushRef = useRef<HarmonyBrush | null>(null);
+    const undoStackRef = useRef<ImageData[]>([]);
+    const hasContentRef = useRef(false);
     const drawingRef = useRef(false);
-    const currentStrokeRef = useRef<SketchStroke | null>(null);
-    const [, setTick] = useState(0);
 
-    const paint = useCallback(() => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const ctx = canvas.getContext("2d");
+    const ensureLayers = useCallback(() => {
+      if (!baseRef.current) {
+        baseRef.current = document.createElement("canvas");
+      }
+      if (!strokeRef.current) {
+        strokeRef.current = document.createElement("canvas");
+      }
+      baseRef.current.width = width;
+      baseRef.current.height = height;
+      strokeRef.current.width = width;
+      strokeRef.current.height = height;
+    }, [width, height]);
+
+    const composite = useCallback(() => {
+      const display = displayRef.current;
+      const base = baseRef.current;
+      const stroke = strokeRef.current;
+      if (!display || !base || !stroke) return;
+      const ctx = display.getContext("2d");
       if (!ctx) return;
-      redrawSketchCanvas(
-        ctx,
-        width,
-        height,
-        strokesRef.current,
-        "#ffffff",
-        backgroundImage,
-        backgroundOpacity,
-      );
-    }, [width, height, backgroundImage, backgroundOpacity]);
+      ctx.clearRect(0, 0, width, height);
+      ctx.drawImage(base, 0, 0);
+      ctx.drawImage(stroke, 0, 0);
+    }, [width, height]);
+
+    const paintBase = useCallback(() => {
+      ensureLayers();
+      const base = baseRef.current;
+      if (!base) return;
+      const ctx = base.getContext("2d");
+      if (!ctx) return;
+      paintBaseLayer(ctx, width, height, backgroundImage, backgroundOpacity);
+      composite();
+    }, [width, height, backgroundImage, backgroundOpacity, ensureLayers, composite]);
+
+    const destroyBrush = useCallback(() => {
+      brushRef.current?.destroy();
+      brushRef.current = null;
+    }, []);
+
+    const createBrush = useCallback(() => {
+      ensureLayers();
+      const stroke = strokeRef.current;
+      if (!stroke) return;
+      const ctx = stroke.getContext("2d");
+      if (!ctx) return;
+      destroyBrush();
+      brushRef.current = createHarmonyBrush(brush, ctx, {
+        color: parseSketchColor(color),
+        size: brushSize,
+        pressure: 1,
+        canvasWidth: width,
+        canvasHeight: height,
+      });
+    }, [brush, color, brushSize, width, height, ensureLayers, destroyBrush]);
 
     useEffect(() => {
-      paint();
-    }, [paint]);
+      paintBase();
+    }, [paintBase]);
+
+    useEffect(() => {
+      createBrush();
+      return () => destroyBrush();
+    }, [createBrush, destroyBrush]);
+
+    useEffect(() => {
+      ensureLayers();
+      const stroke = strokeRef.current;
+      if (stroke) {
+        const ctx = stroke.getContext("2d");
+        ctx?.clearRect(0, 0, width, height);
+      }
+      undoStackRef.current = [];
+      hasContentRef.current = false;
+      composite();
+      onHistoryChange?.();
+    }, [width, height]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    useEffect(() => {
+      if (brush !== "ribbon") return;
+      let raf = 0;
+      const loop = () => {
+        composite();
+        raf = requestAnimationFrame(loop);
+      };
+      raf = requestAnimationFrame(loop);
+      return () => cancelAnimationFrame(raf);
+    }, [brush, composite]);
 
     const pushUndo = useCallback(() => {
-      undoStackRef.current.push(strokesRef.current.map((s) => ({ ...s, points: [...s.points] })));
+      ensureLayers();
+      const stroke = strokeRef.current;
+      if (!stroke) return;
+      const ctx = stroke.getContext("2d");
+      if (!ctx) return;
+      undoStackRef.current.push(ctx.getImageData(0, 0, width, height));
       if (undoStackRef.current.length > 40) {
         undoStackRef.current.shift();
       }
       onHistoryChange?.();
-    }, [onHistoryChange]);
+    }, [width, height, ensureLayers, onHistoryChange]);
 
-    const pointerPos = (e: React.PointerEvent<HTMLCanvasElement>): SketchPoint | null => {
-      const canvas = canvasRef.current;
+    const pointerPos = (e: React.PointerEvent<HTMLCanvasElement>) => {
+      const canvas = displayRef.current;
       if (!canvas) return null;
       const rect = canvas.getBoundingClientRect();
       const scaleX = width / rect.width;
@@ -97,37 +195,31 @@ export const SketchCanvas = forwardRef<SketchCanvasHandle, SketchCanvasProps>(
     };
 
     const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
-      if (e.button !== 0) return;
+      if (e.button !== 0 || !brushRef.current) return;
       const p = pointerPos(e);
       if (!p) return;
       e.currentTarget.setPointerCapture(e.pointerId);
       drawingRef.current = true;
       pushUndo();
-      currentStrokeRef.current = {
-        brush,
-        color,
-        size: brushSize,
-        points: [p],
-        opacity: 1,
-      };
-      strokesRef.current = [...strokesRef.current, currentStrokeRef.current];
-      paint();
+      brushRef.current.strokeStart(p.x, p.y);
+      hasContentRef.current = true;
+      composite();
     };
 
     const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
-      if (!drawingRef.current || !currentStrokeRef.current) return;
+      if (!drawingRef.current || !brushRef.current) return;
       const p = pointerPos(e);
       if (!p) return;
-      const last = currentStrokeRef.current.points[currentStrokeRef.current.points.length - 1];
-      if (last && Math.hypot(last.x - p.x, last.y - p.y) < 1.5) return;
-      currentStrokeRef.current.points.push(p);
-      paint();
+      brushRef.current.stroke(p.x, p.y);
+      composite();
     };
 
     const finishStroke = () => {
+      if (drawingRef.current && brushRef.current) {
+        brushRef.current.strokeEnd();
+      }
       drawingRef.current = false;
-      currentStrokeRef.current = null;
-      setTick((v) => v + 1);
+      composite();
       onHistoryChange?.();
     };
 
@@ -135,10 +227,19 @@ export const SketchCanvas = forwardRef<SketchCanvasHandle, SketchCanvasProps>(
       ref,
       () => ({
         exportPNG: async () => {
-          const canvas = canvasRef.current;
-          if (!canvas) throw new Error("Холст недоступен");
+          ensureLayers();
+          const base = baseRef.current;
+          const stroke = strokeRef.current;
+          if (!base || !stroke) throw new Error("Холст недоступен");
+          const exportCanvas = document.createElement("canvas");
+          exportCanvas.width = width;
+          exportCanvas.height = height;
+          const ctx = exportCanvas.getContext("2d");
+          if (!ctx) throw new Error("Холст недоступен");
+          ctx.drawImage(base, 0, 0);
+          ctx.drawImage(stroke, 0, 0);
           const blob = await new Promise<Blob>((resolve, reject) => {
-            canvas.toBlob(
+            exportCanvas.toBlob(
               (b) => (b ? resolve(b) : reject(new Error("Экспорт не удался"))),
               "image/png",
               1,
@@ -148,29 +249,36 @@ export const SketchCanvas = forwardRef<SketchCanvasHandle, SketchCanvasProps>(
         },
         clear: () => {
           pushUndo();
-          strokesRef.current = [];
-          paint();
-          setTick((v) => v + 1);
+          ensureLayers();
+          const stroke = strokeRef.current;
+          if (stroke) {
+            const ctx = stroke.getContext("2d");
+            ctx?.clearRect(0, 0, width, height);
+          }
+          hasContentRef.current = false;
+          composite();
+          onHistoryChange?.();
         },
         undo: () => {
           const prev = undoStackRef.current.pop();
-          if (prev) {
-            strokesRef.current = prev;
-            paint();
-            setTick((v) => v + 1);
+          ensureLayers();
+          const stroke = strokeRef.current;
+          if (prev && stroke) {
+            const ctx = stroke.getContext("2d");
+            ctx?.putImageData(prev, 0, 0);
+            hasContentRef.current = undoStackRef.current.length > 0;
+            composite();
             onHistoryChange?.();
           }
         },
         canUndo: () => undoStackRef.current.length > 0,
-        hasContent: () =>
-          strokesRef.current.some((s) => s.points.length > 1 || (s.points.length === 1 && s.size > 0)),
+        hasContent: () => hasContentRef.current,
       }),
-      [paint, pushUndo],
+      [width, height, ensureLayers, pushUndo, composite, onHistoryChange],
     );
 
     return (
       <div
-        ref={containerRef}
         className="relative flex h-full w-full items-center justify-center overflow-hidden bg-zinc-100 dark:bg-zinc-900"
         style={{
           backgroundImage:
@@ -180,7 +288,7 @@ export const SketchCanvas = forwardRef<SketchCanvasHandle, SketchCanvasProps>(
         }}
       >
         <canvas
-          ref={canvasRef}
+          ref={displayRef}
           width={width}
           height={height}
           onPointerDown={handlePointerDown}

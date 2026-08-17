@@ -60,8 +60,16 @@ export function AiContentHub() {
     [router],
   );
 
+  if (tab === "sketch") {
+    return (
+      <div className="-mx-4 -mt-6 sm:-mx-6 sm:-mt-6 lg:-mx-8 lg:-mt-8">
+        <SketchPage />
+      </div>
+    );
+  }
+
   return (
-    <div className={cn("flex flex-col", tab === "sketch" ? "gap-0" : "gap-4")}>
+    <div className="flex flex-col gap-4">
       <div className="inline-flex w-fit shrink-0 rounded-lg border border-border bg-bg p-1">
         {tabs.map((item) => {
           const Icon = item.icon;
@@ -85,11 +93,7 @@ export function AiContentHub() {
         })}
       </div>
 
-      {tab === "sketch" ? (
-        <div className="-mx-4 mt-0 sm:-mx-6 lg:-mx-8">
-          <SketchPage />
-        </div>
-      ) : tab === "studio" ? (
+      {tab === "studio" ? (
         <AdStudioPage />
       ) : tab === "photo" ? (
         <GenerationPageContent />

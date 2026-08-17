@@ -31,7 +31,7 @@ import {
 import {
   aspectRatioToSize,
   type SketchBrushId,
-} from "@/lib/sketch-brushes";
+} from "@/lib/harmony-brushes";
 import { fetchSketchStyles, generateFromSketch, type SketchStyle } from "@/lib/sketch-api";
 import { mediaUrl } from "@/lib/media-display";
 
@@ -216,7 +216,7 @@ export function SketchPage() {
   }
 
   return (
-    <div className="relative flex h-[calc(100vh-11rem)] min-h-[480px] w-full flex-col overflow-hidden bg-zinc-50 dark:bg-zinc-950">
+    <div className="relative flex h-[calc(100vh-3.5rem)] min-h-[480px] w-full flex-col overflow-hidden bg-zinc-50 dark:bg-zinc-950">
       <header className="z-20 flex h-14 shrink-0 items-center justify-between border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4">
         <div className="flex items-center gap-3">
           <Link
