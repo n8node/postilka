@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Film, PenLine, Sparkles } from "lucide-react";
 import { ProtectedMediaImage } from "@/components/media/ProtectedMediaImage";
 import { ProtectedMediaVideo } from "@/components/media/ProtectedMediaVideo";
@@ -28,6 +28,7 @@ import {
   type GenerationHistoryItem,
 } from "@/lib/generation-data";
 import {
+  historyItemFromGenerationId,
   historyItemToUpload,
 } from "@/lib/generation-history-drop";
 import { useVideoGenerationJobStore } from "@/lib/video-generation-job-store";
@@ -58,6 +59,9 @@ import { cn } from "@/lib/utils";
 
 export function VideoGenerationPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const sourceGenerationId = searchParams.get("source");
+  const appliedSourceRef = useRef<string | null>(null);
   const [mode, setMode] = useState<VideoGenerationModeId>("text-to-video");
   const [prompt, setPrompt] = useState(defaultVideoPrompt);
   const [aspectRatio, setAspectRatio] = useState<VideoAspectRatioId>("16:9");
@@ -172,6 +176,57 @@ export function VideoGenerationPageContent() {
     if (!pricing) return;
     setDuration(defaultDurationForMode(pricing, mode));
   }, [mode, pricing]);
+
+  useEffect(() => {
+    if (!sourceGenerationId || appliedSourceRef.current === sourceGenerationId) {
+      return;
+    }
+    appliedSourceRef.current = sourceGenerationId;
+
+    let cancelled = false;
+
+    void (async () => {
+      setMode("image-to-video");
+      setFirstFrame(null);
+      setLastFrame(null);
+      setReferenceImages(emptyReferenceImageSlots());
+      setReferenceVideos(emptyReferenceVideoSlots());
+      setReferenceAudios([]);
+      clearResult();
+      clearError();
+      setPreviewIsImage(false);
+      setImproveError(null);
+      setPrompt("");
+
+      try {
+        const upload = await historyItemToUpload(
+          historyItemFromGenerationId(sourceGenerationId),
+        );
+        if (cancelled) return;
+        setFirstFrame({
+          uploadId: upload.uploadId,
+          previewUrl: upload.previewUrl,
+          mediaKind: "image",
+        });
+      } catch (err) {
+        if (!cancelled) {
+          setImproveError(
+            err instanceof ApiError
+              ? err.message
+              : "Не удалось подставить фото как источник для видео",
+          );
+        }
+      } finally {
+        if (!cancelled) {
+          router.replace("/ai?tab=video", { scroll: false });
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sourceGenerationId, router, clearResult, clearError]);
 
   const costInput = useMemo(
     () => ({

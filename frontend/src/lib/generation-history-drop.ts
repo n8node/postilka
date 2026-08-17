@@ -46,6 +46,19 @@ export function uploadHistoryItem(
   };
 }
 
+export function historyItemFromGenerationId(
+  generationId: string,
+): GenerationHistoryItem {
+  return {
+    id: generationId,
+    prompt: "",
+    mode: "",
+    createdAt: "",
+    imageUrl: "",
+    usedInPost: false,
+  };
+}
+
 export async function historyItemToUpload(
   item: GenerationHistoryItem,
 ): Promise<GenerationUpload> {
