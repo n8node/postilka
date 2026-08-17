@@ -21,6 +21,23 @@ import {
   Link2,
   Radio,
   Square,
+  ExternalLink,
+  Split,
+  GitFork,
+  MessageSquare,
+  Send,
+  Eye,
+  Pin,
+  VolumeX,
+  Shield,
+  MapPin,
+  ListPlus,
+  Video,
+  Film,
+  FileText,
+  HelpCircle,
+  Layers,
+  ChevronDown,
 } from "lucide-react";
 import type { WorkflowNode } from "@/lib/workflows-api";
 import {
@@ -30,6 +47,7 @@ import {
   fetchWorkflowWebhookTestStatus,
   type WorkflowWebhookTestStatus,
 } from "@/lib/workflows-api";
+import { fetchChannels, type ChannelListItem } from "@/lib/api";
 import { uploadFile } from "@/lib/files-api";
 import { getCachedFileMediaUrl } from "@/lib/file-media-cache";
 import { NODE_DEFINITIONS } from "./nodeTypes";
@@ -71,6 +89,28 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
   const [webhookTestStatus, setWebhookTestStatus] =
     useState<WorkflowWebhookTestStatus | null>(null);
   const webhookPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const [channels, setChannels] = useState<ChannelListItem[]>([]);
+  const [loadingChannels, setLoadingChannels] = useState(false);
+  const [locationExpanded, setLocationExpanded] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    setLoadingChannels(true);
+    fetchChannels()
+      .then((res) => {
+        if (mounted && res?.items) {
+          setChannels(res.items);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (mounted) setLoadingChannels(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const stopWebhookPolling = useCallback(() => {
     if (webhookPollRef.current) {
@@ -194,6 +234,86 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
     const currentVal = (data[fieldKey] as string) || "";
     handleFieldChange(fieldKey, currentVal + " " + variableStr);
     setShowVariablePickerFor(null);
+  };
+
+  const renderChannelSelector = (provider: string, providerTitle: string) => {
+    const providerChannels = channels.filter(
+      (c) => c.provider === provider && (c.status === "active" || c.status === "connected" || !c.status)
+    );
+    const selectedChannelId = data.channelId || "";
+
+    if (loadingChannels) {
+      return (
+        <div className="flex items-center gap-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-850/40 p-2.5 text-xs text-zinc-500">
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-indigo-500" />
+          <span>Загрузка подключенных каналов...</span>
+        </div>
+      );
+    }
+
+    if (providerChannels.length === 0) {
+      return (
+        <div className="rounded-xl border border-amber-300 dark:border-amber-800/80 bg-amber-50/90 dark:bg-amber-950/40 p-3 space-y-2">
+          <div className="flex items-center gap-1.5 text-amber-900 dark:text-amber-300 font-semibold text-xs">
+            <AlertCircle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
+            <span>Нет подключенных каналов {providerTitle}</span>
+          </div>
+          <p className="text-[11px] text-zinc-700 dark:text-zinc-400 leading-relaxed">
+            Чтобы процесс мог публиковать посты, подключите канал {providerTitle} в разделе каналов.
+          </p>
+          <a
+            href="/channels"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 text-xs font-semibold shadow-sm transition"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            <span>Подключить {providerTitle}</span>
+            <ExternalLink className="h-3 w-3 opacity-80" />
+          </a>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between">
+          <label className="font-semibold text-zinc-800 dark:text-zinc-200 text-xs">
+            Подключенный канал {providerTitle}
+          </label>
+          <a
+            href="/channels"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-[10px] text-indigo-600 hover:text-indigo-700 dark:text-indigo-400"
+          >
+            <span>Каналы</span>
+            <ExternalLink className="h-2.5 w-2.5" />
+          </a>
+        </div>
+        <select
+          value={selectedChannelId}
+          onChange={(e) => {
+            const chId = e.target.value;
+            const targetCh = providerChannels.find((c) => c.id === chId);
+            handleFieldChange("channelId", chId);
+            if (targetCh) {
+              handleFieldChange("channelName", targetCh.name);
+            } else {
+              handleFieldChange("channelName", "");
+            }
+          }}
+          className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-2 text-xs text-zinc-900 dark:text-zinc-100 font-medium focus:border-indigo-500 focus:outline-none"
+        >
+          <option value="">-- Выберите канал из списка --</option>
+          {providerChannels.map((ch) => (
+            <option key={ch.id} value={ch.id}>
+              {ch.name} {ch.bot_username ? `(@${ch.bot_username})` : ch.chat_id ? `(${ch.chat_id})` : ""}
+            </option>
+          ))}
+        </select>
+      </div>
+    );
   };
 
   return (
@@ -746,27 +866,568 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
         )}
 
         {/* 5. TELEGRAM NODE */}
-        {node.type === "social_telegram" && (
+        {node.type === "social_telegram" && (() => {
+          const currentTgChannel = channels.find((c) => c.id === data.channelId);
+          const caps = currentTgChannel?.publish_capabilities;
+          const canStories = caps?.formats ? caps.formats.includes("story") : true;
+          const canVideoNotes = caps?.composer_video_note ?? true;
+          const canPin = caps?.composer_pin ?? true;
+          const canSilent = caps?.composer_silent ?? true;
+          const canButtons = caps?.inline_buttons ?? true;
+          const currentFormat = data.format || "message";
+
+          return (
+            <div className="space-y-3">
+              {renderChannelSelector("telegram", "Telegram")}
+
+              <div>
+                <label className="mb-1 block font-medium text-zinc-700 dark:text-zinc-300">
+                  Формат Telegram
+                </label>
+                <select
+                  value={currentFormat}
+                  onChange={(e) => handleFieldChange("format", e.target.value)}
+                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none font-medium"
+                >
+                  <option value="message">Обычный пост (текст / фото / видео)</option>
+                  {canStories && <option value="story">Telegram История (Story)</option>}
+                  {canVideoNotes && <option value="video_note">Кружочек (Video Note)</option>}
+                </select>
+              </div>
+
+              {currentFormat === "message" && (
+                <>
+                  <div>
+                    <div className="mb-1 flex items-center justify-between">
+                      <label className="font-medium text-zinc-700 dark:text-zinc-300">
+                        Текст публикации
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setShowVariablePickerFor(
+                            showVariablePickerFor === "text" ? null : "text"
+                          )
+                        }
+                        className="flex items-center gap-1 rounded bg-sky-50 dark:bg-sky-950/40 px-1.5 py-0.5 text-[10px] font-medium text-sky-600 dark:text-sky-400 hover:bg-sky-100"
+                      >
+                        <Variable className="h-3 w-3" />
+                        Переменная
+                      </button>
+                    </div>
+                    <textarea
+                      rows={4}
+                      value={data.text || ""}
+                      onChange={(e) => handleFieldChange("text", e.target.value)}
+                      className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 p-2.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none font-mono"
+                      placeholder="{{ ai_text_1.text }}"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="mb-1 flex items-center justify-between">
+                      <label className="font-medium text-zinc-700 dark:text-zinc-300">
+                        Медиафайл (URL фото или видео)
+                      </label>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => onOpenMediaPicker?.(node.id, "mediaUrl")}
+                          className="flex items-center gap-1 rounded bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200"
+                        >
+                          <Folder className="h-2.5 w-2.5" />
+                          Медиатека
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setShowVariablePickerFor(
+                              showVariablePickerFor === "mediaUrl" ? null : "mediaUrl"
+                            )
+                          }
+                          className="flex items-center gap-1 rounded bg-sky-50 dark:bg-sky-950/40 px-1.5 py-0.5 text-[10px] font-medium text-sky-600 dark:text-sky-400 hover:bg-sky-100"
+                        >
+                          <Variable className="h-3 w-3" />
+                          Переменная
+                        </button>
+                      </div>
+                    </div>
+                    <input
+                      type="text"
+                      value={data.mediaUrl || ""}
+                      onChange={(e) => handleFieldChange("mediaUrl", e.target.value)}
+                      placeholder="{{ files_media_1.image_url }} или https://..."
+                      className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none font-mono"
+                    />
+                  </div>
+
+                  {/* Telegram Options */}
+                  <div className="space-y-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 p-2.5">
+                    {canSilent && (
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={!!data.silent}
+                          onChange={(e) => handleFieldChange("silent", e.target.checked)}
+                          className="rounded border-zinc-300 text-sky-600 focus:ring-sky-500"
+                        />
+                        <span className="text-zinc-700 dark:text-zinc-300 text-xs">
+                          Без звука (тихое сообщение)
+                        </span>
+                      </label>
+                    )}
+
+                    {canPin && (
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={!!data.pin}
+                          onChange={(e) => handleFieldChange("pin", e.target.checked)}
+                          className="rounded border-zinc-300 text-sky-600 focus:ring-sky-500"
+                        />
+                        <span className="text-zinc-700 dark:text-zinc-300 text-xs">
+                          Закрепить сообщение в канале
+                        </span>
+                      </label>
+                    )}
+
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={!!data.protectContent}
+                        onChange={(e) => handleFieldChange("protectContent", e.target.checked)}
+                        className="rounded border-zinc-300 text-sky-600 focus:ring-sky-500"
+                      />
+                      <span className="text-zinc-700 dark:text-zinc-300 text-xs">
+                        Защита контента (запретить пересылку и сохранение)
+                      </span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={!!data.disableLinkPreview}
+                        onChange={(e) => handleFieldChange("disableLinkPreview", e.target.checked)}
+                        className="rounded border-zinc-300 text-sky-600 focus:ring-sky-500"
+                      />
+                      <span className="text-zinc-700 dark:text-zinc-300 text-xs">
+                        Отключить предпросмотр ссылок (Web Page Preview)
+                      </span>
+                    </label>
+                  </div>
+
+                  {/* Inline Buttons Builder */}
+                  {canButtons && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <label className="font-medium text-zinc-700 dark:text-zinc-300 text-xs">
+                          Инлайн-кнопки со ссылками
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const btns = Array.isArray(data.buttons) ? [...data.buttons] : [];
+                            btns.push({ text: "Подробнее 🚀", url: "https://postilka.ru" });
+                            handleFieldChange("buttons", btns);
+                          }}
+                          className="flex items-center gap-1 text-[10px] text-sky-600 hover:text-sky-700 font-medium"
+                        >
+                          <Plus className="h-3 w-3" />
+                          Добавить кнопку
+                        </button>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        {Array.isArray(data.buttons) &&
+                          data.buttons.map((btn: any, idx: number) => (
+                            <div key={idx} className="flex items-center gap-1.5">
+                              <input
+                                type="text"
+                                value={btn.text || ""}
+                                onChange={(e) => {
+                                  const btns = [...data.buttons];
+                                  btns[idx].text = e.target.value;
+                                  handleFieldChange("buttons", btns);
+                                }}
+                                placeholder="Текст кнопки"
+                                className="w-1/2 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2 py-1 text-xs"
+                              />
+                              <input
+                                type="text"
+                                value={btn.url || ""}
+                                onChange={(e) => {
+                                  const btns = [...data.buttons];
+                                  btns[idx].url = e.target.value;
+                                  handleFieldChange("buttons", btns);
+                                }}
+                                placeholder="https://..."
+                                className="flex-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2 py-1 text-xs font-mono"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const btns = data.buttons.filter((_: any, i: number) => i !== idx);
+                                  handleFieldChange("buttons", btns);
+                                }}
+                                className="p-1 text-zinc-400 hover:text-red-500 transition"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Location Collapsible */}
+                  <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/40 dark:bg-zinc-800/20 p-2.5 space-y-2">
+                    <button
+                      type="button"
+                      onClick={() => setLocationExpanded(!locationExpanded)}
+                      className="flex w-full items-center justify-between text-xs font-medium text-zinc-700 dark:text-zinc-300"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <MapPin className="h-3.5 w-3.5 text-zinc-500" />
+                        <span>Геолокация (опционально)</span>
+                      </div>
+                      <ChevronDown
+                        className={`h-3.5 w-3.5 text-zinc-400 transition-transform ${
+                          locationExpanded ? "rotate-180" : ""
+                        }`}
+                      />
+                    </button>
+                    {locationExpanded && (
+                      <div className="space-y-2 pt-1 border-t border-zinc-100 dark:border-zinc-800">
+                        <input
+                          type="text"
+                          value={data.locationName || ""}
+                          onChange={(e) => handleFieldChange("locationName", e.target.value)}
+                          placeholder="Название места (напр. Москва, Красная площадь)"
+                          className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1 text-xs"
+                        />
+                        <div className="grid grid-cols-2 gap-2">
+                          <input
+                            type="text"
+                            value={data.latitude || ""}
+                            onChange={(e) => handleFieldChange("latitude", e.target.value)}
+                            placeholder="Широта (55.7558)"
+                            className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2 py-1 text-xs"
+                          />
+                          <input
+                            type="text"
+                            value={data.longitude || ""}
+                            onChange={(e) => handleFieldChange("longitude", e.target.value)}
+                            placeholder="Долгота (37.6173)"
+                            className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2 py-1 text-xs"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {currentFormat === "story" && (
+                <div className="space-y-3">
+                  <div>
+                    <div className="mb-1 flex items-center justify-between">
+                      <label className="font-medium text-zinc-700 dark:text-zinc-300">
+                        Медиафайл для Истории (фото/видео)
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setShowVariablePickerFor(
+                            showVariablePickerFor === "mediaUrl" ? null : "mediaUrl"
+                          )
+                        }
+                        className="flex items-center gap-1 rounded bg-purple-50 dark:bg-purple-950/40 px-1.5 py-0.5 text-[10px] font-medium text-purple-600 dark:text-purple-400 hover:bg-purple-100"
+                      >
+                        <Variable className="h-3 w-3" />
+                        Переменная
+                      </button>
+                    </div>
+                    <input
+                      type="text"
+                      value={data.mediaUrl || ""}
+                      onChange={(e) => handleFieldChange("mediaUrl", e.target.value)}
+                      placeholder="{{ ai_image_1.image_url }}"
+                      className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 font-mono"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block font-medium text-zinc-700 dark:text-zinc-300">
+                      Подпись к истории (до 200 символов)
+                    </label>
+                    <input
+                      type="text"
+                      value={data.text || ""}
+                      onChange={(e) => handleFieldChange("text", e.target.value)}
+                      placeholder="Подпись к истории..."
+                      className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {currentFormat === "video_note" && (
+                <div className="space-y-3">
+                  <div>
+                    <div className="mb-1 flex items-center justify-between">
+                      <label className="font-medium text-zinc-700 dark:text-zinc-300">
+                        Видеофайл для кружочка (MP4 1:1)
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setShowVariablePickerFor(
+                            showVariablePickerFor === "mediaUrl" ? null : "mediaUrl"
+                          )
+                        }
+                        className="flex items-center gap-1 rounded bg-sky-50 dark:bg-sky-950/40 px-1.5 py-0.5 text-[10px] font-medium text-sky-600 dark:text-sky-400 hover:bg-sky-100"
+                      >
+                        <Variable className="h-3 w-3" />
+                        Переменная
+                      </button>
+                    </div>
+                    <input
+                      type="text"
+                      value={data.mediaUrl || ""}
+                      onChange={(e) => handleFieldChange("mediaUrl", e.target.value)}
+                      placeholder="{{ files_media_1.video_url }}"
+                      className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs font-mono"
+                    />
+                  </div>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={!!data.silent}
+                      onChange={(e) => handleFieldChange("silent", e.target.checked)}
+                      className="rounded border-zinc-300 text-sky-600"
+                    />
+                    <span className="text-zinc-700 dark:text-zinc-300 text-xs">
+                      Без звука
+                    </span>
+                  </label>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* 5b. MAX NODE */}
+        {node.type === "social_max" && (() => {
+          const currentFormat = data.format || "message";
+          return (
+            <div className="space-y-3">
+              {renderChannelSelector("max", "MAX")}
+
+              <div>
+                <label className="mb-1 block font-medium text-zinc-700 dark:text-zinc-300">
+                  Формат публикации MAX
+                </label>
+                <select
+                  value={currentFormat}
+                  onChange={(e) => handleFieldChange("format", e.target.value)}
+                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none font-medium"
+                >
+                  <option value="message">Сообщение / Пост</option>
+                  <option value="article">Статья (Лонгрид)</option>
+                  <option value="rich_message">Форматированное сообщение</option>
+                </select>
+              </div>
+
+              <div>
+                <div className="mb-1 flex items-center justify-between">
+                  <label className="font-medium text-zinc-700 dark:text-zinc-300">
+                    {currentFormat === "article" ? "Текст статьи" : "Текст сообщения"}
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setShowVariablePickerFor(
+                        showVariablePickerFor === "text" ? null : "text"
+                      )
+                    }
+                    className="flex items-center gap-1 rounded bg-violet-50 dark:bg-violet-950/40 px-1.5 py-0.5 text-[10px] font-medium text-violet-600 dark:text-violet-400 hover:bg-violet-100"
+                  >
+                    <Variable className="h-3 w-3" />
+                    Переменная
+                  </button>
+                </div>
+                <textarea
+                  rows={5}
+                  value={data.text || ""}
+                  onChange={(e) => handleFieldChange("text", e.target.value)}
+                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 p-2.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none font-mono"
+                  placeholder="{{ ai_text_1.text }}"
+                />
+              </div>
+
+              <div>
+                <div className="mb-1 flex items-center justify-between">
+                  <label className="font-medium text-zinc-700 dark:text-zinc-300">
+                    Медиафайл (URL)
+                  </label>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => onOpenMediaPicker?.(node.id, "mediaUrl")}
+                      className="flex items-center gap-1 rounded bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200"
+                    >
+                      <Folder className="h-2.5 w-2.5" />
+                      Медиатека
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setShowVariablePickerFor(
+                          showVariablePickerFor === "mediaUrl" ? null : "mediaUrl"
+                        )
+                      }
+                      className="flex items-center gap-1 rounded bg-violet-50 dark:bg-violet-950/40 px-1.5 py-0.5 text-[10px] font-medium text-violet-600 dark:text-violet-400 hover:bg-violet-100"
+                    >
+                      <Variable className="h-3 w-3" />
+                      Переменная
+                    </button>
+                  </div>
+                </div>
+                <input
+                  type="text"
+                  value={data.mediaUrl || ""}
+                  onChange={(e) => handleFieldChange("mediaUrl", e.target.value)}
+                  placeholder="{{ files_media_1.image_url }} или https://..."
+                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 font-mono"
+                />
+              </div>
+
+              {/* MAX Options */}
+              <div className="space-y-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 p-2.5">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={!!data.silent}
+                    onChange={(e) => handleFieldChange("silent", e.target.checked)}
+                    className="rounded border-zinc-300 text-violet-600"
+                  />
+                  <span className="text-zinc-700 dark:text-zinc-300 text-xs">
+                    Без звука (тихое уведомление)
+                  </span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={!!data.pin}
+                    onChange={(e) => handleFieldChange("pin", e.target.checked)}
+                    className="rounded border-zinc-300 text-violet-600"
+                  />
+                  <span className="text-zinc-700 dark:text-zinc-300 text-xs">
+                    Закрепить сообщение в MAX
+                  </span>
+                </label>
+
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={!!data.disableLinkPreview}
+                    onChange={(e) => handleFieldChange("disableLinkPreview", e.target.checked)}
+                    className="rounded border-zinc-300 text-violet-600"
+                  />
+                  <span className="text-zinc-700 dark:text-zinc-300 text-xs">
+                    Отключить предпросмотр ссылок
+                  </span>
+                </label>
+              </div>
+
+              {/* Inline Buttons Builder */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="font-medium text-zinc-700 dark:text-zinc-300 text-xs">
+                    Инлайн-кнопки со ссылками
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const btns = Array.isArray(data.buttons) ? [...data.buttons] : [];
+                      btns.push({ text: "Подробнее 🚀", url: "https://postilka.ru" });
+                      handleFieldChange("buttons", btns);
+                    }}
+                    className="flex items-center gap-1 text-[10px] text-violet-600 hover:text-violet-700 font-medium"
+                  >
+                    <Plus className="h-3 w-3" />
+                    Добавить кнопку
+                  </button>
+                </div>
+
+                <div className="space-y-1.5">
+                  {Array.isArray(data.buttons) &&
+                    data.buttons.map((btn: any, idx: number) => (
+                      <div key={idx} className="flex items-center gap-1.5">
+                        <input
+                          type="text"
+                          value={btn.text || ""}
+                          onChange={(e) => {
+                            const btns = [...data.buttons];
+                            btns[idx].text = e.target.value;
+                            handleFieldChange("buttons", btns);
+                          }}
+                          placeholder="Текст кнопки"
+                          className="w-1/2 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2 py-1 text-xs"
+                        />
+                        <input
+                          type="text"
+                          value={btn.url || ""}
+                          onChange={(e) => {
+                            const btns = [...data.buttons];
+                            btns[idx].url = e.target.value;
+                            handleFieldChange("buttons", btns);
+                          }}
+                          placeholder="https://..."
+                          className="flex-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2 py-1 text-xs font-mono"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const btns = data.buttons.filter((_: any, i: number) => i !== idx);
+                            handleFieldChange("buttons", btns);
+                          }}
+                          className="p-1 text-zinc-400 hover:text-red-500 transition"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* 6. VK NODE */}
+        {node.type === "social_vk" && (
           <div className="space-y-3">
+            {renderChannelSelector("vk", "ВКонтакте")}
+
             <div>
               <label className="mb-1 block font-medium text-zinc-700 dark:text-zinc-300">
-                Формат Telegram
+                Формат ВКонтакте
               </label>
               <select
-                value={data.format || "message"}
+                value={data.format || "wall_post"}
                 onChange={(e) => handleFieldChange("format", e.target.value)}
-                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none"
+                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none font-medium"
               >
-                <option value="message">Обычный пост / сообщение</option>
-                <option value="story">Telegram Story (История)</option>
-                <option value="video_note">Кружочек (Video Note)</option>
+                <option value="wall_post">Запись на стене (Пост)</option>
+                <option value="clip">VK Клип (Короткое видео)</option>
+                <option value="story">История (Story)</option>
               </select>
             </div>
 
             <div>
               <div className="mb-1 flex items-center justify-between">
                 <label className="font-medium text-zinc-700 dark:text-zinc-300">
-                  Текст публикации
+                  Текст записи ВКонтакте
                 </label>
                 <button
                   type="button"
@@ -775,7 +1436,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                       showVariablePickerFor === "text" ? null : "text"
                     )
                   }
-                  className="flex items-center gap-1 rounded bg-sky-50 dark:bg-sky-950/40 px-1.5 py-0.5 text-[10px] font-medium text-sky-600 dark:text-sky-400 hover:bg-sky-100"
+                  className="flex items-center gap-1 rounded bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.5 text-[10px] font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-100"
                 >
                   <Variable className="h-3 w-3" />
                   Переменная
@@ -790,99 +1451,113 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
               />
             </div>
 
-            {/* Telegram specific toggles */}
+            <div>
+              <div className="mb-1 flex items-center justify-between">
+                <label className="font-medium text-zinc-700 dark:text-zinc-300">
+                  Медиафайл (URL фото или видео)
+                </label>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => onOpenMediaPicker?.(node.id, "mediaUrl")}
+                    className="flex items-center gap-1 rounded bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200"
+                  >
+                    <Folder className="h-2.5 w-2.5" />
+                    Медиатека
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setShowVariablePickerFor(
+                        showVariablePickerFor === "mediaUrl" ? null : "mediaUrl"
+                      )
+                    }
+                    className="flex items-center gap-1 rounded bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.5 text-[10px] font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-100"
+                  >
+                    <Variable className="h-3 w-3" />
+                    Переменная
+                  </button>
+                </div>
+              </div>
+              <input
+                type="text"
+                value={data.mediaUrl || ""}
+                onChange={(e) => handleFieldChange("mediaUrl", e.target.value)}
+                placeholder="{{ files_media_1.image_url }} или https://..."
+                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs font-mono"
+              />
+            </div>
+
             <div className="space-y-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 p-2.5">
-              <label className="flex items-center gap-2">
+              <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={!!data.silent}
-                  onChange={(e) => handleFieldChange("silent", e.target.checked)}
-                  className="rounded border-zinc-300 text-sky-600 focus:ring-sky-500"
+                  checked={data.fromGroup !== false}
+                  onChange={(e) => handleFieldChange("fromGroup", e.target.checked)}
+                  className="rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
                 />
                 <span className="text-zinc-700 dark:text-zinc-300 text-xs">
-                  Без звука (Silent message)
+                  Опубликовать от имени сообщества
                 </span>
               </label>
 
-              <label className="flex items-center gap-2">
+              <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={!!data.pin}
-                  onChange={(e) => handleFieldChange("pin", e.target.checked)}
-                  className="rounded border-zinc-300 text-sky-600 focus:ring-sky-500"
+                  checked={!!data.signed}
+                  onChange={(e) => handleFieldChange("signed", e.target.checked)}
+                  className="rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
                 />
                 <span className="text-zinc-700 dark:text-zinc-300 text-xs">
-                  Закрепить сообщение в канале (Pin)
+                  Подпись автора публикации
+                </span>
+              </label>
+
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={!!data.donutOnly}
+                  onChange={(e) => handleFieldChange("donutOnly", e.target.checked)}
+                  className="rounded border-zinc-300 text-blue-600"
+                />
+                <span className="text-zinc-700 dark:text-zinc-300 text-xs">
+                  Только для донов (VK Donut)
+                </span>
+              </label>
+
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={!!data.closeComments}
+                  onChange={(e) => handleFieldChange("closeComments", e.target.checked)}
+                  className="rounded border-zinc-300 text-blue-600"
+                />
+                <span className="text-zinc-700 dark:text-zinc-300 text-xs">
+                  Отключить комментарии
                 </span>
               </label>
             </div>
 
-            {/* Inline Buttons Builder */}
             <div>
-              <div className="mb-1 flex items-center justify-between">
-                <label className="font-medium text-zinc-700 dark:text-zinc-300">
-                  Инлайн-кнопки (URL)
-                </label>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const btns = Array.isArray(data.buttons) ? [...data.buttons] : [];
-                    btns.push({ text: "Перейти на сайт 🚀", url: "https://postilka.ru" });
-                    handleFieldChange("buttons", btns);
-                  }}
-                  className="flex items-center gap-1 text-[10px] text-sky-600 hover:text-sky-700"
-                >
-                  <Plus className="h-3 w-3" />
-                  Добавить кнопку
-                </button>
-              </div>
-
-              <div className="space-y-1.5">
-                {Array.isArray(data.buttons) &&
-                  data.buttons.map((btn: any, idx: number) => (
-                    <div key={idx} className="flex items-center gap-1.5">
-                      <input
-                        type="text"
-                        value={btn.text || ""}
-                        onChange={(e) => {
-                          const btns = [...data.buttons];
-                          btns[idx].text = e.target.value;
-                          handleFieldChange("buttons", btns);
-                        }}
-                        placeholder="Текст кнопки"
-                        className="flex-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2 py-1 text-xs"
-                      />
-                      <input
-                        type="text"
-                        value={btn.url || ""}
-                        onChange={(e) => {
-                          const btns = [...data.buttons];
-                          btns[idx].url = e.target.value;
-                          handleFieldChange("buttons", btns);
-                        }}
-                        placeholder="URL https://..."
-                        className="flex-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2 py-1 text-xs"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const btns = data.buttons.filter((_: any, i: number) => i !== idx);
-                          handleFieldChange("buttons", btns);
-                        }}
-                        className="p-1 text-zinc-400 hover:text-red-500"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  ))}
-              </div>
+              <label className="mb-1 block font-medium text-zinc-700 dark:text-zinc-300">
+                Первый комментарий (опционально)
+              </label>
+              <input
+                type="text"
+                value={data.firstComment || ""}
+                onChange={(e) => handleFieldChange("firstComment", e.target.value)}
+                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none"
+                placeholder="Ссылка на источник или дополнительный материал..."
+              />
             </div>
           </div>
         )}
 
-        {/* 6. YOUTUBE NODE */}
+        {/* 7. YOUTUBE NODE */}
         {node.type === "social_youtube" && (
           <div className="space-y-3">
+            {renderChannelSelector("youtube", "YouTube")}
+
             <div>
               <label className="mb-1 block font-medium text-zinc-700 dark:text-zinc-300">
                 Формат YouTube
@@ -890,22 +1565,73 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
               <select
                 value={data.format || "shorts"}
                 onChange={(e) => handleFieldChange("format", e.target.value)}
-                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none"
+                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none font-medium"
               >
-                <option value="shorts">YouTube Shorts (Вертикальное)</option>
+                <option value="shorts">YouTube Shorts (Вертикальное до 60 сек)</option>
                 <option value="video">Обычное видео (Горизонтальное)</option>
               </select>
             </div>
 
             <div>
-              <label className="mb-1 block font-medium text-zinc-700 dark:text-zinc-300">
-                Заголовок видео (Title)
-              </label>
+              <div className="mb-1 flex items-center justify-between">
+                <label className="font-medium text-zinc-700 dark:text-zinc-300">
+                  Видеофайл (URL MP4)
+                </label>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => onOpenMediaPicker?.(node.id, "videoUrl")}
+                    className="flex items-center gap-1 rounded bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200"
+                  >
+                    <Folder className="h-2.5 w-2.5" />
+                    Медиатека
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setShowVariablePickerFor(
+                        showVariablePickerFor === "videoUrl" ? null : "videoUrl"
+                      )
+                    }
+                    className="flex items-center gap-1 rounded bg-red-50 dark:bg-red-950/40 px-1.5 py-0.5 text-[10px] font-medium text-red-600 dark:text-red-400 hover:bg-red-100"
+                  >
+                    <Variable className="h-3 w-3" />
+                    Переменная
+                  </button>
+                </div>
+              </div>
+              <input
+                type="text"
+                value={data.videoUrl || ""}
+                onChange={(e) => handleFieldChange("videoUrl", e.target.value)}
+                placeholder="{{ ai_video_1.video_url }} или https://..."
+                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs font-mono"
+              />
+            </div>
+
+            <div>
+              <div className="mb-1 flex items-center justify-between">
+                <label className="font-medium text-zinc-700 dark:text-zinc-300">
+                  Заголовок видео (Title)
+                </label>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setShowVariablePickerFor(
+                      showVariablePickerFor === "titleText" ? null : "titleText"
+                    )
+                  }
+                  className="flex items-center gap-1 rounded bg-red-50 dark:bg-red-950/40 px-1.5 py-0.5 text-[10px] font-medium text-red-600 dark:text-red-400 hover:bg-red-100"
+                >
+                  <Variable className="h-3 w-3" />
+                  Переменная
+                </button>
+              </div>
               <input
                 type="text"
                 value={data.titleText || ""}
                 onChange={(e) => handleFieldChange("titleText", e.target.value)}
-                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none"
+                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none font-medium"
                 placeholder="Заголовок ролика #shorts"
               />
             </div>
@@ -954,7 +1680,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
               </div>
               <div>
                 <label className="mb-1 block font-medium text-zinc-700 dark:text-zinc-300">
-                  Теги (через запятую)
+                  Теги
                 </label>
                 <input
                   type="text"
@@ -968,13 +1694,79 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
           </div>
         )}
 
-        {/* 7. VK NODE */}
-        {node.type === "social_vk" && (
+        {/* 7b. RUTUBE NODE */}
+        {node.type === "social_rutube" && (
           <div className="space-y-3">
+            {renderChannelSelector("rutube", "Rutube")}
+
             <div>
               <div className="mb-1 flex items-center justify-between">
                 <label className="font-medium text-zinc-700 dark:text-zinc-300">
-                  Текст записи ВКонтакте
+                  Видеофайл (URL MP4)
+                </label>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => onOpenMediaPicker?.(node.id, "videoUrl")}
+                    className="flex items-center gap-1 rounded bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200"
+                  >
+                    <Folder className="h-2.5 w-2.5" />
+                    Медиатека
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setShowVariablePickerFor(
+                        showVariablePickerFor === "videoUrl" ? null : "videoUrl"
+                      )
+                    }
+                    className="flex items-center gap-1 rounded bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400 hover:bg-amber-100"
+                  >
+                    <Variable className="h-3 w-3" />
+                    Переменная
+                  </button>
+                </div>
+              </div>
+              <input
+                type="text"
+                value={data.videoUrl || ""}
+                onChange={(e) => handleFieldChange("videoUrl", e.target.value)}
+                placeholder="{{ ai_video_1.video_url }} или https://..."
+                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs font-mono"
+              />
+            </div>
+
+            <div>
+              <div className="mb-1 flex items-center justify-between">
+                <label className="font-medium text-zinc-700 dark:text-zinc-300">
+                  Название видео (Rutube)
+                </label>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setShowVariablePickerFor(
+                      showVariablePickerFor === "title" ? null : "title"
+                    )
+                  }
+                  className="flex items-center gap-1 rounded bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400 hover:bg-amber-100"
+                >
+                  <Variable className="h-3 w-3" />
+                  Переменная
+                </button>
+              </div>
+              <input
+                type="text"
+                value={data.title || data.titleText || ""}
+                onChange={(e) => handleFieldChange("title", e.target.value)}
+                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 font-medium"
+                placeholder="Название видео на Rutube"
+              />
+            </div>
+
+            <div>
+              <div className="mb-1 flex items-center justify-between">
+                <label className="font-medium text-zinc-700 dark:text-zinc-300">
+                  Описание публикации
                 </label>
                 <button
                   type="button"
@@ -983,7 +1775,90 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                       showVariablePickerFor === "text" ? null : "text"
                     )
                   }
-                  className="flex items-center gap-1 rounded bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.5 text-[10px] font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-100"
+                  className="flex items-center gap-1 rounded bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400 hover:bg-amber-100"
+                >
+                  <Variable className="h-3 w-3" />
+                  Переменная
+                </button>
+              </div>
+              <textarea
+                rows={3}
+                value={data.text || ""}
+                onChange={(e) => handleFieldChange("text", e.target.value)}
+                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 p-2.5 text-xs text-zinc-900 dark:text-zinc-100 font-mono"
+                placeholder="{{ ai_text_1.text }}"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="mb-1 block font-medium text-zinc-700 dark:text-zinc-300">
+                  Категория
+                </label>
+                <select
+                  value={data.category || "Бизнес и стартапы"}
+                  onChange={(e) => handleFieldChange("category", e.target.value)}
+                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-2.5 py-1.5 text-xs text-zinc-900 dark:text-zinc-100"
+                >
+                  <option value="Бизнес и стартапы">Бизнес и стартапы</option>
+                  <option value="Технологии и интернет">Технологии и IT</option>
+                  <option value="Образование">Образование</option>
+                  <option value="Развлечения">Развлечения</option>
+                  <option value="Новости и СМИ">Новости и СМИ</option>
+                  <option value="Юмор">Юмор</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block font-medium text-zinc-700 dark:text-zinc-300">
+                  Приватность
+                </label>
+                <select
+                  value={data.privacyStatus || "public"}
+                  onChange={(e) => handleFieldChange("privacyStatus", e.target.value)}
+                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-2.5 py-1.5 text-xs"
+                >
+                  <option value="public">Публичное</option>
+                  <option value="unlisted">По ссылке</option>
+                  <option value="private">Приватное</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 7c. DZEN NODE */}
+        {node.type === "social_dzen" && (
+          <div className="space-y-3">
+            {renderChannelSelector("dzen", "Дзен")}
+
+            <div>
+              <label className="mb-1 block font-medium text-zinc-700 dark:text-zinc-300">
+                Формат Дзен
+              </label>
+              <select
+                value={data.format || "brief"}
+                onChange={(e) => handleFieldChange("format", e.target.value)}
+                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 font-medium"
+              >
+                <option value="brief">Короткий пост (Пост в ленту)</option>
+                <option value="article">Статья (Лонгрид)</option>
+                <option value="video">Видео</option>
+              </select>
+            </div>
+
+            <div>
+              <div className="mb-1 flex items-center justify-between">
+                <label className="font-medium text-zinc-700 dark:text-zinc-300">
+                  {data.format === "article" ? "Текст статьи" : "Текст поста"}
+                </label>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setShowVariablePickerFor(
+                      showVariablePickerFor === "text" ? null : "text"
+                    )
+                  }
+                  className="flex items-center gap-1 rounded bg-orange-50 dark:bg-orange-950/40 px-1.5 py-0.5 text-[10px] font-medium text-orange-600 dark:text-orange-400 hover:bg-orange-100"
                 >
                   <Variable className="h-3 w-3" />
                   Переменная
@@ -993,49 +1868,362 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                 rows={4}
                 value={data.text || ""}
                 onChange={(e) => handleFieldChange("text", e.target.value)}
-                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 p-2.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none font-mono"
+                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 p-2.5 text-xs font-mono"
                 placeholder="{{ ai_text_1.text }}"
               />
             </div>
+          </div>
+        )}
 
-            <div className="space-y-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 p-2.5">
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={data.fromGroup !== false}
-                  onChange={(e) => handleFieldChange("fromGroup", e.target.checked)}
-                  className="rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
-                />
-                <span className="text-zinc-700 dark:text-zinc-300 text-xs">
-                  Опубликовать от имени сообщества
-                </span>
-              </label>
+        {/* 8. SWITCH NODE (n8n Switch Analog) */}
+        {node.type === "switch" && (() => {
+          const switchOperators = [
+            { value: "not_empty", label: "Не пусто (заполнено)" },
+            { value: "is_empty", label: "Пусто (пустая строка)" },
+            { value: "equals", label: "Равно ( = )" },
+            { value: "not_equals", label: "Не равно ( != )" },
+            { value: "contains", label: "Содержит подстроку" },
+            { value: "not_contains", label: "Не содержит" },
+            { value: "starts_with", label: "Начинается с" },
+            { value: "ends_with", label: "Заканчивается на" },
+            { value: "greater_than", label: "Больше ( > )" },
+            { value: "less_than", label: "Меньше ( < )" },
+            { value: "greater_than_or_equal", label: "Больше или равно ( >= )" },
+            { value: "less_than_or_equal", label: "Меньше или равно ( <= )" },
+            { value: "is_true", label: "Истина (true / 1)" },
+            { value: "is_false", label: "Ложь (false / 0)" },
+            { value: "regex", label: "RegExp регулярное выражение" },
+          ];
 
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={!!data.signed}
-                  onChange={(e) => handleFieldChange("signed", e.target.checked)}
-                  className="rounded border-zinc-300 text-blue-600 focus:ring-blue-500"
-                />
-                <span className="text-zinc-700 dark:text-zinc-300 text-xs">
-                  Подпись автора публикации
-                </span>
-              </label>
+          const isUnary = (op: string) =>
+            ["not_empty", "is_empty", "is_true", "is_false"].includes(op);
+
+          return (
+            <div className="space-y-4">
+              <div className="rounded-xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/70 dark:bg-emerald-950/30 p-3 space-y-1.5">
+                <div className="flex items-center gap-1.5 font-semibold text-emerald-900 dark:text-emerald-300 text-xs">
+                  <Split className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                  <span>Разветвление сценария (n8n Switch)</span>
+                </div>
+                <p className="text-[11px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                  Поток выполнения направляется только по той ветке, условие которой сработало. Шаги на неактивных ветках автоматически пропускаются.
+                </p>
+              </div>
+
+              {/* Rule 0 / Branch 1 */}
+              <div className="rounded-xl border border-emerald-300/80 dark:border-emerald-800 bg-white dark:bg-zinc-900/60 p-3 space-y-2.5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 font-semibold text-xs text-emerald-700 dark:text-emerald-300">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-950 font-bold text-[10px]">
+                      1
+                    </span>
+                    <span>Ветка 1 (Выход 1 / True)</span>
+                  </span>
+                  <input
+                    type="text"
+                    value={data.rule0_label || "Ветка 1"}
+                    onChange={(e) => handleFieldChange("rule0_label", e.target.value)}
+                    className="w-24 rounded border border-zinc-200 dark:border-zinc-700 px-1.5 py-0.5 text-[10px] text-right"
+                    placeholder="Название"
+                  />
+                </div>
+
+                <div>
+                  <div className="mb-1 flex items-center justify-between">
+                    <label className="text-[11px] font-medium text-zinc-700 dark:text-zinc-300">
+                      Проверяемое значение / переменная
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setShowVariablePickerFor(
+                          showVariablePickerFor === "rule0_value1" ? null : "rule0_value1"
+                        )
+                      }
+                      className="flex items-center gap-1 rounded bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100"
+                    >
+                      <Variable className="h-3 w-3" />
+                      Переменная
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    value={data.rule0_value1 || ""}
+                    onChange={(e) => handleFieldChange("rule0_value1", e.target.value)}
+                    placeholder="{{ ai_text_1.text }}"
+                    className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-2.5 py-1.5 text-xs font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium text-zinc-700 dark:text-zinc-300">
+                    Оператор сравнения
+                  </label>
+                  <select
+                    value={data.rule0_operator || "not_empty"}
+                    onChange={(e) => handleFieldChange("rule0_operator", e.target.value)}
+                    className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-2.5 py-1.5 text-xs"
+                  >
+                    {switchOperators.map((op) => (
+                      <option key={op.value} value={op.value}>
+                        {op.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {!isUnary(data.rule0_operator || "not_empty") && (
+                  <div>
+                    <div className="mb-1 flex items-center justify-between">
+                      <label className="text-[11px] font-medium text-zinc-700 dark:text-zinc-300">
+                        Значение для сравнения
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setShowVariablePickerFor(
+                            showVariablePickerFor === "rule0_value2" ? null : "rule0_value2"
+                          )
+                        }
+                        className="flex items-center gap-1 rounded bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100"
+                      >
+                        <Variable className="h-3 w-3" />
+                        Переменная
+                      </button>
+                    </div>
+                    <input
+                      type="text"
+                      value={data.rule0_value2 || ""}
+                      onChange={(e) => handleFieldChange("rule0_value2", e.target.value)}
+                      placeholder="Значение для проверки..."
+                      className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-2.5 py-1.5 text-xs font-mono"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Rule 1 / Branch 2 */}
+              <div className="rounded-xl border border-sky-300/80 dark:border-sky-800 bg-white dark:bg-zinc-900/60 p-3 space-y-2.5 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 font-semibold text-xs text-sky-700 dark:text-sky-300">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-sky-100 dark:bg-sky-950 font-bold text-[10px]">
+                      2
+                    </span>
+                    <span>Ветка 2 (Выход 2 / False / Rule 2)</span>
+                  </span>
+                  <input
+                    type="text"
+                    value={data.rule1_label || "Ветка 2"}
+                    onChange={(e) => handleFieldChange("rule1_label", e.target.value)}
+                    className="w-24 rounded border border-zinc-200 dark:border-zinc-700 px-1.5 py-0.5 text-[10px] text-right"
+                    placeholder="Название"
+                  />
+                </div>
+
+                <div>
+                  <div className="mb-1 flex items-center justify-between">
+                    <label className="text-[11px] font-medium text-zinc-700 dark:text-zinc-300">
+                      Проверяемое значение / переменная
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setShowVariablePickerFor(
+                          showVariablePickerFor === "rule1_value1" ? null : "rule1_value1"
+                        )
+                      }
+                      className="flex items-center gap-1 rounded bg-sky-50 dark:bg-sky-950/40 px-1.5 py-0.5 text-[10px] font-medium text-sky-600 dark:text-sky-400 hover:bg-sky-100"
+                    >
+                      <Variable className="h-3 w-3" />
+                      Переменная
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    value={data.rule1_value1 || ""}
+                    onChange={(e) => handleFieldChange("rule1_value1", e.target.value)}
+                    placeholder="{{ ai_text_1.text }}"
+                    className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-2.5 py-1.5 text-xs font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium text-zinc-700 dark:text-zinc-300">
+                    Оператор сравнения
+                  </label>
+                  <select
+                    value={data.rule1_operator || "is_empty"}
+                    onChange={(e) => handleFieldChange("rule1_operator", e.target.value)}
+                    className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-2.5 py-1.5 text-xs"
+                  >
+                    {switchOperators.map((op) => (
+                      <option key={op.value} value={op.value}>
+                        {op.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {!isUnary(data.rule1_operator || "is_empty") && (
+                  <div>
+                    <div className="mb-1 flex items-center justify-between">
+                      <label className="text-[11px] font-medium text-zinc-700 dark:text-zinc-300">
+                        Значение для сравнения
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setShowVariablePickerFor(
+                            showVariablePickerFor === "rule1_value2" ? null : "rule1_value2"
+                          )
+                        }
+                        className="flex items-center gap-1 rounded bg-sky-50 dark:bg-sky-950/40 px-1.5 py-0.5 text-[10px] font-medium text-sky-600 dark:text-sky-400 hover:bg-sky-100"
+                      >
+                        <Variable className="h-3 w-3" />
+                        Переменная
+                      </button>
+                    </div>
+                    <input
+                      type="text"
+                      value={data.rule1_value2 || ""}
+                      onChange={(e) => handleFieldChange("rule1_value2", e.target.value)}
+                      placeholder="Значение..."
+                      className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-2.5 py-1.5 text-xs font-mono"
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Fallback Branch */}
+              <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/60 dark:bg-zinc-850/40 p-2.5 space-y-1.5">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={data.enableFallback !== false}
+                    onChange={(e) => handleFieldChange("enableFallback", e.target.checked)}
+                    className="rounded border-zinc-300 text-emerald-600"
+                  />
+                  <span className="font-semibold text-xs text-zinc-800 dark:text-zinc-200">
+                    Ветка 3 (Иначе / Fallback)
+                  </span>
+                </label>
+                <p className="text-[10px] text-zinc-500 pl-5">
+                  Если ни Ветка 1, ни Ветка 2 не выполнились, управление передаётся на выход «Иначе».
+                </p>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* 9. LOGIC CONDITION (IF/ELSE) */}
+        {node.type === "logic_condition" && (
+          <div className="space-y-3">
+            <div>
+              <div className="mb-1 flex items-center justify-between">
+                <label className="font-medium text-zinc-700 dark:text-zinc-300">
+                  Проверяемое значение (Left Value)
+                </label>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setShowVariablePickerFor(
+                      showVariablePickerFor === "leftValue" ? null : "leftValue"
+                    )
+                  }
+                  className="flex items-center gap-1 rounded bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 text-[10px] font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200"
+                >
+                  <Variable className="h-3 w-3" />
+                  Переменная
+                </button>
+              </div>
+              <input
+                type="text"
+                value={data.leftValue || ""}
+                onChange={(e) => handleFieldChange("leftValue", e.target.value)}
+                placeholder="{{ ai_text_1.text }}"
+                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs font-mono"
+              />
             </div>
 
             <div>
               <label className="mb-1 block font-medium text-zinc-700 dark:text-zinc-300">
-                Первый комментарий (опционально)
+                Оператор
               </label>
-              <input
-                type="text"
-                value={data.firstComment || ""}
-                onChange={(e) => handleFieldChange("firstComment", e.target.value)}
-                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none"
-                placeholder="Ссылка на источник или дополнительный материал..."
+              <select
+                value={data.operator || "not_empty"}
+                onChange={(e) => handleFieldChange("operator", e.target.value)}
+                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs"
+              >
+                <option value="not_empty">Не пусто (заполнено)</option>
+                <option value="equals">Равно (=)</option>
+                <option value="not_equals">Не равно (!=)</option>
+                <option value="contains">Содержит подстроку</option>
+              </select>
+            </div>
+
+            {data.operator !== "not_empty" && (
+              <div>
+                <div className="mb-1 flex items-center justify-between">
+                  <label className="font-medium text-zinc-700 dark:text-zinc-300">
+                    Значение для сравнения (Right Value)
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setShowVariablePickerFor(
+                        showVariablePickerFor === "rightValue" ? null : "rightValue"
+                      )
+                    }
+                    className="flex items-center gap-1 rounded bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 text-[10px] font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200"
+                  >
+                    <Variable className="h-3 w-3" />
+                    Переменная
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  value={data.rightValue || ""}
+                  onChange={(e) => handleFieldChange("rightValue", e.target.value)}
+                  placeholder="Значение..."
+                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs font-mono"
+                />
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* 10. FORMATTER & UTM */}
+        {node.type === "formatter" && (
+          <div className="space-y-3">
+            <div>
+              <div className="mb-1 flex items-center justify-between">
+                <label className="font-medium text-zinc-700 dark:text-zinc-300">
+                  Шаблон текста (Template)
+                </label>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setShowVariablePickerFor(
+                      showVariablePickerFor === "template" ? null : "template"
+                    )
+                  }
+                  className="flex items-center gap-1 rounded bg-cyan-50 dark:bg-cyan-950/40 px-1.5 py-0.5 text-[10px] font-medium text-cyan-600 dark:text-cyan-400 hover:bg-cyan-100"
+                >
+                  <Variable className="h-3 w-3" />
+                  Переменная
+                </button>
+              </div>
+              <textarea
+                rows={6}
+                value={data.template || ""}
+                onChange={(e) => handleFieldChange("template", e.target.value)}
+                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 p-2.5 text-xs font-mono"
+                placeholder="{{ ai_text_1.text }}\n\n🔥 https://postilka.ru/go/promo"
               />
             </div>
+            <p className="text-[10px] text-zinc-500">
+              Поддерживает подстановку переменных вида <code className="font-mono text-[9px]">{`{{ node_id.output }}`}</code>.
+            </p>
           </div>
         )}
 

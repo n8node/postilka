@@ -27,3 +27,4 @@ certbot-webroot/
 .DS_Store
 Thumbs.db
 *.log
+*.tsbuildinfo

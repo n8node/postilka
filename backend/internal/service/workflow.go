@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -410,8 +411,46 @@ func (s *WorkflowService) executeWorkflowGraph(ctx context.Context, runID string
 	totalKopecks := 0
 	isAwaitingApproval := false
 
+	// Index incoming edges: targetNodeID -> []WorkflowEdge
+	incomingEdgesMap := make(map[string][]model.WorkflowEdge)
+	for _, edge := range graph.Edges {
+		incomingEdgesMap[edge.Target] = append(incomingEdgesMap[edge.Target], edge)
+	}
+
+	skippedNodes := make(map[string]bool)
+
 	// 2. Execute nodes sequentially
 	for _, node := range orderedNodes {
+		// Check if this node should be skipped due to branch filtering (e.g. Switch or Condition)
+		shouldSkip := false
+		incoming := incomingEdgesMap[node.ID]
+		if len(incoming) > 0 {
+			hasAtLeastOneActivePath := false
+			for _, edge := range incoming {
+				// If predecessor was skipped, this incoming path is inactive
+				if skippedNodes[edge.Source] {
+					continue
+				}
+
+				// If predecessor is a switch or condition, check if sourceHandle matches active branch
+				predOutputs, hasOutputs := executionOutputs[edge.Source]
+				if hasOutputs {
+					activeOutput, hasActive := predOutputs["active_output"].(string)
+					if hasActive && activeOutput != "" && edge.SourceHandle != "" {
+						if edge.SourceHandle != activeOutput {
+							// Inactive branch edge
+							continue
+						}
+					}
+				}
+				hasAtLeastOneActivePath = true
+				break
+			}
+			if !hasAtLeastOneActivePath {
+				shouldSkip = true
+			}
+		}
+
 		stepNow := time.Now()
 		step := &model.WorkflowRunStep{
 			RunID:      runID,
@@ -422,6 +461,16 @@ func (s *WorkflowService) executeWorkflowGraph(ctx context.Context, runID string
 			Inputs:     s.resolveNodeData(node.Data, executionOutputs),
 			Outputs:    make(map[string]interface{}),
 			StartedAt:  &stepNow,
+		}
+
+		if shouldSkip {
+			skippedNodes[node.ID] = true
+			finished := time.Now()
+			step.Status = model.WorkflowStepStatusSkipped
+			step.FinishedAt = &finished
+			step.DurationMS = 0
+			_, _ = s.repo.CreateRunStep(ctx, step)
+			continue
 		}
 
 		createdStep, stepErr := s.repo.CreateRunStep(ctx, step)
@@ -579,12 +628,19 @@ func (s *WorkflowService) executeNode(
 		format := getString(inputs, "format", "message")
 		silent := getBool(inputs, "silent", false)
 		pin := getBool(inputs, "pin", false)
+		protectContent := getBool(inputs, "protectContent", false)
+		disableLinkPreview := getBool(inputs, "disableLinkPreview", false)
 		mediaURL := getString(inputs, "mediaUrl", "")
+		channelID := getString(inputs, "channelId", "")
 
 		channels, _ := s.channelRepo.ListByWorkspace(ctx, workspaceID)
 		var tgChannel *model.Channel
 		for _, ch := range channels {
-			if ch.Provider == model.ChannelProviderTelegram {
+			if channelID != "" && ch.ID == channelID {
+				tgChannel = &ch
+				break
+			}
+			if channelID == "" && ch.Provider == model.ChannelProviderTelegram {
 				tgChannel = &ch
 				break
 			}
@@ -596,12 +652,57 @@ func (s *WorkflowService) executeNode(
 		outputs["text"] = text
 		outputs["silent"] = silent
 		outputs["pin"] = pin
+		outputs["protect_content"] = protectContent
+		outputs["disable_link_preview"] = disableLinkPreview
 		outputs["media_url"] = mediaURL
 		if tgChannel != nil {
 			outputs["channel_id"] = tgChannel.ID
 			outputs["channel_name"] = tgChannel.Name
+			outputs["chat_id"] = tgChannel.ChatID
 		} else {
 			outputs["channel_name"] = "Telegram (Демо-канал)"
+		}
+		return outputs, 0, 0, 0, nil
+
+	case "social_max":
+		text := getString(inputs, "text", "")
+		if text == "" {
+			return nil, 0, 0, 0, errors.New("текст сообщения для MAX обязателен")
+		}
+		format := getString(inputs, "format", "message")
+		silent := getBool(inputs, "silent", false)
+		pin := getBool(inputs, "pin", false)
+		disableLinkPreview := getBool(inputs, "disableLinkPreview", false)
+		mediaURL := getString(inputs, "mediaUrl", "")
+		channelID := getString(inputs, "channelId", "")
+
+		channels, _ := s.channelRepo.ListByWorkspace(ctx, workspaceID)
+		var maxChannel *model.Channel
+		for _, ch := range channels {
+			if channelID != "" && ch.ID == channelID {
+				maxChannel = &ch
+				break
+			}
+			if channelID == "" && ch.Provider == model.ChannelProviderMAX {
+				maxChannel = &ch
+				break
+			}
+		}
+
+		outputs["status"] = "success"
+		outputs["provider"] = "max"
+		outputs["format"] = format
+		outputs["text"] = text
+		outputs["silent"] = silent
+		outputs["pin"] = pin
+		outputs["disable_link_preview"] = disableLinkPreview
+		outputs["media_url"] = mediaURL
+		if maxChannel != nil {
+			outputs["channel_id"] = maxChannel.ID
+			outputs["channel_name"] = maxChannel.Name
+			outputs["chat_id"] = maxChannel.ChatID
+		} else {
+			outputs["channel_name"] = "MAX (Демо-канал)"
 		}
 		return outputs, 0, 0, 0, nil
 
@@ -610,14 +711,23 @@ func (s *WorkflowService) executeNode(
 		if text == "" {
 			return nil, 0, 0, 0, errors.New("текст записи для ВКонтакте обязателен")
 		}
+		format := getString(inputs, "format", "wall_post")
 		fromGroup := getBool(inputs, "fromGroup", true)
 		signed := getBool(inputs, "signed", false)
 		firstComment := getString(inputs, "firstComment", "")
+		donutOnly := getBool(inputs, "donutOnly", false)
+		closeComments := getBool(inputs, "closeComments", false)
+		mediaURL := getString(inputs, "mediaUrl", "")
+		channelID := getString(inputs, "channelId", "")
 
 		channels, _ := s.channelRepo.ListByWorkspace(ctx, workspaceID)
 		var vkChannel *model.Channel
 		for _, ch := range channels {
-			if ch.Provider == model.ChannelProviderVK {
+			if channelID != "" && ch.ID == channelID {
+				vkChannel = &ch
+				break
+			}
+			if channelID == "" && ch.Provider == model.ChannelProviderVK {
 				vkChannel = &ch
 				break
 			}
@@ -625,13 +735,18 @@ func (s *WorkflowService) executeNode(
 
 		outputs["status"] = "success"
 		outputs["provider"] = "vk"
+		outputs["format"] = format
 		outputs["text"] = text
 		outputs["from_group"] = fromGroup
 		outputs["signed"] = signed
 		outputs["first_comment"] = firstComment
+		outputs["donut_only"] = donutOnly
+		outputs["close_comments"] = closeComments
+		outputs["media_url"] = mediaURL
 		if vkChannel != nil {
 			outputs["channel_id"] = vkChannel.ID
 			outputs["channel_name"] = vkChannel.Name
+			outputs["chat_id"] = vkChannel.ChatID
 		} else {
 			outputs["channel_name"] = "ВКонтакте (Демо-сообщество)"
 		}
@@ -643,6 +758,20 @@ func (s *WorkflowService) executeNode(
 		description := getString(inputs, "description", "")
 		format := getString(inputs, "format", "shorts")
 		privacy := getString(inputs, "privacyStatus", "public")
+		channelID := getString(inputs, "channelId", "")
+
+		channels, _ := s.channelRepo.ListByWorkspace(ctx, workspaceID)
+		var ytChannel *model.Channel
+		for _, ch := range channels {
+			if channelID != "" && ch.ID == channelID {
+				ytChannel = &ch
+				break
+			}
+			if channelID == "" && ch.Provider == model.ChannelProviderYouTube {
+				ytChannel = &ch
+				break
+			}
+		}
 
 		outputs["status"] = "success"
 		outputs["provider"] = "youtube"
@@ -651,12 +780,88 @@ func (s *WorkflowService) executeNode(
 		outputs["description"] = description
 		outputs["video_url"] = videoURL
 		outputs["privacy_status"] = privacy
+		if ytChannel != nil {
+			outputs["channel_id"] = ytChannel.ID
+			outputs["channel_name"] = ytChannel.Name
+		} else {
+			outputs["channel_name"] = "YouTube (Канал)"
+		}
 		return outputs, 0, 0, 0, nil
 
-	case "social_rutube", "social_dzen", "social_max", "social_ok":
+	case "social_rutube":
+		text := getString(inputs, "text", "")
+		title := getString(inputs, "title", getString(inputs, "titleText", "Новое видео"))
+		videoURL := getString(inputs, "videoUrl", "")
+		category := getString(inputs, "category", "Бизнес и стартапы")
+		privacy := getString(inputs, "privacyStatus", "public")
+		channelID := getString(inputs, "channelId", "")
+
+		channels, _ := s.channelRepo.ListByWorkspace(ctx, workspaceID)
+		var rutubeChannel *model.Channel
+		for _, ch := range channels {
+			if channelID != "" && ch.ID == channelID {
+				rutubeChannel = &ch
+				break
+			}
+			if channelID == "" && ch.Provider == model.ChannelProviderRutube {
+				rutubeChannel = &ch
+				break
+			}
+		}
+
+		outputs["status"] = "success"
+		outputs["provider"] = "rutube"
+		outputs["title"] = title
+		outputs["text"] = text
+		outputs["video_url"] = videoURL
+		outputs["category"] = category
+		outputs["privacy_status"] = privacy
+		if rutubeChannel != nil {
+			outputs["channel_id"] = rutubeChannel.ID
+			outputs["channel_name"] = rutubeChannel.Name
+		} else {
+			outputs["channel_name"] = "Rutube (Канал)"
+		}
+		return outputs, 0, 0, 0, nil
+
+	case "social_dzen":
+		text := getString(inputs, "text", "")
+		title := getString(inputs, "title", "")
+		format := getString(inputs, "format", "brief")
+		mediaURL := getString(inputs, "mediaUrl", "")
+		channelID := getString(inputs, "channelId", "")
+
+		channels, _ := s.channelRepo.ListByWorkspace(ctx, workspaceID)
+		var dzenChannel *model.Channel
+		for _, ch := range channels {
+			if channelID != "" && ch.ID == channelID {
+				dzenChannel = &ch
+				break
+			}
+			if channelID == "" && ch.Provider == model.ChannelProviderDzen {
+				dzenChannel = &ch
+				break
+			}
+		}
+
+		outputs["status"] = "success"
+		outputs["provider"] = "dzen"
+		outputs["format"] = format
+		outputs["title"] = title
+		outputs["text"] = text
+		outputs["media_url"] = mediaURL
+		if dzenChannel != nil {
+			outputs["channel_id"] = dzenChannel.ID
+			outputs["channel_name"] = dzenChannel.Name
+		} else {
+			outputs["channel_name"] = "Дзен (Канал)"
+		}
+		return outputs, 0, 0, 0, nil
+
+	case "social_ok":
 		text := getString(inputs, "text", "")
 		outputs["status"] = "success"
-		outputs["provider"] = strings.TrimPrefix(node.Type, "social_")
+		outputs["provider"] = "ok"
 		outputs["text"] = text
 		return outputs, 0, 0, 0, nil
 
@@ -667,22 +872,61 @@ func (s *WorkflowService) executeNode(
 		outputs["post_id"] = uuid.New().String()
 		return outputs, 0, 0, 0, nil
 
+	case "switch", "logic_switch":
+		// Pass-through all input data to output
+		for k, v := range inputs {
+			outputs[k] = v
+		}
+
+		mode := getString(inputs, "mode", "rules")
+		activeOutput := "output_0"
+
+		if mode == "rules" {
+			r0Val1 := getString(inputs, "rule0_value1", "")
+			r0Op := getString(inputs, "rule0_operator", "not_empty")
+			r0Val2 := getString(inputs, "rule0_value2", "")
+
+			r1Val1 := getString(inputs, "rule1_value1", "")
+			r1Op := getString(inputs, "rule1_operator", "is_empty")
+			r1Val2 := getString(inputs, "rule1_value2", "")
+
+			enableFallback := getBool(inputs, "enableFallback", true)
+
+			if evaluateSwitchOperator(r0Val1, r0Op, r0Val2) {
+				activeOutput = "output_0"
+			} else if evaluateSwitchOperator(r1Val1, r1Op, r1Val2) {
+				activeOutput = "output_1"
+			} else if enableFallback {
+				activeOutput = "fallback"
+			} else {
+				activeOutput = "output_1"
+			}
+		} else {
+			expr := strings.TrimSpace(getString(inputs, "expression", "0"))
+			if expr == "1" || expr == "output_1" {
+				activeOutput = "output_1"
+			} else if expr == "2" || expr == "fallback" {
+				activeOutput = "fallback"
+			} else {
+				activeOutput = "output_0"
+			}
+		}
+
+		outputs["active_output"] = activeOutput
+		outputs["result"] = activeOutput
+		return outputs, 0, 0, 0, nil
+
 	case "logic_condition":
 		left := getString(inputs, "leftValue", "")
-		operator := getString(inputs, "operator", "equals")
+		operator := getString(inputs, "operator", "not_empty")
 		right := getString(inputs, "rightValue", "")
-		res := false
-		switch operator {
-		case "equals":
-			res = left == right
-		case "not_equals":
-			res = left != right
-		case "contains":
-			res = strings.Contains(left, right)
-		case "not_empty":
-			res = strings.TrimSpace(left) != ""
-		}
+		res := evaluateSwitchOperator(left, operator, right)
 		outputs["result"] = res
+		if res {
+			outputs["active_output"] = "output_0"
+		} else {
+			outputs["active_output"] = "output_1"
+		}
 		return outputs, 0, 0, 0, nil
 
 	case "formatter":
@@ -869,6 +1113,69 @@ func (s *WorkflowService) topologicalSort(graph model.WorkflowGraph) ([]model.Wo
 	return ordered, nil
 }
 
+func evaluateSwitchOperator(val1, op, val2 string) bool {
+	v1 := strings.TrimSpace(val1)
+	v2 := strings.TrimSpace(val2)
+	lower1 := strings.ToLower(v1)
+	lower2 := strings.ToLower(v2)
+
+	switch op {
+	case "not_empty":
+		return v1 != ""
+	case "is_empty":
+		return v1 == ""
+	case "equals", "equal", "==":
+		return strings.EqualFold(v1, v2)
+	case "not_equals", "not_equal", "!=":
+		return !strings.EqualFold(v1, v2)
+	case "contains":
+		return strings.Contains(lower1, lower2)
+	case "not_contains":
+		return !strings.Contains(lower1, lower2)
+	case "starts_with":
+		return strings.HasPrefix(lower1, lower2)
+	case "ends_with":
+		return strings.HasSuffix(lower1, lower2)
+	case "greater_than", ">":
+		f1, err1 := strconv.ParseFloat(v1, 64)
+		f2, err2 := strconv.ParseFloat(v2, 64)
+		if err1 == nil && err2 == nil {
+			return f1 > f2
+		}
+		return v1 > v2
+	case "less_than", "<":
+		f1, err1 := strconv.ParseFloat(v1, 64)
+		f2, err2 := strconv.ParseFloat(v2, 64)
+		if err1 == nil && err2 == nil {
+			return f1 < f2
+		}
+		return v1 < v2
+	case "greater_than_or_equal", ">=":
+		f1, err1 := strconv.ParseFloat(v1, 64)
+		f2, err2 := strconv.ParseFloat(v2, 64)
+		if err1 == nil && err2 == nil {
+			return f1 >= f2
+		}
+		return v1 >= v2
+	case "less_than_or_equal", "<=":
+		f1, err1 := strconv.ParseFloat(v1, 64)
+		f2, err2 := strconv.ParseFloat(v2, 64)
+		if err1 == nil && err2 == nil {
+			return f1 <= f2
+		}
+		return v1 <= v2
+	case "is_true":
+		return lower1 == "true" || lower1 == "1" || lower1 == "yes"
+	case "is_false":
+		return lower1 == "false" || lower1 == "0" || lower1 == "no" || lower1 == ""
+	case "regex":
+		matched, err := regexp.MatchString(val2, val1)
+		return err == nil && matched
+	default:
+		return v1 == v2
+	}
+}
+
 func (s *WorkflowService) getNodeTitle(node model.WorkflowNode) string {
 	if t, ok := node.Data["title"].(string); ok && strings.TrimSpace(t) != "" {
 		return strings.TrimSpace(t)
@@ -886,10 +1193,22 @@ func (s *WorkflowService) getNodeTitle(node model.WorkflowNode) string {
 		return "AI Видео"
 	case "social_telegram":
 		return "Telegram Пост"
+	case "social_max":
+		return "MAX Пост"
 	case "social_vk":
-		return "ВКонтакте Стена"
+		return "ВКонтакте Пост"
 	case "social_youtube":
 		return "YouTube Shorts"
+	case "social_rutube":
+		return "Rutube Видео"
+	case "social_dzen":
+		return "Дзен Пост"
+	case "switch", "logic_switch":
+		return "Разветвление (Switch)"
+	case "logic_condition":
+		return "Проверка условия"
+	case "formatter":
+		return "Форматирование текста"
 	case "draft_approval":
 		return "Модерация черновика"
 	default:

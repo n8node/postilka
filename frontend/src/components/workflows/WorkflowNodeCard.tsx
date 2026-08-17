@@ -14,6 +14,9 @@ import {
   Folder,
   CheckCircle2,
   GitBranch,
+  GitFork,
+  Split,
+  MessageSquare,
   Type,
   AlignLeft,
   Trash2,
@@ -91,6 +94,9 @@ const ICON_MAP: Record<string, React.ElementType> = {
   folder: Folder,
   "check-circle-2": CheckCircle2,
   "git-branch": GitBranch,
+  "git-fork": GitFork,
+  split: Split,
+  "message-square": MessageSquare,
   type: Type,
   "align-left": AlignLeft,
 };
@@ -789,9 +795,23 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-1 pt-0.5">
+              {node.data.channelName ? (
+                <span className="rounded bg-sky-100 dark:bg-sky-950/60 border border-sky-200 dark:border-sky-800/40 px-1.5 py-0.5 text-[9px] text-sky-700 dark:text-sky-300 font-medium truncate max-w-[140px]">
+                  {node.data.channelName}
+                </span>
+              ) : (
+                <span className="rounded bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800/40 px-1.5 py-0.5 text-[9px] text-amber-700 dark:text-amber-400 font-medium">
+                  Канал не выбран
+                </span>
+              )}
               {node.data.format === "video_note" && (
                 <span className="rounded bg-sky-500/10 dark:bg-sky-500/20 px-1.5 py-0.5 text-[9px] text-sky-700 dark:text-sky-300 font-medium">
                   Кружочек
+                </span>
+              )}
+              {node.data.format === "story" && (
+                <span className="rounded bg-purple-500/10 dark:bg-purple-500/20 px-1.5 py-0.5 text-[9px] text-purple-700 dark:text-purple-300 font-medium">
+                  История
                 </span>
               )}
               {node.data.silent && (
@@ -807,7 +827,50 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
               {Array.isArray(node.data.buttons) &&
                 node.data.buttons.length > 0 && (
                   <span className="rounded bg-sky-500/10 dark:bg-sky-500/20 px-1.5 py-0.5 text-[9px] text-sky-700 dark:text-sky-300 font-medium">
-                    {node.data.buttons.length} кнопок
+                    {node.data.buttons.length} кн.
+                  </span>
+                )}
+            </div>
+          </div>
+        )}
+
+        {/* 5b. MAX */}
+        {node.type === "social_max" && (
+          <div className="space-y-2">
+            <div className="rounded-xl border border-violet-100 dark:border-violet-900/40 bg-violet-50/60 dark:bg-violet-950/20 p-3 text-xs">
+              <div className="line-clamp-2 text-[11px] text-zinc-800 dark:text-zinc-200 font-mono">
+                {(node.data.text as string) || "{{ AI.text }}"}
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-1 pt-0.5">
+              {node.data.channelName ? (
+                <span className="rounded bg-violet-100 dark:bg-violet-950/60 border border-violet-200 dark:border-violet-800/40 px-1.5 py-0.5 text-[9px] text-violet-700 dark:text-violet-300 font-medium truncate max-w-[140px]">
+                  {node.data.channelName}
+                </span>
+              ) : (
+                <span className="rounded bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800/40 px-1.5 py-0.5 text-[9px] text-amber-700 dark:text-amber-400 font-medium">
+                  Канал не выбран
+                </span>
+              )}
+              {node.data.format === "article" && (
+                <span className="rounded bg-violet-500/10 dark:bg-violet-500/20 px-1.5 py-0.5 text-[9px] text-violet-700 dark:text-violet-300 font-medium">
+                  Статья
+                </span>
+              )}
+              {node.data.silent && (
+                <span className="rounded bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 text-[9px] text-zinc-600 dark:text-zinc-400">
+                  Без звука
+                </span>
+              )}
+              {node.data.pin && (
+                <span className="rounded bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 text-[9px] text-zinc-600 dark:text-zinc-400">
+                  Закрепить
+                </span>
+              )}
+              {Array.isArray(node.data.buttons) &&
+                node.data.buttons.length > 0 && (
+                  <span className="rounded bg-violet-500/10 dark:bg-violet-500/20 px-1.5 py-0.5 text-[9px] text-violet-700 dark:text-violet-300 font-medium">
+                    {node.data.buttons.length} кн.
                   </span>
                 )}
             </div>
@@ -822,7 +885,16 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
                 {(node.data.text as string) || "{{ AI.text }}"}
               </div>
             </div>
-            <div className="flex items-center gap-1.5 text-[10px] text-zinc-500 px-1">
+            <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-zinc-500 px-1">
+              {node.data.channelName ? (
+                <span className="rounded bg-blue-100 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800/40 px-1.5 py-0.5 text-[9px] text-blue-700 dark:text-blue-300 font-medium truncate max-w-[120px]">
+                  {node.data.channelName}
+                </span>
+              ) : (
+                <span className="rounded bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800/40 px-1.5 py-0.5 text-[9px] text-amber-700 dark:text-amber-400 font-medium">
+                  Канал не выбран
+                </span>
+              )}
               <span>{node.data.fromGroup ? "От сообщества" : "От автора"}</span>
               {node.data.firstComment && <span>• 1-й коммент</span>}
             </div>
@@ -838,10 +910,49 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
               </div>
             </div>
             <div className="flex items-center justify-between text-[10px] text-zinc-500 px-1">
-              <span className="rounded bg-red-500/10 dark:bg-red-500/20 px-1.5 py-0.5 text-red-700 dark:text-red-300 font-medium uppercase text-[9px]">
-                {(node.data.format as string) || "Shorts"}
-              </span>
+              {node.data.channelName ? (
+                <span className="rounded bg-red-100 dark:bg-red-950/60 border border-red-200 dark:border-red-800/40 px-1.5 py-0.5 text-[9px] text-red-700 dark:text-red-300 font-medium truncate max-w-[100px]">
+                  {node.data.channelName}
+                </span>
+              ) : (
+                <span className="rounded bg-red-500/10 dark:bg-red-500/20 px-1.5 py-0.5 text-red-700 dark:text-red-300 font-medium uppercase text-[9px]">
+                  {(node.data.format as string) || "Shorts"}
+                </span>
+              )}
               <span>{(node.data.privacyStatus as string) || "Public"}</span>
+            </div>
+          </div>
+        )}
+
+        {/* 7b. RUTUBE & DZEN */}
+        {node.type === "social_rutube" && (
+          <div className="space-y-2">
+            <div className="rounded-xl border border-amber-100 dark:border-amber-900/40 bg-amber-50/60 dark:bg-amber-950/20 p-2.5 text-xs">
+              <div className="line-clamp-1 font-semibold text-[11px] text-zinc-800 dark:text-zinc-200">
+                {(node.data.title as string) || (node.data.titleText as string) || "Rutube Видео"}
+              </div>
+            </div>
+            <div className="flex items-center justify-between text-[10px] text-zinc-500 px-1">
+              <span className="truncate max-w-[120px]">
+                {node.data.channelName || "Канал не выбран"}
+              </span>
+              <span>{node.data.category || "Видео"}</span>
+            </div>
+          </div>
+        )}
+
+        {node.type === "social_dzen" && (
+          <div className="space-y-2">
+            <div className="rounded-xl border border-orange-100 dark:border-orange-900/40 bg-orange-50/60 dark:bg-orange-950/20 p-2.5 text-xs">
+              <div className="line-clamp-2 text-[11px] text-zinc-800 dark:text-zinc-200 font-mono">
+                {(node.data.text as string) || "{{ AI.text }}"}
+              </div>
+            </div>
+            <div className="flex items-center justify-between text-[10px] text-zinc-500 px-1">
+              <span className="truncate max-w-[120px]">
+                {node.data.channelName || "Канал не выбран"}
+              </span>
+              <span className="capitalize">{node.data.format || "brief"}</span>
             </div>
           </div>
         )}
@@ -854,13 +965,32 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
           </div>
         )}
 
-        {/* 10. CONDITION & FORMATTER */}
+        {/* 10. CONDITION, SWITCH & FORMATTER */}
         {node.type === "logic_condition" && (
           <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/40 p-2 text-[11px] text-zinc-700 dark:text-zinc-300">
             Условие:{" "}
             <span className="font-semibold text-indigo-600 dark:text-indigo-400">
               {node.data.operator || "equals"}
             </span>
+          </div>
+        )}
+
+        {node.type === "switch" && (
+          <div className="space-y-1.5 rounded-xl border border-emerald-200/80 dark:border-emerald-900/50 bg-emerald-50/50 dark:bg-emerald-950/20 p-2.5 text-[11px]">
+            <div className="flex items-center justify-between font-semibold text-emerald-800 dark:text-emerald-300">
+              <span>2+ Ветки маршрутизации</span>
+              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-normal">n8n Switch</span>
+            </div>
+            <div className="space-y-1 text-[10px] text-zinc-600 dark:text-zinc-400">
+              <div className="flex items-center justify-between rounded bg-white/70 dark:bg-zinc-900/60 px-1.5 py-0.5 border border-emerald-100 dark:border-emerald-950">
+                <span className="font-medium text-emerald-700 dark:text-emerald-300">1: {node.data.rule0_label || "Ветка 1"}</span>
+                <span className="font-mono text-zinc-500">{node.data.rule0_operator || "not_empty"}</span>
+              </div>
+              <div className="flex items-center justify-between rounded bg-white/70 dark:bg-zinc-900/60 px-1.5 py-0.5 border border-emerald-100 dark:border-emerald-950">
+                <span className="font-medium text-sky-700 dark:text-sky-300">2: {node.data.rule1_label || "Ветка 2"}</span>
+                <span className="font-mono text-zinc-500">{node.data.rule1_operator || "is_empty"}</span>
+              </div>
+            </div>
           </div>
         )}
 
