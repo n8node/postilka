@@ -12,6 +12,13 @@ export type NodePort = {
   type: "string" | "number" | "boolean" | "image" | "video" | "any";
 };
 
+/** Universal flow input — every node except trigger must have at least one input port. */
+export const NODE_FLOW_INPUT: NodePort = {
+  id: "input",
+  label: "Вход",
+  type: "any",
+};
+
 export type NodeTypeDefinition = {
   type: string;
   title: string;
@@ -67,6 +74,7 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       text: "text-indigo-600 dark:text-indigo-400",
     },
     inputs: [
+      NODE_FLOW_INPUT,
       { id: "prompt", label: "Промпт / Тема", type: "string" },
     ],
     outputs: [
@@ -92,9 +100,7 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       badge: "bg-slate-600 text-white",
       text: "text-slate-600 dark:text-slate-400",
     },
-    inputs: [
-      { id: "input", label: "Вход / Триггер", type: "any" },
-    ],
+    inputs: [{ ...NODE_FLOW_INPUT, label: "Вход / Триггер" }],
     outputs: [
       { id: "text", label: "Текст", type: "string" },
     ],
@@ -116,6 +122,7 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       text: "text-purple-600 dark:text-purple-400",
     },
     inputs: [
+      NODE_FLOW_INPUT,
       { id: "prompt", label: "Промпт / Описание", type: "string" },
       { id: "referenceImage", label: "Референс (Image)", type: "image" },
     ],
@@ -143,6 +150,7 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       text: "text-pink-600 dark:text-pink-400",
     },
     inputs: [
+      NODE_FLOW_INPUT,
       { id: "prompt", label: "Сценарий / Промпт", type: "string" },
       { id: "firstFrame", label: "Первый кадр", type: "image" },
     ],
@@ -169,6 +177,7 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       text: "text-sky-600 dark:text-sky-400",
     },
     inputs: [
+      NODE_FLOW_INPUT,
       { id: "text", label: "Текст сообщения", type: "string" },
       { id: "mediaUrl", label: "Медиафайл (опционально)", type: "any" },
     ],
@@ -209,6 +218,7 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       text: "text-blue-600 dark:text-blue-400",
     },
     inputs: [
+      NODE_FLOW_INPUT,
       { id: "text", label: "Текст записи", type: "string" },
       { id: "mediaUrl", label: "Вложения", type: "any" },
     ],
@@ -237,6 +247,7 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       text: "text-red-600 dark:text-red-400",
     },
     inputs: [
+      NODE_FLOW_INPUT,
       { id: "videoUrl", label: "Видеофайл (MP4)", type: "video" },
       { id: "titleText", label: "Заголовок видео", type: "string" },
       { id: "description", label: "Описание", type: "string" },
@@ -267,6 +278,7 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       text: "text-violet-600 dark:text-violet-400",
     },
     inputs: [
+      NODE_FLOW_INPUT,
       { id: "text", label: "Текст сообщения", type: "string" },
       { id: "mediaUrl", label: "Медиафайл (опционально)", type: "any" },
     ],
@@ -298,6 +310,7 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       text: "text-orange-600 dark:text-orange-400",
     },
     inputs: [
+      NODE_FLOW_INPUT,
       { id: "text", label: "Текст статьи / поста", type: "string" },
     ],
     outputs: [
@@ -321,7 +334,7 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       badge: "bg-purple-600 text-white",
       text: "text-purple-600 dark:text-purple-400",
     },
-    inputs: [],
+    inputs: [NODE_FLOW_INPUT],
     outputs: [
       { id: "image_url", label: "Изображение", type: "image" },
       { id: "video_url", label: "Видео", type: "video" },
@@ -348,6 +361,7 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       text: "text-amber-600 dark:text-amber-400",
     },
     inputs: [
+      NODE_FLOW_INPUT,
       { id: "text", label: "Контент черновика", type: "string" },
     ],
     outputs: [
@@ -373,6 +387,7 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       text: "text-zinc-600 dark:text-zinc-400",
     },
     inputs: [
+      NODE_FLOW_INPUT,
       { id: "leftValue", label: "Значение", type: "any" },
     ],
     outputs: [
@@ -397,9 +412,7 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       badge: "bg-emerald-600 text-white",
       text: "text-emerald-600 dark:text-emerald-400",
     },
-    inputs: [
-      { id: "input", label: "Входной поток", type: "any" },
-    ],
+    inputs: [{ ...NODE_FLOW_INPUT, label: "Входной поток" }],
     outputs: [
       { id: "output_0", label: "Ветка 1 (True / Маршрут 1)", type: "any" },
       { id: "output_1", label: "Ветка 2 (False / Маршрут 2)", type: "any" },
@@ -432,6 +445,7 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       text: "text-cyan-600 dark:text-cyan-400",
     },
     inputs: [
+      NODE_FLOW_INPUT,
       { id: "sourceText", label: "Исходный текст", type: "string" },
     ],
     outputs: [
