@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useCallback } from "react";
+import Link from "next/link";
 import {
   X,
   Play,
@@ -238,7 +239,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
 
   const renderChannelSelector = (provider: string, providerTitle: string) => {
     const providerChannels = channels.filter(
-      (c) => c.provider === provider && (c.status === "active" || c.status === "connected" || !c.status)
+      (c) => c.provider === provider && c.status !== "disabled"
     );
     const selectedChannelId = data.channelId || "";
 
@@ -261,7 +262,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
           <p className="text-[11px] text-zinc-700 dark:text-zinc-400 leading-relaxed">
             Чтобы процесс мог публиковать посты, подключите канал {providerTitle} в разделе каналов.
           </p>
-          <a
+          <Link
             href="/channels"
             target="_blank"
             rel="noopener noreferrer"
@@ -270,7 +271,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
             <Plus className="h-3.5 w-3.5" />
             <span>Подключить {providerTitle}</span>
             <ExternalLink className="h-3 w-3 opacity-80" />
-          </a>
+          </Link>
         </div>
       );
     }
@@ -281,7 +282,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
           <label className="font-semibold text-zinc-800 dark:text-zinc-200 text-xs">
             Подключенный канал {providerTitle}
           </label>
-          <a
+          <Link
             href="/channels"
             target="_blank"
             rel="noopener noreferrer"
@@ -289,7 +290,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
           >
             <span>Каналы</span>
             <ExternalLink className="h-2.5 w-2.5" />
-          </a>
+          </Link>
         </div>
         <select
           value={selectedChannelId}
@@ -2274,6 +2275,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                     className="h-full w-full object-cover"
                   />
                 ) : (
+                  /* eslint-disable-next-line @next/next/no-img-element */
                   <img
                     src={(data.fileUrl as string) || (data.imageUrl as string)}
                     alt="Preview"

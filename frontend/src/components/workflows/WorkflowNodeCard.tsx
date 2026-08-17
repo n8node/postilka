@@ -574,6 +574,7 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
                     autoPlay
                   />
                 ) : (
+                  /* eslint-disable-next-line @next/next/no-img-element */
                   <img
                     src={
                       (node.data.fileUrl as string) ||
@@ -666,6 +667,7 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
           <div className="space-y-2">
             <div className="relative aspect-square w-full overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-950 flex flex-col items-center justify-center">
               {node.data.outputImageUrl || node.data.imageUrl ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
                 <img
                   src={
                     (node.data.outputImageUrl as string) ||
