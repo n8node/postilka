@@ -6,7 +6,6 @@ import {
   ArrowRight,
   CalendarDays,
   CheckCircle2,
-  ImageIcon,
   LayoutGrid,
   Loader2,
   PenSquare,
@@ -60,8 +59,11 @@ function templateAspectClass(ratio: string) {
   return "aspect-square";
 }
 
-function StudioTemplateCard({ template }: { template: AdStudioTemplate }) {
-  const isVideo = template.preview_kind === "video" && template.preview_source_url;
+const STUDIO_VIDEO_ROWS = 2;
+const STUDIO_VIDEO_COLUMNS = 6;
+
+function StudioVideoCard({ template }: { template: AdStudioTemplate }) {
+  const hasVideoPreview = template.preview_kind === "video" && template.preview_source_url;
 
   return (
     <Link
@@ -69,7 +71,7 @@ function StudioTemplateCard({ template }: { template: AdStudioTemplate }) {
       className="group relative min-w-0 overflow-hidden rounded-2xl bg-zinc-100 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
     >
       <div className={cn("relative overflow-hidden", templateAspectClass(template.aspect_ratio))}>
-        {isVideo ? (
+        {hasVideoPreview ? (
           <ProtectedMediaVideo
             url={template.preview_source_url!}
             poster={template.preview_url}
@@ -89,12 +91,12 @@ function StudioTemplateCard({ template }: { template: AdStudioTemplate }) {
           />
         ) : (
           <div className="flex h-full items-center justify-center bg-gradient-to-br from-violet-200 via-fuchsia-100 to-amber-100 text-violet-700">
-            <Sparkles className="h-7 w-7" />
+            <Video className="h-7 w-7" />
           </div>
         )}
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent p-3 pt-10 text-white">
           <div className="mb-1 flex items-center gap-1.5 text-[11px] font-medium text-white/75">
-            {template.media_kind === "video" ? <Video className="h-3 w-3" /> : <ImageIcon className="h-3 w-3" />}
+            <Video className="h-3 w-3" />
             {adStudioCategoryLabel(template.category)}
           </div>
           <p className="truncate text-sm font-semibold">{template.title}</p>
@@ -119,7 +121,11 @@ export function DashboardOverview({ userName, workspaceName }: DashboardOverview
     ])
       .then(([studio, channelResponse, postResponse]) => {
         if (!mounted) return;
-        setTemplates(studio.items.slice(0, 8));
+        setTemplates(
+          studio.items
+            .filter((item) => item.media_kind === "video")
+            .slice(0, STUDIO_VIDEO_ROWS * STUDIO_VIDEO_COLUMNS),
+        );
         setChannels(channelResponse.items);
         setPosts(postResponse.items);
       })
@@ -209,11 +215,11 @@ export function DashboardOverview({ userName, workspaceName }: DashboardOverview
               <LayoutGrid className="h-4 w-4" />
               <span className="text-xs font-semibold uppercase tracking-[0.14em]">Студия</span>
             </div>
-            <h2 className="text-xl font-semibold tracking-tight">Идеи, которые можно превратить в контент</h2>
-            <p className="mt-1 text-sm text-muted">Выберите визуальный сценарий для фото или видео — настройка откроется в Студии.</p>
+            <h2 className="text-xl font-semibold tracking-tight">Видео-сценарии из Студии</h2>
+            <p className="mt-1 text-sm text-muted">Готовые видео-шаблоны для рекламы, UGC и motion — откроются в Студии.</p>
           </div>
           <Link href="/ai" className="inline-flex items-center gap-1.5 text-sm font-semibold text-accent hover:underline">
-            Все шаблоны <ArrowRight className="h-4 w-4" />
+            Все видео-шаблоны <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
 
@@ -223,14 +229,18 @@ export function DashboardOverview({ userName, workspaceName }: DashboardOverview
               <Loader2 className="h-4 w-4 animate-spin" /> Загружаем Студию…
             </div>
           ) : templates.length ? (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 2xl:grid-cols-8">
-              {templates.map((template) => <StudioTemplateCard key={template.id} template={template} />)}
+            <div className="overflow-x-auto pb-1">
+              <div className="grid min-w-min grid-flow-col grid-rows-2 gap-3 auto-cols-[minmax(9.5rem,1fr)] sm:auto-cols-[minmax(11rem,1fr)] lg:auto-cols-[minmax(13rem,1fr)] xl:auto-cols-[minmax(15rem,1fr)]">
+                {templates.map((template) => (
+                  <StudioVideoCard key={template.id} template={template} />
+                ))}
+              </div>
             </div>
           ) : (
             <div className="flex min-h-52 flex-col items-center justify-center rounded-2xl bg-zinc-50 px-5 text-center">
-              <Sparkles className="mb-3 h-6 w-6 text-violet-600" />
-              <p className="font-semibold">Студия готова к работе</p>
-              <p className="mt-1 text-sm text-muted">Откройте её, чтобы посмотреть доступные сценарии генерации.</p>
+              <Video className="mb-3 h-6 w-6 text-violet-600" />
+              <p className="font-semibold">Видео-шаблоны скоро появятся</p>
+              <p className="mt-1 text-sm text-muted">Откройте Студию, чтобы посмотреть все сценарии генерации видео.</p>
               <Link href="/ai" className="mt-4 text-sm font-semibold text-accent hover:underline">Перейти в Студию</Link>
             </div>
           )}
