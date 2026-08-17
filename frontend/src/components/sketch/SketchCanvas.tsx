@@ -87,10 +87,15 @@ export const SketchCanvas = forwardRef<SketchCanvasHandle, SketchCanvasProps>(
       if (!strokeRef.current) {
         strokeRef.current = document.createElement("canvas");
       }
-      baseRef.current.width = width;
-      baseRef.current.height = height;
-      strokeRef.current.width = width;
-      strokeRef.current.height = height;
+      // Resizing clears canvas pixels — only resize when dimensions change.
+      if (baseRef.current.width !== width || baseRef.current.height !== height) {
+        baseRef.current.width = width;
+        baseRef.current.height = height;
+      }
+      if (strokeRef.current.width !== width || strokeRef.current.height !== height) {
+        strokeRef.current.width = width;
+        strokeRef.current.height = height;
+      }
     }, [width, height]);
 
     const composite = useCallback(() => {
