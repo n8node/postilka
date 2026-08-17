@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   ImagePlus,
   Loader2,
@@ -9,6 +9,7 @@ import {
   Sparkles,
   Trash2,
   Undo2,
+  X,
 } from "lucide-react";
 import { ProtectedMediaImage } from "@/components/media/ProtectedMediaImage";
 import { AspectRatioPicker } from "@/components/generation/AspectRatioPicker";
@@ -101,6 +102,20 @@ export function SketchInspector({
   const videoCost = videoPricing?.image_to_video ?? 2;
   const cost = output === "video" ? videoCost * Math.max(1, duration / 5) : imageCost;
   const costLabel = formatMediaCreditCost(Math.ceil(cost));
+  const [resultPreviewOpen, setResultPreviewOpen] = useState(false);
+
+  useEffect(() => {
+    setResultPreviewOpen(false);
+  }, [resultUrl]);
+
+  useEffect(() => {
+    if (!resultPreviewOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setResultPreviewOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [resultPreviewOpen]);
 
   return (
     <aside
@@ -352,7 +367,18 @@ export function SketchInspector({
               {resultIsVideo ? (
                 <video src={resultUrl} controls className="max-h-40 w-full object-contain" />
               ) : (
-                <ProtectedMediaImage url={resultUrl} alt="" className="max-h-40 w-full object-contain" />
+                <button
+                  type="button"
+                  onClick={() => setResultPreviewOpen(true)}
+                  className="block w-full cursor-zoom-in transition hover:opacity-95"
+                  aria-label="Открыть фото в полном размере"
+                >
+                  <ProtectedMediaImage
+                    url={resultUrl}
+                    alt="Результат генерации"
+                    className="max-h-40 w-full object-contain"
+                  />
+                </button>
               )}
             </div>
             <div className="flex flex-wrap gap-2">
@@ -403,6 +429,35 @@ export function SketchInspector({
           {generating ? "Генерация…" : "Сгенерировать"}
         </button>
       </div>
+
+      {resultPreviewOpen && resultUrl && !resultIsVideo && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Просмотр результата"
+          onClick={() => setResultPreviewOpen(false)}
+        >
+          <button
+            type="button"
+            onClick={() => setResultPreviewOpen(false)}
+            className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white transition hover:bg-black/70"
+            aria-label="Закрыть"
+          >
+            <X className="h-5 w-5" />
+          </button>
+          <div
+            className="max-h-[90vh] max-w-[min(96vw,1200px)] overflow-hidden rounded-xl bg-white shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <ProtectedMediaImage
+              url={resultUrl}
+              alt="Результат генерации"
+              className="max-h-[90vh] w-full object-contain"
+            />
+          </div>
+        </div>
+      )}
     </aside>
   );
 }
