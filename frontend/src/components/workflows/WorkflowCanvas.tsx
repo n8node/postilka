@@ -714,6 +714,20 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
               const midX = 0.125 * p1.x + 0.375 * c1x + 0.375 * c2x + 0.125 * p2.x;
               const midY = 0.125 * p1.y + 0.375 * c1y + 0.375 * c2y + 0.125 * p2.y;
 
+              const activeStroke = isEdgeSelected
+                ? "#6366f1"
+                : isEdgeHovered
+                ? "#818cf8"
+                : strokeColor;
+              const activeStrokeWidth =
+                isEdgeSelected || isEdgeHovered ? 3.5 : 2;
+              const edgeMotionClass =
+                draggingNodeId || isPanning
+                  ? ""
+                  : "transition-[stroke,stroke-width,stroke-opacity] duration-150";
+              const flowDelay =
+                (edge.id.charCodeAt(edge.id.length - 1) % 6) * 0.35;
+
               return (
                 <g
                   key={edge.id}
@@ -741,20 +755,14 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                       setSelectedNodeId(null);
                     }}
                   />
-                  {/* Visible wire path */}
+                  {/* Base wire — no geometry transition while dragging */}
                   <path
                     d={pathD}
                     fill="none"
-                    stroke={
-                      isEdgeSelected
-                        ? "#6366f1"
-                        : isEdgeHovered
-                        ? "#818cf8"
-                        : strokeColor
-                    }
-                    strokeWidth={isEdgeSelected || isEdgeHovered ? "3.5" : "2"}
-                    strokeOpacity={isEdgeSelected || isEdgeHovered ? "1" : "0.9"}
-                    className="transition-all cursor-pointer"
+                    stroke={activeStroke}
+                    strokeWidth={activeStrokeWidth}
+                    strokeOpacity={isEdgeSelected || isEdgeHovered ? "1" : "0.88"}
+                    className={`${edgeMotionClass} cursor-pointer`}
                     onMouseDown={(e) => {
                       e.stopPropagation();
                       setSelectedEdgeId(edge.id);
@@ -765,6 +773,18 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                       setSelectedEdgeId(edge.id);
                       setSelectedNodeId(null);
                     }}
+                  />
+                  {/* Subtle flowing highlight (data stream) */}
+                  <path
+                    d={pathD}
+                    fill="none"
+                    stroke={activeStroke}
+                    strokeWidth={Math.max(activeStrokeWidth - 0.5, 1.5)}
+                    strokeOpacity={
+                      isEdgeSelected || isEdgeHovered ? "0.5" : "0.32"
+                    }
+                    className="workflow-edge-flow"
+                    style={{ animationDelay: `${flowDelay}s` }}
                   />
                   {/* Anchor Dots */}
                   <circle

@@ -355,3 +355,27 @@ body {
     transform: none !important;
   }
 }
+
+/* Workflow canvas: subtle data-flow glow along edges */
+@keyframes workflow-edge-flow {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: -52;
+  }
+}
+
+.workflow-edge-flow {
+  stroke-dasharray: 7 22;
+  stroke-linecap: round;
+  animation: workflow-edge-flow 3.2s linear infinite;
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workflow-edge-flow {
+    animation: none;
+    display: none;
+  }
+}
