@@ -54,6 +54,12 @@ import { fetchChannels, type ChannelListItem } from "@/lib/api";
 import { uploadFile } from "@/lib/files-api";
 import { getCachedFileMediaUrl } from "@/lib/file-media-cache";
 import { NODE_DEFINITIONS } from "./nodeTypes";
+import { WorkflowMediaPreview, ButtonStylePicker } from "./WorkflowMediaPreview";
+import { StoryAreaEditor } from "@/components/posts/StoryAreaEditor";
+import {
+  normalizeStorySettings,
+  type TelegramStorySettings,
+} from "@/lib/telegram-story";
 
 interface NodeInspectorProps {
   node: WorkflowNode | null;
@@ -966,39 +972,105 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                       placeholder="{{ files_media_1.image_url }} или https://..."
                       className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none font-mono"
                     />
+                    <WorkflowMediaPreview
+                      url={data.mediaUrl}
+                      fileName={data.fileName}
+                    />
                   </div>
 
-                  {/* Media position relative to text */}
-                  <div>
-                    <label className="mb-1 block font-medium text-zinc-700 dark:text-zinc-300 text-xs">
-                      Расположение медиа относительно текста
+                  {/* Media delivery: together vs separate */}
+                  <div className="space-y-2">
+                    <label className="block font-medium text-zinc-700 dark:text-zinc-300 text-xs">
+                      Доставка медиа и текста
                     </label>
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         type="button"
-                        onClick={() => handleFieldChange("mediaPosition", "below")}
-                        className={`flex items-center justify-center gap-1.5 rounded-xl border p-2 text-xs font-medium transition ${
-                          (data.mediaPosition || "below") === "below"
+                        onClick={() => handleFieldChange("mediaLayout", "separate")}
+                        className={`rounded-xl border p-2 text-xs font-medium transition ${
+                          (data.mediaLayout || "separate") === "separate"
                             ? "border-sky-500 bg-sky-50 dark:bg-sky-950/50 text-sky-700 dark:text-sky-300 ring-1 ring-sky-500"
                             : "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800/60 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50"
                         }`}
                       >
-                        <ArrowDown className="h-3.5 w-3.5" />
-                        <span>Медиа над текстом</span>
+                        Разными сообщениями
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleFieldChange("mediaPosition", "above")}
-                        className={`flex items-center justify-center gap-1.5 rounded-xl border p-2 text-xs font-medium transition ${
-                          data.mediaPosition === "above"
+                        onClick={() => handleFieldChange("mediaLayout", "caption")}
+                        className={`rounded-xl border p-2 text-xs font-medium transition ${
+                          data.mediaLayout === "caption"
                             ? "border-sky-500 bg-sky-50 dark:bg-sky-950/50 text-sky-700 dark:text-sky-300 ring-1 ring-sky-500"
                             : "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800/60 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50"
                         }`}
                       >
-                        <ArrowUp className="h-3.5 w-3.5" />
-                        <span>Медиа под текстом</span>
+                        Одним сообщением
                       </button>
                     </div>
+
+                    {data.mediaLayout === "caption" ? (
+                      <div>
+                        <label className="mb-1 block text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+                          Текст относительно медиа
+                        </label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleFieldChange("mediaPosition", "above")}
+                            className={`flex items-center justify-center gap-1.5 rounded-xl border p-2 text-xs font-medium transition ${
+                              data.mediaPosition === "above"
+                                ? "border-sky-500 bg-sky-50 dark:bg-sky-950/50 text-sky-700 dark:text-sky-300 ring-1 ring-sky-500"
+                                : "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800/60 text-zinc-600 dark:text-zinc-400"
+                            }`}
+                          >
+                            <ArrowUp className="h-3.5 w-3.5" />
+                            Текст сверху
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleFieldChange("mediaPosition", "below")}
+                            className={`flex items-center justify-center gap-1.5 rounded-xl border p-2 text-xs font-medium transition ${
+                              (data.mediaPosition || "below") === "below"
+                                ? "border-sky-500 bg-sky-50 dark:bg-sky-950/50 text-sky-700 dark:text-sky-300 ring-1 ring-sky-500"
+                                : "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800/60 text-zinc-600 dark:text-zinc-400"
+                            }`}
+                          >
+                            <ArrowDown className="h-3.5 w-3.5" />
+                            Текст снизу
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <label className="mb-1 block text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+                          Порядок в канале
+                        </label>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button
+                            type="button"
+                            onClick={() => handleFieldChange("mediaOrder", "media_first")}
+                            className={`rounded-xl border p-2 text-xs font-medium transition ${
+                              (data.mediaOrder || "media_first") === "media_first"
+                                ? "border-sky-500 bg-sky-50 dark:bg-sky-950/50 text-sky-700 dark:text-sky-300 ring-1 ring-sky-500"
+                                : "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800/60 text-zinc-600 dark:text-zinc-400"
+                            }`}
+                          >
+                            Сначала медиа
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleFieldChange("mediaOrder", "text_first")}
+                            className={`rounded-xl border p-2 text-xs font-medium transition ${
+                              data.mediaOrder === "text_first"
+                                ? "border-sky-500 bg-sky-50 dark:bg-sky-950/50 text-sky-700 dark:text-sky-300 ring-1 ring-sky-500"
+                                : "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800/60 text-zinc-600 dark:text-zinc-400"
+                            }`}
+                          >
+                            Сначала текст
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Telegram Options */}
@@ -1165,7 +1237,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
 
                                 <div className="space-y-1.5">
                                   {row.map((btn, btnIndex) => (
-                                    <div key={btnIndex} className="flex items-center gap-1.5">
+                                    <div key={btnIndex} className="flex items-center gap-1.5 min-w-0">
                                       <input
                                         type="text"
                                         value={btn.text || ""}
@@ -1173,7 +1245,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                                           updateButton(rowIndex, btnIndex, { text: e.target.value })
                                         }
                                         placeholder="Текст кнопки"
-                                        className="w-1/3 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2 py-1 text-xs text-zinc-900 dark:text-zinc-100"
+                                        className="min-w-0 flex-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2 py-1 text-xs text-zinc-900 dark:text-zinc-100"
                                       />
                                       <input
                                         type="text"
@@ -1182,21 +1254,14 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                                           updateButton(rowIndex, btnIndex, { url: e.target.value })
                                         }
                                         placeholder="https://..."
-                                        className="flex-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2 py-1 text-xs font-mono text-zinc-900 dark:text-zinc-100"
+                                        className="min-w-0 flex-[1.2] rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2 py-1 text-xs font-mono text-zinc-900 dark:text-zinc-100"
                                       />
-                                      <select
+                                      <ButtonStylePicker
                                         value={btn.style || "default"}
-                                        onChange={(e) =>
-                                          updateButton(rowIndex, btnIndex, { style: e.target.value })
+                                        onChange={(style) =>
+                                          updateButton(rowIndex, btnIndex, { style })
                                         }
-                                        className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-1.5 py-1 text-xs text-zinc-700 dark:text-zinc-300 font-medium"
-                                        title="Цвет кнопки"
-                                      >
-                                        <option value="default">Обычная</option>
-                                        <option value="primary">Основная (синяя)</option>
-                                        <option value="success">Успех (зеленая)</option>
-                                        <option value="danger">Опасная (красная)</option>
-                                      </select>
+                                      />
                                       <button
                                         type="button"
                                         onClick={() => removeButton(rowIndex, btnIndex)}
@@ -1225,18 +1290,28 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                       <label className="font-medium text-zinc-700 dark:text-zinc-300">
                         Медиафайл для Истории (фото/видео)
                       </label>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setShowVariablePickerFor(
-                            showVariablePickerFor === "mediaUrl" ? null : "mediaUrl"
-                          )
-                        }
-                        className="flex items-center gap-1 rounded bg-purple-50 dark:bg-purple-950/40 px-1.5 py-0.5 text-[10px] font-medium text-purple-600 dark:text-purple-400 hover:bg-purple-100"
-                      >
-                        <Variable className="h-3 w-3" />
-                        Переменная
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => onOpenMediaPicker?.(node.id, "mediaUrl")}
+                          className="flex items-center gap-1 rounded bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200"
+                        >
+                          <Folder className="h-2.5 w-2.5" />
+                          Медиатека
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setShowVariablePickerFor(
+                              showVariablePickerFor === "mediaUrl" ? null : "mediaUrl"
+                            )
+                          }
+                          className="flex items-center gap-1 rounded bg-purple-50 dark:bg-purple-950/40 px-1.5 py-0.5 text-[10px] font-medium text-purple-600 dark:text-purple-400 hover:bg-purple-100"
+                        >
+                          <Variable className="h-3 w-3" />
+                          Переменная
+                        </button>
+                      </div>
                     </div>
                     <input
                       type="text"
@@ -1244,6 +1319,10 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                       onChange={(e) => handleFieldChange("mediaUrl", e.target.value)}
                       placeholder="{{ ai_image_1.image_url }}"
                       className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 font-mono"
+                    />
+                    <WorkflowMediaPreview
+                      url={data.mediaUrl}
+                      fileName={data.fileName}
                     />
                   </div>
                   <div>
@@ -1258,6 +1337,13 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                       className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100"
                     />
                   </div>
+                  <StoryAreaEditor
+                    settings={normalizeStorySettings(
+                      (data.telegramStory as TelegramStorySettings) || undefined
+                    )}
+                    mediaPreviewUrl={data.mediaUrl || null}
+                    onChange={(next) => handleFieldChange("telegramStory", next)}
+                  />
                 </div>
               )}
 
@@ -1268,18 +1354,28 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                       <label className="font-medium text-zinc-700 dark:text-zinc-300">
                         Видеофайл для кружочка (MP4 1:1)
                       </label>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setShowVariablePickerFor(
-                            showVariablePickerFor === "mediaUrl" ? null : "mediaUrl"
-                          )
-                        }
-                        className="flex items-center gap-1 rounded bg-sky-50 dark:bg-sky-950/40 px-1.5 py-0.5 text-[10px] font-medium text-sky-600 dark:text-sky-400 hover:bg-sky-100"
-                      >
-                        <Variable className="h-3 w-3" />
-                        Переменная
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => onOpenMediaPicker?.(node.id, "mediaUrl")}
+                          className="flex items-center gap-1 rounded bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200"
+                        >
+                          <Folder className="h-2.5 w-2.5" />
+                          Медиатека
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setShowVariablePickerFor(
+                              showVariablePickerFor === "mediaUrl" ? null : "mediaUrl"
+                            )
+                          }
+                          className="flex items-center gap-1 rounded bg-sky-50 dark:bg-sky-950/40 px-1.5 py-0.5 text-[10px] font-medium text-sky-600 dark:text-sky-400 hover:bg-sky-100"
+                        >
+                          <Variable className="h-3 w-3" />
+                          Переменная
+                        </button>
+                      </div>
                     </div>
                     <input
                       type="text"
@@ -1288,6 +1384,39 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                       placeholder="{{ files_media_1.video_url }}"
                       className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs font-mono"
                     />
+                    <WorkflowMediaPreview
+                      url={data.mediaUrl}
+                      fileName={data.fileName}
+                    />
+                  </div>
+                  <div>
+                    <div className="mb-1 flex items-center justify-between">
+                      <label className="font-medium text-zinc-700 dark:text-zinc-300">
+                        Текст отдельным сообщением
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setShowVariablePickerFor(
+                            showVariablePickerFor === "text" ? null : "text"
+                          )
+                        }
+                        className="flex items-center gap-1 rounded bg-sky-50 dark:bg-sky-950/40 px-1.5 py-0.5 text-[10px] font-medium text-sky-600 dark:text-sky-400 hover:bg-sky-100"
+                      >
+                        <Variable className="h-3 w-3" />
+                        Переменная
+                      </button>
+                    </div>
+                    <textarea
+                      rows={3}
+                      value={data.text || ""}
+                      onChange={(e) => handleFieldChange("text", e.target.value)}
+                      placeholder="Подпись отправится следом за кружочком..."
+                      className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 p-2.5 text-xs text-zinc-900 dark:text-zinc-100 font-mono"
+                    />
+                    <p className="mt-1 text-[10px] text-zinc-500">
+                      Кружочек и текст уходят двумя сообщениями, как в композере.
+                    </p>
                   </div>
                   <label className="flex items-center gap-2 cursor-pointer">
                     <input
@@ -1373,6 +1502,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                   placeholder="{{ files_media_1.image_url }} или https://..."
                   className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 font-mono"
                 />
+                <WorkflowMediaPreview url={data.mediaUrl} fileName={data.fileName} />
               </div>
 
               {/* MAX Options */}
@@ -1680,6 +1810,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                 placeholder="{{ ai_video_1.video_url }} или https://..."
                 className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs font-mono"
               />
+              <WorkflowMediaPreview url={data.videoUrl} fileName={data.fileName} />
             </div>
 
             <div>
@@ -2342,9 +2473,19 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
             {testResult.error ? (
               <p className="text-[11px]">{testResult.error}</p>
             ) : (
-              <pre className="max-h-32 overflow-x-auto rounded bg-black/5 dark:bg-black/30 p-1.5 text-[10px] font-mono">
-                {JSON.stringify(testResult.outputs, null, 2)}
-              </pre>
+              <div className="space-y-1.5">
+                {testResult.outputs?.published && (
+                  <p className="text-[11px] font-medium">
+                    Публикация отправлена в канал
+                    {testResult.outputs.provider_post_id
+                      ? ` (ID: ${testResult.outputs.provider_post_id})`
+                      : ""}
+                  </p>
+                )}
+                <pre className="max-h-32 overflow-x-auto rounded bg-black/5 dark:bg-black/30 p-1.5 text-[10px] font-mono">
+                  {JSON.stringify(testResult.outputs, null, 2)}
+                </pre>
+              </div>
             )}
           </div>
         )}
@@ -2368,7 +2509,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
             ) : (
               <Play className="h-3.5 w-3.5 fill-current" />
             )}
-            {testing ? "Выполняется тест..." : "Протестировать этот узел"}
+            {testing ? "Выполняется тест..." : node.type.startsWith("social_") ? "Отправить тестовую публикацию" : "Протестировать этот узел"}
           </button>
         )}
       </div>

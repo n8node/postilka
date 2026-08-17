@@ -182,12 +182,18 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       channelName: "",
       text: "{{ ai_text_1.text }}",
       format: "message",
+      mediaLayout: "separate",
       mediaPosition: "below",
+      mediaOrder: "media_first",
       silent: false,
       pin: false,
       protectContent: false,
       disableLinkPreview: false,
       buttons: [],
+      telegramStory: {
+        active_period: 86400,
+        areas: [],
+      },
     },
   },
   social_vk: {

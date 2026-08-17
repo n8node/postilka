@@ -622,10 +622,20 @@ func (s *WorkflowService) executeNode(
 
 	case "social_telegram":
 		text := getString(inputs, "text", "")
-		if text == "" {
-			return nil, 0, 0, 0, errors.New("текст сообщения для Telegram обязателен")
-		}
 		format := getString(inputs, "format", "message")
+		if format == "message" && text == "" && strings.TrimSpace(getString(inputs, "mediaUrl", "")) == "" && strings.TrimSpace(getString(inputs, "fileId", "")) == "" {
+			return nil, 0, 0, 0, errors.New("текст сообщения или медиафайл для Telegram обязателен")
+		}
+		if format == "short_video" || format == "video_note" {
+			if strings.TrimSpace(getString(inputs, "mediaUrl", "")) == "" && strings.TrimSpace(getString(inputs, "fileId", "")) == "" {
+				return nil, 0, 0, 0, errors.New("для кружочка нужен видеофайл")
+			}
+		}
+		if format == "story" {
+			if strings.TrimSpace(getString(inputs, "mediaUrl", "")) == "" && strings.TrimSpace(getString(inputs, "fileId", "")) == "" {
+				return nil, 0, 0, 0, errors.New("для истории нужен медиафайл")
+			}
+		}
 		silent := getBool(inputs, "silent", false)
 		pin := getBool(inputs, "pin", false)
 		protectContent := getBool(inputs, "protectContent", false)
@@ -655,7 +665,9 @@ func (s *WorkflowService) executeNode(
 		outputs["pin"] = pin
 		outputs["protect_content"] = protectContent
 		outputs["disable_link_preview"] = disableLinkPreview
+		outputs["media_layout"] = getString(inputs, "mediaLayout", "separate")
 		outputs["media_position"] = mediaPosition
+		outputs["media_order"] = getString(inputs, "mediaOrder", "media_first")
 		outputs["media_url"] = mediaURL
 		if btns, ok := inputs["buttons"]; ok && btns != nil {
 			outputs["buttons"] = btns
@@ -978,6 +990,29 @@ func (s *WorkflowService) TestNode(ctx context.Context, workspaceID, userID stri
 	if err != nil {
 		return nil, err
 	}
+
+	if isWorkflowSocialNode(node.Type) {
+		post, pubErr := s.postSvc.PublishWorkflowNodeTest(ctx, workspaceID, userID, node.Type, mergedInputs)
+		if pubErr != nil {
+			return nil, pubErr
+		}
+		outputs["published"] = true
+		outputs["post_id"] = post.ID
+		outputs["post_status"] = string(post.Status)
+		if post.LastError != "" {
+			outputs["last_error"] = post.LastError
+		}
+		for _, target := range post.Targets {
+			if target.ProviderPostID != "" {
+				outputs["provider_post_id"] = target.ProviderPostID
+				break
+			}
+		}
+		if post.PublishedAt != nil {
+			outputs["published_at"] = post.PublishedAt.UTC().Format(time.RFC3339)
+		}
+	}
+
 	return outputs, nil
 }
 
