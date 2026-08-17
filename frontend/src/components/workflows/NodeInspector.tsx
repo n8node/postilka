@@ -1475,7 +1475,6 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                 </div>
               </div>
             </div>
-          </div>
         )}
 
         {/* 6. VK NODE */}
