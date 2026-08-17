@@ -169,8 +169,12 @@ export function DashboardOverview({ userName, workspaceName }: DashboardOverview
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Link href="/ai" className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-zinc-950 transition hover:bg-zinc-100">
+            <Link href="/ai" className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/15">
               <Sparkles className="h-4 w-4" />
+              Ai контент
+            </Link>
+            <Link href="/ai" className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-zinc-950 transition hover:bg-zinc-100">
+              <LayoutGrid className="h-4 w-4" />
               Открыть Студию
             </Link>
             <Link href="/posts/new" className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-white/15">
