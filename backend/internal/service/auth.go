@@ -214,6 +214,10 @@ func (s *AuthService) registerWithoutInviteCheck(ctx context.Context, email, pas
 		return nil, err
 	}
 
+	if s.telegram != nil {
+		s.telegram.NotifyRegistration(ctx, user, RegistrationNotifyMeta{})
+	}
+
 	token, err := s.auth.IssueToken(user.ID, tokenTTL)
 	if err != nil {
 		return nil, err

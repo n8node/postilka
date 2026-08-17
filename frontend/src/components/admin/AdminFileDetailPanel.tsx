@@ -2,6 +2,7 @@
 
 import { X } from "lucide-react";
 import {
+  adminFilePreviewURL,
   type AdminFileDetail,
   type AdminFileAIGeneration,
 } from "@/lib/api";
@@ -77,6 +78,42 @@ function AIBlock({ ai }: { ai: AdminFileAIGeneration }) {
   );
 }
 
+function FilePreview({ file }: { file: AdminFileDetail }) {
+  const previewUrl = adminFilePreviewURL(file.id);
+  if (file.mime_type.startsWith("image/")) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={previewUrl}
+        alt={file.name}
+        className="max-h-80 w-full rounded-lg object-contain bg-slate-100 ring-1 ring-slate-200"
+      />
+    );
+  }
+  if (file.mime_type.startsWith("video/")) {
+    return (
+      <video
+        src={previewUrl}
+        controls
+        className="max-h-80 w-full rounded-lg bg-black ring-1 ring-slate-200"
+        preload="metadata"
+      />
+    );
+  }
+  if (file.mime_type.startsWith("audio/")) {
+    return (
+      <div className="rounded-lg bg-slate-50 p-4 ring-1 ring-slate-200">
+        <audio src={previewUrl} controls className="w-full" preload="metadata" />
+      </div>
+    );
+  }
+  return (
+    <div className="flex h-40 items-center justify-center rounded-lg bg-slate-50 text-sm text-slate-500 ring-1 ring-slate-200">
+      Превью недоступно для этого типа файла
+    </div>
+  );
+}
+
 type AdminFileDetailPanelProps = {
   file: AdminFileDetail | null;
   loading: boolean;
@@ -89,7 +126,7 @@ export function AdminFileDetailPanel({
   onClose,
 }: AdminFileDetailPanelProps) {
   return (
-    <aside className="flex w-full shrink-0 flex-col border-l border-slate-200 bg-white lg:w-[360px]">
+    <aside className="flex w-full shrink-0 flex-col border-l border-slate-200 bg-white lg:w-[480px]">
       <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
         <p className="text-sm font-semibold text-slate-900">Карточка файла</p>
         <button
@@ -108,7 +145,8 @@ export function AdminFileDetailPanel({
         )}
         {!loading && file && (
           <>
-            <p className="break-all text-base font-semibold text-slate-900">{file.name}</p>
+            <FilePreview file={file} />
+            <p className="mt-4 break-all text-base font-semibold text-slate-900">{file.name}</p>
             <p className="mt-1 font-mono text-[10px] text-slate-400">{file.id}</p>
             <div className="mt-4 space-y-0">
               <Row label="Тип" value={file.mime_type} />

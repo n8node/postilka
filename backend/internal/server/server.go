@@ -124,6 +124,8 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	telegramHealthMonitor := service.NewTelegramHealthMonitor(telegramSvc, emailSvc, userRepo, cfg, logger)
 	telegramHealthMonitor.Start()
 
+	oauthSvc.BindTelegram(telegramSvc)
+
 	wsInviteRepo := repository.NewWorkspaceInviteRepository(db.Pool)
 	wsInviteSvc := service.NewWorkspaceInviteService(wsInviteRepo, wsRepo, userRepo, wsSvc, txEmailSvc, cfg, logger)
 
@@ -147,7 +149,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 		fileStorageRepo, folderStorageRepo, walletRepo, logger,
 	)
 	adminAnalyticsRepo := repository.NewAdminAnalyticsRepository(db.Pool)
-	adminHandler := handler.NewAdminHandler(userRepo, adminUserSvc, adminWalletSvc, planSvc, oauthSvc, adminWorkspaceSvc, fileStorageRepo, folderStorageRepo, adminAnalyticsRepo)
+	adminHandler := handler.NewAdminHandler(userRepo, adminUserSvc, adminWalletSvc, planSvc, oauthSvc, adminWorkspaceSvc, fileStorageRepo, folderStorageRepo, postRepo, adminAnalyticsRepo, objectStorage)
 	inviteHandler := handler.NewInviteHandler(inviteSvc, oauthSvc)
 	adminInviteHandler := handler.NewAdminInviteHandler(inviteSvc, userRepo, oauthSvc)
 	smtpHandler := handler.NewSMTPSettingsHandler(smtpSettingsSvc, emailSvc)
@@ -587,6 +589,11 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Get("/files", adminHandler.ListFiles)
 				r.Get("/files/folders", adminHandler.ListFileFolders)
 				r.Get("/files/{fileID}", adminHandler.GetFile)
+				r.Get("/files/{fileID}/preview", adminHandler.PreviewFile)
+
+				r.Get("/posts", adminHandler.ListPosts)
+				r.Get("/posts/{postID}", adminHandler.GetPost)
+
 				r.Get("/analytics", adminHandler.Analytics)
 			})
 		})

@@ -31,16 +31,17 @@ var (
 )
 
 type OAuthLoginService struct {
-	users        *repository.UserRepository
-	identities   *repository.UserLoginIdentityRepository
-	sessions     *repository.OAuthLoginSessionRepository
+	users         *repository.UserRepository
+	identities    *repository.UserLoginIdentityRepository
+	sessions      *repository.OAuthLoginSessionRepository
 	oauthSettings *repository.OAuthSettingsRepository
-	workspaces   *repository.WorkspaceRepository
-	plans        *repository.PlanRepository
-	settings     *repository.SettingsRepository
-	pool         pgxPoolBeginner
-	auth         *middleware.Auth
-	cfg          *config.Config
+	workspaces    *repository.WorkspaceRepository
+	plans         *repository.PlanRepository
+	settings      *repository.SettingsRepository
+	pool          pgxPoolBeginner
+	auth          *middleware.Auth
+	cfg           *config.Config
+	telegram      *TelegramService
 }
 
 func NewOAuthLoginService(
@@ -61,6 +62,10 @@ func NewOAuthLoginService(
 		workspaces: workspaces, plans: plans, settings: settings,
 		pool: pool, auth: auth, cfg: cfg,
 	}
+}
+
+func (s *OAuthLoginService) BindTelegram(telegram *TelegramService) {
+	s.telegram = telegram
 }
 
 type OAuthStartResult struct {
@@ -623,6 +628,10 @@ func (s *OAuthLoginService) createOAuthUser(ctx context.Context, profile OAuthId
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
+	if s.telegram != nil {
+		meta := RegistrationNotifyMeta{InviteScope: oauthProviderLabel(profile.Provider)}
+		s.telegram.NotifyRegistration(ctx, user, meta)
+	}
 	return user, nil
 }
 
@@ -846,4 +855,15 @@ func (s *OAuthLoginService) ResolveActiveWorkspace(
 ) (*model.Workspace, []model.Workspace, error) {
 	wsSvc := NewWorkspaceService(s.workspaces, s.plans)
 	return wsSvc.ResolveActive(ctx, userID, r)
+}
+
+func oauthProviderLabel(provider model.LoginOAuthProvider) string {
+	switch provider {
+	case model.LoginProviderVK:
+		return "OAuth: ВКонтакте"
+	case model.LoginProviderMAX:
+		return "OAuth: MAX"
+	default:
+		return "OAuth: " + string(provider)
+	}
 }

@@ -985,6 +985,152 @@ export function fetchAdminFileFolders(workspaceId: string, includeDeleted = fals
   );
 }
 
+export function adminFilePreviewURL(fileId: string, download = false) {
+  const base = `${clientBase()}/admin/files/${encodeURIComponent(fileId)}/preview`;
+  return download ? `${base}?download=1` : base;
+}
+
+export type AdminPost = {
+  id: string;
+  workspace_id: string;
+  workspace_name: string;
+  author_user_id: string | null;
+  author_email: string | null;
+  author_name: string | null;
+  mission_id: string | null;
+  mission_title: string | null;
+  origin: "user" | "agent";
+  status: string;
+  preview_text: string;
+  targets_count: number;
+  media_count: number;
+  channels_label: string;
+  views: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  reach: number;
+  clicks: number;
+  clicks_unique: number;
+  metrika_visits: number;
+  metrika_goals: number;
+  has_metrics: boolean;
+  due_at: string | null;
+  published_at: string | null;
+  last_error: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AdminPostStats = {
+  total_posts: number;
+  draft_count: number;
+  pending_count: number;
+  scheduled_count: number;
+  publishing_count: number;
+  published_count: number;
+  failed_count: number;
+  canceled_count: number;
+  with_metrics_count: number;
+};
+
+export type AdminPostsQuery = {
+  q?: string;
+  workspace_id?: string;
+  status?: string;
+  origin?: string;
+  created_by?: string;
+  mission_id?: string;
+  channel_id?: string;
+  provider?: string;
+  created_from?: string;
+  created_to?: string;
+  published_from?: string;
+  published_to?: string;
+  has_metrics?: boolean;
+  limit?: number;
+  offset?: number;
+};
+
+export type AdminPostsResponse = {
+  total: number;
+  posts: AdminPost[];
+  stats: AdminPostStats;
+};
+
+export type AdminPostTarget = {
+  id: string;
+  channel_id: string;
+  channel_name: string;
+  provider: string;
+  provider_label: string;
+  status: string;
+  provider_post_id: string;
+  last_error: string;
+  attempts: number;
+  published_at: string | null;
+};
+
+export type AdminPostMedia = {
+  id: string;
+  file_id: string;
+  position: number;
+  name: string;
+  mime_type: string;
+  size: number;
+};
+
+export type AdminPostMetric = {
+  target_id: string;
+  channel_name: string;
+  provider_label: string;
+  views: number;
+  likes: number;
+  comments: number;
+  shares: number;
+  reach: number;
+  clicks: number;
+  clicks_unique: number;
+  metrika_visits: number;
+  metrika_goals: number;
+  has_data: boolean;
+};
+
+export type AdminPostDetail = AdminPost & {
+  content: Record<string, unknown>;
+  settings: Record<string, unknown>;
+  targets: AdminPostTarget[];
+  media: AdminPostMedia[];
+  metrics: AdminPostMetric[];
+};
+
+export function fetchAdminPosts(query: AdminPostsQuery = {}) {
+  const params = new URLSearchParams();
+  if (query.q?.trim()) params.set("q", query.q.trim());
+  if (query.workspace_id?.trim()) params.set("workspace_id", query.workspace_id.trim());
+  if (query.status?.trim()) params.set("status", query.status.trim());
+  if (query.origin?.trim()) params.set("origin", query.origin.trim());
+  if (query.created_by?.trim()) params.set("created_by", query.created_by.trim());
+  if (query.mission_id?.trim()) params.set("mission_id", query.mission_id.trim());
+  if (query.channel_id?.trim()) params.set("channel_id", query.channel_id.trim());
+  if (query.provider?.trim()) params.set("provider", query.provider.trim());
+  if (query.created_from?.trim()) params.set("created_from", query.created_from.trim());
+  if (query.created_to?.trim()) params.set("created_to", query.created_to.trim());
+  if (query.published_from?.trim()) params.set("published_from", query.published_from.trim());
+  if (query.published_to?.trim()) params.set("published_to", query.published_to.trim());
+  if (typeof query.has_metrics === "boolean") {
+    params.set("has_metrics", String(query.has_metrics));
+  }
+  if (typeof query.limit === "number") params.set("limit", String(query.limit));
+  if (typeof query.offset === "number") params.set("offset", String(query.offset));
+  const qs = params.toString();
+  return apiFetch<AdminPostsResponse>(`/admin/posts${qs ? `?${qs}` : ""}`);
+}
+
+export function fetchAdminPost(postId: string) {
+  return apiFetch<{ post: AdminPostDetail }>(`/admin/posts/${postId}`);
+}
+
 export function fetchAdminWorkspace(workspaceId: string) {
   return apiFetch<AdminWorkspaceDetail>(`/admin/workspaces/${workspaceId}`);
 }

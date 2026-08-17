@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   ApiError,
+  adminFilePreviewURL,
   fetchAdminFile,
   fetchAdminFileFolders,
   fetchAdminFiles,
@@ -44,6 +45,42 @@ function mimeBadge(mime: string) {
   if (mime.startsWith("video/")) return "Видео";
   if (mime.startsWith("audio/")) return "Аудио";
   return "Файл";
+}
+
+function FileThumbnail({ file }: { file: AdminFile }) {
+  const previewUrl = adminFilePreviewURL(file.id);
+  if (file.mime_type.startsWith("image/")) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={previewUrl}
+        alt=""
+        className="h-10 w-10 shrink-0 rounded object-cover ring-1 ring-slate-200"
+        loading="lazy"
+      />
+    );
+  }
+  if (file.mime_type.startsWith("video/")) {
+    return (
+      <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded ring-1 ring-slate-200">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <video
+          src={previewUrl}
+          className="h-full w-full object-cover"
+          muted
+          preload="metadata"
+        />
+        <span className="absolute inset-0 flex items-center justify-center bg-black/20 text-[9px] font-semibold text-white">
+          ▶
+        </span>
+      </div>
+    );
+  }
+  return (
+    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-slate-100 text-[10px] font-medium text-slate-500 ring-1 ring-slate-200">
+      {file.mime_type.startsWith("audio/") ? "♪" : "DOC"}
+    </div>
+  );
 }
 
 function StatCard({ label, value }: { label: string; value: string }) {
@@ -375,6 +412,7 @@ export function AdminFilesPage() {
           <table className="min-w-full text-left text-sm">
             <thead className="border-b border-slate-200 bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
               <tr>
+                <th className="px-4 py-3 w-14"></th>
                 <th className="px-4 py-3">Файл</th>
                 <th className="px-4 py-3">Формат</th>
                 <th className="px-4 py-3">Размер</th>
@@ -392,7 +430,7 @@ export function AdminFilesPage() {
               {loading && (
                 <tr>
                   <td
-                    colSpan={deletedFilter === "trash" || deletedFilter === "all" ? 9 : 8}
+                    colSpan={deletedFilter === "trash" || deletedFilter === "all" ? 10 : 9}
                     className="px-4 py-10 text-center text-slate-500"
                   >
                     Загрузка…
@@ -402,7 +440,7 @@ export function AdminFilesPage() {
               {!loading && error && (
                 <tr>
                   <td
-                    colSpan={deletedFilter === "trash" || deletedFilter === "all" ? 9 : 8}
+                    colSpan={deletedFilter === "trash" || deletedFilter === "all" ? 10 : 9}
                     className="px-4 py-10 text-center text-rose-600"
                   >
                     {error}
@@ -412,7 +450,7 @@ export function AdminFilesPage() {
               {!loading && !error && files.length === 0 && (
                 <tr>
                   <td
-                    colSpan={deletedFilter === "trash" || deletedFilter === "all" ? 9 : 8}
+                    colSpan={deletedFilter === "trash" || deletedFilter === "all" ? 10 : 9}
                     className="px-4 py-10 text-center text-slate-500"
                   >
                     Файлы не найдены
@@ -430,6 +468,9 @@ export function AdminFilesPage() {
                     )}
                     onClick={() => setSelectedFileId(f.id)}
                   >
+                    <td className="px-4 py-3">
+                      <FileThumbnail file={f} />
+                    </td>
                     <td className="px-4 py-3">
                       <p className="max-w-[220px] truncate font-medium text-slate-900">{f.name}</p>
                       <p className="font-mono text-[10px] text-slate-400">{f.id}</p>

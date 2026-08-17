@@ -15,15 +15,17 @@ import (
 )
 
 type AdminHandler struct {
-	users        *repository.UserRepository
-	adminUsers   *service.AdminUserService
-	adminWallet  *service.AdminWalletService
-	plans        *service.PlanService
-	oauth        *service.OAuthLoginService
-	workspaces   *service.AdminWorkspaceService
-	files        *repository.WorkspaceFileRepository
-	folders      *repository.WorkspaceFolderRepository
-	analytics    *repository.AdminAnalyticsRepository
+	users         *repository.UserRepository
+	adminUsers    *service.AdminUserService
+	adminWallet   *service.AdminWalletService
+	plans         *service.PlanService
+	oauth         *service.OAuthLoginService
+	workspaces    *service.AdminWorkspaceService
+	files         *repository.WorkspaceFileRepository
+	folders       *repository.WorkspaceFolderRepository
+	posts         *repository.PostRepository
+	analytics     *repository.AdminAnalyticsRepository
+	objectStorage *service.ObjectStorage
 }
 
 func NewAdminHandler(
@@ -35,11 +37,13 @@ func NewAdminHandler(
 	workspaces *service.AdminWorkspaceService,
 	files *repository.WorkspaceFileRepository,
 	folders *repository.WorkspaceFolderRepository,
+	posts *repository.PostRepository,
 	analytics *repository.AdminAnalyticsRepository,
+	objectStorage *service.ObjectStorage,
 ) *AdminHandler {
 	return &AdminHandler{
 		users: users, adminUsers: adminUsers, adminWallet: adminWallet, plans: plans, oauth: oauth, workspaces: workspaces,
-		files: files, folders: folders, analytics: analytics,
+		files: files, folders: folders, posts: posts, analytics: analytics, objectStorage: objectStorage,
 	}
 }
 

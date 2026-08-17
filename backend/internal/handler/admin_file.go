@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
@@ -10,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/postilka/postilka/internal/model"
 	"github.com/postilka/postilka/internal/repository"
+	"github.com/postilka/postilka/internal/service"
 )
 
 func (h *AdminHandler) ListFiles(w http.ResponseWriter, r *http.Request) {
@@ -141,4 +143,19 @@ func parseOptionalInt64(raw string) (int64, bool) {
 
 func parseInt64(raw string) (int64, error) {
 	return strconv.ParseInt(raw, 10, 64)
+}
+
+func (h *AdminHandler) adminFilePreviewURL(ctx context.Context, file *model.AdminFileDetail, inline bool) (string, error) {
+	if h.objectStorage == nil || file == nil || strings.TrimSpace(file.S3Key) == "" {
+		return "", errors.New("preview unavailable")
+	}
+	opts := service.PresignGetOptions{
+		Filename: file.Name,
+		Inline:   inline,
+		Expires:  time.Hour,
+	}
+	if inline {
+		opts.CacheControl = "private, max-age=3600, stale-while-revalidate=86400"
+	}
+	return h.objectStorage.PresignGetWithOptions(ctx, file.S3Key, opts)
 }
