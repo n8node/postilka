@@ -19,6 +19,7 @@ import { AdminTelegramPage } from "@/components/admin/AdminTelegramPage";
 import { AdminMetrikaPage } from "@/components/admin/AdminMetrikaPage";
 import { AdminYandexGptPage } from "@/components/admin/AdminYandexGptPage";
 import { AdminAdStudioPage } from "@/components/admin/AdminAdStudioPage";
+import { AdminSketchStylesPage } from "@/components/admin/AdminSketchStylesPage";
 // Hidden until agents return: import { AdminAgentTemplatesPage } from "@/components/admin/AdminAgentTemplatesPage";
 import { cn } from "@/lib/utils";
 
@@ -33,6 +34,7 @@ type SettingsKey =
   | "ai-kie"
   | "ai-kie-video"
   | "ai-ad-studio"
+  | "ai-sketch-styles"
   | "analytics-metrika";
 
 const SETTINGS_MENU: { key: SettingsKey; label: string; description: string }[] = [
@@ -86,6 +88,11 @@ const SETTINGS_MENU: { key: SettingsKey; label: string; description: string }[] 
     key: "ai-ad-studio",
     label: "AI — Студия рекламы",
     description: "Шаблоны: товар, движение, UGC, реклама",
+  },
+  {
+    key: "ai-sketch-styles",
+    label: "AI — Набросок",
+    description: "Стили генерации из рисунка",
   },
   {
     key: "analytics-metrika",
@@ -252,6 +259,9 @@ function SettingsSectionContent({
   }
   if (selected === "ai-ad-studio") {
     return <AdminAdStudioPage embedded />;
+  }
+  if (selected === "ai-sketch-styles") {
+    return <AdminSketchStylesPage embedded />;
   }
   if (selected === "analytics-metrika") {
     return <AdminMetrikaPage embedded />;

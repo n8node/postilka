@@ -138,7 +138,7 @@ func (s *GenerationService) StartGenerate(ctx context.Context, userID string, r 
 	}
 
 	switch mode {
-	case generationModeFilter, "image-to-image":
+	case generationModeFilter, "image-to-image", "sketch":
 		if strings.TrimSpace(in.SourceUploadID) == "" {
 			return StartGenerateResult{}, ErrGenerationSourceRequired
 		}
@@ -941,7 +941,7 @@ func (s *GenerationService) submitPendingJob(ctx context.Context, jobID string, 
 
 	var imageURLs []string
 	switch mode {
-	case generationModeFilter, "image-to-image":
+	case generationModeFilter, "image-to-image", "sketch":
 		sourceID := strings.TrimSpace(in.SourceUploadID)
 		if sourceID == "" {
 			_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
@@ -1006,7 +1006,7 @@ func (s *GenerationService) submitPendingJob(ctx context.Context, jobID string, 
 	}
 
 	kieMode := mode
-	if mode == generationModeFilter {
+	if mode == generationModeFilter || mode == "sketch" {
 		kieMode = "image-to-image"
 	}
 	aspectRatio := in.AspectRatio
@@ -1103,7 +1103,7 @@ func normalizeGenerationMode(mode string) string {
 	switch strings.TrimSpace(mode) {
 	case generationModeFilter:
 		return generationModeFilter
-	case "image-to-image", "combine":
+	case "image-to-image", "combine", "sketch":
 		return strings.TrimSpace(mode)
 	default:
 		return "text-to-image"
@@ -1114,7 +1114,7 @@ func modelForGenerationMode(settings model.KieSettings, mode string) string {
 	switch mode {
 	case generationModeFilter:
 		return strings.TrimSpace(settings.ModelFilter)
-	case "image-to-image":
+	case "image-to-image", "sketch":
 		return strings.TrimSpace(settings.ModelImageToImage)
 	case "combine":
 		return strings.TrimSpace(settings.ModelCombine)

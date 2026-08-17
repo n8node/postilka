@@ -2,18 +2,20 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Film, ImageIcon, LayoutGrid } from "lucide-react";
+import { Film, ImageIcon, LayoutGrid, Paintbrush } from "lucide-react";
 import { AdStudioPage } from "@/components/generation/AdStudioPage";
 import { GenerationPageContent } from "@/components/generation/GenerationPageContent";
 import { VideoGenerationPageContent } from "@/components/generation/VideoGenerationPageContent";
+import { SketchPage } from "@/components/sketch/SketchPage";
 import { cn } from "@/lib/utils";
 
-type AiTab = "studio" | "photo" | "video";
+type AiTab = "studio" | "photo" | "video" | "sketch";
 
 const tabs: { id: AiTab; label: string; icon: typeof ImageIcon }[] = [
   { id: "studio", label: "Студия", icon: LayoutGrid },
   { id: "photo", label: "Фото", icon: ImageIcon },
   { id: "video", label: "Видео", icon: Film },
+  { id: "sketch", label: "Набросок", icon: Paintbrush },
 ];
 
 export function AiContentHub() {
@@ -21,26 +23,46 @@ export function AiContentHub() {
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
   const [tab, setTab] = useState<AiTab>(
-    tabParam === "video" ? "video" : tabParam === "photo" ? "photo" : "studio",
+    tabParam === "video"
+      ? "video"
+      : tabParam === "photo"
+        ? "photo"
+        : tabParam === "sketch"
+          ? "sketch"
+          : "studio",
   );
 
   useEffect(() => {
-    setTab(tabParam === "video" ? "video" : tabParam === "photo" ? "photo" : "studio");
+    setTab(
+      tabParam === "video"
+        ? "video"
+        : tabParam === "photo"
+          ? "photo"
+          : tabParam === "sketch"
+            ? "sketch"
+            : "studio",
+    );
   }, [tabParam]);
 
   const switchTab = useCallback(
     (next: AiTab) => {
       setTab(next);
       const qs =
-        next === "video" ? "?tab=video" : next === "photo" ? "?tab=photo" : "";
+        next === "video"
+          ? "?tab=video"
+          : next === "photo"
+            ? "?tab=photo"
+            : next === "sketch"
+              ? "?tab=sketch"
+              : "";
       router.replace(`/ai${qs}`, { scroll: false });
     },
     [router],
   );
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="inline-flex w-fit rounded-lg border border-border bg-bg p-1">
+    <div className={cn("flex flex-col", tab === "sketch" ? "gap-0" : "gap-4")}>
+      <div className="inline-flex w-fit shrink-0 rounded-lg border border-border bg-bg p-1">
         {tabs.map((item) => {
           const Icon = item.icon;
           const active = tab === item.id;
@@ -63,7 +85,11 @@ export function AiContentHub() {
         })}
       </div>
 
-      {tab === "studio" ? (
+      {tab === "sketch" ? (
+        <div className="-mx-4 mt-0 sm:-mx-6 lg:-mx-8">
+          <SketchPage />
+        </div>
+      ) : tab === "studio" ? (
         <AdStudioPage />
       ) : tab === "photo" ? (
         <GenerationPageContent />

@@ -69,7 +69,7 @@ type KieUpdateRequest struct {
 
 func (s KieSettings) TokenCostForGenerationMode(mode string) int {
 	switch strings.ToLower(strings.TrimSpace(mode)) {
-	case "image-to-image":
+	case "image-to-image", "sketch":
 		return positiveOrOne(s.TokenCostImageToImage)
 	case "combine":
 		return positiveOrOne(s.TokenCostCombine)

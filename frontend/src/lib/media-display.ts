@@ -22,7 +22,8 @@ export function requiresProtectedMedia(url: string): boolean {
   return (
     resolved.includes("/media/ai-generations/") ||
     resolved.includes("/media/generation-uploads/") ||
-    resolved.includes("/ad-studio/templates/")
+    resolved.includes("/ad-studio/templates/") ||
+    resolved.includes("/sketch/styles/")
   );
 }
 

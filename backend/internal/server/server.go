@@ -214,6 +214,9 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	adStudioRepo := repository.NewAdStudioRepository(db.Pool)
 	adStudioSvc := service.NewAdStudioService(adStudioRepo, settingsRepo, generationSvc, objectStorage)
 	adStudioHandler := handler.NewAdStudioHandler(adStudioSvc)
+	sketchStyleRepo := repository.NewSketchStyleRepository(db.Pool)
+	sketchSvc := service.NewSketchService(sketchStyleRepo, generationSvc, objectStorage)
+	sketchHandler := handler.NewSketchHandler(sketchSvc)
 
 	workflowRepo := repository.NewWorkflowRepository(db.Pool)
 	workflowSvc := service.NewWorkflowService(
@@ -465,6 +468,11 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Get("/ad-studio/templates/{id}/preview/source", adStudioHandler.PreviewSource)
 			r.Post("/ad-studio/templates/{id}/generate", adStudioHandler.Generate)
 
+			r.Get("/sketch/styles", sketchHandler.ListStyles)
+			r.Get("/sketch/styles/{id}", sketchHandler.GetStyle)
+			r.Get("/sketch/styles/{id}/preview", sketchHandler.PreviewStyle)
+			r.Post("/sketch/generate", sketchHandler.Generate)
+
 			r.Get("/workflows", workflowHandler.List)
 			r.Post("/workflows", workflowHandler.Create)
 			r.Get("/workflows/templates", workflowHandler.ListTemplates)
@@ -546,6 +554,12 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Get("/ad-studio/templates/{id}/preview/source", adStudioHandler.AdminPreviewSource)
 				r.Post("/ad-studio/templates/{id}/preview", adStudioHandler.AdminUploadPreview)
 				r.Post("/ad-studio/templates/backfill-previews", adStudioHandler.AdminBackfillPreviews)
+				r.Get("/sketch/styles", sketchHandler.AdminList)
+				r.Post("/sketch/styles", sketchHandler.AdminCreate)
+				r.Put("/sketch/styles/{id}", sketchHandler.AdminUpdate)
+				r.Delete("/sketch/styles/{id}", sketchHandler.AdminDelete)
+				r.Get("/sketch/styles/{id}/preview", sketchHandler.AdminPreview)
+				r.Post("/sketch/styles/{id}/preview", sketchHandler.AdminUploadPreview)
 				r.Get("/settings/upload-files", uploadFileSettingsHandler.GetAdmin)
 				r.Put("/settings/upload-files", uploadFileSettingsHandler.UpdateAdmin)
 				r.Get("/telegram", telegramHandler.GetAdmin)
