@@ -233,7 +233,7 @@ class ChromeBrush extends PointsBrushBase {
   constructor(ctx: CanvasRenderingContext2D, settings: HarmonyBrushSettings) {
     super(ctx, settings);
     if (isWebKit()) {
-      ctx.globalCompositeOperation = "darker";
+      ctx.globalCompositeOperation = "darker" as GlobalCompositeOperation;
     }
   }
 
@@ -312,7 +312,7 @@ class GridBrush implements HarmonyBrush {
     private settings: HarmonyBrushSettings,
   ) {
     if (isWebKit()) {
-      ctx.globalCompositeOperation = "darker";
+      ctx.globalCompositeOperation = "darker" as GlobalCompositeOperation;
     }
   }
 
