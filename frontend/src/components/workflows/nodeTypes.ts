@@ -463,7 +463,7 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
   merge: {
     type: "merge",
     title: "Объединение данных",
-    description: "Собирает результаты нескольких предыдущих нод в один поток",
+    description: "Объединяет две параллельные ветки в один поток",
     category: "logic",
     icon: "git-merge",
     color: {
@@ -475,7 +475,6 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
     inputs: [
       { id: "input_1", label: "Вход 1", type: "any" },
       { id: "input_2", label: "Вход 2", type: "any" },
-      { id: "input_3", label: "Вход 3 (опц.)", type: "any" },
     ],
     outputs: [
       { id: "text", label: "Текст", type: "string" },

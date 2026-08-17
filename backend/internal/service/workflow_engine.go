@@ -38,8 +38,6 @@ func mergeInputOrder(handle string) int {
 		return 1
 	case "input_2":
 		return 2
-	case "input_3":
-		return 3
 	default:
 		return 99
 	}
