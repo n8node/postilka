@@ -470,17 +470,10 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       badge: "bg-teal-600 text-white",
       text: "text-teal-600 dark:text-teal-400",
     },
-    inputs: [
-      { id: "input_1", label: "Вход 1", type: "any" },
-      { id: "input_2", label: "Вход 2", type: "any" },
-      { id: "input_3", label: "Вход 3 (опц.)", type: "any" },
-    ],
+    inputs: [NODE_FLOW_INPUT],
     outputs: [
       { id: "text", label: "Текст", type: "string" },
-      { id: "image_url", label: "Изображение", type: "image" },
-      { id: "video_url", label: "Видео", type: "video" },
-      { id: "mediaUrl", label: "Медиа URL", type: "any" },
-      { id: "merged", label: "Все поля", type: "any" },
+      { id: "mediaUrl", label: "Медиа", type: "any" },
     ],
     defaultData: {
       title: "Объединение данных",
@@ -502,9 +495,7 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
     },
     inputs: [NODE_FLOW_INPUT],
     outputs: [
-      { id: "text", label: "Текст", type: "string" },
-      { id: "mediaUrl", label: "Медиа", type: "any" },
-      { id: "payload", label: "Все поля", type: "any" },
+      { id: "payload", label: "Собранные поля", type: "any" },
     ],
     defaultData: {
       title: "Сборка полей",
@@ -526,11 +517,9 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       badge: "bg-orange-600 text-white",
       text: "text-orange-600 dark:text-orange-400",
     },
-    inputs: [NODE_FLOW_INPUT, { id: "items", label: "Массив элементов", type: "any" }],
+    inputs: [NODE_FLOW_INPUT],
     outputs: [
-      { id: "results", label: "Результаты итераций", type: "any" },
-      { id: "count", label: "Количество", type: "number" },
-      { id: "last_result", label: "Последний результат", type: "any" },
+      { id: "output", label: "Результат итерации", type: "any" },
     ],
     defaultData: {
       title: "Цикл по каналам",
@@ -558,13 +547,9 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
     inputs: [
       NODE_FLOW_INPUT,
       { id: "url", label: "URL", type: "string" },
-      { id: "body", label: "Тело запроса", type: "any" },
     ],
     outputs: [
-      { id: "status_code", label: "HTTP код", type: "number" },
-      { id: "body", label: "Ответ", type: "any" },
-      { id: "headers", label: "Заголовки", type: "any" },
-      { id: "ok", label: "Успех (2xx)", type: "boolean" },
+      { id: "body", label: "Ответ API", type: "any" },
     ],
     defaultData: {
       title: "HTTP запрос",

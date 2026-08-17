@@ -569,7 +569,7 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
           )}
         </div>
       ) : (
-        <div className="p-3">
+        <div className="p-3 min-h-[92px]">
         {/* 1. IMAGE / MEDIA FROM DISK OR PC */}
         {node.type === "files_media" && (
           <div className="space-y-2">
@@ -1016,6 +1016,118 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
         {node.type === "formatter" && (
           <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/40 p-2 text-[11px] text-zinc-700 dark:text-zinc-300 font-mono line-clamp-2">
             {(node.data.template as string) || "Шаблон"}
+          </div>
+        )}
+
+        {node.type === "merge" && (
+          <div className="space-y-2">
+            <div className="rounded-xl border border-teal-100 dark:border-teal-900/40 bg-teal-50/60 dark:bg-teal-950/20 p-3 text-xs">
+              <div className="line-clamp-2 text-[11px] text-zinc-800 dark:text-zinc-200">
+                Объединяет параллельные ветки: текст, медиа и другие поля в один поток
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-1 pt-0.5">
+              <span className="rounded bg-teal-100 dark:bg-teal-950/60 border border-teal-200 dark:border-teal-800/40 px-1.5 py-0.5 text-[9px] text-teal-700 dark:text-teal-300 font-medium">
+                {(node.data.mode as string) === "prefer_first"
+                  ? "Первый вход"
+                  : (node.data.mode as string) === "prefer_last"
+                  ? "Последний вход"
+                  : "Combine"}
+              </span>
+              {node.data.waitForAll !== false && (
+                <span className="rounded bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 text-[9px] text-zinc-600 dark:text-zinc-400">
+                  Ждать все входы
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
+        {node.type === "set_fields" && (
+          <div className="space-y-2">
+            <div className="rounded-xl border border-blue-100 dark:border-blue-900/40 bg-blue-50/60 dark:bg-blue-950/20 p-3 text-xs space-y-1.5">
+              {(Array.isArray(node.data.fields) ? node.data.fields : [])
+                .slice(0, 3)
+                .map((field: { key?: string; value?: string }, idx: number) => (
+                  <div key={idx} className="flex flex-col gap-0.5">
+                    <span className="text-[9px] font-semibold uppercase tracking-wide text-blue-600 dark:text-blue-400">
+                      {(field.key as string) || `поле_${idx + 1}`}
+                    </span>
+                    <span className="line-clamp-1 text-[11px] text-zinc-800 dark:text-zinc-200 font-mono">
+                      {(field.value as string) || "—"}
+                    </span>
+                  </div>
+                ))}
+              {(!Array.isArray(node.data.fields) || node.data.fields.length === 0) && (
+                <span className="text-[11px] text-zinc-500 italic">Добавьте поля в инспекторе</span>
+              )}
+            </div>
+            {Array.isArray(node.data.fields) && node.data.fields.length > 3 && (
+              <span className="text-[10px] text-zinc-500 px-1">
+                +{node.data.fields.length - 3} полей
+              </span>
+            )}
+          </div>
+        )}
+
+        {node.type === "loop_items" && (
+          <div className="space-y-2">
+            <div className="rounded-xl border border-orange-100 dark:border-orange-900/40 bg-orange-50/60 dark:bg-orange-950/20 p-3 text-xs">
+              <div className="line-clamp-2 text-[11px] text-zinc-800 dark:text-zinc-200">
+                {(node.data.itemsSource as string) === "static"
+                  ? "Повтор для каждого элемента статического списка"
+                  : (node.data.itemsSource as string) === "upstream_field"
+                  ? "Повтор для каждого элемента из предыдущей ноды"
+                  : "Повтор для каждого подключённого канала"}
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-1 pt-0.5">
+              {(node.data.itemsSource as string) !== "channels" ? (
+                <span className="rounded bg-orange-100 dark:bg-orange-950/60 border border-orange-200 dark:border-orange-800/40 px-1.5 py-0.5 text-[9px] text-orange-700 dark:text-orange-300 font-medium">
+                  {(node.data.itemsSource as string) || "channels"}
+                </span>
+              ) : (
+                (Array.isArray(node.data.channelProviders)
+                  ? node.data.channelProviders
+                  : ["telegram", "vk"]
+                ).map((p: string) => (
+                  <span
+                    key={p}
+                    className="rounded bg-orange-100 dark:bg-orange-950/60 border border-orange-200 dark:border-orange-800/40 px-1.5 py-0.5 text-[9px] text-orange-700 dark:text-orange-300 font-medium uppercase"
+                  >
+                    {p}
+                  </span>
+                ))
+              )}
+              <span className="rounded bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 text-[9px] text-zinc-600 dark:text-zinc-400">
+                max {(node.data.maxIterations as number) || 20}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {node.type === "http_request" && (
+          <div className="space-y-2">
+            <div className="rounded-xl border border-sky-100 dark:border-sky-900/40 bg-sky-50/60 dark:bg-sky-950/20 p-3 text-xs">
+              <div className="line-clamp-2 text-[11px] text-zinc-800 dark:text-zinc-200 font-mono break-all">
+                {(node.data.url as string) || "https://api.example.com/endpoint"}
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-1 pt-0.5">
+              <span className="rounded bg-sky-100 dark:bg-sky-950/60 border border-sky-200 dark:border-sky-800/40 px-1.5 py-0.5 text-[9px] text-sky-700 dark:text-sky-300 font-bold uppercase">
+                {(node.data.method as string) || "GET"}
+              </span>
+              {(node.data.responseFormat as string) && (
+                <span className="rounded bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 text-[9px] text-zinc-600 dark:text-zinc-400">
+                  {(node.data.responseFormat as string).toUpperCase()}
+                </span>
+              )}
+              {node.data.failOnNon2xx !== false && (
+                <span className="rounded bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800/40 px-1.5 py-0.5 text-[9px] text-amber-700 dark:text-amber-400">
+                  Fail on 4xx/5xx
+                </span>
+              )}
+            </div>
           </div>
         )}
       </div>

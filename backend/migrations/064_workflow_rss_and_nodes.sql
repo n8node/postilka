@@ -41,8 +41,8 @@ VALUES
         "edges": [
             {"id": "e1", "source": "trigger_1", "target": "ai_text_1"},
             {"id": "e2", "source": "trigger_1", "target": "ai_image_1"},
-            {"id": "e3", "source": "ai_text_1", "target": "merge_1", "sourceHandle": "text", "targetHandle": "input_1"},
-            {"id": "e4", "source": "ai_image_1", "target": "merge_1", "sourceHandle": "image_url", "targetHandle": "input_2"},
+            {"id": "e3", "source": "ai_text_1", "target": "merge_1", "sourceHandle": "text"},
+            {"id": "e4", "source": "ai_image_1", "target": "merge_1", "sourceHandle": "image_url"},
             {"id": "e5", "source": "merge_1", "target": "formatter_1"},
             {"id": "e6", "source": "formatter_1", "target": "if_1"},
             {"id": "e7", "source": "if_1", "target": "draft_1", "sourceHandle": "output_0"},

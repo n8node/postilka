@@ -648,6 +648,7 @@ func (s *WorkflowService) executeWorkflowGraph(ctx context.Context, runID string
 			outputs["count"] = len(items)
 			if len(iterationResults) > 0 {
 				outputs["last_result"] = iterationResults[len(iterationResults)-1]
+				outputs["output"] = iterationResults[len(iterationResults)-1]
 			}
 			createdStep.Outputs = outputs
 		}
