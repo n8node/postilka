@@ -39,6 +39,8 @@ import {
   HelpCircle,
   Layers,
   ChevronDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import type { WorkflowNode } from "@/lib/workflows-api";
 import {
@@ -93,7 +95,6 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
 
   const [channels, setChannels] = useState<ChannelListItem[]>([]);
   const [loadingChannels, setLoadingChannels] = useState(false);
-  const [locationExpanded, setLocationExpanded] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -208,11 +209,18 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
   const def = NODE_DEFINITIONS[node.type];
   const data = node.data || {};
 
-  const handleFieldChange = (key: string, value: any) => {
-    onUpdateNodeData(node.id, {
-      ...data,
-      [key]: value,
-    });
+  const handleFieldChange = (keyOrUpdates: string | Record<string, any>, value?: any) => {
+    if (typeof keyOrUpdates === "string") {
+      onUpdateNodeData(node.id, {
+        ...data,
+        [keyOrUpdates]: value,
+      });
+    } else if (typeof keyOrUpdates === "object" && keyOrUpdates !== null) {
+      onUpdateNodeData(node.id, {
+        ...data,
+        ...keyOrUpdates,
+      });
+    }
   };
 
   const handleTest = async () => {
@@ -297,12 +305,10 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
           onChange={(e) => {
             const chId = e.target.value;
             const targetCh = providerChannels.find((c) => c.id === chId);
-            handleFieldChange("channelId", chId);
-            if (targetCh) {
-              handleFieldChange("channelName", targetCh.name);
-            } else {
-              handleFieldChange("channelName", "");
-            }
+            handleFieldChange({
+              channelId: chId,
+              channelName: targetCh ? targetCh.name : "",
+            });
           }}
           className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-2 text-xs text-zinc-900 dark:text-zinc-100 font-medium focus:border-indigo-500 focus:outline-none"
         >
@@ -962,6 +968,39 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                     />
                   </div>
 
+                  {/* Media position relative to text */}
+                  <div>
+                    <label className="mb-1 block font-medium text-zinc-700 dark:text-zinc-300 text-xs">
+                      Расположение медиа относительно текста
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleFieldChange("mediaPosition", "below")}
+                        className={`flex items-center justify-center gap-1.5 rounded-xl border p-2 text-xs font-medium transition ${
+                          (data.mediaPosition || "below") === "below"
+                            ? "border-sky-500 bg-sky-50 dark:bg-sky-950/50 text-sky-700 dark:text-sky-300 ring-1 ring-sky-500"
+                            : "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800/60 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50"
+                        }`}
+                      >
+                        <ArrowDown className="h-3.5 w-3.5" />
+                        <span>Медиа над текстом</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleFieldChange("mediaPosition", "above")}
+                        className={`flex items-center justify-center gap-1.5 rounded-xl border p-2 text-xs font-medium transition ${
+                          data.mediaPosition === "above"
+                            ? "border-sky-500 bg-sky-50 dark:bg-sky-950/50 text-sky-700 dark:text-sky-300 ring-1 ring-sky-500"
+                            : "border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800/60 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50"
+                        }`}
+                      >
+                        <ArrowUp className="h-3.5 w-3.5" />
+                        <span>Медиа под текстом</span>
+                      </button>
+                    </div>
+                  </div>
+
                   {/* Telegram Options */}
                   <div className="space-y-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 p-2.5">
                     {canSilent && (
@@ -1018,113 +1057,164 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                   </div>
 
                   {/* Inline Buttons Builder */}
-                  {canButtons && (
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between">
-                        <label className="font-medium text-zinc-700 dark:text-zinc-300 text-xs">
-                          Инлайн-кнопки со ссылками
-                        </label>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const btns = Array.isArray(data.buttons) ? [...data.buttons] : [];
-                            btns.push({ text: "Подробнее 🚀", url: "https://postilka.ru" });
-                            handleFieldChange("buttons", btns);
-                          }}
-                          className="flex items-center gap-1 text-[10px] text-sky-600 hover:text-sky-700 font-medium"
-                        >
-                          <Plus className="h-3 w-3" />
-                          Добавить кнопку
-                        </button>
-                      </div>
+                  {canButtons && (() => {
+                    const rawBtns = data.buttons;
+                    const buttonRows: Array<Array<{ text: string; url: string; style?: string }>> =
+                      !Array.isArray(rawBtns)
+                        ? []
+                        : rawBtns.length === 0
+                        ? []
+                        : Array.isArray(rawBtns[0])
+                        ? (rawBtns as Array<Array<{ text: string; url: string; style?: string }>>)
+                        : [(rawBtns as Array<{ text: string; url: string; style?: string }>)];
 
-                      <div className="space-y-1.5">
-                        {Array.isArray(data.buttons) &&
-                          data.buttons.map((btn: any, idx: number) => (
-                            <div key={idx} className="flex items-center gap-1.5">
-                              <input
-                                type="text"
-                                value={btn.text || ""}
-                                onChange={(e) => {
-                                  const btns = [...data.buttons];
-                                  btns[idx].text = e.target.value;
-                                  handleFieldChange("buttons", btns);
-                                }}
-                                placeholder="Текст кнопки"
-                                className="w-1/2 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2 py-1 text-xs"
-                              />
-                              <input
-                                type="text"
-                                value={btn.url || ""}
-                                onChange={(e) => {
-                                  const btns = [...data.buttons];
-                                  btns[idx].url = e.target.value;
-                                  handleFieldChange("buttons", btns);
-                                }}
-                                placeholder="https://..."
-                                className="flex-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2 py-1 text-xs font-mono"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const btns = data.buttons.filter((_: any, i: number) => i !== idx);
-                                  handleFieldChange("buttons", btns);
-                                }}
-                                className="p-1 text-zinc-400 hover:text-red-500 transition"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            </div>
-                          ))}
-                      </div>
-                    </div>
-                  )}
+                    const updateRows = (
+                      newRows: Array<Array<{ text: string; url: string; style?: string }>>
+                    ) => {
+                      handleFieldChange("buttons", newRows);
+                    };
 
-                  {/* Location Collapsible */}
-                  <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/40 dark:bg-zinc-800/20 p-2.5 space-y-2">
-                    <button
-                      type="button"
-                      onClick={() => setLocationExpanded(!locationExpanded)}
-                      className="flex w-full items-center justify-between text-xs font-medium text-zinc-700 dark:text-zinc-300"
-                    >
-                      <div className="flex items-center gap-1.5">
-                        <MapPin className="h-3.5 w-3.5 text-zinc-500" />
-                        <span>Геолокация (опционально)</span>
-                      </div>
-                      <ChevronDown
-                        className={`h-3.5 w-3.5 text-zinc-400 transition-transform ${
-                          locationExpanded ? "rotate-180" : ""
-                        }`}
-                      />
-                    </button>
-                    {locationExpanded && (
-                      <div className="space-y-2 pt-1 border-t border-zinc-100 dark:border-zinc-800">
-                        <input
-                          type="text"
-                          value={data.locationName || ""}
-                          onChange={(e) => handleFieldChange("locationName", e.target.value)}
-                          placeholder="Название места (напр. Москва, Красная площадь)"
-                          className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2.5 py-1 text-xs"
-                        />
-                        <div className="grid grid-cols-2 gap-2">
-                          <input
-                            type="text"
-                            value={data.latitude || ""}
-                            onChange={(e) => handleFieldChange("latitude", e.target.value)}
-                            placeholder="Широта (55.7558)"
-                            className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2 py-1 text-xs"
-                          />
-                          <input
-                            type="text"
-                            value={data.longitude || ""}
-                            onChange={(e) => handleFieldChange("longitude", e.target.value)}
-                            placeholder="Долгота (37.6173)"
-                            className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2 py-1 text-xs"
-                          />
+                    const addRow = () => {
+                      updateRows([
+                        ...buttonRows,
+                        [{ text: "Подробнее 🚀", url: "https://postilka.ru", style: "default" }],
+                      ]);
+                    };
+
+                    const addButtonToRow = (rowIndex: number) => {
+                      const next = buttonRows.map((r) => [...r]);
+                      next[rowIndex].push({
+                        text: "Кнопка",
+                        url: "https://postilka.ru",
+                        style: "default",
+                      });
+                      updateRows(next);
+                    };
+
+                    const updateButton = (
+                      rowIndex: number,
+                      btnIndex: number,
+                      patch: Partial<{ text: string; url: string; style: string }>
+                    ) => {
+                      const next = buttonRows.map((r) => r.map((b) => ({ ...b })));
+                      next[rowIndex][btnIndex] = { ...next[rowIndex][btnIndex], ...patch };
+                      updateRows(next);
+                    };
+
+                    const removeButton = (rowIndex: number, btnIndex: number) => {
+                      let next = buttonRows.map((r) => r.filter((_, idx) => idx !== btnIndex));
+                      next = next.filter((r) => r.length > 0);
+                      updateRows(next);
+                    };
+
+                    const removeRow = (rowIndex: number) => {
+                      const next = buttonRows.filter((_, idx) => idx !== rowIndex);
+                      updateRows(next);
+                    };
+
+                    return (
+                      <div className="space-y-2.5">
+                        <div className="flex items-center justify-between">
+                          <label className="font-semibold text-zinc-800 dark:text-zinc-200 text-xs">
+                            Инлайн-кнопки (строки и цвета)
+                          </label>
+                          <button
+                            type="button"
+                            onClick={addRow}
+                            className="flex items-center gap-1 text-[11px] font-medium text-sky-600 hover:text-sky-700 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/50 px-2 py-1 rounded-lg border border-sky-200 dark:border-sky-800 transition"
+                          >
+                            <Plus className="h-3 w-3" />
+                            Добавить строку
+                          </button>
                         </div>
+
+                        {buttonRows.length === 0 ? (
+                          <div className="rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800 p-3 text-center text-[11px] text-zinc-400">
+                            Кнопки не добавлены. Нажмите «Добавить строку», чтобы создать кнопки.
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            {buttonRows.map((row, rowIndex) => (
+                              <div
+                                key={rowIndex}
+                                className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-850/40 p-2.5 space-y-2"
+                              >
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[11px] font-semibold text-zinc-700 dark:text-zinc-300">
+                                    Строка {rowIndex + 1} ({row.length} {row.length === 1 ? "кнопка" : "кнопок"})
+                                  </span>
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => addButtonToRow(rowIndex)}
+                                      className="flex items-center gap-0.5 text-[10px] text-sky-600 dark:text-sky-400 hover:underline px-1 py-0.5 font-medium"
+                                    >
+                                      <Plus className="h-2.5 w-2.5" />
+                                      Кнопка в строку
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => removeRow(rowIndex)}
+                                      className="p-1 text-zinc-400 hover:text-red-500 transition"
+                                      title="Удалить строку"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+
+                                <div className="space-y-1.5">
+                                  {row.map((btn, btnIndex) => (
+                                    <div key={btnIndex} className="flex items-center gap-1.5">
+                                      <input
+                                        type="text"
+                                        value={btn.text || ""}
+                                        onChange={(e) =>
+                                          updateButton(rowIndex, btnIndex, { text: e.target.value })
+                                        }
+                                        placeholder="Текст кнопки"
+                                        className="w-1/3 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2 py-1 text-xs text-zinc-900 dark:text-zinc-100"
+                                      />
+                                      <input
+                                        type="text"
+                                        value={btn.url || ""}
+                                        onChange={(e) =>
+                                          updateButton(rowIndex, btnIndex, { url: e.target.value })
+                                        }
+                                        placeholder="https://..."
+                                        className="flex-1 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-2 py-1 text-xs font-mono text-zinc-900 dark:text-zinc-100"
+                                      />
+                                      <select
+                                        value={btn.style || "default"}
+                                        onChange={(e) =>
+                                          updateButton(rowIndex, btnIndex, { style: e.target.value })
+                                        }
+                                        className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-1.5 py-1 text-xs text-zinc-700 dark:text-zinc-300 font-medium"
+                                        title="Цвет кнопки"
+                                      >
+                                        <option value="default">Обычная</option>
+                                        <option value="primary">Основная (синяя)</option>
+                                        <option value="success">Успех (зеленая)</option>
+                                        <option value="danger">Опасная (красная)</option>
+                                      </select>
+                                      <button
+                                        type="button"
+                                        onClick={() => removeButton(rowIndex, btnIndex)}
+                                        className="p-1 text-zinc-400 hover:text-red-500 transition shrink-0"
+                                        title="Удалить кнопку"
+                                      >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
+                    );
+                  })()}
                 </>
               )}
 
@@ -1217,53 +1307,36 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
         })()}
 
         {/* 5b. MAX NODE */}
-        {node.type === "social_max" && (() => {
-          const currentFormat = data.format || "message";
-          return (
-            <div className="space-y-3">
-              {renderChannelSelector("max", "MAX")}
+        {node.type === "social_max" && (
+          <div className="space-y-3">
+            {renderChannelSelector("max", "MAX")}
 
-              <div>
-                <label className="mb-1 block font-medium text-zinc-700 dark:text-zinc-300">
-                  Формат публикации MAX
+            <div>
+              <div className="mb-1 flex items-center justify-between">
+                <label className="font-medium text-zinc-700 dark:text-zinc-300">
+                  Текст сообщения
                 </label>
-                <select
-                  value={currentFormat}
-                  onChange={(e) => handleFieldChange("format", e.target.value)}
-                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none font-medium"
+                <button
+                  type="button"
+                  onClick={() =>
+                    setShowVariablePickerFor(
+                      showVariablePickerFor === "text" ? null : "text"
+                    )
+                  }
+                  className="flex items-center gap-1 rounded bg-violet-50 dark:bg-violet-950/40 px-1.5 py-0.5 text-[10px] font-medium text-violet-600 dark:text-violet-400 hover:bg-violet-100"
                 >
-                  <option value="message">Сообщение / Пост</option>
-                  <option value="article">Статья (Лонгрид)</option>
-                  <option value="rich_message">Форматированное сообщение</option>
-                </select>
+                  <Variable className="h-3 w-3" />
+                  Переменная
+                </button>
               </div>
-
-              <div>
-                <div className="mb-1 flex items-center justify-between">
-                  <label className="font-medium text-zinc-700 dark:text-zinc-300">
-                    {currentFormat === "article" ? "Текст статьи" : "Текст сообщения"}
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setShowVariablePickerFor(
-                        showVariablePickerFor === "text" ? null : "text"
-                      )
-                    }
-                    className="flex items-center gap-1 rounded bg-violet-50 dark:bg-violet-950/40 px-1.5 py-0.5 text-[10px] font-medium text-violet-600 dark:text-violet-400 hover:bg-violet-100"
-                  >
-                    <Variable className="h-3 w-3" />
-                    Переменная
-                  </button>
-                </div>
-                <textarea
-                  rows={5}
-                  value={data.text || ""}
-                  onChange={(e) => handleFieldChange("text", e.target.value)}
-                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 p-2.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none font-mono"
-                  placeholder="{{ ai_text_1.text }}"
-                />
-              </div>
+              <textarea
+                rows={5}
+                value={data.text || ""}
+                onChange={(e) => handleFieldChange("text", e.target.value)}
+                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 p-2.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none font-mono"
+                placeholder="{{ ai_text_1.text }}"
+              />
+            </div>
 
               <div>
                 <div className="mb-1 flex items-center justify-between">
@@ -1402,8 +1475,8 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                 </div>
               </div>
             </div>
-          );
-        })()}
+          </div>
+        )}
 
         {/* 6. VK NODE */}
         {node.type === "social_vk" && (
@@ -1695,139 +1768,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
           </div>
         )}
 
-        {/* 7b. RUTUBE NODE */}
-        {node.type === "social_rutube" && (
-          <div className="space-y-3">
-            {renderChannelSelector("rutube", "Rutube")}
-
-            <div>
-              <div className="mb-1 flex items-center justify-between">
-                <label className="font-medium text-zinc-700 dark:text-zinc-300">
-                  Видеофайл (URL MP4)
-                </label>
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => onOpenMediaPicker?.(node.id, "videoUrl")}
-                    className="flex items-center gap-1 rounded bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200"
-                  >
-                    <Folder className="h-2.5 w-2.5" />
-                    Медиатека
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setShowVariablePickerFor(
-                        showVariablePickerFor === "videoUrl" ? null : "videoUrl"
-                      )
-                    }
-                    className="flex items-center gap-1 rounded bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400 hover:bg-amber-100"
-                  >
-                    <Variable className="h-3 w-3" />
-                    Переменная
-                  </button>
-                </div>
-              </div>
-              <input
-                type="text"
-                value={data.videoUrl || ""}
-                onChange={(e) => handleFieldChange("videoUrl", e.target.value)}
-                placeholder="{{ ai_video_1.video_url }} или https://..."
-                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs font-mono"
-              />
-            </div>
-
-            <div>
-              <div className="mb-1 flex items-center justify-between">
-                <label className="font-medium text-zinc-700 dark:text-zinc-300">
-                  Название видео (Rutube)
-                </label>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setShowVariablePickerFor(
-                      showVariablePickerFor === "title" ? null : "title"
-                    )
-                  }
-                  className="flex items-center gap-1 rounded bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400 hover:bg-amber-100"
-                >
-                  <Variable className="h-3 w-3" />
-                  Переменная
-                </button>
-              </div>
-              <input
-                type="text"
-                value={data.title || data.titleText || ""}
-                onChange={(e) => handleFieldChange("title", e.target.value)}
-                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 font-medium"
-                placeholder="Название видео на Rutube"
-              />
-            </div>
-
-            <div>
-              <div className="mb-1 flex items-center justify-between">
-                <label className="font-medium text-zinc-700 dark:text-zinc-300">
-                  Описание публикации
-                </label>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setShowVariablePickerFor(
-                      showVariablePickerFor === "text" ? null : "text"
-                    )
-                  }
-                  className="flex items-center gap-1 rounded bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:text-amber-400 hover:bg-amber-100"
-                >
-                  <Variable className="h-3 w-3" />
-                  Переменная
-                </button>
-              </div>
-              <textarea
-                rows={3}
-                value={data.text || ""}
-                onChange={(e) => handleFieldChange("text", e.target.value)}
-                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 p-2.5 text-xs text-zinc-900 dark:text-zinc-100 font-mono"
-                placeholder="{{ ai_text_1.text }}"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="mb-1 block font-medium text-zinc-700 dark:text-zinc-300">
-                  Категория
-                </label>
-                <select
-                  value={data.category || "Бизнес и стартапы"}
-                  onChange={(e) => handleFieldChange("category", e.target.value)}
-                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-2.5 py-1.5 text-xs text-zinc-900 dark:text-zinc-100"
-                >
-                  <option value="Бизнес и стартапы">Бизнес и стартапы</option>
-                  <option value="Технологии и интернет">Технологии и IT</option>
-                  <option value="Образование">Образование</option>
-                  <option value="Развлечения">Развлечения</option>
-                  <option value="Новости и СМИ">Новости и СМИ</option>
-                  <option value="Юмор">Юмор</option>
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block font-medium text-zinc-700 dark:text-zinc-300">
-                  Приватность
-                </label>
-                <select
-                  value={data.privacyStatus || "public"}
-                  onChange={(e) => handleFieldChange("privacyStatus", e.target.value)}
-                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-2.5 py-1.5 text-xs"
-                >
-                  <option value="public">Публичное</option>
-                  <option value="unlisted">По ссылке</option>
-                  <option value="private">Приватное</option>
-                </select>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* 7c. DZEN NODE */}
+        {/* 7b. DZEN NODE */}
         {node.type === "social_dzen" && (
           <div className="space-y-3">
             {renderChannelSelector("dzen", "Дзен")}
@@ -1876,7 +1817,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
           </div>
         )}
 
-        {/* 8. SWITCH NODE (n8n Switch Analog) */}
+        {/* 8. SWITCH NODE */}
         {node.type === "switch" && (() => {
           const switchOperators = [
             { value: "not_empty", label: "Не пусто (заполнено)" },
@@ -1904,7 +1845,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
               <div className="rounded-xl border border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/70 dark:bg-emerald-950/30 p-3 space-y-1.5">
                 <div className="flex items-center gap-1.5 font-semibold text-emerald-900 dark:text-emerald-300 text-xs">
                   <Split className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
-                  <span>Разветвление сценария (n8n Switch)</span>
+                  <span>Разветвление сценария (Switch)</span>
                 </div>
                 <p className="text-[11px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
                   Поток выполнения направляется только по той ветке, условие которой сработало. Шаги на неактивных ветках автоматически пропускаются.

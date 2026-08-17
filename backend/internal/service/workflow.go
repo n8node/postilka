@@ -630,6 +630,7 @@ func (s *WorkflowService) executeNode(
 		pin := getBool(inputs, "pin", false)
 		protectContent := getBool(inputs, "protectContent", false)
 		disableLinkPreview := getBool(inputs, "disableLinkPreview", false)
+		mediaPosition := getString(inputs, "mediaPosition", "below")
 		mediaURL := getString(inputs, "mediaUrl", "")
 		channelID := getString(inputs, "channelId", "")
 
@@ -654,7 +655,11 @@ func (s *WorkflowService) executeNode(
 		outputs["pin"] = pin
 		outputs["protect_content"] = protectContent
 		outputs["disable_link_preview"] = disableLinkPreview
+		outputs["media_position"] = mediaPosition
 		outputs["media_url"] = mediaURL
+		if btns, ok := inputs["buttons"]; ok && btns != nil {
+			outputs["buttons"] = btns
+		}
 		if tgChannel != nil {
 			outputs["channel_id"] = tgChannel.ID
 			outputs["channel_name"] = tgChannel.Name
@@ -697,6 +702,9 @@ func (s *WorkflowService) executeNode(
 		outputs["pin"] = pin
 		outputs["disable_link_preview"] = disableLinkPreview
 		outputs["media_url"] = mediaURL
+		if btns, ok := inputs["buttons"]; ok && btns != nil {
+			outputs["buttons"] = btns
+		}
 		if maxChannel != nil {
 			outputs["channel_id"] = maxChannel.ID
 			outputs["channel_name"] = maxChannel.Name

@@ -178,10 +178,15 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
     ],
     defaultData: {
       title: "Telegram Пост",
+      channelId: "",
+      channelName: "",
       text: "{{ ai_text_1.text }}",
       format: "message",
+      mediaPosition: "below",
       silent: false,
       pin: false,
+      protectContent: false,
+      disableLinkPreview: false,
       buttons: [],
     },
   },
@@ -243,35 +248,10 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       tags: "shorts, ai, marketing",
     },
   },
-  social_rutube: {
-    type: "social_rutube",
-    title: "Rutube Канал",
-    description: "Публикация видео и постов в ленту Rutube",
-    category: "social",
-    icon: "film",
-    color: {
-      bg: "bg-amber-500/10 dark:bg-amber-500/20",
-      border: "border-amber-500/40",
-      badge: "bg-amber-600 text-white",
-      text: "text-amber-600 dark:text-amber-400",
-    },
-    inputs: [
-      { id: "text", label: "Текст / Описание", type: "string" },
-      { id: "videoUrl", label: "Видео", type: "video" },
-    ],
-    outputs: [
-      { id: "status", label: "Статус", type: "string" },
-    ],
-    defaultData: {
-      title: "Rutube Публикация",
-      text: "{{ ai_text_1.text }}",
-      category: "Бизнес и стартапы",
-    },
-  },
   social_max: {
     type: "social_max",
     title: "MAX Канал",
-    description: "Публикация постов, медиа, кнопок и статей в мессенджер MAX",
+    description: "Публикация постов, медиафайлов и инлайн-кнопок в мессенджер MAX",
     category: "social",
     icon: "message-square",
     color: {
@@ -293,9 +273,9 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       channelId: "",
       channelName: "",
       text: "{{ ai_text_1.text }}",
-      format: "message",
       silent: false,
       pin: false,
+      disableLinkPreview: false,
       buttons: [],
     },
   },
@@ -402,7 +382,7 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
   switch: {
     type: "switch",
     title: "Разветвление (Switch)",
-    description: "Маршрутизация по условиям на разные ветки (аналог n8n Switch)",
+    description: "Маршрутизация по условиям на разные ветки сценария",
     category: "logic",
     icon: "split",
     color: {
@@ -615,7 +595,6 @@ export function calculateWorkflowCost(
       n.type === "social_telegram" ||
       n.type === "social_vk" ||
       n.type === "social_youtube" ||
-      n.type === "social_rutube" ||
       n.type === "social_max" ||
       n.type === "social_dzen"
     ) {
