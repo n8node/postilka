@@ -393,7 +393,9 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       { id: "leftValue", label: "Значение", type: "any" },
     ],
     outputs: [
-      { id: "result", label: "Результат (true/false)", type: "boolean" },
+      { id: "output_0", label: "Да (True)", type: "any" },
+      { id: "output_1", label: "Нет (False)", type: "any" },
+      { id: "result", label: "Результат (boolean)", type: "boolean" },
     ],
     defaultData: {
       title: "Проверка условия",
@@ -470,10 +472,15 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       badge: "bg-teal-600 text-white",
       text: "text-teal-600 dark:text-teal-400",
     },
-    inputs: [NODE_FLOW_INPUT],
+    inputs: [
+      { id: "input_1", label: "Вход 1", type: "any" },
+      { id: "input_2", label: "Вход 2", type: "any" },
+      { id: "input_3", label: "Вход 3 (опц.)", type: "any" },
+    ],
     outputs: [
       { id: "text", label: "Текст", type: "string" },
       { id: "mediaUrl", label: "Медиа", type: "any" },
+      { id: "merged", label: "Объединённый объект", type: "any" },
     ],
     defaultData: {
       title: "Объединение данных",

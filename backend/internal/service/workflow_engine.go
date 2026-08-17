@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/postilka/postilka/internal/model"
@@ -31,14 +32,55 @@ func (s *WorkflowService) syncWorkflowMetaFromGraph(w *model.Workflow) {
 	}
 }
 
+func mergeInputOrder(handle string) int {
+	switch handle {
+	case "input_1", "input":
+		return 1
+	case "input_2":
+		return 2
+	case "input_3":
+		return 3
+	default:
+		return 99
+	}
+}
+
+func isActiveBranchEdge(
+	edge model.WorkflowEdge,
+	predOutputs map[string]interface{},
+	skipped map[string]bool,
+) bool {
+	if skipped[edge.Source] {
+		return false
+	}
+	if predOutputs == nil {
+		return true
+	}
+	activeOutput, hasActive := predOutputs["active_output"].(string)
+	if !hasActive || activeOutput == "" || edge.SourceHandle == "" {
+		return true
+	}
+	// Legacy graphs may connect the old boolean port "result".
+	if edge.SourceHandle == "result" {
+		return true
+	}
+	return edge.SourceHandle == activeOutput
+}
+
 func collectMergeInputs(
 	incoming []model.WorkflowEdge,
 	outputs map[string]map[string]interface{},
 	skipped map[string]bool,
 ) []map[string]interface{} {
-	sources := make([]map[string]interface{}, 0, len(incoming))
+	ordered := make([]model.WorkflowEdge, len(incoming))
+	copy(ordered, incoming)
+	sort.SliceStable(ordered, func(i, j int) bool {
+		return mergeInputOrder(ordered[i].TargetHandle) < mergeInputOrder(ordered[j].TargetHandle)
+	})
+
+	sources := make([]map[string]interface{}, 0, len(ordered))
 	seen := make(map[string]bool)
-	for _, edge := range incoming {
+	for _, edge := range ordered {
 		if skipped[edge.Source] {
 			continue
 		}

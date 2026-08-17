@@ -469,22 +469,10 @@ func (s *WorkflowService) executeWorkflowGraph(ctx context.Context, runID string
 		if len(incoming) > 0 {
 			hasAtLeastOneActivePath := false
 			for _, edge := range incoming {
-				// If predecessor was skipped, this incoming path is inactive
-				if skippedNodes[edge.Source] {
+				if !isActiveBranchEdge(edge, executionOutputs[edge.Source], skippedNodes) {
 					continue
 				}
 
-				// If predecessor is a switch or condition, check if sourceHandle matches active branch
-				predOutputs, hasOutputs := executionOutputs[edge.Source]
-				if hasOutputs {
-					activeOutput, hasActive := predOutputs["active_output"].(string)
-					if hasActive && activeOutput != "" && edge.SourceHandle != "" {
-						if edge.SourceHandle != activeOutput {
-							// Inactive branch edge
-							continue
-						}
-					}
-				}
 				hasAtLeastOneActivePath = true
 				break
 			}

@@ -986,11 +986,21 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
 
         {/* 10. CONDITION, SWITCH & FORMATTER */}
         {node.type === "logic_condition" && (
-          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/40 p-2 text-[11px] text-zinc-700 dark:text-zinc-300">
-            Условие:{" "}
-            <span className="font-semibold text-indigo-600 dark:text-indigo-400">
-              {node.data.operator || "equals"}
-            </span>
+          <div className="space-y-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/40 p-2.5 text-[11px]">
+            <div className="text-zinc-700 dark:text-zinc-300">
+              Условие:{" "}
+              <span className="font-semibold text-indigo-600 dark:text-indigo-400">
+                {node.data.operator || "equals"}
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-1 pt-0.5">
+              <span className="rounded bg-emerald-100 dark:bg-emerald-950/60 border border-emerald-200 dark:border-emerald-800/40 px-1.5 py-0.5 text-[9px] text-emerald-700 dark:text-emerald-300 font-medium">
+                Да → output_0
+              </span>
+              <span className="rounded bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 text-[9px] text-zinc-600 dark:text-zinc-400 font-medium">
+                Нет → output_1
+              </span>
+            </div>
           </div>
         )}
 
