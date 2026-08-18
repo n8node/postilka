@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { ArrowLeft, ImagePlus, Loader2, Save, Trash2, Undo2 } from "lucide-react";
 import { SketchCanvas, type SketchCanvasHandle } from "@/components/sketch/SketchCanvas";
 import { SketchInspector } from "@/components/sketch/SketchInspector";
+import { SketchPageFlip } from "@/components/sketch/SketchPageFlip";
+import { SketchSaveStrip } from "@/components/sketch/SketchSaveStrip";
 import { useAuth } from "@/context/AuthContext";
 import { ApiError } from "@/lib/api";
 import type { AspectRatioId } from "@/lib/generation-data";
@@ -41,7 +43,6 @@ import {
   saveSketch,
   type SavedSketch,
 } from "@/lib/sketch-saves";
-import { cn } from "@/lib/utils";
 
 export function SketchPage() {
   const router = useRouter();
@@ -74,6 +75,8 @@ export function SketchPage() {
   const [resultGenerationId, setResultGenerationId] = useState<string | null>(null);
   const [savedSketches, setSavedSketches] = useState<SavedSketch[]>([]);
   const [selectedSaveId, setSelectedSaveId] = useState<string | null>(null);
+  const [activeSaveIndex, setActiveSaveIndex] = useState<number | null>(null);
+  const [canvasDisplayHeight, setCanvasDisplayHeight] = useState(320);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [hasCanvasContent, setHasCanvasContent] = useState(false);
 
@@ -254,8 +257,9 @@ export function SketchPage() {
     }
     try {
       const dataUrl = await canvasRef.current.exportDataUrl();
-      const saved = saveSketch(workspaceId, aspectRatio, dataUrl);
+      const saved = await saveSketch(workspaceId, aspectRatio, dataUrl);
       setSelectedSaveId(saved.id);
+      setActiveSaveIndex(0);
       reloadSavedSketches();
     } catch {
       setSaveError("Не удалось сохранить набросок");
@@ -264,21 +268,66 @@ export function SketchPage() {
 
   const handleDeleteSavedSketch = () => {
     if (!workspaceId || !selectedSaveId) return;
+    const deletedIndex = savedSketches.findIndex((s) => s.id === selectedSaveId);
     deleteSketchSave(workspaceId, selectedSaveId);
     setSelectedSaveId(null);
+    if (activeSaveIndex !== null) {
+      if (deletedIndex === activeSaveIndex) {
+        setActiveSaveIndex(null);
+        canvasRef.current?.clear();
+        refreshUndo();
+      } else if (deletedIndex < activeSaveIndex) {
+        setActiveSaveIndex(activeSaveIndex - 1);
+      }
+    }
     reloadSavedSketches();
   };
 
+  const loadSavedAtIndex = useCallback(
+    (index: number) => {
+      const item = savedSketches[index];
+      if (!item) return;
+      setSelectedSaveId(item.id);
+      setActiveSaveIndex(index);
+      setSaveError(null);
+      if (item.aspectRatio !== aspectRatio) {
+        pendingLoadRef.current = item.dataUrl;
+        setAspectRatio(item.aspectRatio);
+        return;
+      }
+      void canvasRef.current?.loadFromDataUrl(item.dataUrl).then(refreshUndo);
+    },
+    [savedSketches, aspectRatio, refreshUndo],
+  );
+
   const handleLoadSavedSketch = (item: SavedSketch) => {
-    setSelectedSaveId(item.id);
-    setSaveError(null);
-    if (item.aspectRatio !== aspectRatio) {
-      pendingLoadRef.current = item.dataUrl;
-      setAspectRatio(item.aspectRatio);
-      return;
-    }
-    void canvasRef.current?.loadFromDataUrl(item.dataUrl).then(refreshUndo);
+    const index = savedSketches.findIndex((s) => s.id === item.id);
+    if (index >= 0) loadSavedAtIndex(index);
   };
+
+  const goToNewPage = useCallback(async () => {
+    canvasRef.current?.clear();
+    setSelectedSaveId(null);
+    setActiveSaveIndex(null);
+    refreshUndo();
+  }, [refreshUndo]);
+
+  const goToPrevSavedPage = useCallback(async () => {
+    if (savedSketches.length === 0) return;
+    const nextIndex =
+      activeSaveIndex === null ? 0 : Math.min(activeSaveIndex + 1, savedSketches.length - 1);
+    if (activeSaveIndex !== null && nextIndex === activeSaveIndex) return;
+    loadSavedAtIndex(nextIndex);
+  }, [savedSketches.length, activeSaveIndex, loadSavedAtIndex]);
+
+  const canFlipLeft =
+    savedSketches.length > 0 &&
+    (activeSaveIndex === null || activeSaveIndex < savedSketches.length - 1);
+  const canFlipRight = true;
+
+  const handleDisplaySizeChange = useCallback((size: { width: number; height: number }) => {
+    setCanvasDisplayHeight(Math.round(size.height));
+  }, []);
 
   if (stylesLoading) {
     return (
@@ -308,42 +357,14 @@ export function SketchPage() {
       <div className="relative flex flex-1 min-h-0">
         <div className="relative flex flex-1 min-w-0 items-center justify-center overflow-auto p-4 pr-0 sm:pr-[432px]">
           <div className="flex items-start gap-3">
-            {/* Saved sketches — vertical strip left of canvas */}
-            <div
-              className="flex w-16 shrink-0 flex-col gap-2 overflow-y-auto py-1"
-              style={{ maxHeight: "calc(100vh - 12rem)" }}
-            >
-              {savedSketches.length === 0 ? (
-                <>
-                  {[0, 1, 2, 3].map((i) => (
-                    <div
-                      key={i}
-                      className="h-16 w-16 shrink-0 rounded-lg border border-dashed border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/40"
-                    />
-                  ))}
-                </>
-              ) : (
-                savedSketches.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => handleLoadSavedSketch(item)}
-                    className={cn(
-                      "h-16 w-16 shrink-0 overflow-hidden rounded-lg border bg-white transition",
-                      selectedSaveId === item.id
-                        ? "border-indigo-500 ring-2 ring-indigo-500/30"
-                        : "border-zinc-200 hover:border-zinc-300 dark:border-zinc-700",
-                    )}
-                    title={new Date(item.createdAt).toLocaleString("ru-RU")}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={item.dataUrl}
-                      alt=""
-                      className="h-full w-full object-cover"
-                    />
-                  </button>
-                ))
+            <div className="shrink-0 pt-9">
+              {canvasDisplayHeight > 0 && (
+                <SketchSaveStrip
+                  saves={savedSketches}
+                  selectedId={selectedSaveId}
+                  frameHeight={canvasDisplayHeight}
+                  onSelect={handleLoadSavedSketch}
+                />
               )}
             </div>
 
@@ -399,18 +420,27 @@ export function SketchPage() {
                 </div>
               </div>
 
-              <SketchCanvas
-                ref={canvasRef}
-                width={canvasSize.width}
-                height={canvasSize.height}
-                brush={brush}
-                color={color}
-                brushSize={brushSize}
-                backgroundImage={backgroundImage}
-                backgroundOpacity={backgroundOpacity}
-                onHistoryChange={refreshUndo}
-                maxHeight="calc(100vh - 14rem)"
-              />
+              <SketchPageFlip
+                canFlipLeft={canFlipLeft}
+                canFlipRight={canFlipRight}
+                disabled={localGenerating}
+                onFlipLeft={goToPrevSavedPage}
+                onFlipRight={goToNewPage}
+              >
+                <SketchCanvas
+                  ref={canvasRef}
+                  width={canvasSize.width}
+                  height={canvasSize.height}
+                  brush={brush}
+                  color={color}
+                  brushSize={brushSize}
+                  backgroundImage={backgroundImage}
+                  backgroundOpacity={backgroundOpacity}
+                  onHistoryChange={refreshUndo}
+                  onDisplaySizeChange={handleDisplaySizeChange}
+                  maxHeight="calc(100vh - 14rem)"
+                />
+              </SketchPageFlip>
 
               <div className="mt-2 flex items-center justify-end gap-2">
                 <button
