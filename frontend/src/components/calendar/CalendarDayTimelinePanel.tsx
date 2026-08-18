@@ -66,7 +66,7 @@ export function CalendarDayTimelinePanel({
   const hours = Array.from({ length: 24 }, (_, h) => h);
 
   return (
-    <aside className="flex w-64 shrink-0 flex-col border-l border-border bg-surface xl:w-72">
+    <aside className="flex h-full w-64 shrink-0 flex-col border-l border-border bg-surface xl:w-72">
       <div className="flex items-start justify-between border-b border-border px-4 py-3">
         <h2 className="text-sm font-semibold capitalize leading-snug">{title}</h2>
         <button

@@ -78,7 +78,7 @@ export function CalendarToolbar({
   }, [filtersOpen, onFiltersOpenChange]);
 
   return (
-    <div className="flex flex-col border-b border-border bg-surface">
+    <div className="shrink-0 flex flex-col border-b border-border bg-surface">
       <div className="flex flex-wrap items-center gap-3 px-3 py-2.5 sm:px-4">
         <Link
           href="/posts/new"

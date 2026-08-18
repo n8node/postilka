@@ -57,7 +57,7 @@ export function CalendarSidebar({
   };
 
   return (
-    <aside className="flex w-56 shrink-0 flex-col border-r border-border bg-surface lg:w-60">
+    <aside className="flex h-full w-56 shrink-0 flex-col border-r border-border bg-surface lg:w-60">
       <div className="border-b border-border p-3">
         <div className="mb-2 flex items-center justify-between">
           <button

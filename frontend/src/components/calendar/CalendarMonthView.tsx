@@ -78,7 +78,7 @@ export function CalendarMonthView({
   const channelIndex = new Map(channels.map((c, i) => [c.id, i]));
 
   return (
-    <div className="flex h-full min-h-[32rem] flex-col bg-surface">
+    <div className="flex h-full min-h-0 flex-col bg-surface">
       <div className="grid shrink-0 grid-cols-7 border-b border-border text-center text-xs font-medium text-muted">
         {WEEKDAY_LABELS.map((d, i) => (
           <div

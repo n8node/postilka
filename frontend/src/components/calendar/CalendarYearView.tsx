@@ -35,7 +35,7 @@ export function CalendarYearView({ anchor, timeZone, posts, onPickMonth }: Calen
   }
 
   return (
-    <div className="grid gap-4 overflow-y-auto p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+    <div className="grid h-full gap-4 overflow-y-auto p-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
       {monthAnchors.map((monthAnchor) => {
         const monthLabel = new Intl.DateTimeFormat("ru-RU", { month: "long", timeZone }).format(monthAnchor);
         const days = monthGridDays(monthAnchor, timeZone).slice(0, 42);

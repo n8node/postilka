@@ -238,7 +238,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             "min-w-0 flex-1",
             isActive(pathname, "/posts") ||
             isActive(pathname, "/ai") ||
-            isActive(pathname, "/workflows")
+            isActive(pathname, "/workflows") ||
+            isActive(pathname, "/calendar")
               ? "overflow-x-visible"
               : "overflow-x-clip",
           )}
@@ -247,7 +248,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             key={workspaceId}
             className={cn(
               "mx-auto",
-              pathname === "/dashboard" || pathname.startsWith("/workflows/")
+              pathname === "/dashboard" ||
+              pathname === "/calendar" ||
+              pathname.startsWith("/workflows/")
                 ? "max-w-none p-0 sm:p-0 lg:p-0"
                 : isActive(pathname, "/workflows") ||
                   isActive(pathname, "/files") ||

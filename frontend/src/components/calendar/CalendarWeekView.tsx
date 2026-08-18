@@ -63,8 +63,8 @@ export function CalendarWeekView({
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
-      <div className="grid grid-cols-7 border-b border-border bg-zinc-50">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-surface">
+      <div className="grid shrink-0 grid-cols-7 border-b border-border bg-zinc-50">
         {days.map((day, i) => {
           const today = isToday(day, timeZone);
           return (
@@ -85,7 +85,7 @@ export function CalendarWeekView({
           );
         })}
       </div>
-      <div className="grid min-h-[24rem] grid-cols-7">
+      <div className="grid min-h-0 flex-1 grid-cols-7">
         {days.map((day) => {
           const key = dateKey(day, timeZone);
           const dayPosts = (postsByDay.get(key) ?? []).sort(
@@ -190,8 +190,8 @@ export function CalendarDayView({
   const hours = Array.from({ length: 24 }, (_, h) => h);
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
-      <div className="border-b border-border px-4 py-3">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-surface">
+      <div className="shrink-0 border-b border-border px-4 py-3">
         <h3 className="text-sm font-semibold capitalize">
           {new Intl.DateTimeFormat("ru-RU", {
             weekday: "long",
@@ -201,7 +201,7 @@ export function CalendarDayView({
           }).format(anchor)}
         </h3>
       </div>
-      <div className="max-h-[32rem] overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto">
         {hours.map((hour) => {
           const hourPosts = dayPosts.filter((post) => {
             const at = postCalendarDate(post);

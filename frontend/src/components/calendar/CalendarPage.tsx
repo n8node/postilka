@@ -46,6 +46,7 @@ import {
   type Post,
 } from "@/lib/posts-api";
 import { postPreviewText, postToSaveInput } from "@/lib/posts-display";
+import { cn } from "@/lib/utils";
 
 type DragPayload = {
   postId: string;
@@ -431,7 +432,7 @@ export function CalendarPage() {
   const mainContent = () => {
     if (loading && posts.length === 0) {
       return (
-        <div className="flex flex-1 items-center justify-center gap-2 py-24 text-sm text-muted">
+        <div className="flex h-full flex-1 items-center justify-center gap-2 text-sm text-muted">
           <Loader2 className="h-5 w-5 animate-spin" />
           Загрузка календаря…
         </div>
@@ -439,18 +440,20 @@ export function CalendarPage() {
     }
     if (filteredPosts.length === 0 && queuePosts.length === 0) {
       return (
-        <EmptyState
-          title="Календарь пуст"
-          description="Создайте пост или перетащите черновик из очереди на нужный день."
-          action={
-            <Link
-              href="/posts/new"
-              className="inline-flex rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white hover:opacity-90"
-            >
-              Создать пост
-            </Link>
-          }
-        />
+        <div className="flex h-full flex-1 items-center justify-center p-6">
+          <EmptyState
+            title="Календарь пуст"
+            description="Создайте пост или перетащите черновик из очереди на нужный день."
+            action={
+              <Link
+                href="/posts/new"
+                className="inline-flex rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white hover:opacity-90"
+              >
+                Создать пост
+              </Link>
+            }
+          />
+        </div>
       );
     }
 
@@ -580,8 +583,10 @@ export function CalendarPage() {
     );
   };
 
+  const stretchView = view === "month" || view === "week" || view === "day";
+
   return (
-    <div className="-mx-4 -mt-2 flex min-h-[calc(100vh-5rem)] flex-col sm:-mx-6 lg:-mx-8">
+    <div className="relative flex h-[calc(100vh-3.5rem)] w-full flex-col overflow-hidden bg-surface">
       <CalendarToolbar
         view={view}
         anchor={anchor}
@@ -631,7 +636,7 @@ export function CalendarPage() {
           onDragEnd={handleDragEnd}
         />
 
-        <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <main className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
           {view === "list" ? (
             <div className="border-b border-border px-3 py-2">
               <CalendarBulkBar
@@ -675,11 +680,18 @@ export function CalendarPage() {
             </div>
           ) : null}
 
-          <div className="min-h-0 flex-1 overflow-auto">{mainContent()}</div>
+          <div
+            className={cn(
+              "min-h-0 flex-1",
+              stretchView ? "overflow-hidden" : "overflow-auto",
+            )}
+          >
+            {mainContent()}
+          </div>
         </main>
 
         {selected ? (
-          <aside className="flex w-64 shrink-0 flex-col border-l border-border bg-surface xl:w-80">
+          <aside className="flex h-full w-64 shrink-0 flex-col border-l border-border bg-surface xl:w-80">
             <div className="flex items-center justify-between border-b border-border px-4 py-3">
               <h2 className="truncate text-sm font-semibold">{postPreviewText(selected).slice(0, 48)}</h2>
               <button
