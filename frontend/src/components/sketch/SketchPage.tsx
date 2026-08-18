@@ -162,6 +162,11 @@ export function SketchPage() {
       return;
     }
 
+    const submittedPrompt = prompt.trim();
+    if (submittedPrompt) {
+      setPrompt("");
+    }
+
     setLocalGenerating(true);
     setResultUrl(null);
     setResultGenerationId(null);
@@ -175,7 +180,7 @@ export function SketchPage() {
       const { job, media_kind } = await generateFromSketch({
         style_id: selectedStyleId,
         source_upload_id: upload.id,
-        prompt: prompt.trim(),
+        prompt: submittedPrompt,
         aspect_ratio: aspectRatio,
         strength,
         output,
@@ -272,12 +277,32 @@ export function SketchPage() {
   const handleLoadSavedSketch = (item: SavedSketch) => {
     setSelectedSaveId(item.id);
     setSaveError(null);
+    setPrompt("");
     if (item.aspectRatio !== aspectRatio) {
       pendingLoadRef.current = item.dataUrl;
       setAspectRatio(item.aspectRatio);
       return;
     }
     void canvasRef.current?.loadFromDataUrl(item.dataUrl).then(refreshUndo);
+  };
+
+  const handleAspectRatioChange = (next: AspectRatioId) => {
+    if (next !== aspectRatio) {
+      setPrompt("");
+    }
+    setAspectRatio(next);
+  };
+
+  const handleSelectStyle = (id: string) => {
+    if (id !== selectedStyleId) {
+      setPrompt("");
+    }
+    setSelectedStyleId(id);
+  };
+
+  const handleClearCanvas = () => {
+    canvasRef.current?.clear();
+    setPrompt("");
   };
 
   if (stylesLoading) {
@@ -382,7 +407,7 @@ export function SketchPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => canvasRef.current?.clear()}
+                    onClick={handleClearCanvas}
                     className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 px-2 py-1 text-[11px] font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -444,13 +469,13 @@ export function SketchPage() {
         <SketchInspector
           styles={styles}
           selectedStyleId={selectedStyleId}
-          onSelectStyle={setSelectedStyleId}
+          onSelectStyle={handleSelectStyle}
           prompt={prompt}
           onPromptChange={setPrompt}
           strength={strength}
           onStrengthChange={setStrength}
           aspectRatio={aspectRatio}
-          onAspectRatioChange={setAspectRatio}
+          onAspectRatioChange={handleAspectRatioChange}
           output={output}
           onOutputChange={setOutput}
           duration={duration}
