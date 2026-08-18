@@ -43,6 +43,10 @@ import {
   saveSketch,
   type SavedSketch,
 } from "@/lib/sketch-saves";
+import {
+  computeSketchDisplaySize,
+  sketchCanvasMaxHeight,
+} from "@/lib/sketch-display-size";
 
 export function SketchPage() {
   const router = useRouter();
@@ -76,7 +80,9 @@ export function SketchPage() {
   const [savedSketches, setSavedSketches] = useState<SavedSketch[]>([]);
   const [selectedSaveId, setSelectedSaveId] = useState<string | null>(null);
   const [activeSaveIndex, setActiveSaveIndex] = useState<number | null>(null);
-  const [canvasDisplayHeight, setCanvasDisplayHeight] = useState(320);
+  const [viewportHeight, setViewportHeight] = useState(
+    typeof window !== "undefined" ? window.innerHeight : 800,
+  );
   const [saveError, setSaveError] = useState<string | null>(null);
   const [hasCanvasContent, setHasCanvasContent] = useState(false);
 
@@ -84,6 +90,22 @@ export function SketchPage() {
   const setCreditsRemaining = useGenerationCreditsStore((s) => s.setCreditsRemaining);
 
   const canvasSize = useMemo(() => aspectRatioToSize(aspectRatio, 768), [aspectRatio]);
+
+  const displaySize = useMemo(
+    () =>
+      computeSketchDisplaySize(
+        canvasSize.width,
+        canvasSize.height,
+        sketchCanvasMaxHeight(viewportHeight),
+      ),
+    [canvasSize.width, canvasSize.height, viewportHeight],
+  );
+
+  useEffect(() => {
+    const onResize = () => setViewportHeight(window.innerHeight);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
 
   const selectedStyle = styles.find((s) => s.id === selectedStyleId);
 
@@ -325,10 +347,6 @@ export function SketchPage() {
     (activeSaveIndex === null || activeSaveIndex < savedSketches.length - 1);
   const canFlipRight = true;
 
-  const handleDisplaySizeChange = useCallback((size: { width: number; height: number }) => {
-    setCanvasDisplayHeight(Math.round(size.height));
-  }, []);
-
   if (stylesLoading) {
     return (
       <div className="flex h-[calc(100vh-3.5rem)] items-center justify-center">
@@ -357,15 +375,13 @@ export function SketchPage() {
       <div className="relative flex flex-1 min-h-0">
         <div className="relative flex flex-1 min-w-0 items-center justify-center overflow-auto p-4 pr-0 sm:pr-[432px]">
           <div className="flex items-start gap-3">
-            <div className="shrink-0 pt-9">
-              {canvasDisplayHeight > 0 && (
-                <SketchSaveStrip
-                  saves={savedSketches}
-                  selectedId={selectedSaveId}
-                  frameHeight={canvasDisplayHeight}
-                  onSelect={handleLoadSavedSketch}
-                />
-              )}
+            <div className="shrink-0 self-start pt-9">
+              <SketchSaveStrip
+                saves={savedSketches}
+                selectedId={selectedSaveId}
+                frameHeight={displaySize.height}
+                onSelect={handleLoadSavedSketch}
+              />
             </div>
 
             {/* Canvas workspace column — width follows canvas */}
@@ -431,14 +447,14 @@ export function SketchPage() {
                   ref={canvasRef}
                   width={canvasSize.width}
                   height={canvasSize.height}
+                  displayWidth={displaySize.width}
+                  displayHeight={displaySize.height}
                   brush={brush}
                   color={color}
                   brushSize={brushSize}
                   backgroundImage={backgroundImage}
                   backgroundOpacity={backgroundOpacity}
                   onHistoryChange={refreshUndo}
-                  onDisplaySizeChange={handleDisplaySizeChange}
-                  maxHeight="calc(100vh - 14rem)"
                 />
               </SketchPageFlip>
 

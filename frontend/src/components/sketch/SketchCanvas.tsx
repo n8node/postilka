@@ -35,8 +35,8 @@ type SketchCanvasProps = {
   backgroundOpacity: number;
   onHistoryChange?: () => void;
   className?: string;
-  maxHeight?: string;
-  onDisplaySizeChange?: (size: { width: number; height: number }) => void;
+  displayWidth?: number;
+  displayHeight?: number;
 };
 
 function paintBaseLayer(
@@ -76,13 +76,15 @@ export const SketchCanvas = forwardRef<SketchCanvasHandle, SketchCanvasProps>(
       backgroundOpacity,
       onHistoryChange,
       className,
-      maxHeight = "calc(100vh - 12rem)",
-      onDisplaySizeChange,
+      displayWidth,
+      displayHeight,
     },
     ref,
   ) {
     const displayRef = useRef<HTMLCanvasElement>(null);
-    const shellRef = useRef<HTMLDivElement>(null);
+
+    const shellWidth = displayWidth ?? width;
+    const shellHeight = displayHeight ?? height;
     const baseRef = useRef<HTMLCanvasElement | null>(null);
     const strokeRef = useRef<HTMLCanvasElement | null>(null);
     const brushRef = useRef<HarmonyBrush | null>(null);
@@ -183,21 +185,6 @@ export const SketchCanvas = forwardRef<SketchCanvasHandle, SketchCanvasProps>(
       raf = requestAnimationFrame(loop);
       return () => cancelAnimationFrame(raf);
     }, [brush, composite]);
-
-    useEffect(() => {
-      const shell = shellRef.current;
-      if (!shell || !onDisplaySizeChange) return;
-      const report = () => {
-        const rect = shell.getBoundingClientRect();
-        if (rect.width > 0 && rect.height > 0) {
-          onDisplaySizeChange({ width: rect.width, height: rect.height });
-        }
-      };
-      report();
-      const observer = new ResizeObserver(report);
-      observer.observe(shell);
-      return () => observer.disconnect();
-    }, [onDisplaySizeChange, width, height, maxHeight]);
 
     const pushUndo = useCallback(() => {
       ensureLayers();
@@ -351,15 +338,14 @@ export const SketchCanvas = forwardRef<SketchCanvasHandle, SketchCanvasProps>(
 
     return (
       <div
-        ref={shellRef}
         className={cn(
           "relative shrink-0 overflow-hidden rounded-xl border border-zinc-200 shadow-lg dark:border-zinc-700",
           className,
         )}
         style={{
-          aspectRatio: `${width} / ${height}`,
-          width: `min(${width}px, 100%)`,
-          maxHeight,
+          width: shellWidth,
+          height: shellHeight,
+          maxWidth: "100%",
           backgroundImage:
             "linear-gradient(45deg, #e4e4e7 25%, transparent 25%), linear-gradient(-45deg, #e4e4e7 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e4e4e7 75%), linear-gradient(-45deg, transparent 75%, #e4e4e7 75%)",
           backgroundSize: "20px 20px",

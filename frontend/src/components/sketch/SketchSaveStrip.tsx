@@ -15,6 +15,7 @@ type SketchSaveStripProps = {
 
 const MIN_SLOTS = 3;
 const SLOT_GAP = 8;
+const MAX_FRAME_HEIGHT = 520;
 
 export function SketchSaveStrip({
   saves,
@@ -23,22 +24,23 @@ export function SketchSaveStrip({
   onSelect,
 }: SketchSaveStripProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const slotHeight = Math.min(Math.max(frameHeight, 120), MAX_FRAME_HEIGHT);
   const slotCount = Math.max(MIN_SLOTS, saves.length);
-  const viewportHeight = frameHeight * MIN_SLOTS + SLOT_GAP * (MIN_SLOTS - 1);
+  const viewportHeight = slotHeight * MIN_SLOTS + SLOT_GAP * (MIN_SLOTS - 1);
 
   useEffect(() => {
     if (!selectedId || !scrollRef.current) return;
     const index = saves.findIndex((s) => s.id === selectedId);
     if (index < 0) return;
     scrollRef.current.scrollTo({
-      top: index * (frameHeight + SLOT_GAP),
+      top: index * (slotHeight + SLOT_GAP),
       behavior: "smooth",
     });
-  }, [selectedId, saves, frameHeight]);
+  }, [selectedId, saves, slotHeight]);
 
   const scrollBySlot = (direction: -1 | 1) => {
     scrollRef.current?.scrollBy({
-      top: direction * (frameHeight + SLOT_GAP),
+      top: direction * (slotHeight + SLOT_GAP),
       behavior: "smooth",
     });
   };
@@ -46,7 +48,7 @@ export function SketchSaveStrip({
   return (
     <div
       className="flex w-[72px] shrink-0 flex-col items-center gap-1"
-      style={{ height: viewportHeight + 56 }}
+      style={{ height: viewportHeight + 52 }}
     >
       <button
         type="button"
@@ -59,8 +61,8 @@ export function SketchSaveStrip({
 
       <div
         ref={scrollRef}
-        className="w-full flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin"
-        style={{ maxHeight: viewportHeight }}
+        className="w-full overflow-y-auto overflow-x-hidden"
+        style={{ height: viewportHeight }}
       >
         <div className="flex flex-col" style={{ gap: SLOT_GAP }}>
           {Array.from({ length: slotCount }, (_, index) => {
@@ -77,7 +79,7 @@ export function SketchSaveStrip({
                       ? "border-indigo-500 ring-2 ring-indigo-500/30"
                       : "border-zinc-200 hover:border-zinc-300 dark:border-zinc-700",
                   )}
-                  style={{ height: frameHeight }}
+                  style={{ height: slotHeight }}
                   title={new Date(item.createdAt).toLocaleString("ru-RU")}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -93,7 +95,7 @@ export function SketchSaveStrip({
               <div
                 key={`empty-${index}`}
                 className="w-full shrink-0 rounded-lg border border-dashed border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/40"
-                style={{ height: frameHeight }}
+                style={{ height: slotHeight }}
               />
             );
           })}
