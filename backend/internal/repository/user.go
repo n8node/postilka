@@ -22,13 +22,13 @@ func NewUserRepository(pool *pgxpool.Pool) *UserRepository {
 	return &UserRepository{pool: pool}
 }
 
-const userColumns = `id, email, name, locale, timezone, is_blocked, is_platform_admin, email_verified_at, created_at`
+const userColumns = `id, email, name, locale, timezone, is_blocked, is_platform_admin, email_verified_at, created_at, avatar_s3_key`
 
 func (r *UserRepository) Create(ctx context.Context, email, passwordHash, name string) (*model.User, error) {
 	const q = `
 		INSERT INTO users (email, password_hash, name)
 		VALUES ($1, $2, $3)
-		RETURNING id, email, name, locale, timezone, is_blocked, is_platform_admin, email_verified_at, created_at
+		RETURNING ` + userColumns + `
 	`
 	return scanUser(r.pool.QueryRow(ctx, q, email, passwordHash, name))
 }
@@ -37,7 +37,7 @@ func (r *UserRepository) CreateTx(ctx context.Context, tx pgx.Tx, email, passwor
 	const q = `
 		INSERT INTO users (email, password_hash, name)
 		VALUES ($1, $2, $3)
-		RETURNING id, email, name, locale, timezone, is_blocked, is_platform_admin, email_verified_at, created_at
+		RETURNING ` + userColumns + `
 	`
 	return scanUser(tx.QueryRow(ctx, q, email, passwordHash, name))
 }
@@ -53,7 +53,7 @@ func (r *UserRepository) CreateOAuthTx(ctx context.Context, tx pgx.Tx, email, na
 	const q = `
 		INSERT INTO users (email, password_hash, name, email_verified_at)
 		VALUES ($1, NULL, $2, NOW())
-		RETURNING id, email, name, locale, timezone, is_blocked, is_platform_admin, email_verified_at, created_at
+		RETURNING ` + userColumns + `
 	`
 	return scanUser(tx.QueryRow(ctx, q, email, name))
 }
@@ -93,7 +93,7 @@ func (r *UserRepository) UpdateEmail(ctx context.Context, userID, email string) 
 		UPDATE users
 		SET email = $2, email_verified_at = NULL, updated_at = NOW()
 		WHERE id = $1
-		RETURNING id, email, name, locale, timezone, is_blocked, is_platform_admin, email_verified_at, created_at
+		RETURNING ` + userColumns + `
 	`
 	return scanUser(r.pool.QueryRow(ctx, q, userID, email))
 }
@@ -103,7 +103,7 @@ func (r *UserRepository) UpdateTimezone(ctx context.Context, userID, timezone st
 		UPDATE users
 		SET timezone = $2, updated_at = NOW()
 		WHERE id = $1
-		RETURNING id, email, name, locale, timezone, is_blocked, is_platform_admin, email_verified_at, created_at
+		RETURNING ` + userColumns + `
 	`
 	return scanUser(r.pool.QueryRow(ctx, q, userID, timezone))
 }
@@ -151,7 +151,7 @@ func (r *UserRepository) GetPasswordHash(ctx context.Context, userID string) (st
 
 func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*model.User, string, error) {
 	const q = `
-		SELECT id, email, password_hash, name, locale, timezone, is_blocked, is_platform_admin, email_verified_at, created_at
+		SELECT id, email, password_hash, name, locale, timezone, is_blocked, is_platform_admin, email_verified_at, created_at, avatar_s3_key
 		FROM users WHERE email = $1
 	`
 	var hash *string
@@ -172,7 +172,7 @@ func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*model.U
 
 func (r *UserRepository) GetByID(ctx context.Context, id string) (*model.User, error) {
 	const q = `
-		SELECT id, email, name, locale, timezone, is_blocked, is_platform_admin, email_verified_at, created_at
+		SELECT ` + userColumns + `
 		FROM users WHERE id = $1
 	`
 	u, err := scanUser(r.pool.QueryRow(ctx, q, id))
@@ -211,7 +211,7 @@ func (r *UserRepository) SetPlatformAdminByEmail(ctx context.Context, email stri
 		UPDATE users
 		SET is_platform_admin = $2, updated_at = NOW()
 		WHERE email = $1
-		RETURNING id, email, name, locale, timezone, is_blocked, is_platform_admin, email_verified_at, created_at
+		RETURNING ` + userColumns + `
 	`
 	u, err := scanUser(r.pool.QueryRow(ctx, q, email, value))
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -251,7 +251,7 @@ func (r *UserRepository) SetBlocked(ctx context.Context, userID string, blocked 
 		UPDATE users
 		SET is_blocked = $2, updated_at = NOW()
 		WHERE id = $1
-		RETURNING id, email, name, locale, timezone, is_blocked, is_platform_admin, email_verified_at, created_at
+		RETURNING ` + userColumns + `
 	`
 	u, err := scanUser(r.pool.QueryRow(ctx, q, userID, blocked))
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -384,30 +384,69 @@ func (r *UserRepository) ListForAdmin(ctx context.Context, f ListUsersFilter) ([
 	return items, total, nil
 }
 
+func (r *UserRepository) UpdateAvatarS3Key(ctx context.Context, userID string, key *string) (*model.User, error) {
+	const q = `
+		UPDATE users
+		SET avatar_s3_key = $2, updated_at = NOW()
+		WHERE id = $1
+		RETURNING ` + userColumns + `
+	`
+	u, err := scanUser(r.pool.QueryRow(ctx, q, userID, key))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	return u, err
+}
+
+func (r *UserRepository) GetAvatarS3Key(ctx context.Context, userID string) (string, error) {
+	var key *string
+	err := r.pool.QueryRow(ctx, `SELECT avatar_s3_key FROM users WHERE id = $1`, userID).Scan(&key)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	if err != nil {
+		return "", err
+	}
+	if key == nil {
+		return "", nil
+	}
+	return strings.TrimSpace(*key), nil
+}
+
 func scanUser(row pgx.Row) (*model.User, error) {
 	var u model.User
 	var createdAt time.Time
+	var avatarKey *string
 	err := row.Scan(
 		&u.ID, &u.Email, &u.Name, &u.Locale, &u.Timezone,
-		&u.IsBlocked, &u.IsPlatformAdmin, &u.EmailVerifiedAt, &createdAt,
+		&u.IsBlocked, &u.IsPlatformAdmin, &u.EmailVerifiedAt, &createdAt, &avatarKey,
 	)
 	if err != nil {
 		return nil, err
 	}
 	u.CreatedAt = createdAt
+	if avatarKey != nil {
+		u.AvatarS3Key = strings.TrimSpace(*avatarKey)
+	}
+	model.ApplyUserAvatarURL(&u)
 	return &u, nil
 }
 
 func scanUserWithHash(row pgx.Row, hash **string) (*model.User, error) {
 	var u model.User
 	var createdAt time.Time
+	var avatarKey *string
 	err := row.Scan(
 		&u.ID, &u.Email, hash, &u.Name, &u.Locale, &u.Timezone,
-		&u.IsBlocked, &u.IsPlatformAdmin, &u.EmailVerifiedAt, &createdAt,
+		&u.IsBlocked, &u.IsPlatformAdmin, &u.EmailVerifiedAt, &createdAt, &avatarKey,
 	)
 	if err != nil {
 		return nil, err
 	}
 	u.CreatedAt = createdAt
+	if avatarKey != nil {
+		u.AvatarS3Key = strings.TrimSpace(*avatarKey)
+	}
+	model.ApplyUserAvatarURL(&u)
 	return &u, nil
 }

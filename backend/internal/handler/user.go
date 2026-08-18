@@ -12,11 +12,12 @@ import (
 )
 
 type UserHandler struct {
-	auth *service.AuthService
+	auth   *service.AuthService
+	avatar *service.UserAvatarService
 }
 
-func NewUserHandler(auth *service.AuthService) *UserHandler {
-	return &UserHandler{auth: auth}
+func NewUserHandler(auth *service.AuthService, avatar *service.UserAvatarService) *UserHandler {
+	return &UserHandler{auth: auth, avatar: avatar}
 }
 
 type changeEmailRequest struct {
@@ -102,6 +103,86 @@ func (h *UserHandler) ListTimezones(w http.ResponseWriter, _ *http.Request) {
 		"timezones": timezone.RussiaZones,
 	})
 }
+
+func (h *UserHandler) UploadAvatar(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Не авторизован")
+		return
+	}
+
+	if err := r.ParseMultipartForm(maxUserAvatarSize + (1 << 20)); err != nil {
+		writeError(w, http.StatusBadRequest, "Не удалось прочитать файл")
+		return
+	}
+
+	file, header, err := r.FormFile("file")
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Выберите изображение")
+		return
+	}
+
+	user, err := h.avatar.Upload(r.Context(), userID, file, header)
+	if err != nil {
+		h.writeAvatarError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"user":    user,
+		"message": "Аватар обновлён",
+	})
+}
+
+func (h *UserHandler) DeleteAvatar(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Не авторизован")
+		return
+	}
+
+	user, err := h.avatar.Delete(r.Context(), userID)
+	if err != nil {
+		h.writeAvatarError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"user":    user,
+		"message": "Аватар удалён",
+	})
+}
+
+func (h *UserHandler) Avatar(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Не авторизован")
+		return
+	}
+
+	body, contentType, err := h.avatar.Fetch(r.Context(), userID)
+	if err != nil {
+		h.writeAvatarError(w, err)
+		return
+	}
+
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Cache-Control", "private, max-age=3600")
+	_, _ = w.Write(body)
+}
+
+func (h *UserHandler) writeAvatarError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, service.ErrUserAvatarInvalid):
+		writeError(w, http.StatusBadRequest, "Загрузите JPG, PNG или WebP до 5 МБ")
+	case errors.Is(err, service.ErrUserAvatarNotFound):
+		writeError(w, http.StatusNotFound, "Аватар не найден")
+	default:
+		writeError(w, http.StatusInternalServerError, "Внутренняя ошибка")
+	}
+}
+
+const maxUserAvatarSize = 5 << 20
 
 type WorkspaceInviteHandler struct {
 	invites    *service.WorkspaceInviteService

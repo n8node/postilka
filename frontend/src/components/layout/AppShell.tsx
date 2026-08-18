@@ -15,7 +15,6 @@ import {
   BarChart3,
   Settings,
   Bell,
-  Ticket,
   PanelLeftClose,
   PanelLeft,
   LogOut,
@@ -31,6 +30,7 @@ import { GenerationCompleteToast } from "@/components/generation/GenerationCompl
 import { GenerationJobSync } from "@/components/generation/GenerationJobSync";
 import { VideoGenerationJobSync } from "@/components/generation/VideoGenerationJobSync";
 import { cn } from "@/lib/utils";
+import { userAvatarSrc } from "@/lib/user-avatar";
 
 type NavItem = {
   href: string;
@@ -53,7 +53,6 @@ const mainNav: NavItem[] = [
 ];
 
 const bottomNav: NavItem[] = [
-  { href: "/invites", label: "Инвайты", icon: Ticket },
   { href: "/settings", label: "Настройки", icon: Settings },
   { href: "/notifications", label: "Уведомления", icon: Bell },
 ];
@@ -83,6 +82,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     .slice(0, 2)
     .map((p) => p[0]?.toUpperCase())
     .join("");
+  const avatarSrc = userAvatarSrc(user);
 
   return (
     <div className="flex min-h-screen bg-bg text-text">
@@ -193,8 +193,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               collapsed && "justify-center",
             )}
           >
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-zinc-200 text-xs font-semibold text-text">
-              {initials || "?"}
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-zinc-200 text-xs font-semibold text-text">
+              {avatarSrc ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={avatarSrc} alt="" className="h-full w-full object-cover" />
+              ) : (
+                initials || "?"
+              )}
             </div>
             {!collapsed && (
               <>

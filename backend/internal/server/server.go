@@ -129,6 +129,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	wsInviteRepo := repository.NewWorkspaceInviteRepository(db.Pool)
 	wsInviteSvc := service.NewWorkspaceInviteService(wsInviteRepo, wsRepo, userRepo, wsSvc, txEmailSvc, cfg, logger)
 
+	userAvatarSvc := service.NewUserAvatarService(userRepo, objectStorage)
 	authSvc := service.NewAuthService(userRepo, wsRepo, planRepo, inviteSvc, wsInviteSvc, db.Pool, authMW, emailVerificationSvc, passwordResetSvc, telegramSvc)
 	emailVerificationSvc.BindTelegram(telegramSvc)
 
@@ -138,7 +139,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	health := handler.NewHealthHandler(cfg, db)
 	status := handler.NewStatusHandler(cfg)
 	authHandler := handler.NewAuthHandler(authSvc, wsSvc, authMW, cfg)
-	userHandler := handler.NewUserHandler(authSvc)
+	userHandler := handler.NewUserHandler(authSvc, userAvatarSvc)
 	wsInviteHandler := handler.NewWorkspaceInviteHandler(wsInviteSvc, wsSvc)
 	oauthHandler := handler.NewOAuthLoginHandler(oauthSvc, wsSvc, authMW, cfg, logger)
 	wsHandler := handler.NewWorkspaceHandler(wsSvc, cfg)
@@ -275,6 +276,9 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 		r.With(authMW.Required).Delete("/user/login-identities/{provider}", oauthHandler.Unlink)
 		r.With(authMW.Required).Patch("/user/email", userHandler.ChangeEmail)
 		r.With(authMW.Required).Patch("/user/timezone", userHandler.ChangeTimezone)
+		r.With(authMW.Required).Post("/user/avatar", userHandler.UploadAvatar)
+		r.With(authMW.Required).Delete("/user/avatar", userHandler.DeleteAvatar)
+		r.With(authMW.Required).Get("/user/avatar", userHandler.Avatar)
 		r.Get("/user/timezones", userHandler.ListTimezones)
 
 		r.Get("/public/invites", inviteHandler.PublicSystemInvites)

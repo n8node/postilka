@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { UserInvitesBlock } from "@/components/settings/UserInvitesBlock";
+import { UserAvatarEditor } from "@/components/settings/UserAvatarEditor";
 import { LoginIdentitiesBlock } from "@/components/settings/LoginIdentitiesBlock";
 import { ChangeEmailForm } from "@/components/settings/ChangeEmailForm";
 import { WorkspaceSettingsBlock } from "@/components/settings/WorkspaceSettingsBlock";
@@ -27,7 +28,7 @@ const SETTINGS_MENU: {
   label: string;
   description: string;
 }[] = [
-  { key: "profile", label: "Профиль", description: "Имя и email" },
+  { key: "profile", label: "Профиль", description: "Аватар, имя и email" },
   { key: "workspace", label: "Workspace", description: "Команда и доступ" },
   { key: "email", label: "Смена email", description: "Подтверждение адреса" },
   { key: "invites", label: "Мои инвайты", description: "Ключи регистрации" },
@@ -48,8 +49,9 @@ function ProfileSection() {
     <div className="space-y-6">
       <div>
         <h2 className="text-lg font-semibold text-text">Профиль</h2>
-        <p className="mt-1 text-sm text-muted">Основные данные вашего аккаунта.</p>
+        <p className="mt-1 text-sm text-muted">Аватар и основные данные вашего аккаунта.</p>
       </div>
+      <UserAvatarEditor />
       <dl className="max-w-lg space-y-4 text-sm">
         <div>
           <dt className="text-muted">Имя</dt>
