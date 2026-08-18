@@ -13,6 +13,7 @@ import {
   type HarmonyBrush,
   type SketchBrushId,
 } from "@/lib/harmony-brushes";
+import { cn } from "@/lib/utils";
 
 export type SketchCanvasHandle = {
   exportPNG: () => Promise<Blob>;
@@ -33,6 +34,8 @@ type SketchCanvasProps = {
   backgroundImage: HTMLImageElement | null;
   backgroundOpacity: number;
   onHistoryChange?: () => void;
+  className?: string;
+  maxHeight?: string;
 };
 
 function paintBaseLayer(
@@ -71,6 +74,8 @@ export const SketchCanvas = forwardRef<SketchCanvasHandle, SketchCanvasProps>(
       backgroundImage,
       backgroundOpacity,
       onHistoryChange,
+      className,
+      maxHeight = "calc(100vh - 12rem)",
     },
     ref,
   ) {
@@ -328,8 +333,14 @@ export const SketchCanvas = forwardRef<SketchCanvasHandle, SketchCanvasProps>(
 
     return (
       <div
-        className="relative flex h-full w-full items-center justify-center overflow-hidden bg-zinc-100 dark:bg-zinc-900"
+        className={cn(
+          "relative shrink-0 overflow-hidden rounded-xl border border-zinc-200 shadow-lg dark:border-zinc-700",
+          className,
+        )}
         style={{
+          aspectRatio: `${width} / ${height}`,
+          width: `min(${width}px, 100%)`,
+          maxHeight,
           backgroundImage:
             "linear-gradient(45deg, #e4e4e7 25%, transparent 25%), linear-gradient(-45deg, #e4e4e7 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e4e4e7 75%), linear-gradient(-45deg, transparent 75%, #e4e4e7 75%)",
           backgroundSize: "20px 20px",
@@ -345,8 +356,7 @@ export const SketchCanvas = forwardRef<SketchCanvasHandle, SketchCanvasProps>(
           onPointerUp={finishStroke}
           onPointerLeave={finishStroke}
           onPointerCancel={finishStroke}
-          className="max-h-full max-w-full touch-none rounded-xl border border-zinc-200 bg-white shadow-lg dark:border-zinc-700"
-          style={{ aspectRatio: `${width} / ${height}` }}
+          className="block h-full w-full touch-none bg-white"
         />
       </div>
     );
