@@ -35,8 +35,7 @@ type SketchCanvasProps = {
   backgroundOpacity: number;
   onHistoryChange?: () => void;
   className?: string;
-  displayWidth?: number;
-  displayHeight?: number;
+  maxHeight?: string;
 };
 
 function paintBaseLayer(
@@ -76,15 +75,11 @@ export const SketchCanvas = forwardRef<SketchCanvasHandle, SketchCanvasProps>(
       backgroundOpacity,
       onHistoryChange,
       className,
-      displayWidth,
-      displayHeight,
+      maxHeight = "calc(100vh - 12rem)",
     },
     ref,
   ) {
     const displayRef = useRef<HTMLCanvasElement>(null);
-
-    const shellWidth = displayWidth ?? width;
-    const shellHeight = displayHeight ?? height;
     const baseRef = useRef<HTMLCanvasElement | null>(null);
     const strokeRef = useRef<HTMLCanvasElement | null>(null);
     const brushRef = useRef<HarmonyBrush | null>(null);
@@ -343,9 +338,9 @@ export const SketchCanvas = forwardRef<SketchCanvasHandle, SketchCanvasProps>(
           className,
         )}
         style={{
-          width: shellWidth,
-          height: shellHeight,
-          maxWidth: "100%",
+          aspectRatio: `${width} / ${height}`,
+          width: `min(${width}px, 100%)`,
+          maxHeight,
           backgroundImage:
             "linear-gradient(45deg, #e4e4e7 25%, transparent 25%), linear-gradient(-45deg, #e4e4e7 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #e4e4e7 75%), linear-gradient(-45deg, transparent 75%, #e4e4e7 75%)",
           backgroundSize: "20px 20px",

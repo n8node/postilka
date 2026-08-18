@@ -4,10 +4,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ImagePlus, Loader2, Save, Trash2, Undo2 } from "lucide-react";
-import type { SketchCanvasHandle } from "@/components/sketch/SketchCanvas";
-import { SketchFlipBook, type SketchFlipBookHandle } from "@/components/sketch/SketchFlipBook";
+import { SketchCanvas, type SketchCanvasHandle } from "@/components/sketch/SketchCanvas";
 import { SketchInspector } from "@/components/sketch/SketchInspector";
-import { SketchSaveStrip } from "@/components/sketch/SketchSaveStrip";
 import { useAuth } from "@/context/AuthContext";
 import { ApiError } from "@/lib/api";
 import type { AspectRatioId } from "@/lib/generation-data";
@@ -43,18 +41,13 @@ import {
   saveSketch,
   type SavedSketch,
 } from "@/lib/sketch-saves";
-import {
-  computeSketchDisplaySize,
-  sketchCanvasMaxHeight,
-  sketchPageMaxWidth,
-} from "@/lib/sketch-display-size";
+import { cn } from "@/lib/utils";
 
 export function SketchPage() {
   const router = useRouter();
   const { active_workspace, workspace } = useAuth();
   const workspaceId = active_workspace?.id ?? workspace?.id ?? "";
   const canvasRef = useRef<SketchCanvasHandle>(null);
-  const flipBookRef = useRef<SketchFlipBookHandle>(null);
   const bgInputRef = useRef<HTMLInputElement>(null);
   const pendingLoadRef = useRef<string | null>(null);
 
@@ -81,11 +74,6 @@ export function SketchPage() {
   const [resultGenerationId, setResultGenerationId] = useState<string | null>(null);
   const [savedSketches, setSavedSketches] = useState<SavedSketch[]>([]);
   const [selectedSaveId, setSelectedSaveId] = useState<string | null>(null);
-  const [activeSaveIndex, setActiveSaveIndex] = useState<number | null>(null);
-  const [viewport, setViewport] = useState({
-    width: typeof window !== "undefined" ? window.innerWidth : 1200,
-    height: typeof window !== "undefined" ? window.innerHeight : 800,
-  });
   const [saveError, setSaveError] = useState<string | null>(null);
   const [hasCanvasContent, setHasCanvasContent] = useState(false);
 
@@ -93,24 +81,6 @@ export function SketchPage() {
   const setCreditsRemaining = useGenerationCreditsStore((s) => s.setCreditsRemaining);
 
   const canvasSize = useMemo(() => aspectRatioToSize(aspectRatio, 768), [aspectRatio]);
-
-  const displaySize = useMemo(
-    () =>
-      computeSketchDisplaySize(
-        canvasSize.width,
-        canvasSize.height,
-        sketchCanvasMaxHeight(viewport.height),
-        sketchPageMaxWidth(viewport.width, true),
-      ),
-    [canvasSize.width, canvasSize.height, viewport.width, viewport.height],
-  );
-
-  useEffect(() => {
-    const onResize = () =>
-      setViewport({ width: window.innerWidth, height: window.innerHeight });
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
 
   const selectedStyle = styles.find((s) => s.id === selectedStyleId);
 
@@ -284,11 +254,9 @@ export function SketchPage() {
     }
     try {
       const dataUrl = await canvasRef.current.exportDataUrl();
-      const saved = await saveSketch(workspaceId, aspectRatio, dataUrl);
+      const saved = saveSketch(workspaceId, aspectRatio, dataUrl);
       setSelectedSaveId(saved.id);
-      setActiveSaveIndex(0);
       reloadSavedSketches();
-      window.setTimeout(() => flipBookRef.current?.turnToDraft(), 0);
     } catch {
       setSaveError("Не удалось сохранить набросок");
     }
@@ -296,80 +264,21 @@ export function SketchPage() {
 
   const handleDeleteSavedSketch = () => {
     if (!workspaceId || !selectedSaveId) return;
-    const deletedIndex = savedSketches.findIndex((s) => s.id === selectedSaveId);
     deleteSketchSave(workspaceId, selectedSaveId);
     setSelectedSaveId(null);
-    if (activeSaveIndex !== null) {
-      if (deletedIndex === activeSaveIndex) {
-        setActiveSaveIndex(null);
-        canvasRef.current?.clear();
-        refreshUndo();
-      } else if (deletedIndex < activeSaveIndex) {
-        setActiveSaveIndex(activeSaveIndex - 1);
-      }
-    }
     reloadSavedSketches();
   };
 
-  const loadSavedAtIndex = useCallback(
-    (index: number) => {
-      const item = savedSketches[index];
-      if (!item) return;
-      setSelectedSaveId(item.id);
-      setActiveSaveIndex(index);
-      setSaveError(null);
-      if (item.aspectRatio !== aspectRatio) {
-        pendingLoadRef.current = item.dataUrl;
-        setAspectRatio(item.aspectRatio);
-        return;
-      }
-      void canvasRef.current?.loadFromDataUrl(item.dataUrl).then(refreshUndo);
-    },
-    [savedSketches, aspectRatio, refreshUndo],
-  );
-
   const handleLoadSavedSketch = (item: SavedSketch) => {
-    const index = savedSketches.findIndex((s) => s.id === item.id);
-    if (index >= 0) {
-      loadSavedAtIndex(index);
-      flipBookRef.current?.turnToSaveId(item.id);
+    setSelectedSaveId(item.id);
+    setSaveError(null);
+    if (item.aspectRatio !== aspectRatio) {
+      pendingLoadRef.current = item.dataUrl;
+      setAspectRatio(item.aspectRatio);
+      return;
     }
+    void canvasRef.current?.loadFromDataUrl(item.dataUrl).then(refreshUndo);
   };
-
-  const goToNewPage = useCallback(async () => {
-    canvasRef.current?.clear();
-    setSelectedSaveId(null);
-    setActiveSaveIndex(null);
-    refreshUndo();
-  }, [refreshUndo]);
-
-  const handleBookPageChange = useCallback(
-    ({
-      kind,
-      save,
-      isNewSheet,
-    }: {
-      kind: "blank" | "save" | "draft";
-      save: SavedSketch | null;
-      isNewSheet: boolean;
-    }) => {
-      if (isNewSheet) {
-        void goToNewPage();
-        window.setTimeout(() => flipBookRef.current?.turnToDraft(), 0);
-        return;
-      }
-      if (kind === "save" && save) {
-        const index = savedSketches.findIndex((s) => s.id === save.id);
-        if (index >= 0) loadSavedAtIndex(index);
-        return;
-      }
-      if (kind === "draft") {
-        setSelectedSaveId(null);
-        setActiveSaveIndex(null);
-      }
-    },
-    [goToNewPage, loadSavedAtIndex, savedSketches],
-  );
 
   if (stylesLoading) {
     return (
@@ -396,22 +305,51 @@ export function SketchPage() {
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden sm:flex-row">
-        <main className="flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-auto p-4">
-          <div className="flex items-start justify-center gap-3">
-            <div className="hidden shrink-0 self-start pt-9 sm:block">
-              <SketchSaveStrip
-                saves={savedSketches}
-                selectedId={selectedSaveId}
-                onSelect={handleLoadSavedSketch}
-              />
+      <div className="relative flex flex-1 min-h-0">
+        <div className="relative flex flex-1 min-w-0 items-center justify-center overflow-auto p-4 pr-0 sm:pr-[432px]">
+          <div className="flex items-start gap-3">
+            {/* Saved sketches — vertical strip left of canvas */}
+            <div
+              className="flex w-16 shrink-0 flex-col gap-2 overflow-y-auto py-1"
+              style={{ maxHeight: "calc(100vh - 12rem)" }}
+            >
+              {savedSketches.length === 0 ? (
+                <>
+                  {[0, 1, 2, 3].map((i) => (
+                    <div
+                      key={i}
+                      className="h-16 w-16 shrink-0 rounded-lg border border-dashed border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/40"
+                    />
+                  ))}
+                </>
+              ) : (
+                savedSketches.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => handleLoadSavedSketch(item)}
+                    className={cn(
+                      "h-16 w-16 shrink-0 overflow-hidden rounded-lg border bg-white transition",
+                      selectedSaveId === item.id
+                        ? "border-indigo-500 ring-2 ring-indigo-500/30"
+                        : "border-zinc-200 hover:border-zinc-300 dark:border-zinc-700",
+                    )}
+                    title={new Date(item.createdAt).toLocaleString("ru-RU")}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={item.dataUrl}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                  </button>
+                ))
+              )}
             </div>
 
-            <div className="flex w-full max-w-full flex-col items-center">
-              <div
-                className="mb-1.5 flex w-full items-center justify-between gap-2"
-                style={{ maxWidth: displaySize.width * 2 }}
-              >
+            {/* Canvas workspace column — width follows canvas */}
+            <div className="inline-flex min-w-0 max-w-full flex-col">
+              <div className="mb-1.5 flex items-center justify-between gap-2">
                 <div className="flex min-w-0 items-center gap-2 text-[11px] text-zinc-500">
                   <span className="shrink-0">Подложка: прозрачность</span>
                   <input
@@ -461,28 +399,20 @@ export function SketchPage() {
                 </div>
               </div>
 
-              <SketchFlipBook
-                ref={flipBookRef}
-                savedSketches={savedSketches}
-                pageWidth={displaySize.width}
-                pageHeight={displaySize.height}
-                canvasWidth={canvasSize.width}
-                canvasHeight={canvasSize.height}
-                canvasRef={canvasRef}
+              <SketchCanvas
+                ref={canvasRef}
+                width={canvasSize.width}
+                height={canvasSize.height}
                 brush={brush}
                 color={color}
                 brushSize={brushSize}
                 backgroundImage={backgroundImage}
                 backgroundOpacity={backgroundOpacity}
                 onHistoryChange={refreshUndo}
-                onPageChange={handleBookPageChange}
-                disabled={localGenerating}
+                maxHeight="calc(100vh - 14rem)"
               />
 
-              <div
-                className="mt-2 flex w-full items-center justify-end gap-2"
-                style={{ maxWidth: displaySize.width * 2 }}
-              >
+              <div className="mt-2 flex items-center justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => void handleSaveSketch()}
@@ -509,7 +439,7 @@ export function SketchPage() {
               )}
             </div>
           </div>
-        </main>
+        </div>
 
         <SketchInspector
           styles={styles}
