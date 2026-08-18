@@ -87,9 +87,10 @@ type GenerationPricingView struct {
 }
 
 type MediaCreditsRemainingView struct {
-	QuotaRemaining   *int  `json:"quota_remaining,omitempty"`
-	WalletCredits    int   `json:"wallet_credits"`
-	TotalAvailable   int   `json:"total_available"`
-	Unlimited        bool  `json:"unlimited"`
+	QuotaRemaining   *int    `json:"quota_remaining,omitempty"`
+	PurchasedCredits int     `json:"purchased_credits"`
+	WalletCredits    int     `json:"wallet_credits"`
+	TotalAvailable   int     `json:"total_available"`
+	Unlimited        bool    `json:"unlimited"`
 	WalletBalanceRub float64 `json:"wallet_balance_rub"`
 }

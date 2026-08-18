@@ -35,6 +35,15 @@ func (s *QuotaService) periodStartForWorkspace(ctx context.Context, workspaceID 
 	return fallback.UTC()
 }
 
+func (s *QuotaService) periodEndForWorkspace(ctx context.Context, workspaceID string, fallback time.Time) time.Time {
+	sub, err := s.subs.GetActiveForWorkspace(ctx, workspaceID)
+	if err == nil {
+		return sub.PeriodEnd.UTC()
+	}
+	start := fallback.UTC()
+	return start.AddDate(0, 1, 0)
+}
+
 func (s *QuotaService) GetUsage(ctx context.Context, workspaceID string, planAssignedAt time.Time) (model.BillingUsage, error) {
 	periodStart := s.periodStartForWorkspace(ctx, workspaceID, planAssignedAt)
 	posts, err := s.usage.SumForPeriod(ctx, workspaceID, "posts", periodStart)

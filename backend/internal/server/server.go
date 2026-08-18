@@ -70,6 +70,8 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	uploadFileSettingsRepo := repository.NewUploadFileSettingsRepository(db.Pool)
 	uploadFileSettingsSvc := service.NewUploadFileSettingsService(uploadFileSettingsRepo)
 	planCheckoutRepo := repository.NewPlanCheckoutRepository(db.Pool)
+	tokenPackageRepo := repository.NewTokenPackageRepository(db.Pool)
+	tokenPackageCheckoutRepo := repository.NewTokenPackageCheckoutRepository(db.Pool)
 	walletRepo := repository.NewWalletRepository(db.Pool)
 	adminWalletSvc := service.NewAdminWalletService(walletRepo, userRepo)
 	usageRepo := repository.NewUsageRepository(db.Pool)
@@ -133,8 +135,10 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	authSvc := service.NewAuthService(userRepo, wsRepo, planRepo, inviteSvc, wsInviteSvc, db.Pool, authMW, emailVerificationSvc, passwordResetSvc, telegramSvc)
 	emailVerificationSvc.BindTelegram(telegramSvc)
 
-	checkoutSvc := service.NewCheckoutService(planCheckoutRepo, walletRepo, planRepo, wsRepo, userRepo, paymentSettingsSvc, subscriptionSvc, wsSvc, txEmailSvc, telegramSvc, cfg)
-	billingSvc := service.NewBillingService(planRepo, wsRepo, walletRepo, planCheckoutRepo, paymentSettingsSvc, quotaSvc, subscriptionSvc, wsSvc)
+	checkoutSvc := service.NewCheckoutService(planCheckoutRepo, tokenPackageCheckoutRepo, walletRepo, planRepo, tokenPackageRepo, wsRepo, userRepo, paymentSettingsSvc, subscriptionSvc, wsSvc, txEmailSvc, telegramSvc, cfg)
+	tokenBalanceSvc := service.NewTokenBalanceService(walletRepo, quotaSvc, wsRepo)
+	tokenPackageSvc := service.NewTokenPackageService(tokenPackageRepo)
+	billingSvc := service.NewBillingService(planRepo, wsRepo, walletRepo, planCheckoutRepo, tokenPackageCheckoutRepo, tokenPackageRepo, paymentSettingsSvc, quotaSvc, subscriptionSvc, wsSvc, tokenBalanceSvc)
 
 	health := handler.NewHealthHandler(cfg, db)
 	status := handler.NewStatusHandler(cfg)
@@ -240,6 +244,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	wsInviteSvc.SetNotifier(notificationSvc)
 
 	billingHandler := handler.NewBillingHandler(billingSvc, checkoutSvc, wsSvc)
+	tokenPackageHandler := handler.NewTokenPackageHandler(tokenPackageSvc, checkoutSvc)
 	notificationHandler := handler.NewNotificationHandler(notificationSvc, wsSvc)
 
 	r.Get("/health", health.ServeHTTP)
@@ -283,6 +288,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 
 		r.Get("/public/invites", inviteHandler.PublicSystemInvites)
 		r.Get("/public/billing/plans", billingHandler.PublicListPlans)
+		r.Get("/public/billing/packages", tokenPackageHandler.ListPublic)
 		r.Get("/public/workspace-invites/preview", wsInviteHandler.Preview)
 
 		r.Route("/webhooks", func(r chi.Router) {
@@ -316,6 +322,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Post("/checkout/subscribe", billingHandler.SubscribeCheckout)
 			r.Put("/subscription/auto-renew", billingHandler.SetAutoRenew)
 			r.Post("/wallet/topup", billingHandler.WalletTopup)
+			r.Post("/checkout/package/{id}", tokenPackageHandler.PackageCheckout)
 			r.Post("/switch-free", billingHandler.SwitchFree)
 			r.Get("/payments", billingHandler.PaymentHistory)
 			r.Get("/wallet/ledger", billingHandler.WalletLedger)
@@ -510,6 +517,11 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Get("/plans/{planID}", adminHandler.GetPlan)
 				r.Put("/plans/{planID}", adminHandler.UpdatePlan)
 				r.Delete("/plans/{planID}", adminHandler.DeletePlan)
+
+				r.Get("/token-packages", tokenPackageHandler.ListAdmin)
+				r.Post("/token-packages", tokenPackageHandler.CreateAdmin)
+				r.Put("/token-packages/{id}", tokenPackageHandler.UpdateAdmin)
+				r.Delete("/token-packages/{id}", tokenPackageHandler.DeleteAdmin)
 
 				r.Get("/public-pages", publicPageHandler.ListAdmin)
 				r.Post("/public-pages", publicPageHandler.CreateAdmin)

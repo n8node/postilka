@@ -73,6 +73,7 @@ type BillingOverview struct {
 	PlanAssignedAt      *time.Time             `json:"plan_assigned_at,omitempty"`
 	Subscription        *WorkspaceSubscription `json:"subscription,omitempty"`
 	Usage               BillingUsage           `json:"usage"`
+	TokenBalance        TokenBalanceView       `json:"token_balance"`
 	WalletBalanceCents  int64                  `json:"wallet_balance_cents"`
 	WalletTopupMinCents int                    `json:"wallet_topup_min_cents"`
 	WalletTopupMaxCents int                    `json:"wallet_topup_max_cents"`

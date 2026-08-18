@@ -1466,9 +1466,39 @@ export type BillingOverview = {
   plan_assigned_at?: string;
   subscription?: WorkspaceSubscription;
   usage: BillingUsage;
+  token_balance: TokenBalanceView;
   wallet_balance_cents: number;
   wallet_topup_min_cents: number;
   wallet_topup_max_cents: number;
+};
+
+export type TokenBalanceView = {
+  total_remaining: number;
+  plan_tokens_remaining: number;
+  purchased_tokens_remaining: number;
+  plan_tokens_allowance?: number | null;
+  plan_period_end?: string;
+  unlimited: boolean;
+};
+
+export type TokenPackage = {
+  id: string;
+  name: string;
+  tokens: number;
+  price_cents: number;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type TokenPackageUpsert = {
+  id: string;
+  name: string;
+  tokens: number;
+  price_cents: number;
+  sort_order: number;
+  is_active: boolean;
 };
 
 export type CheckoutResult = {
@@ -1511,6 +1541,40 @@ export function billingWalletTopup(payload: { amount_cents: number }) {
   return apiFetch<CheckoutResult>("/billing/wallet/topup", {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+export function fetchTokenPackages() {
+  return apiFetch<{ packages: TokenPackage[] }>("/public/billing/packages");
+}
+
+export function billingPackageCheckout(packageId: string) {
+  return apiFetch<CheckoutResult>(`/billing/checkout/package/${encodeURIComponent(packageId)}`, {
+    method: "POST",
+  });
+}
+
+export function fetchAdminTokenPackages() {
+  return apiFetch<{ packages: TokenPackage[] }>("/admin/token-packages");
+}
+
+export function createAdminTokenPackage(body: TokenPackageUpsert) {
+  return apiFetch<{ package: TokenPackage }>("/admin/token-packages", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function updateAdminTokenPackage(id: string, body: TokenPackageUpsert) {
+  return apiFetch<{ package: TokenPackage }>(`/admin/token-packages/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteAdminTokenPackage(id: string) {
+  return apiFetch<{ ok: boolean }>(`/admin/token-packages/${encodeURIComponent(id)}`, {
+    method: "DELETE",
   });
 }
 

@@ -1,26 +1,28 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { Check, CreditCard, Package, Zap } from "lucide-react";
 import {
   ApiError,
+  billingPackageCheckout,
   billingSetAutoRenew,
   billingSubscribeCheckout,
   billingSwitchFree,
-  billingWalletTopup,
   fetchBillingOverview,
   fetchBillingPaymentHistory,
   fetchBillingPlans,
   fetchSubscribePreview,
+  fetchTokenPackages,
   type BillingOverview,
   type BillingPeriod,
   type PaymentHistoryItem,
   type Plan,
   type SubscribePreview,
+  type TokenPackage,
 } from "@/lib/api";
-import { fetchGenerationUsageHistory, type AIUsageHistoryItem } from "@/lib/generation-api";
 import { AIUsageHistoryList } from "@/components/billing/AIUsageHistoryList";
-import { PageHeader } from "@/components/layout/PageHeader";
+import { fetchGenerationUsageHistory, type AIUsageHistoryItem } from "@/lib/generation-api";
 import { cn } from "@/lib/utils";
 
 function formatRub(cents: number) {
@@ -31,47 +33,88 @@ function formatRub(cents: number) {
   }).format(cents / 100);
 }
 
+function formatTokenCount(value: number) {
+  return new Intl.NumberFormat("ru-RU").format(value);
+}
+
 function formatQuota(v: number | null | undefined) {
   if (v == null) return "∞";
   return String(v);
 }
 
-function formatStorageGb(bytes: number | null | undefined) {
-  if (bytes == null) return "∞";
-  return String(Math.round(bytes / (1024 * 1024 * 1024)));
+function formatPaymentDate(value?: string) {
+  if (!value) return "—";
+  return new Date(value).toLocaleDateString("ru-RU", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
 }
 
-function formatYesNo(value: boolean) {
-  return value ? "Да" : "Нет";
+function formatPeriodEnd(value?: string) {
+  if (!value) return "в конце периода";
+  return new Date(value).toLocaleDateString("ru-RU", {
+    day: "numeric",
+    month: "long",
+  });
+}
+
+function planFeatures(plan: Plan): string[] {
+  const items: string[] = [];
+  if (plan.is_free) {
+    items.push("Базовые возможности кабинета");
+  }
+  items.push(`Каналы — ${formatQuota(plan.max_channels)}`);
+  items.push(`Посты / период — ${formatQuota(plan.max_posts_per_period)}`);
+  items.push(`AI-токены — ${formatQuota(plan.ai_text_tokens_quota)}`);
+  items.push(`Медиа-кредиты — ${formatQuota(plan.ai_media_credits_quota)}`);
+  if (plan.storage_bytes != null) {
+    items.push(`Хранилище — ${Math.round(plan.storage_bytes / (1024 ** 3))} ГБ`);
+  } else {
+    items.push("Хранилище — без лимита");
+  }
+  return items;
+}
+
+function planPriceLabel(plan: Plan, period: BillingPeriod, preview?: SubscribePreview) {
+  if (plan.is_free) return "0 ₽";
+  if (preview?.amount_due_cents != null && preview.amount_due_cents >= 0) {
+    return formatRub(preview.amount_due_cents);
+  }
+  const cents = period === "yearly" ? plan.price_yearly_cents : plan.price_monthly_cents;
+  return formatRub(cents ?? 0);
 }
 
 export function PlansWalletPage() {
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [overview, setOverview] = useState<BillingOverview | null>(null);
   const [plans, setPlans] = useState<Plan[]>([]);
+  const [packages, setPackages] = useState<TokenPackage[]>([]);
   const [history, setHistory] = useState<PaymentHistoryItem[]>([]);
   const [aiUsage, setAiUsage] = useState<AIUsageHistoryItem[]>([]);
   const [period, setPeriod] = useState<BillingPeriod>("monthly");
-  const [topupRub, setTopupRub] = useState("");
-  const [busy, setBusy] = useState<string | null>(null);
+  const [checkoutTarget, setCheckoutTarget] = useState<string | null>(null);
   const [previews, setPreviews] = useState<Record<string, SubscribePreview>>({});
+  const [busy, setBusy] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [ov, pl, hist, usage] = await Promise.all([
+      const [ov, pl, pkgs, hist, usage] = await Promise.all([
         fetchBillingOverview(),
         fetchBillingPlans(),
+        fetchTokenPackages(),
         fetchBillingPaymentHistory(),
         fetchGenerationUsageHistory(50),
       ]);
       setOverview(ov);
-      setPlans(pl.plans.filter((p) => p.is_active && !p.is_free));
-      setHistory(hist.items);
+      setPlans(pl.plans.filter((p) => p.is_active).sort((a, b) => a.sort_order - b.sort_order));
+      setPackages(pkgs.packages ?? []);
+      setHistory(hist.items ?? []);
       setAiUsage(usage.items ?? []);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Не удалось загрузить данные");
@@ -85,17 +128,11 @@ export function PlansWalletPage() {
   }, [reload]);
 
   useEffect(() => {
-    const payment = searchParams.get("payment");
-    if (payment === "success") setNotice("Оплата принята. Обновление может занять несколько секунд.");
-    if (payment === "failed") setNotice("Оплата не завершена.");
-  }, [searchParams]);
-
-  useEffect(() => {
     if (!overview?.workspace_id || plans.length === 0) return;
     void (async () => {
       const next: Record<string, SubscribePreview> = {};
       await Promise.all(
-        plans.map(async (plan) => {
+        plans.filter((p) => !p.is_free).map(async (plan) => {
           try {
             next[plan.id] = await fetchSubscribePreview({
               plan_id: plan.id,
@@ -103,7 +140,7 @@ export function PlansWalletPage() {
               workspace_id: overview.workspace_id,
             });
           } catch {
-            /* ignore preview errors */
+            /* ignore */
           }
         }),
       );
@@ -111,10 +148,35 @@ export function PlansWalletPage() {
     })();
   }, [overview?.workspace_id, plans, period]);
 
+  const currentPlanId = overview?.plan?.id;
+  const paymentsEnabled = overview?.payments_enabled ?? false;
+  const balance = overview?.token_balance;
+
+  const paymentNotice = useMemo(() => {
+    if (searchParams.get("payment") === "success") {
+      return "Оплата принята. Тариф или токены обновятся после подтверждения Robokassa.";
+    }
+    if (searchParams.get("payment") === "failed") {
+      return "Оплата не завершена. Попробуйте снова.";
+    }
+    return null;
+  }, [searchParams]);
+
+  async function startCheckout(target: string, action: () => Promise<{ checkout_url: string }>) {
+    setCheckoutTarget(target);
+    setCheckoutError(null);
+    try {
+      const result = await action();
+      window.location.href = result.checkout_url;
+    } catch (e) {
+      setCheckoutError(e instanceof ApiError ? e.message : "Не удалось начать оплату");
+      setCheckoutTarget(null);
+    }
+  }
+
   async function handleToggleAutoRenew() {
     if (!overview?.subscription) return;
     setBusy("auto-renew");
-    setError(null);
     try {
       await billingSetAutoRenew({
         workspace_id: overview.workspace_id,
@@ -128,48 +190,12 @@ export function PlansWalletPage() {
     }
   }
 
-  async function handleSubscribe(planId: string) {
-    setBusy(planId);
-    setError(null);
-    try {
-      const result = await billingSubscribeCheckout({
-        plan_id: planId,
-        billing_period: period,
-        workspace_id: overview?.workspace_id,
-      });
-      window.location.href = result.checkout_url;
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Не удалось начать оплату");
-      setBusy(null);
-    }
-  }
-
-  async function handleTopup() {
-    const rub = Number(topupRub.replace(",", "."));
-    if (!Number.isFinite(rub) || rub <= 0) {
-      setError("Укажите сумму пополнения в рублях");
-      return;
-    }
-    const amountCents = Math.round(rub * 100);
-    setBusy("topup");
-    setError(null);
-    try {
-      const result = await billingWalletTopup({ amount_cents: amountCents });
-      window.location.href = result.checkout_url;
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Не удалось начать пополнение");
-      setBusy(null);
-    }
-  }
-
   async function handleSwitchFree() {
     if (!overview?.workspace_id) return;
     setBusy("free");
-    setError(null);
     try {
       await billingSwitchFree({ workspace_id: overview.workspace_id });
       await reload();
-      setNotice("Переключено на бесплатный тариф");
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Не удалось переключить тариф");
     } finally {
@@ -181,237 +207,281 @@ export function PlansWalletPage() {
     return <p className="text-sm text-muted">Загрузка…</p>;
   }
 
-  const currentPlan = overview?.plan;
-
   return (
     <div>
-      <PageHeader
-        title="Тариф и кошелёк"
-        description="Подписка workspace (entitlements) и отдельный баланс ₽ для overage AI."
-      />
+      <h2 className="mb-1.5 text-lg font-semibold text-text">Тарифные планы</h2>
+      <p className="mb-5 text-sm text-muted">
+        Ваш текущий план:{" "}
+        <strong className="font-medium text-text">{overview?.plan?.name ?? "—"}</strong>
+        {paymentsEnabled
+          ? ". Оплата тарифов и пакетов токенов — через Robokassa."
+          : ". Оплата временно недоступна — администратор ещё не включил Robokassa."}
+      </p>
 
+      {paymentNotice && (
+        <p className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+          {paymentNotice}
+        </p>
+      )}
+      {checkoutError && (
+        <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          {checkoutError}
+        </p>
+      )}
       {error && (
-        <div className="mb-4 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+        <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           {error}
-        </div>
-      )}
-      {notice && (
-        <div className="mb-4 rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
-          {notice}
-        </div>
+        </p>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <section className="rounded-xl border border-border bg-surface p-6 shadow-sm">
-          <div className="flex items-center justify-between">
-            <h2 className="font-semibold">Текущий тариф</h2>
-            <span className="rounded-md bg-zinc-100 px-2 py-0.5 text-xs font-medium">
-              {currentPlan?.name ?? "—"}
-            </span>
-          </div>
-          {currentPlan && (
-            <ul className="mt-4 space-y-2 text-sm text-muted">
-              <li>Каналы — {formatQuota(currentPlan.max_channels)}</li>
-              <li>
-                Посты / период — {overview?.usage.posts_used ?? 0} /{" "}
-                {formatQuota(currentPlan.max_posts_per_period)}
-              </li>
-              <li>
-                AI-токены в тарифе — {overview?.usage.ai_text_tokens_used ?? 0} /{" "}
-                {formatQuota(currentPlan.ai_text_tokens_quota)}
-              </li>
-              <li>
-                Медиа-кредиты — {overview?.usage.ai_media_credits_used ?? 0} /{" "}
-                {formatQuota(currentPlan.ai_media_credits_quota)}
-              </li>
-              <li>Хранилище — {formatStorageGb(currentPlan.storage_bytes)} ГБ</li>
-              <li>Воркфлоу — {formatQuota(currentPlan.max_workflows)}</li>
-              <li>
-                Приглашения в воркфлоу — {formatQuota(currentPlan.max_workflow_invites)}
-              </li>
-              <li>Пуш по готовности — {formatYesNo(currentPlan.push_on_ready)}</li>
-            </ul>
-          )}
-          {overview?.subscription && !currentPlan?.is_free && (
-            <div className="mt-4 space-y-2 border-t border-border pt-4 text-sm">
-              <p className="text-muted">
-                Период до{" "}
-                <span className="font-medium text-text">
-                  {new Date(overview.subscription.period_end).toLocaleDateString("ru-RU")}
-                </span>
-                {overview.subscription.status === "past_due" && (
-                  <span className="ml-2 text-amber-700">· просрочена</span>
-                )}
+      {balance && (
+        <div className="mb-5 rounded-xl border border-teal-200 bg-teal-50/70 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="flex items-center gap-1.5 text-xs font-medium text-teal-800">
+                <Zap className="h-3.5 w-3.5 text-teal-600" />
+                Баланс токенов
               </p>
-              <label className="flex cursor-pointer items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={overview.subscription.auto_renew}
-                  disabled={busy !== null}
-                  onChange={handleToggleAutoRenew}
-                  className="rounded border-border"
-                />
-                <span>Автопродление с кошелька</span>
-              </label>
-              <p className="text-xs text-muted">
-                При истечении периода спишем стоимость тарифа с вашего кошелька. Grace 72 ч,
-                затем переход на free.
+              <p className="mt-1 text-2xl font-semibold text-text">
+                {formatTokenCount(balance.total_remaining)}
+              </p>
+              <p className="mt-1 text-xs text-muted">
+                {formatTokenCount(balance.plan_tokens_remaining)} из тарифа
+                {balance.purchased_tokens_remaining > 0 &&
+                  ` · ${formatTokenCount(balance.purchased_tokens_remaining)} докуплено`}
               </p>
             </div>
-          )}
-          {!overview?.payments_enabled && (
-            <p className="mt-4 text-sm text-amber-700">
-              Оплата временно недоступна — настройте Robokassa в админке.
+            <p className="max-w-sm text-xs text-muted">
+              Токены тарифа обновятся {formatPeriodEnd(balance.plan_period_end)} и сгорят, если не
+              использованы. Докупленные не сгорают.
             </p>
-          )}
-          {currentPlan && !currentPlan.is_free && (
-            <button
-              type="button"
-              disabled={busy !== null}
-              onClick={handleSwitchFree}
-              className="mt-5 rounded-md border border-border px-3 py-2 text-sm hover:bg-zinc-50 disabled:opacity-60"
-            >
-              Перейти на бесплатный
-            </button>
-          )}
-        </section>
-
-        <section className="rounded-xl border border-border bg-surface p-6 shadow-sm">
-          <h2 className="font-semibold">Кошелёк</h2>
-          <p className="mt-3 text-3xl font-semibold tracking-tight">
-            {formatRub(overview?.wallet_balance_cents ?? 0)}
-          </p>
-          <p className="mt-1 text-sm text-muted">
-            Пополнение для докупки AI. Не смешивается с тарифом.
-          </p>
-          <div className="mt-4 flex gap-2">
-            <input
-              type="number"
-              min={1}
-              placeholder={`от ${formatRub(overview?.wallet_topup_min_cents ?? 10000)}`}
-              value={topupRub}
-              onChange={(e) => setTopupRub(e.target.value)}
-              className="w-full rounded-md border border-border px-3 py-2 text-sm"
-            />
-            <button
-              type="button"
-              disabled={!overview?.payments_enabled || busy !== null}
-              onClick={handleTopup}
-              className="shrink-0 rounded-md border border-border px-3 py-2 text-sm hover:bg-zinc-50 disabled:opacity-60"
-            >
-              Пополнить
-            </button>
           </div>
-        </section>
+        </div>
+      )}
+
+      <div className="mb-4 flex items-center gap-2">
+        <span className="text-sm text-muted">Период оплаты:</span>
+        <div className="inline-flex rounded-lg border border-border p-0.5">
+          {(["monthly", "yearly"] as BillingPeriod[]).map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => setPeriod(p)}
+              className={cn(
+                "rounded-md px-3 py-1 text-sm",
+                period === p ? "bg-zinc-100 font-medium text-text" : "text-muted hover:text-text",
+              )}
+            >
+              {p === "monthly" ? "Месяц" : "Год"}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {plans.length > 0 && (
-        <section className="mt-8">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold">Доступные тарифы</h2>
-            <div className="flex rounded-md border border-border p-0.5 text-sm">
-              {(["monthly", "yearly"] as BillingPeriod[]).map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => setPeriod(p)}
-                  className={cn(
-                    "rounded px-3 py-1",
-                    period === p ? "bg-zinc-100 font-medium" : "text-muted",
-                  )}
-                >
-                  {p === "monthly" ? "Месяц" : "Год"}
-                </button>
-              ))}
+      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-3">
+        {plans.map((plan) => {
+          const isCurrent = plan.id === currentPlanId;
+          const preview = previews[plan.id];
+          const paidPlan = !plan.is_free && (plan.price_monthly_cents ?? 0) > 0;
+          const canBuy = paymentsEnabled && !isCurrent && paidPlan;
+          const checkoutKey = `plan:${plan.id}`;
+          const isCheckingOut = checkoutTarget === checkoutKey;
+          return (
+            <div
+              key={plan.id}
+              className={cn(
+                "relative flex flex-col rounded-xl bg-surface p-4 shadow-sm",
+                isCurrent ? "border-2 border-teal-500" : "border border-border",
+              )}
+            >
+              {isCurrent && (
+                <span className="absolute -top-2.5 left-4 rounded-full bg-teal-100 px-2.5 py-0.5 text-[11px] font-medium text-teal-800">
+                  Текущий план
+                </span>
+              )}
+              <div className="mb-1.5 text-sm font-semibold text-text">{plan.name}</div>
+              <div className="mb-3.5">
+                <span className="text-2xl font-semibold text-text">
+                  {planPriceLabel(plan, period, preview)}
+                </span>
+                {paidPlan && <span className="text-xs text-muted">/{period === "yearly" ? "год" : "мес"}</span>}
+              </div>
+              {plan.description && (
+                <p className="mb-3 text-xs text-muted">{plan.description}</p>
+              )}
+              <div className="mb-4 flex flex-1 flex-col gap-2">
+                {planFeatures(plan).map((feature) => (
+                  <div key={feature} className="flex items-start gap-1.5 text-xs text-muted">
+                    <Check className="mt-px h-3.5 w-3.5 shrink-0 text-teal-600" />
+                    {feature}
+                  </div>
+                ))}
+              </div>
+              <button
+                type="button"
+                disabled={isCurrent || isCheckingOut || (!canBuy && !isCurrent && paidPlan)}
+                onClick={() => {
+                  if (!canBuy) return;
+                  void startCheckout(checkoutKey, () =>
+                    billingSubscribeCheckout({
+                      plan_id: plan.id,
+                      billing_period: period,
+                      workspace_id: overview?.workspace_id,
+                    }),
+                  );
+                }}
+                className={cn(
+                  "h-9 w-full rounded-lg text-sm font-medium",
+                  isCurrent
+                    ? "cursor-default border border-border bg-zinc-50 text-muted"
+                    : canBuy
+                      ? "bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-60"
+                      : "cursor-default border border-border bg-zinc-50 text-muted",
+                )}
+              >
+                {isCurrent
+                  ? "Активен"
+                  : isCheckingOut
+                    ? "Переход…"
+                    : canBuy
+                      ? "Оплатить"
+                      : plan.is_free
+                        ? "Бесплатно"
+                        : "Недоступно"}
+              </button>
             </div>
-          </div>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {plans.map((plan) => {
-              const price =
-                period === "monthly" ? plan.price_monthly_cents : plan.price_yearly_cents;
-              const isCurrent = currentPlan?.id === plan.id;
-              const preview = previews[plan.id];
-              const due = preview?.amount_due_cents;
+          );
+        })}
+      </div>
+
+      {overview?.subscription && !overview.plan?.is_free && (
+        <div className="mt-4 rounded-xl border border-border bg-surface p-4 text-sm">
+          <label className="flex cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              checked={overview.subscription.auto_renew}
+              disabled={busy !== null}
+              onChange={() => void handleToggleAutoRenew()}
+              className="rounded border-border"
+            />
+            <span>Автопродление с кошелька</span>
+          </label>
+          <p className="mt-2 text-xs text-muted">
+            Период до {formatPaymentDate(overview.subscription.period_end)}. При истечении спишем
+            стоимость тарифа с кошелька ({formatRub(overview.wallet_balance_cents)}).
+          </p>
+          <button
+            type="button"
+            disabled={busy !== null}
+            onClick={() => void handleSwitchFree()}
+            className="mt-3 rounded-md border border-border px-3 py-1.5 text-xs hover:bg-zinc-50 disabled:opacity-60"
+          >
+            Перейти на бесплатный
+          </button>
+        </div>
+      )}
+
+      <div className="mt-8">
+        <h3 className="mb-1 text-base font-semibold text-text">Дополнительные пакеты токенов</h3>
+        <p className="mb-4 text-sm text-muted">
+          Сначала расходуются токены тарифа, затем докупленные. Докупленные токены не сгорают.
+        </p>
+        {packages.length === 0 ? (
+          <p className="text-sm text-muted">Пакеты пока недоступны.</p>
+        ) : (
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {packages.map((pkg) => {
+              const checkoutKey = `package:${pkg.id}`;
+              const isCheckingOut = checkoutTarget === checkoutKey;
+              const canBuy = paymentsEnabled && pkg.price_cents > 0;
               return (
-                <article
-                  key={plan.id}
-                  className={cn(
-                    "rounded-xl border bg-surface p-5 shadow-sm",
-                    plan.is_popular ? "border-accent" : "border-border",
-                  )}
+                <div
+                  key={pkg.id}
+                  className="flex flex-col rounded-xl border border-border bg-surface p-4 shadow-sm"
                 >
-                  <h3 className="font-semibold">{plan.name}</h3>
-                  <p className="mt-1 text-sm text-muted">{plan.description}</p>
-                  <p className="mt-4 text-2xl font-semibold">
-                    {due != null && preview?.prorate_credit_cents
-                      ? formatRub(due)
-                      : price != null
-                        ? formatRub(price)
-                        : "—"}
-                    <span className="text-sm font-normal text-muted">
-                      /{period === "monthly" ? "мес" : "год"}
-                    </span>
+                  <div className="mb-2 flex items-center gap-2 text-teal-700">
+                    <Package className="h-4 w-4" />
+                    <span className="text-sm font-semibold text-text">{pkg.name}</span>
+                  </div>
+                  <p className="text-2xl font-semibold text-text">
+                    {formatTokenCount(pkg.tokens)}
+                    <span className="ml-1 text-xs font-normal text-muted">токенов</span>
                   </p>
-                  {preview && preview.prorate_credit_cents > 0 && (
-                    <p className="mt-1 text-xs text-green-800">
-                      Перерасчёт −{formatRub(preview.prorate_credit_cents)} (к оплате{" "}
-                      {formatRub(preview.amount_due_cents)})
-                    </p>
-                  )}
-                  <ul className="mt-4 space-y-1 text-sm text-muted">
-                    <li>Каналы — {formatQuota(plan.max_channels)}</li>
-                    <li>Посты / период — {formatQuota(plan.max_posts_per_period)}</li>
-                    <li>AI-токены в тарифе — {formatQuota(plan.ai_text_tokens_quota)}</li>
-                    <li>Медиа-кредиты — {formatQuota(plan.ai_media_credits_quota)}</li>
-                    <li>Хранилище — {formatStorageGb(plan.storage_bytes)} ГБ</li>
-                    <li>Воркфлоу — {formatQuota(plan.max_workflows)}</li>
-                    <li>
-                      Приглашения в воркфлоу — {formatQuota(plan.max_workflow_invites)}
-                    </li>
-                    <li>Пуш по готовности — {formatYesNo(plan.push_on_ready)}</li>
-                  </ul>
+                  <p className="mt-2 text-sm font-medium text-text">{formatRub(pkg.price_cents)}</p>
                   <button
                     type="button"
-                    disabled={isCurrent || !overview?.payments_enabled || busy !== null || !price}
-                    onClick={() => handleSubscribe(plan.id)}
-                    className="mt-5 w-full rounded-md bg-accent px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
+                    disabled={!canBuy || isCheckingOut}
+                    onClick={() => {
+                      if (!canBuy) return;
+                      void startCheckout(checkoutKey, () => billingPackageCheckout(pkg.id));
+                    }}
+                    className={cn(
+                      "mt-4 h-9 w-full rounded-lg text-sm font-medium",
+                      canBuy
+                        ? "bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-60"
+                        : "cursor-default border border-border bg-zinc-50 text-muted",
+                    )}
                   >
-                    {isCurrent ? "Текущий тариф" : "Оплатить"}
+                    {isCheckingOut ? "Переход…" : canBuy ? "Купить" : "Недоступно"}
                   </button>
-                </article>
+                </div>
               );
             })}
           </div>
-        </section>
-      )}
+        )}
+      </div>
 
-      {history.length > 0 && (
-        <section className="mt-8 rounded-xl border border-border bg-surface p-6 shadow-sm">
-          <h2 className="font-semibold">История платежей</h2>
-          <ul className="mt-4 divide-y divide-border">
-            {history.slice(0, 10).map((item) => (
-              <li key={item.id} className="flex items-center justify-between py-3 text-sm">
-                <div>
-                  <p className="font-medium">{item.description}</p>
-                  <p className="text-muted">
-                    {new Date(item.created_at).toLocaleString("ru-RU")} · {item.status}
-                  </p>
-                </div>
-                <span className="font-medium">{formatRub(item.amount_cents)}</span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+      <div className="mt-8 rounded-xl border border-border bg-surface shadow-sm">
+        <div className="flex items-center gap-2 border-b border-border px-4 py-3">
+          <CreditCard className="h-4 w-4 text-muted" />
+          <h3 className="text-sm font-semibold text-text">История платежей</h3>
+        </div>
+        {!paymentsEnabled ? (
+          <p className="px-4 py-6 text-center text-sm text-muted">
+            История появится после включения Robokassa в админке.
+          </p>
+        ) : history.length === 0 ? (
+          <p className="px-4 py-6 text-center text-sm text-muted">Платежей пока нет.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[520px] border-collapse text-left text-xs">
+              <thead>
+                <tr className="border-b border-border text-[11px] font-semibold uppercase tracking-wide text-muted">
+                  <th className="px-4 py-2.5">Описание</th>
+                  <th className="px-4 py-2.5">Дата</th>
+                  <th className="px-4 py-2.5">Статус</th>
+                  <th className="px-4 py-2.5 text-right">Сумма</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.map((item) => (
+                  <tr key={item.id} className="border-b border-border/70 last:border-0">
+                    <td className="px-4 py-3 font-medium text-text">{item.description}</td>
+                    <td className="whitespace-nowrap px-4 py-3 text-muted">
+                      {formatPaymentDate(item.paid_at ?? item.created_at)}
+                    </td>
+                    <td className="px-4 py-3 text-muted">
+                      {item.status === "paid"
+                        ? "Оплачен"
+                        : item.status === "pending"
+                          ? "Ожидает"
+                          : item.status}
+                    </td>
+                    <td className="px-4 py-3 text-right font-medium text-text">
+                      {formatRub(item.amount_cents)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
-      <section className="mt-8 rounded-xl border border-border bg-surface p-6 shadow-sm">
-        <h2 className="font-semibold">История списаний AI</h2>
-        <p className="mt-1 text-sm text-muted">
-          Кредиты за успешные генерации. Сначала расходуется квота тарифа, остаток — с кошелька.
-          Файлы сохраняются в папку «AI контент».
-        </p>
+      <div className="mt-8">
+        <h3 className="mb-3 text-base font-semibold text-text">История списаний AI</h3>
         <AIUsageHistoryList items={aiUsage} />
-      </section>
+      </div>
     </div>
   );
 }

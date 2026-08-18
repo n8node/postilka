@@ -15,10 +15,13 @@ type BillingService struct {
 	workspaces *repository.WorkspaceRepository
 	wallet     *repository.WalletRepository
 	checkouts  *repository.PlanCheckoutRepository
+	pkgCheckouts *repository.TokenPackageCheckoutRepository
+	packages   *repository.TokenPackageRepository
 	payments   *PaymentSettingsService
 	quota      *QuotaService
 	subSvc     *SubscriptionService
 	wsSvc      *WorkspaceService
+	tokenBal   *TokenBalanceService
 }
 
 func NewBillingService(
@@ -26,20 +29,26 @@ func NewBillingService(
 	workspaces *repository.WorkspaceRepository,
 	wallet *repository.WalletRepository,
 	checkouts *repository.PlanCheckoutRepository,
+	pkgCheckouts *repository.TokenPackageCheckoutRepository,
+	packages *repository.TokenPackageRepository,
 	payments *PaymentSettingsService,
 	quota *QuotaService,
 	subSvc *SubscriptionService,
 	wsSvc *WorkspaceService,
+	tokenBal *TokenBalanceService,
 ) *BillingService {
 	return &BillingService{
-		plans:      plans,
-		workspaces: workspaces,
-		wallet:     wallet,
-		checkouts:  checkouts,
-		payments:   payments,
-		quota:      quota,
-		subSvc:     subSvc,
-		wsSvc:      wsSvc,
+		plans:        plans,
+		workspaces:   workspaces,
+		wallet:       wallet,
+		checkouts:    checkouts,
+		pkgCheckouts: pkgCheckouts,
+		packages:     packages,
+		payments:     payments,
+		quota:        quota,
+		subSvc:       subSvc,
+		wsSvc:        wsSvc,
+		tokenBal:     tokenBal,
 	}
 }
 
@@ -99,6 +108,11 @@ func (s *BillingService) Overview(ctx context.Context, userID string, r *http.Re
 
 	sub, _ := s.subSvc.GetActive(ctx, ws.ID)
 
+	tokenBalance, err := s.tokenBal.GetBalance(ctx, ws.ID, userID)
+	if err != nil {
+		return nil, err
+	}
+
 	var assignedPtr *time.Time
 	if !assignedAt.IsZero() {
 		t := assignedAt
@@ -113,6 +127,7 @@ func (s *BillingService) Overview(ctx context.Context, userID string, r *http.Re
 		PlanAssignedAt:      assignedPtr,
 		Subscription:        sub,
 		Usage:               usage,
+		TokenBalance:        tokenBalance,
 		WalletBalanceCents:  balance,
 		WalletTopupMinCents: cfg.WalletTopupMinCents,
 		WalletTopupMaxCents: cfg.WalletTopupMaxCents,
@@ -180,8 +195,12 @@ func (s *BillingService) PaymentHistory(ctx context.Context, userID string) ([]m
 	if err != nil {
 		return nil, err
 	}
+	pkgCheckouts, err := s.pkgCheckouts.ListForUser(ctx, userID, 20)
+	if err != nil {
+		return nil, err
+	}
 
-	items := make([]model.PaymentHistoryItem, 0, len(checkouts)+len(topups))
+	items := make([]model.PaymentHistoryItem, 0, len(checkouts)+len(topups)+len(pkgCheckouts))
 	for _, c := range checkouts {
 		desc := fmt.Sprintf("Оплата тарифа (%s)", c.BillingPeriod)
 		if c.ProrateCreditCents > 0 {
@@ -206,6 +225,21 @@ func (s *BillingService) PaymentHistory(ctx context.Context, userID string) ([]m
 			Description: "Пополнение кошелька",
 			CreatedAt:   t.CreatedAt,
 			PaidAt:      t.PaidAt,
+		})
+	}
+	for _, pc := range pkgCheckouts {
+		desc := fmt.Sprintf("%d токенов", pc.Tokens)
+		if pkg, err := s.packages.GetByID(ctx, pc.PackageID); err == nil {
+			desc = pkg.Name
+		}
+		items = append(items, model.PaymentHistoryItem{
+			ID:          pc.ID,
+			Kind:        "token_package",
+			AmountCents: pc.AmountCents,
+			Status:      string(pc.Status),
+			Description: desc,
+			CreatedAt:   pc.CreatedAt,
+			PaidAt:      pc.PaidAt,
 		})
 	}
 

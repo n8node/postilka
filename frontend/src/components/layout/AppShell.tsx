@@ -47,7 +47,7 @@ const mainNav: NavItem[] = [
   { href: "/files", label: "Файлы", icon: ImageIcon },
   { href: "/ai", label: "Ai контент", icon: Sparkles },
   { href: "/workflows", label: "Процессы", icon: GitBranch },
-  { href: "/plans", label: "Тариф и кошелёк", icon: Wallet },
+  { href: "/plans", label: "Тарифные планы", icon: Wallet },
   { href: "/team", label: "Команда", icon: Users },
   { href: "/analytics", label: "Аналитика", icon: BarChart3 },
 ];

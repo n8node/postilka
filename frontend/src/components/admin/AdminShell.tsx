@@ -38,6 +38,7 @@ const nav: NavSection[] = [
       { href: "/admin/workspaces", label: "Workspace" },
       { href: "/admin/files", label: "Файлы" },
       { href: "/admin/plans", label: "Тарифы" },
+      { href: "/admin/token-packages", label: "Пакеты токенов" },
       { href: "/admin/settings", label: "Настройки" },
       { href: "/admin/auth-settings", label: "Вход и регистрация" },
       { href: "/admin/email-templates", label: "Шаблоны писем" },
@@ -69,6 +70,7 @@ function breadcrumbLabel(pathname: string) {
   if (pathname.startsWith("/admin/public-pages")) return "Публичные страницы";
   if (pathname.startsWith("/admin/telegram")) return "Telegram";
   if (pathname.startsWith("/admin/plans")) return "Тарифы";
+  if (pathname.startsWith("/admin/token-packages")) return "Пакеты токенов";
   if (pathname.startsWith("/admin/settings")) return "Настройки";
   if (pathname.startsWith("/admin/users")) return "Пользователи";
   return "Admin";

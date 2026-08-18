@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 
 	"github.com/postilka/postilka/internal/model"
 	"github.com/postilka/postilka/internal/repository"
@@ -31,13 +30,15 @@ func NewAIBillingService(
 }
 
 type aiDebitResult struct {
-	QuotaUsed          int
-	WalletCentsCharged int64
+	QuotaUsed            int
+	PurchasedCreditsUsed int
+	WalletCentsCharged   int64
 }
 
 type AIDebitOutcome struct {
-	WalletCentsCharged int
-	QuotaCreditsUsed   int
+	WalletCentsCharged     int
+	QuotaCreditsUsed       int
+	PurchasedCreditsUsed   int
 }
 
 func (s *AIBillingService) kopecksPerCredit(ctx context.Context) (int, error) {
@@ -76,11 +77,19 @@ func (s *AIBillingService) PrefailCheckWithKopecks(ctx context.Context, workspac
 	if remaining >= creditCost {
 		return nil
 	}
-	overage := creditCost - remaining
+	needed := creditCost - remaining
+	purchased, _, err := s.wallet.GetPurchasedCredits(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if purchased >= needed {
+		return nil
+	}
+	needed -= purchased
 	if kopecksPerCredit <= 0 {
 		kopecksPerCredit = 5000
 	}
-	centsNeeded := int64(overage) * int64(kopecksPerCredit)
+	centsNeeded := int64(needed) * int64(kopecksPerCredit)
 	balance, err := s.wallet.GetBalance(ctx, userID)
 	if err != nil {
 		return err
@@ -108,8 +117,9 @@ func (s *AIBillingService) DebitAfterSuccessWithKopecks(ctx context.Context, wor
 		return AIDebitOutcome{}, err
 	}
 	return AIDebitOutcome{
-		WalletCentsCharged: int(result.WalletCentsCharged),
-		QuotaCreditsUsed:   result.QuotaUsed,
+		WalletCentsCharged:   int(result.WalletCentsCharged),
+		QuotaCreditsUsed:     result.QuotaUsed,
+		PurchasedCreditsUsed: result.PurchasedCreditsUsed,
 	}, nil
 }
 
@@ -134,7 +144,18 @@ func (s *AIBillingService) debitWithKopecks(ctx context.Context, workspaceID, us
 	if quotaUsed > remaining {
 		quotaUsed = remaining
 	}
-	walletCredits := creditCost - quotaUsed
+	left := creditCost - quotaUsed
+
+	purchasedAvailable, _, err := s.wallet.GetPurchasedCredits(ctx, userID)
+	if err != nil {
+		return aiDebitResult{}, err
+	}
+	purchasedUsed := left
+	if purchasedUsed > purchasedAvailable {
+		purchasedUsed = purchasedAvailable
+	}
+	left -= purchasedUsed
+	walletCredits := left
 
 	plan, assignedAt, err := s.quota.getWorkspacePlan(ctx, workspaceID)
 	if err != nil {
@@ -144,6 +165,11 @@ func (s *AIBillingService) debitWithKopecks(ctx context.Context, workspaceID, us
 
 	if quotaUsed > 0 {
 		if err := s.usage.Record(ctx, workspaceID, "ai_media_credits", quotaUsed, periodStart); err != nil {
+			return aiDebitResult{}, err
+		}
+	}
+	if purchasedUsed > 0 {
+		if err := s.wallet.DeductPurchasedCredits(ctx, userID, purchasedUsed); err != nil {
 			return aiDebitResult{}, err
 		}
 	}
@@ -172,11 +198,15 @@ func (s *AIBillingService) debitWithKopecks(ctx context.Context, workspaceID, us
 	}
 
 	_ = plan
-	return aiDebitResult{QuotaUsed: quotaUsed, WalletCentsCharged: walletCents}, nil
+	return aiDebitResult{QuotaUsed: quotaUsed, PurchasedCreditsUsed: purchasedUsed, WalletCentsCharged: walletCents}, nil
 }
 
 func (s *AIBillingService) GetMediaCreditsRemaining(ctx context.Context, workspaceID, userID string) (model.MediaCreditsRemainingView, error) {
 	remaining, unlimited, err := s.quotaRemaining(ctx, workspaceID)
+	if err != nil {
+		return model.MediaCreditsRemainingView{}, err
+	}
+	purchased, _, err := s.wallet.GetPurchasedCredits(ctx, userID)
 	if err != nil {
 		return model.MediaCreditsRemainingView{}, err
 	}
@@ -194,15 +224,16 @@ func (s *AIBillingService) GetMediaCreditsRemaining(ctx context.Context, workspa
 	}
 
 	out := model.MediaCreditsRemainingView{
+		PurchasedCredits: purchased,
 		WalletCredits:    walletCredits,
 		WalletBalanceRub: float64(balance) / 100.0,
 		Unlimited:        unlimited,
 	}
 	if unlimited {
-		out.TotalAvailable = math.MaxInt32
+		out.TotalAvailable = purchased + walletCredits
 		return out, nil
 	}
-	out.TotalAvailable = remaining + walletCredits
+	out.TotalAvailable = remaining + purchased + walletCredits
 	rem := remaining
 	out.QuotaRemaining = &rem
 	return out, nil

@@ -20,24 +20,28 @@ var (
 )
 
 type CheckoutService struct {
-	checkouts  *repository.PlanCheckoutRepository
-	wallet     *repository.WalletRepository
-	plans      *repository.PlanRepository
-	workspaces *repository.WorkspaceRepository
-	users      *repository.UserRepository
-	payments   *PaymentSettingsService
-	subSvc     *SubscriptionService
-	wsSvc      *WorkspaceService
-	emails     *TransactionalEmailService
-	telegram   *TelegramService
-	cfg        *config.Config
-	notify     *NotificationService
+	checkouts    *repository.PlanCheckoutRepository
+	pkgCheckouts *repository.TokenPackageCheckoutRepository
+	wallet       *repository.WalletRepository
+	plans        *repository.PlanRepository
+	packages     *repository.TokenPackageRepository
+	workspaces   *repository.WorkspaceRepository
+	users        *repository.UserRepository
+	payments     *PaymentSettingsService
+	subSvc       *SubscriptionService
+	wsSvc        *WorkspaceService
+	emails       *TransactionalEmailService
+	telegram     *TelegramService
+	cfg          *config.Config
+	notify       *NotificationService
 }
 
 func NewCheckoutService(
 	checkouts *repository.PlanCheckoutRepository,
+	pkgCheckouts *repository.TokenPackageCheckoutRepository,
 	wallet *repository.WalletRepository,
 	plans *repository.PlanRepository,
+	packages *repository.TokenPackageRepository,
 	workspaces *repository.WorkspaceRepository,
 	users *repository.UserRepository,
 	payments *PaymentSettingsService,
@@ -48,17 +52,19 @@ func NewCheckoutService(
 	cfg *config.Config,
 ) *CheckoutService {
 	return &CheckoutService{
-		checkouts:  checkouts,
-		wallet:     wallet,
-		plans:      plans,
-		workspaces: workspaces,
-		users:      users,
-		payments:   payments,
-		subSvc:     subSvc,
-		wsSvc:      wsSvc,
-		emails:     emails,
-		telegram:   telegram,
-		cfg:        cfg,
+		checkouts:    checkouts,
+		pkgCheckouts: pkgCheckouts,
+		wallet:       wallet,
+		plans:        plans,
+		packages:     packages,
+		workspaces:   workspaces,
+		users:        users,
+		payments:     payments,
+		subSvc:       subSvc,
+		wsSvc:        wsSvc,
+		emails:       emails,
+		telegram:     telegram,
+		cfg:          cfg,
 	}
 }
 
@@ -168,6 +174,46 @@ func (s *CheckoutService) CreateWalletTopup(ctx context.Context, userID string, 
 	return s.createRobokassaTopup(ctx, cfg, topup)
 }
 
+func (s *CheckoutService) CreatePackageCheckout(ctx context.Context, userID, packageID string) (*model.CheckoutResult, error) {
+	enabled, provider, err := s.payments.PaymentsEnabled(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !enabled {
+		return nil, ErrCheckoutUnavailable
+	}
+
+	pkg, err := s.packages.GetByID(ctx, packageID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, ErrTokenPackageNotFound
+		}
+		return nil, err
+	}
+	if !pkg.IsActive || pkg.PriceCents <= 0 || pkg.Tokens <= 0 {
+		return nil, ErrInvalidInput
+	}
+
+	user, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if user.IsBlocked {
+		return nil, ErrUserBlocked
+	}
+
+	cfg, err := s.payments.GetEffective(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	checkout, err := s.pkgCheckouts.Create(ctx, userID, pkg.ID, string(provider), pkg.PriceCents, pkg.Tokens)
+	if err != nil {
+		return nil, err
+	}
+	return s.createRobokassaPackage(ctx, cfg, checkout, pkg)
+}
+
 func (s *CheckoutService) createRobokassaSubscribe(
 	ctx context.Context,
 	cfg model.PaymentSettings,
@@ -214,6 +260,52 @@ func (s *CheckoutService) createRobokassaSubscribe(
 	return &model.CheckoutResult{
 		CheckoutID:  checkout.ID,
 		Kind:        "subscribe",
+		Provider:    string(model.PaymentProviderRobokassa),
+		CheckoutURL: "https://auth.robokassa.ru/Merchant/Index.aspx?" + params.Encode(),
+	}, nil
+}
+
+func (s *CheckoutService) createRobokassaPackage(
+	ctx context.Context,
+	cfg model.PaymentSettings,
+	checkout *model.TokenPackageCheckout,
+	pkg *model.TokenPackage,
+) (*model.CheckoutResult, error) {
+	rk := cfg.Robokassa
+	invID, err := s.wallet.NextInvID(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	outSum := FormatRubOutSum(checkout.AmountCents)
+	login := strings.TrimSpace(rk.MerchantLogin)
+	pass1 := strings.TrimSpace(rk.Password1)
+	invStr := strconv.FormatInt(invID, 10)
+	signature := BuildRobokassaPaymentSignature(login, outSum, invStr, pass1, "")
+
+	returnURL := s.payments.defaultReturnURL()
+	successURL := appendBillingQuery(returnURL, "payment", "success")
+	failURL := appendBillingQuery(returnURL, "payment", "failed")
+
+	params := url.Values{}
+	params.Set("MerchantLogin", login)
+	params.Set("OutSum", outSum)
+	params.Set("InvId", invStr)
+	params.Set("Description", fmt.Sprintf("Postilka — %s", pkg.Name))
+	params.Set("SignatureValue", signature)
+	params.Set("SuccessURL", successURL)
+	params.Set("FailURL", failURL)
+	if rk.TestMode {
+		params.Set("IsTest", "1")
+	}
+
+	if err := s.pkgCheckouts.SetExternal(ctx, checkout.ID, invStr, &invID); err != nil {
+		return nil, err
+	}
+
+	return &model.CheckoutResult{
+		CheckoutID:  checkout.ID,
+		Kind:        "token_package",
 		Provider:    string(model.PaymentProviderRobokassa),
 		CheckoutURL: "https://auth.robokassa.ru/Merchant/Index.aspx?" + params.Encode(),
 	}, nil
@@ -280,29 +372,40 @@ func (s *CheckoutService) HandleRobokassaResult(ctx context.Context, invIDStr, o
 	}
 
 	topup, err := s.wallet.GetTopupByInvID(ctx, invID)
-	if err != nil {
-		return err
-	}
-	if err := VerifyRobokassaOutSum(topup.AmountCents, outSumStr); err != nil {
-		return err
-	}
-	paid, err := s.wallet.MarkTopupPaid(ctx, topup.ID)
-	if err != nil {
-		return err
-	}
-	if paid.Status == model.CheckoutStatusPaid && s.emails != nil {
-		s.emails.SendWalletTopupPaidBestEffort(ctx, paid)
-	}
-	if paid.Status == model.CheckoutStatusPaid && s.telegram != nil {
-		if user, err := s.users.GetByID(ctx, paid.UserID); err == nil {
-			balance, _ := s.wallet.GetBalance(ctx, paid.UserID)
-			s.telegram.NotifyWalletTopup(ctx, user, paid.AmountCents, balance)
+	if err == nil {
+		if err := VerifyRobokassaOutSum(topup.AmountCents, outSumStr); err != nil {
+			return err
 		}
+		paid, err := s.wallet.MarkTopupPaid(ctx, topup.ID)
+		if err != nil {
+			return err
+		}
+		if paid.Status == model.CheckoutStatusPaid && s.emails != nil {
+			s.emails.SendWalletTopupPaidBestEffort(ctx, paid)
+		}
+		if paid.Status == model.CheckoutStatusPaid && s.telegram != nil {
+			if user, err := s.users.GetByID(ctx, paid.UserID); err == nil {
+				balance, _ := s.wallet.GetBalance(ctx, paid.UserID)
+				s.telegram.NotifyWalletTopup(ctx, user, paid.AmountCents, balance)
+			}
+		}
+		if paid.Status == model.CheckoutStatusPaid && s.notify != nil {
+			s.notify.NotifyWalletTopup(ctx, paid.UserID, paid.AmountCents)
+		}
+		return nil
+	} else if !errors.Is(err, repository.ErrNotFound) {
+		return err
 	}
-	if paid.Status == model.CheckoutStatusPaid && s.notify != nil {
-		s.notify.NotifyWalletTopup(ctx, paid.UserID, paid.AmountCents)
+
+	pkgCheckout, err := s.pkgCheckouts.GetByInvID(ctx, invID)
+	if err != nil {
+		return err
 	}
-	return nil
+	if err := VerifyRobokassaOutSum(pkgCheckout.AmountCents, outSumStr); err != nil {
+		return err
+	}
+	_, err = s.pkgCheckouts.MarkPaid(ctx, pkgCheckout.ID)
+	return err
 }
 
 func (s *CheckoutService) FulfillSubscribe(ctx context.Context, checkoutID string) error {
