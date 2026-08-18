@@ -3,44 +3,41 @@
 import React, { useEffect, useRef } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import type { SavedSketch } from "@/lib/sketch-saves";
-import { sketchThumbnailSrc } from "@/lib/sketch-thumbnail";
+import { SKETCH_THUMB_SIZE, sketchThumbnailSrc } from "@/lib/sketch-thumbnail";
 import { cn } from "@/lib/utils";
 
 type SketchSaveStripProps = {
   saves: SavedSketch[];
   selectedId: string | null;
-  frameHeight: number;
   onSelect: (item: SavedSketch) => void;
 };
 
 const MIN_SLOTS = 3;
 const SLOT_GAP = 8;
-const MAX_FRAME_HEIGHT = 520;
+const SLOT_HEIGHT = SKETCH_THUMB_SIZE;
 
 export function SketchSaveStrip({
   saves,
   selectedId,
-  frameHeight,
   onSelect,
 }: SketchSaveStripProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
-  const slotHeight = Math.min(Math.max(frameHeight, 120), MAX_FRAME_HEIGHT);
   const slotCount = Math.max(MIN_SLOTS, saves.length);
-  const viewportHeight = slotHeight * MIN_SLOTS + SLOT_GAP * (MIN_SLOTS - 1);
+  const viewportHeight = SLOT_HEIGHT * MIN_SLOTS + SLOT_GAP * (MIN_SLOTS - 1);
 
   useEffect(() => {
     if (!selectedId || !scrollRef.current) return;
     const index = saves.findIndex((s) => s.id === selectedId);
     if (index < 0) return;
     scrollRef.current.scrollTo({
-      top: index * (slotHeight + SLOT_GAP),
+      top: index * (SLOT_HEIGHT + SLOT_GAP),
       behavior: "smooth",
     });
-  }, [selectedId, saves, slotHeight]);
+  }, [selectedId, saves]);
 
   const scrollBySlot = (direction: -1 | 1) => {
     scrollRef.current?.scrollBy({
-      top: direction * (slotHeight + SLOT_GAP),
+      top: direction * (SLOT_HEIGHT + SLOT_GAP),
       behavior: "smooth",
     });
   };
@@ -79,7 +76,7 @@ export function SketchSaveStrip({
                       ? "border-indigo-500 ring-2 ring-indigo-500/30"
                       : "border-zinc-200 hover:border-zinc-300 dark:border-zinc-700",
                   )}
-                  style={{ height: slotHeight }}
+                  style={{ height: SLOT_HEIGHT }}
                   title={new Date(item.createdAt).toLocaleString("ru-RU")}
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -95,7 +92,7 @@ export function SketchSaveStrip({
               <div
                 key={`empty-${index}`}
                 className="w-full shrink-0 rounded-lg border border-dashed border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/40"
-                style={{ height: slotHeight }}
+                style={{ height: SLOT_HEIGHT }}
               />
             );
           })}

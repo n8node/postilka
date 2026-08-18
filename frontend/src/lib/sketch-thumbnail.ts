@@ -1,4 +1,6 @@
-const THUMB_MAX = 128;
+export const SKETCH_THUMB_SIZE = 128;
+
+const THUMB_MAX = SKETCH_THUMB_SIZE;
 
 export function createSketchThumbnail(dataUrl: string, maxSize = THUMB_MAX): Promise<string> {
   return new Promise((resolve, reject) => {

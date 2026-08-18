@@ -403,7 +403,6 @@ export function SketchPage() {
               <SketchSaveStrip
                 saves={savedSketches}
                 selectedId={selectedSaveId}
-                frameHeight={displaySize.height}
                 onSelect={handleLoadSavedSketch}
               />
             </div>
