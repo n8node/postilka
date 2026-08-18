@@ -2,20 +2,20 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AlertTriangle, Loader2 } from "lucide-react";
-import { PageHeader } from "@/components/layout/PageHeader";
-import { CabinetPage } from "@/components/layout/CabinetPage";
+import { AlertTriangle, Loader2, X } from "lucide-react";
 import { EmptyState } from "@/components/layout/EmptyState";
 import { CalendarBulkBar } from "@/components/calendar/CalendarBulkBar";
 import { CalendarToolbar } from "@/components/calendar/CalendarToolbar";
-import { CalendarFiltersBar, type StatusFilter } from "@/components/calendar/CalendarFiltersBar";
+import { CalendarSidebar } from "@/components/calendar/CalendarSidebar";
+import { CalendarDayTimelinePanel } from "@/components/calendar/CalendarDayTimelinePanel";
+import { CalendarYearView } from "@/components/calendar/CalendarYearView";
+import type { StatusFilter } from "@/components/calendar/CalendarFiltersBar";
 import { CalendarMonthView } from "@/components/calendar/CalendarMonthView";
 import { CalendarWeekView, CalendarDayView } from "@/components/calendar/CalendarWeekView";
 import { CalendarListView } from "@/components/calendar/CalendarListView";
 import { CalendarKanbanView, type KanbanColumnId, columnForPost } from "@/components/calendar/CalendarKanbanView";
 import { CalendarTimelineView } from "@/components/calendar/CalendarTimelineView";
 import { CalendarInspector } from "@/components/calendar/CalendarInspector";
-import { CalendarQueuePanel } from "@/components/calendar/CalendarQueuePanel";
 import { UndoToast } from "@/components/calendar/UndoToast";
 import { useAuth } from "@/context/AuthContext";
 import { ApiError, fetchChannels, type ChannelListItem } from "@/lib/api";
@@ -24,6 +24,7 @@ import {
   combineDateAndTime,
   dateKey,
   isPastDateTime,
+  isSameDay,
   postCalendarDate,
   rangeForView,
   shiftAnchor,
@@ -57,12 +58,24 @@ type UndoState = {
   message: string;
 };
 
+function postsVisibleForChannels(posts: Post[], hiddenChannels: Set<string>) {
+  if (hiddenChannels.size === 0) return posts;
+  return posts.filter((post) => {
+    if (post.targets.length === 0) return true;
+    return post.targets.some((t) => !hiddenChannels.has(t.channel_id));
+  });
+}
+
 export function CalendarPage() {
   const { user } = useAuth();
   const workspaceTz = normalizeTimezone(user?.timezone || DEFAULT_TIMEZONE);
 
   const [view, setView] = useState<CalendarView>("month");
   const [anchor, setAnchor] = useState(() => new Date());
+  const [selectedDay, setSelectedDay] = useState(() => new Date());
+  const [showDayPanel, setShowDayPanel] = useState(true);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [hiddenChannels, setHiddenChannels] = useState<Set<string>>(new Set());
   const [displayTimeZone, setDisplayTimeZone] = useState(workspaceTz);
   const [posts, setPosts] = useState<Post[]>([]);
   const [queuePosts, setQueuePosts] = useState<Post[]>([]);
@@ -89,6 +102,10 @@ export function CalendarPage() {
   useEffect(() => {
     setDisplayTimeZone(workspaceTz);
   }, [workspaceTz]);
+
+  useEffect(() => {
+    if (view === "day") setSelectedDay(anchor);
+  }, [view, anchor]);
 
   const range = useMemo(() => rangeForView(view, anchor, displayTimeZone), [view, anchor, displayTimeZone]);
 
@@ -136,8 +153,9 @@ export function CalendarPage() {
   const filteredPosts = useMemo(() => {
     let list = posts;
     if (hidePublished) list = list.filter((p) => p.status !== "published");
+    list = postsVisibleForChannels(list, hiddenChannels);
     return list;
-  }, [posts, hidePublished]);
+  }, [posts, hidePublished, hiddenChannels]);
 
   const conflicts = useMemo(
     () => detectCalendarConflicts(filteredPosts, channels, displayTimeZone),
@@ -242,8 +260,11 @@ export function CalendarPage() {
       return null;
     }
     setInvalidDrop(false);
-    return { post, next, same:
-      post.due_at && Math.abs(new Date(post.due_at).getTime() - next.getTime()) < 60_000 };
+    return {
+      post,
+      next,
+      same: post.due_at && Math.abs(new Date(post.due_at).getTime() - next.getTime()) < 60_000,
+    };
   };
 
   const handleDragOverDay = (day: Date, e: React.DragEvent) => {
@@ -265,24 +286,26 @@ export function CalendarPage() {
     handleDragEnd();
     if (!result || result.same) return;
     await reschedulePost(result.post, result.next);
+    setSelectedDay(day);
   };
 
   const handleDragOverHour = (hour: number, e: React.DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
-    const key = `${dateKey(anchor, displayTimeZone)}-${hour}`;
+    const day = selectedDay;
+    const key = `${dateKey(day, displayTimeZone)}-${hour}`;
     setDropTargetKey(key);
     const payload = dragPayload.current;
     if (!payload) return;
     const post = [...filteredPosts, ...queuePosts].find((p) => p.id === payload.postId);
     if (!post) return;
-    const next = combineDateAndTime(anchor, post.due_at, displayTimeZone, hour);
+    const next = combineDateAndTime(day, post.due_at, displayTimeZone, hour);
     setInvalidDrop(isPastDateTime(next));
   };
 
   const handleDropHour = async (hour: number, e: React.DragEvent) => {
     e.preventDefault();
-    const next = combineDateAndTime(anchor, undefined, displayTimeZone, hour);
+    const next = combineDateAndTime(selectedDay, undefined, displayTimeZone, hour);
     const payload = dragPayload.current;
     handleDragEnd();
     if (!payload) return;
@@ -350,7 +373,9 @@ export function CalendarPage() {
       }
       if (e.key === "t" || e.key === "T") {
         e.preventDefault();
-        setAnchor(new Date());
+        const now = new Date();
+        setAnchor(now);
+        setSelectedDay(now);
       }
       if (e.key === "ArrowLeft") {
         e.preventDefault();
@@ -375,6 +400,23 @@ export function CalendarPage() {
     });
   };
 
+  const toggleChannel = (channelId: string) => {
+    setHiddenChannels((prev) => {
+      const next = new Set(prev);
+      if (next.has(channelId)) next.delete(channelId);
+      else next.add(channelId);
+      return next;
+    });
+  };
+
+  const pickDay = (day: Date) => {
+    setSelectedDay(day);
+    setShowDayPanel(true);
+    if (view === "month" && !isSameDay(day, anchor, displayTimeZone)) {
+      setAnchor(day);
+    }
+  };
+
   const expandedDayPosts = useMemo(() => {
     if (!expandedDay) return [];
     const key = dateKey(expandedDay, displayTimeZone);
@@ -386,314 +428,389 @@ export function CalendarPage() {
       .sort((a, b) => (postCalendarDate(a)?.getTime() ?? 0) - (postCalendarDate(b)?.getTime() ?? 0));
   }, [expandedDay, filteredPosts, displayTimeZone]);
 
-  return (
-    <div>
-      <PageHeader
-        title="Календарь"
-        description="Планирование публикаций: перетаскивайте посты, фильтруйте по каналам и статусам."
-      />
+  const mainContent = () => {
+    if (loading && posts.length === 0) {
+      return (
+        <div className="flex flex-1 items-center justify-center gap-2 py-24 text-sm text-muted">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          Загрузка календаря…
+        </div>
+      );
+    }
+    if (filteredPosts.length === 0 && queuePosts.length === 0) {
+      return (
+        <EmptyState
+          title="Календарь пуст"
+          description="Создайте пост или перетащите черновик из очереди на нужный день."
+          action={
+            <Link
+              href="/posts/new"
+              className="inline-flex rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white hover:opacity-90"
+            >
+              Создать пост
+            </Link>
+          }
+        />
+      );
+    }
 
-      <CabinetPage
-        rightTitle={selected ? postPreviewText(selected).slice(0, 48) : undefined}
-        onCloseRight={selected ? () => setSelectedId(null) : undefined}
-        right={
-          selected ? (
-            <CalendarInspector
-              post={selected}
-              channels={channels}
-              timeZone={displayTimeZone}
-              metrics={metricsByPost.get(selected.id)}
-              busy={busy}
-              onReschedule={() => {
-                const next = window.prompt(
-                  "Новая дата и время (ГГГГ-ММ-ДД ЧЧ:ММ)",
-                  selected.due_at
-                    ? new Intl.DateTimeFormat("sv-SE", {
-                        year: "numeric",
-                        month: "2-digit",
-                        day: "2-digit",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        timeZone: displayTimeZone,
-                      })
-                        .format(new Date(selected.due_at))
-                        .replace(" ", "T")
-                        .slice(0, 16)
-                        .replace("T", " ")
-                    : "",
-                );
-                if (!next) return;
-                const parsed = new Date(next.replace(" ", "T"));
-                if (Number.isNaN(parsed.getTime())) return;
-                void handleInspectorAction(async () => {
-                  const updated = await schedulePost(selected.id, parsed.toISOString());
-                  updatePostLocal(updated);
-                });
-              }}
-              onCancel={() =>
-                handleInspectorAction(async () => {
-                  const updated = await cancelPost(selected.id);
-                  updatePostLocal(updated);
-                })
-              }
-              onPublish={() =>
-                handleInspectorAction(async () => {
-                  const updated = await publishPost(selected.id);
-                  updatePostLocal(updated);
-                  await load();
-                })
-              }
-              onDuplicate={() =>
-                handleInspectorAction(async () => {
-                  const input = postToSaveInput(selected);
-                  const created = await createPost(input);
-                  updatePostLocal(created);
-                  setSelectedId(created.id);
-                })
-              }
-              onDelete={() =>
-                handleInspectorAction(async () => {
-                  if (!window.confirm("Удалить публикацию?")) return;
-                  await deletePost(selected.id);
-                  removePostLocal(selected.id);
-                })
-              }
-            />
-          ) : undefined
-        }
-      >
-        <CalendarToolbar
-          view={view}
+    if (view === "month") {
+      return (
+        <CalendarMonthView
+          anchor={anchor}
+          selectedDay={selectedDay}
+          timeZone={displayTimeZone}
+          posts={filteredPosts}
+          channels={channels}
+          selectedId={selectedId}
+          conflicts={conflicts}
+          metricsByPost={metricsByPost}
+          draggingId={draggingId}
+          dropTargetKey={dropTargetKey}
+          invalidDrop={invalidDrop}
+          onSelect={setSelectedId}
+          onSelectDay={pickDay}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+          onDragOverDay={handleDragOverDay}
+          onDropDay={handleDropDay}
+          onExpandDay={setExpandedDay}
+        />
+      );
+    }
+    if (view === "year") {
+      return (
+        <CalendarYearView
           anchor={anchor}
           timeZone={displayTimeZone}
-          displayTimeZone={displayTimeZone}
-          onViewChange={setView}
-          onPrev={() => setAnchor((a) => shiftAnchor(view, a, -1, displayTimeZone))}
-          onNext={() => setAnchor((a) => shiftAnchor(view, a, 1, displayTimeZone))}
-          onToday={() => setAnchor(new Date())}
-          onDisplayTimeZoneChange={setDisplayTimeZone}
-          timezoneOptions={RUSSIA_TIMEZONES}
-          loading={loading}
-          onExportIcal={handleExportIcal}
+          posts={filteredPosts}
+          onPickMonth={(monthAnchor) => {
+            setAnchor(monthAnchor);
+            setView("month");
+          }}
         />
-
-        <CalendarFiltersBar
+      );
+    }
+    if (view === "week") {
+      return (
+        <CalendarWeekView
+          anchor={anchor}
+          timeZone={displayTimeZone}
+          posts={filteredPosts}
           channels={channels}
-          status={statusFilter}
-          channelId={channelFilter}
-          query={query}
-          hidePublished={hidePublished}
-          origin={originFilter}
-          onStatusChange={setStatusFilter}
-          onChannelChange={setChannelFilter}
-          onQueryChange={setQuery}
-          onHidePublishedChange={setHidePublished}
-          onOriginChange={setOriginFilter}
+          selectedId={selectedId}
+          conflicts={conflicts}
+          metricsByPost={metricsByPost}
+          draggingId={draggingId}
+          dropTargetKey={dropTargetKey}
+          invalidDrop={invalidDrop}
+          onSelect={setSelectedId}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+          onDragOverDay={handleDragOverDay}
+          onDropDay={handleDropDay}
         />
-
-        {view === "list" ? (
-          <CalendarBulkBar
-            count={bulkSelected.size}
-            busy={busy}
-            onClear={() => setBulkSelected(new Set())}
-            onCancelSelected={() =>
-              void handleInspectorAction(async () => {
-                for (const id of bulkSelected) {
-                  try {
-                    const updated = await cancelPost(id);
-                    updatePostLocal(updated);
-                  } catch {
-                    /* skip failed */
-                  }
-                }
-                setBulkSelected(new Set());
-              })
-            }
-          />
-        ) : null}
-
-        {conflicts.length > 0 ? (
-          <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            <div>
-              <p className="font-semibold">Обнаружены пересечения ({conflicts.length})</p>
-              <ul className="mt-1 list-inside list-disc">
-                {conflicts.slice(0, 3).map((c) => (
-                  <li key={c.id}>{c.message}</li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        ) : null}
-
-        {error ? (
-          <div className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>
-        ) : null}
-
-        <CalendarQueuePanel
-          posts={queuePosts}
+      );
+    }
+    if (view === "day") {
+      return (
+        <CalendarDayView
+          anchor={anchor}
+          timeZone={displayTimeZone}
+          posts={filteredPosts}
+          channels={channels}
+          selectedId={selectedId}
+          conflicts={conflicts}
+          metricsByPost={metricsByPost}
+          draggingId={draggingId}
+          dropTargetKey={dropTargetKey}
+          invalidDrop={invalidDrop}
+          onSelect={setSelectedId}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+          onDragOverHour={handleDragOverHour}
+          onDropHour={handleDropHour}
+        />
+      );
+    }
+    if (view === "kanban") {
+      return (
+        <CalendarKanbanView
+          posts={[...filteredPosts, ...queuePosts]}
           channels={channels}
           timeZone={displayTimeZone}
           selectedId={selectedId}
+          metricsByPost={metricsByPost}
+          conflicts={conflicts}
+          draggingId={draggingId}
+          dropColumn={dropColumn}
           onSelect={setSelectedId}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+          onDragOverColumn={handleDragOverColumn}
+          onDropColumn={handleDropColumn}
+        />
+      );
+    }
+    if (view === "timeline") {
+      return (
+        <CalendarTimelineView
+          anchor={anchor}
+          timeZone={displayTimeZone}
+          posts={filteredPosts}
+          channels={channels}
+          selectedId={selectedId}
+          metricsByPost={metricsByPost}
+          onSelect={setSelectedId}
+        />
+      );
+    }
+    return (
+      <CalendarListView
+        posts={filteredPosts}
+        channels={channels}
+        timeZone={displayTimeZone}
+        selectedId={selectedId}
+        conflicts={conflicts}
+        metricsByPost={metricsByPost}
+        selectedIds={bulkSelected}
+        onSelect={setSelectedId}
+        onToggleSelect={toggleBulk}
+      />
+    );
+  };
+
+  return (
+    <div className="-mx-4 -mt-2 flex min-h-[calc(100vh-5rem)] flex-col sm:-mx-6 lg:-mx-8">
+      <CalendarToolbar
+        view={view}
+        anchor={anchor}
+        timeZone={displayTimeZone}
+        displayTimeZone={displayTimeZone}
+        onViewChange={setView}
+        onPrev={() => setAnchor((a) => shiftAnchor(view, a, -1, displayTimeZone))}
+        onNext={() => setAnchor((a) => shiftAnchor(view, a, 1, displayTimeZone))}
+        onToday={() => {
+          const now = new Date();
+          setAnchor(now);
+          setSelectedDay(now);
+        }}
+        onDisplayTimeZoneChange={setDisplayTimeZone}
+        timezoneOptions={RUSSIA_TIMEZONES}
+        loading={loading}
+        onExportIcal={handleExportIcal}
+        filtersOpen={filtersOpen}
+        onFiltersOpenChange={setFiltersOpen}
+        channels={channels}
+        status={statusFilter}
+        channelId={channelFilter}
+        query={query}
+        hidePublished={hidePublished}
+        origin={originFilter}
+        onStatusChange={setStatusFilter}
+        onChannelChange={setChannelFilter}
+        onQueryChange={setQuery}
+        onHidePublishedChange={setHidePublished}
+        onOriginChange={setOriginFilter}
+      />
+
+      <div className="flex min-h-0 flex-1 overflow-hidden border-t border-border">
+        <CalendarSidebar
+          anchor={anchor}
+          selectedDay={selectedDay}
+          timeZone={displayTimeZone}
+          channels={channels}
+          hiddenChannels={hiddenChannels}
+          queuePosts={queuePosts}
+          selectedId={selectedId}
+          onAnchorChange={setAnchor}
+          onSelectedDayChange={pickDay}
+          onToggleChannel={toggleChannel}
+          onSelectPost={setSelectedId}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         />
 
-        <div className="mt-3">
-          {loading && posts.length === 0 ? (
-            <div className="flex items-center justify-center gap-2 rounded-xl border border-border py-16 text-sm text-muted">
-              <Loader2 className="h-5 w-5 animate-spin" />
-              Загрузка календаря…
+        <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          {view === "list" ? (
+            <div className="border-b border-border px-3 py-2">
+              <CalendarBulkBar
+                count={bulkSelected.size}
+                busy={busy}
+                onClear={() => setBulkSelected(new Set())}
+                onCancelSelected={() =>
+                  void handleInspectorAction(async () => {
+                    for (const id of bulkSelected) {
+                      try {
+                        const updated = await cancelPost(id);
+                        updatePostLocal(updated);
+                      } catch {
+                        /* skip failed */
+                      }
+                    }
+                    setBulkSelected(new Set());
+                  })
+                }
+              />
             </div>
-          ) : filteredPosts.length === 0 && queuePosts.length === 0 ? (
-            <EmptyState
-              title="Календарь пуст"
-              description="Создайте пост или перетащите черновик из очереди на нужный день."
-              action={
-                <Link
-                  href="/posts/new"
-                  className="inline-flex rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white hover:opacity-90"
-                >
-                  Создать пост
-                </Link>
-              }
-            />
-          ) : view === "month" ? (
-            <CalendarMonthView
-              anchor={anchor}
-              timeZone={displayTimeZone}
-              posts={filteredPosts}
-              channels={channels}
-              selectedId={selectedId}
-              conflicts={conflicts}
-              metricsByPost={metricsByPost}
-              draggingId={draggingId}
-              dropTargetKey={dropTargetKey}
-              invalidDrop={invalidDrop}
-              onSelect={setSelectedId}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-              onDragOverDay={handleDragOverDay}
-              onDropDay={handleDropDay}
-              onExpandDay={setExpandedDay}
-            />
-          ) : view === "week" ? (
-            <CalendarWeekView
-              anchor={anchor}
-              timeZone={displayTimeZone}
-              posts={filteredPosts}
-              channels={channels}
-              selectedId={selectedId}
-              conflicts={conflicts}
-              metricsByPost={metricsByPost}
-              draggingId={draggingId}
-              dropTargetKey={dropTargetKey}
-              invalidDrop={invalidDrop}
-              onSelect={setSelectedId}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-              onDragOverDay={handleDragOverDay}
-              onDropDay={handleDropDay}
-            />
-          ) : view === "day" ? (
-            <CalendarDayView
-              anchor={anchor}
-              timeZone={displayTimeZone}
-              posts={filteredPosts}
-              channels={channels}
-              selectedId={selectedId}
-              conflicts={conflicts}
-              metricsByPost={metricsByPost}
-              draggingId={draggingId}
-              dropTargetKey={dropTargetKey}
-              invalidDrop={invalidDrop}
-              onSelect={setSelectedId}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-              onDragOverHour={handleDragOverHour}
-              onDropHour={handleDropHour}
-            />
-          ) : view === "kanban" ? (
-            <CalendarKanbanView
-              posts={[...filteredPosts, ...queuePosts]}
-              channels={channels}
-              timeZone={displayTimeZone}
-              selectedId={selectedId}
-              metricsByPost={metricsByPost}
-              conflicts={conflicts}
-              draggingId={draggingId}
-              dropColumn={dropColumn}
-              onSelect={setSelectedId}
-              onDragStart={handleDragStart}
-              onDragEnd={handleDragEnd}
-              onDragOverColumn={handleDragOverColumn}
-              onDropColumn={handleDropColumn}
-            />
-          ) : view === "timeline" ? (
-            <CalendarTimelineView
-              anchor={anchor}
-              timeZone={displayTimeZone}
-              posts={filteredPosts}
-              channels={channels}
-              selectedId={selectedId}
-              metricsByPost={metricsByPost}
-              onSelect={setSelectedId}
-            />
-          ) : (
-            <CalendarListView
-              posts={filteredPosts}
-              channels={channels}
-              timeZone={displayTimeZone}
-              selectedId={selectedId}
-              conflicts={conflicts}
-              metricsByPost={metricsByPost}
-              selectedIds={bulkSelected}
-              onSelect={setSelectedId}
-              onToggleSelect={toggleBulk}
-            />
-          )}
-        </div>
+          ) : null}
 
-        {expandedDay ? (
-          <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/30 p-4 sm:items-center">
-            <div className="max-h-[80vh] w-full max-w-md overflow-hidden rounded-xl border border-border bg-surface shadow-xl">
-              <div className="flex items-center justify-between border-b border-border px-4 py-3">
-                <h3 className="text-sm font-semibold">
-                  {new Intl.DateTimeFormat("ru-RU", {
-                    weekday: "long",
-                    day: "numeric",
-                    month: "long",
-                    timeZone: displayTimeZone,
-                  }).format(expandedDay)}
-                </h3>
+          {conflicts.length > 0 ? (
+            <div className="mx-3 mt-2 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <div>
+                <p className="font-semibold">Обнаружены пересечения ({conflicts.length})</p>
+                <ul className="mt-1 list-inside list-disc">
+                  {conflicts.slice(0, 3).map((c) => (
+                    <li key={c.id}>{c.message}</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          ) : null}
+
+          {error ? (
+            <div className="mx-3 mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+              {error}
+            </div>
+          ) : null}
+
+          <div className="min-h-0 flex-1 overflow-auto">{mainContent()}</div>
+        </main>
+
+        {selected ? (
+          <aside className="flex w-64 shrink-0 flex-col border-l border-border bg-surface xl:w-80">
+            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+              <h2 className="truncate text-sm font-semibold">{postPreviewText(selected).slice(0, 48)}</h2>
+              <button
+                type="button"
+                onClick={() => setSelectedId(null)}
+                className="rounded p-1 text-muted hover:bg-zinc-100 hover:text-text"
+                aria-label="Закрыть"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="overflow-y-auto px-4 py-4 text-sm">
+              <CalendarInspector
+                post={selected}
+                channels={channels}
+                timeZone={displayTimeZone}
+                metrics={metricsByPost.get(selected.id)}
+                busy={busy}
+                onReschedule={() => {
+                  const next = window.prompt(
+                    "Новая дата и время (ГГГГ-ММ-ДД ЧЧ:ММ)",
+                    selected.due_at
+                      ? new Intl.DateTimeFormat("sv-SE", {
+                          year: "numeric",
+                          month: "2-digit",
+                          day: "2-digit",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          timeZone: displayTimeZone,
+                        })
+                          .format(new Date(selected.due_at))
+                          .replace(" ", "T")
+                          .slice(0, 16)
+                          .replace("T", " ")
+                      : "",
+                  );
+                  if (!next) return;
+                  const parsed = new Date(next.replace(" ", "T"));
+                  if (Number.isNaN(parsed.getTime())) return;
+                  void handleInspectorAction(async () => {
+                    const updated = await schedulePost(selected.id, parsed.toISOString());
+                    updatePostLocal(updated);
+                  });
+                }}
+                onCancel={() =>
+                  handleInspectorAction(async () => {
+                    const updated = await cancelPost(selected.id);
+                    updatePostLocal(updated);
+                  })
+                }
+                onPublish={() =>
+                  handleInspectorAction(async () => {
+                    const updated = await publishPost(selected.id);
+                    updatePostLocal(updated);
+                    await load();
+                  })
+                }
+                onDuplicate={() =>
+                  handleInspectorAction(async () => {
+                    const input = postToSaveInput(selected);
+                    const created = await createPost(input);
+                    updatePostLocal(created);
+                    setSelectedId(created.id);
+                  })
+                }
+                onDelete={() =>
+                  handleInspectorAction(async () => {
+                    if (!window.confirm("Удалить публикацию?")) return;
+                    await deletePost(selected.id);
+                    removePostLocal(selected.id);
+                  })
+                }
+              />
+            </div>
+          </aside>
+        ) : showDayPanel && (view === "month" || view === "week") ? (
+          <CalendarDayTimelinePanel
+            day={selectedDay}
+            timeZone={displayTimeZone}
+            posts={filteredPosts}
+            channels={channels}
+            selectedId={selectedId}
+            conflicts={conflicts}
+            onSelect={setSelectedId}
+            onClose={() => setShowDayPanel(false)}
+            onDragOverHour={handleDragOverHour}
+            onDropHour={handleDropHour}
+            dropTargetKey={dropTargetKey}
+            invalidDrop={invalidDrop}
+          />
+        ) : null}
+      </div>
+
+      {expandedDay ? (
+        <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/30 p-4 sm:items-center">
+          <div className="max-h-[80vh] w-full max-w-md overflow-hidden rounded-xl border border-border bg-surface shadow-xl">
+            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+              <h3 className="text-sm font-semibold capitalize">
+                {new Intl.DateTimeFormat("ru-RU", {
+                  weekday: "long",
+                  day: "numeric",
+                  month: "long",
+                  timeZone: displayTimeZone,
+                }).format(expandedDay)}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setExpandedDay(null)}
+                className="text-sm text-muted hover:text-text"
+              >
+                Закрыть
+              </button>
+            </div>
+            <div className="max-h-[60vh] space-y-1 overflow-y-auto p-3">
+              {expandedDayPosts.map((post) => (
                 <button
+                  key={post.id}
                   type="button"
-                  onClick={() => setExpandedDay(null)}
-                  className="text-sm text-muted hover:text-text"
+                  onClick={() => {
+                    setSelectedId(post.id);
+                    setExpandedDay(null);
+                  }}
+                  className="block w-full rounded-md border border-border px-3 py-2 text-left text-xs hover:bg-zinc-50"
                 >
-                  Закрыть
+                  {postPreviewText(post)}
                 </button>
-              </div>
-              <div className="max-h-[60vh] space-y-1 overflow-y-auto p-3">
-                {expandedDayPosts.map((post) => (
-                  <button
-                    key={post.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedId(post.id);
-                      setExpandedDay(null);
-                    }}
-                    className="block w-full rounded-md border border-border px-3 py-2 text-left text-xs hover:bg-zinc-50"
-                  >
-                    {postPreviewText(post)}
-                  </button>
-                ))}
-              </div>
+              ))}
             </div>
           </div>
-        ) : null}
-      </CabinetPage>
+        </div>
+      ) : null}
 
       {undo ? <UndoToast message={undo.message} onUndo={() => void handleUndo()} onDismiss={() => setUndo(null)} /> : null}
     </div>

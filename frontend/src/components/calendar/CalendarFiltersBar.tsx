@@ -4,6 +4,7 @@ import { Search } from "lucide-react";
 import type { Post } from "@/lib/posts-api";
 import type { ChannelListItem } from "@/lib/api";
 import { POST_STATUS_LABEL } from "@/lib/posts-display";
+import { cn } from "@/lib/utils";
 
 type StatusFilter = Post["status"] | "";
 
@@ -28,6 +29,7 @@ type CalendarFiltersBarProps = {
   onQueryChange: (query: string) => void;
   onHidePublishedChange: (hide: boolean) => void;
   onOriginChange: (origin: "" | "user" | "agent") => void;
+  layout?: "inline" | "stack";
 };
 
 export function CalendarFiltersBar({
@@ -42,11 +44,13 @@ export function CalendarFiltersBar({
   onQueryChange,
   onHidePublishedChange,
   onOriginChange,
+  layout = "inline",
 }: CalendarFiltersBarProps) {
   void origin;
   void onOriginChange;
+  const stack = layout === "stack";
   return (
-    <div className="mb-3 flex flex-wrap items-center gap-2">
+    <div className={cn("flex gap-2", stack ? "flex-col" : "mb-3 flex-wrap items-center")}>
       <div className="relative min-w-[10rem] flex-1 sm:max-w-xs">
         <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
         <input

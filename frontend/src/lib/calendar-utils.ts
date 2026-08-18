@@ -1,12 +1,17 @@
 import type { Post } from "@/lib/posts-api";
 
-export type CalendarView = "month" | "week" | "day" | "list" | "kanban" | "timeline";
+export type CalendarView = "month" | "week" | "day" | "year" | "list" | "kanban" | "timeline";
 
+/** Primary toolbar views (Google Calendar–style). */
 export const CALENDAR_VIEWS: { id: CalendarView; label: string }[] = [
-  { id: "month", label: "Месяц" },
-  { id: "week", label: "Неделя" },
   { id: "day", label: "День" },
-  { id: "list", label: "Список" },
+  { id: "week", label: "Неделя" },
+  { id: "month", label: "Месяц" },
+  { id: "year", label: "Год" },
+  { id: "list", label: "Расписание" },
+];
+
+export const CALENDAR_EXTRA_VIEWS: { id: CalendarView; label: string }[] = [
   { id: "kanban", label: "Kanban" },
   { id: "timeline", label: "Timeline" },
 ];
@@ -120,6 +125,27 @@ export function isSameMonth(date: Date, anchor: Date, timeZone: string) {
   return pa.year === pb.year && pa.month === pb.month;
 }
 
+export function isSameDay(a: Date, b: Date, timeZone: string) {
+  return sameCalendarDay(a, b, timeZone);
+}
+
+export function isWeekend(date: Date, timeZone: string) {
+  const wd = weekdayInTz(date, timeZone);
+  return wd === 0 || wd === 6;
+}
+
+export function miniMonthGridDays(anchor: Date, timeZone: string) {
+  return monthGridDays(anchor, timeZone).slice(0, 42);
+}
+
+export function hourInTz(date: Date, timeZone: string) {
+  return datePartsInTz(date, timeZone).hour;
+}
+
+export function minuteInTz(date: Date, timeZone: string) {
+  return datePartsInTz(date, timeZone).minute;
+}
+
 export function dateKey(date: Date, timeZone: string) {
   const p = datePartsInTz(date, timeZone);
   return `${p.year}-${String(p.month).padStart(2, "0")}-${String(p.day).padStart(2, "0")}`;
@@ -144,6 +170,14 @@ export function rangeForView(view: CalendarView, anchor: Date, timeZone: string)
       to: endOfDay(addDays(anchor, 1, timeZone), timeZone),
     };
   }
+  if (view === "year") {
+    const parts = datePartsInTz(anchor, timeZone);
+    const yearStart = zonedDateTime(parts.year, 1, 1, 0, 0, timeZone);
+    const yearEnd = zonedDateTime(parts.year, 12, 31, 23, 59, timeZone);
+    const gridStart = startOfWeek(yearStart, timeZone);
+    const gridEnd = endOfWeek(yearEnd, timeZone);
+    return { from: startOfDay(gridStart, timeZone), to: endOfDay(addDays(gridEnd, 1, timeZone), timeZone) };
+  }
   if (view === "kanban") {
     const start = startOfWeek(anchor, timeZone);
     const end = addDays(start, 27, timeZone);
@@ -160,6 +194,10 @@ export function rangeForView(view: CalendarView, anchor: Date, timeZone: string)
 }
 
 export function shiftAnchor(view: CalendarView, anchor: Date, delta: number, timeZone: string) {
+  if (view === "year") {
+    const parts = datePartsInTz(anchor, timeZone);
+    return zonedDateTime(parts.year + delta, 1, 1, 12, 0, timeZone);
+  }
   if (view === "month" || view === "list" || view === "kanban") {
     const parts = datePartsInTz(anchor, timeZone);
     return zonedDateTime(parts.year, parts.month + delta, 1, 12, 0, timeZone);
@@ -169,7 +207,6 @@ export function shiftAnchor(view: CalendarView, anchor: Date, delta: number, tim
 }
 
 export function formatPeriodTitle(view: CalendarView, anchor: Date, timeZone: string) {
-  const fmtMonth = new Intl.DateTimeFormat("ru-RU", { month: "long", year: "numeric", timeZone });
   const fmtDay = new Intl.DateTimeFormat("ru-RU", {
     day: "numeric",
     month: "long",
@@ -186,7 +223,13 @@ export function formatPeriodTitle(view: CalendarView, anchor: Date, timeZone: st
     });
     return `${f.format(from)} – ${t.format(to)}`;
   };
-  if (view === "month" || view === "list" || view === "kanban") return fmtMonth.format(anchor);
+  if (view === "year") {
+    const parts = datePartsInTz(anchor, timeZone);
+    return String(parts.year);
+  }
+  if (view === "month" || view === "list" || view === "kanban") {
+    return new Intl.DateTimeFormat("ru-RU", { month: "long", timeZone }).format(anchor);
+  }
   if (view === "week" || view === "timeline") {
     const start = startOfWeek(anchor, timeZone);
     const end = view === "timeline" ? addDays(start, 13, timeZone) : endOfWeek(anchor, timeZone);
