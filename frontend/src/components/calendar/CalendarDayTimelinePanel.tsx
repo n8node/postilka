@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { AlertCircle, CalendarClock, ImageIcon, Plus, X } from "lucide-react";
+import { AlertCircle, CalendarClock, Copy, ImageIcon, Plus, RefreshCw, X } from "lucide-react";
 import type { ChannelListItem } from "@/lib/api";
 import type { Post } from "@/lib/posts-api";
 import { channelCalendarColor } from "@/lib/calendar-channel-colors";
@@ -27,6 +27,8 @@ type CalendarDayTimelinePanelProps = {
   selectedId: string | null;
   conflicts: ReturnType<typeof import("@/lib/calendar-conflicts").detectCalendarConflicts>;
   onSelect: (id: string) => void;
+  onDuplicate: (post: Post) => void;
+  onReschedule: (post: Post) => void;
   onClose: () => void;
   onDragOverHour?: (hour: number, e: React.DragEvent) => void;
   onDropHour?: (hour: number, e: React.DragEvent) => void;
@@ -42,6 +44,8 @@ export function CalendarDayTimelinePanel({
   selectedId,
   conflicts,
   onSelect,
+  onDuplicate,
+  onReschedule,
   onClose,
   onDragOverHour,
   onDropHour,
@@ -75,6 +79,11 @@ export function CalendarDayTimelinePanel({
   const attentionCount = dayPosts.filter(
     (post) => post.status === "failed" || post.status === "pending_approval" || post.last_error,
   ).length;
+  const loadPeriods = [
+    { label: "Утро", count: countPostsInHours(dayPosts, timeZone, 6, 12) },
+    { label: "День", count: countPostsInHours(dayPosts, timeZone, 12, 18) },
+    { label: "Вечер", count: countPostsInHours(dayPosts, timeZone, 18, 24) },
+  ];
   const hours = Array.from({ length: 24 }, (_, h) => h);
 
   return (
@@ -125,6 +134,19 @@ export function CalendarDayTimelinePanel({
           </div>
         ) : null}
 
+        {dayPosts.length > 0 ? (
+          <div className="mt-2 grid grid-cols-3 gap-1.5">
+            {loadPeriods.map(({ label, count }) => (
+              <div key={label} className="rounded-md bg-zinc-50 px-1.5 py-1 text-center">
+                <p className="text-[9px] text-muted">{label}</p>
+                <p className={cn("text-xs font-semibold tabular-nums", count > 0 ? "text-text" : "text-muted/60")}>
+                  {count}
+                </p>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
         {attentionCount > 0 ? (
           <div className="mt-2 inline-flex items-center gap-1 rounded-md bg-amber-50 px-2 py-1 text-[10px] font-medium text-amber-900">
             <AlertCircle className="h-3.5 w-3.5" />
@@ -139,6 +161,29 @@ export function CalendarDayTimelinePanel({
           <Plus className="h-3.5 w-3.5" />
           Создать пост на этот день
         </Link>
+
+        {dayPosts.length > 0 ? (
+          <details className="group mt-2">
+            <summary className="cursor-pointer text-[11px] font-medium text-muted hover:text-text">
+              Предпросмотр публикаций
+            </summary>
+            <div className="mt-2 space-y-1.5">
+              {dayPosts.map((post) => (
+                <button
+                  key={post.id}
+                  type="button"
+                  onClick={() => onSelect(post.id)}
+                  className="block w-full rounded-md border border-border bg-zinc-50 px-2 py-1.5 text-left hover:bg-zinc-100"
+                >
+                  <span className="block truncate text-[10px] font-medium">{postPreviewText(post)}</span>
+                  <span className="mt-0.5 block text-[9px] text-muted">
+                    {formatTime(postCalendarDate(post)!.toISOString(), timeZone)} · {POST_STATUS_LABEL[post.status]}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </details>
+        ) : null}
       </div>
 
       <div className="relative flex-1 overflow-y-auto">
@@ -182,12 +227,10 @@ export function CalendarDayTimelinePanel({
                 .filter(Boolean) as ChannelListItem[];
 
               return (
-                <button
+                <div
                   key={post.id}
-                  type="button"
-                  onClick={() => onSelect(post.id)}
                   className={cn(
-                    "group absolute inset-x-0 overflow-hidden rounded border border-blue-200/80 px-2 py-1 text-left text-[11px] shadow-sm transition-shadow hover:shadow-md",
+                    "group absolute inset-x-0 overflow-hidden rounded border border-blue-200/80 text-left text-[11px] shadow-sm transition-shadow hover:shadow-md",
                     selectedId === post.id && "ring-2 ring-accent ring-offset-1",
                     hasConflict && "border-red-300",
                   )}
@@ -199,28 +242,64 @@ export function CalendarDayTimelinePanel({
                     borderLeftWidth: 3,
                   }}
                 >
-                  <span className="flex items-center gap-1.5">
-                    <span className="shrink-0 tabular-nums text-[10px] font-medium opacity-75">
-                      {formatTime(at.toISOString(), timeZone)}
+                  <button
+                    type="button"
+                    onClick={() => onSelect(post.id)}
+                    className="block h-full w-full overflow-hidden px-2 py-1 pr-12 text-left"
+                    aria-label={`Открыть публикацию: ${postPreviewText(post)}`}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <span className="shrink-0 tabular-nums text-[10px] font-medium opacity-75">
+                        {formatTime(at.toISOString(), timeZone)}
+                      </span>
+                      <span className="truncate font-medium">{postPreviewText(post)}</span>
+                      {post.media.length > 0 ? <ImageIcon className="ml-auto h-3 w-3 shrink-0 opacity-60" /> : null}
                     </span>
-                    <span className="truncate font-medium">{postPreviewText(post)}</span>
-                    {post.media.length > 0 ? <ImageIcon className="ml-auto h-3 w-3 shrink-0 opacity-60" /> : null}
-                  </span>
-                  <span className="mt-0.5 flex items-center gap-1.5 text-[10px] opacity-80">
-                    <span className="truncate">
-                      {postChannels.length > 0 ? postChannels.map((channel) => channel.name).join(", ") : "Без канала"}
+                    <span className="mt-0.5 flex items-center gap-1.5 text-[10px] opacity-80">
+                      <span className="truncate">
+                        {postChannels.length > 0 ? postChannels.map((channel) => channel.name).join(", ") : "Без канала"}
+                      </span>
+                      <span className="ml-auto shrink-0 rounded bg-white/60 px-1 py-px text-[9px]">
+                        {POST_STATUS_LABEL[post.status]}
+                      </span>
                     </span>
-                    <span className="ml-auto shrink-0 rounded bg-white/60 px-1 py-px text-[9px]">
-                      {POST_STATUS_LABEL[post.status]}
-                    </span>
-                  </span>
-                </button>
+                  </button>
+                  {post.status !== "published" && post.status !== "publishing" ? (
+                    <div className="absolute right-1 top-1 flex gap-0.5 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                      <button
+                        type="button"
+                        onClick={() => onReschedule(post)}
+                        className="rounded bg-white/80 p-1 text-muted shadow-sm hover:text-text"
+                        aria-label="Перенести публикацию"
+                        title="Перенести"
+                      >
+                        <RefreshCw className="h-3 w-3" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onDuplicate(post)}
+                        className="rounded bg-white/80 p-1 text-muted shadow-sm hover:text-text"
+                        aria-label="Дублировать публикацию"
+                        title="Дублировать"
+                      >
+                        <Copy className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
               );
             })}
             {dayPosts.length === 0 ? (
               <div className="absolute left-0 right-0 top-16 rounded-lg border border-dashed border-border bg-zinc-50/70 p-3 text-center text-[11px] text-muted">
                 Нет публикаций
                 <span className="mt-1 block text-[10px]">Перетащите сюда черновик или создайте новый пост</span>
+                <Link
+                  href={`/posts/new?date=${dayKey}`}
+                  className="mt-2 inline-flex items-center gap-1 text-[10px] font-medium text-accent hover:underline"
+                >
+                  <Plus className="h-3 w-3" />
+                  Создать пост
+                </Link>
               </div>
             ) : null}
           </div>
@@ -243,4 +322,13 @@ function pluralizeChannels(count: number) {
   if (count === 1) return "канал";
   if (count >= 2 && count <= 4) return "канала";
   return "каналов";
+}
+
+function countPostsInHours(posts: Post[], timeZone: string, from: number, to: number) {
+  return posts.filter((post) => {
+    const at = postCalendarDate(post);
+    if (!at) return false;
+    const hour = hourInTz(at, timeZone);
+    return hour >= from && hour < to;
+  }).length;
 }

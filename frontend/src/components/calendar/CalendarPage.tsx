@@ -367,6 +367,41 @@ export function CalendarPage() {
     }
   };
 
+  const handleQuickDuplicate = (post: Post) => {
+    void handleInspectorAction(async () => {
+      const created = await createPost(postToSaveInput(post));
+      updatePostLocal(created);
+      setSelectedId(created.id);
+    });
+  };
+
+  const handleQuickReschedule = (post: Post) => {
+    const next = window.prompt(
+      "Новая дата и время (ГГГГ-ММ-ДД ЧЧ:ММ)",
+      post.due_at
+        ? new Intl.DateTimeFormat("sv-SE", {
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+            timeZone: displayTimeZone,
+          })
+            .format(new Date(post.due_at))
+            .replace(" ", "T")
+            .slice(0, 16)
+            .replace("T", " ")
+        : "",
+    );
+    if (!next) return;
+    const parsed = new Date(next.replace(" ", "T"));
+    if (Number.isNaN(parsed.getTime())) {
+      setError("Укажите дату в формате ГГГГ-ММ-ДД ЧЧ:ММ");
+      return;
+    }
+    void reschedulePost(post, parsed);
+  };
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) {
@@ -776,6 +811,8 @@ export function CalendarPage() {
             selectedId={selectedId}
             conflicts={conflicts}
             onSelect={setSelectedId}
+            onDuplicate={handleQuickDuplicate}
+            onReschedule={handleQuickReschedule}
             onClose={() => setShowDayPanel(false)}
             onDragOverHour={handleDragOverHour}
             onDropHour={handleDropHour}
