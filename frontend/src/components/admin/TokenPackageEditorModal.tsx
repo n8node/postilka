@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from "react";
 import type { TokenPackage } from "@/lib/api";
+import { centsToRubValue, parseRubToCentsOrZero } from "@/lib/money";
 
 export type TokenPackageFormValues = {
   id: string;
   name: string;
   tokens: number;
-  price_cents: number;
+  price_rub: string;
   sort_order: number;
   is_active: boolean;
 };
@@ -18,7 +19,7 @@ function packageToFormValues(pkg?: TokenPackage): TokenPackageFormValues {
       id: "",
       name: "",
       tokens: 100,
-      price_cents: 0,
+      price_rub: "",
       sort_order: 0,
       is_active: true,
     };
@@ -27,11 +28,13 @@ function packageToFormValues(pkg?: TokenPackage): TokenPackageFormValues {
     id: pkg.id,
     name: pkg.name,
     tokens: pkg.tokens,
-    price_cents: pkg.price_cents,
+    price_rub: centsToRubValue(pkg.price_cents),
     sort_order: pkg.sort_order,
     is_active: pkg.is_active,
   };
 }
+
+export { packageToFormValues };
 
 export function TokenPackageEditorModal({
   open,
@@ -93,12 +96,13 @@ export function TokenPackageEditorModal({
               />
             </label>
             <label className="block text-sm">
-              <span className="text-muted">Цена (коп.)</span>
+              <span className="text-muted">Цена, ₽</span>
               <input
                 type="number"
                 min={1}
-                value={values.price_cents}
-                onChange={(e) => setValues((v) => ({ ...v, price_cents: Number(e.target.value) }))}
+                step={1}
+                value={values.price_rub}
+                onChange={(e) => setValues((v) => ({ ...v, price_rub: e.target.value }))}
                 className="mt-1 w-full rounded-md border border-border px-3 py-2"
               />
             </label>

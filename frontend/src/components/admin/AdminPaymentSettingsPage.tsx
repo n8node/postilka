@@ -11,6 +11,7 @@ import {
   type RobokassaAdminSettings,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { centsToRubValue, parseRubToCentsOrZero } from "@/lib/money";
 
 function SecretInput({
   value,
@@ -103,8 +104,8 @@ export function AdminPaymentSettingsPage({ embedded = false }: { embedded?: bool
   const [password2Set, setPassword2Set] = useState(false);
   const [password2Hint, setPassword2Hint] = useState("");
   const [resultURL, setResultURL] = useState("");
-  const [minTopup, setMinTopup] = useState(10000);
-  const [maxTopup, setMaxTopup] = useState(10000000);
+  const [minTopupRub, setMinTopupRub] = useState("100");
+  const [maxTopupRub, setMaxTopupRub] = useState("100000");
 
   const applyView = useCallback((data: PaymentAdminView) => {
     setRobokassa(data.robokassa);
@@ -113,8 +114,8 @@ export function AdminPaymentSettingsPage({ embedded = false }: { embedded?: bool
     setPassword2Set(data.robokassa_password2_set);
     setPassword2Hint(data.robokassa_password2_hint || "");
     setResultURL(data.robokassa_result_url);
-    setMinTopup(data.wallet_topup_min_cents);
-    setMaxTopup(data.wallet_topup_max_cents);
+    setMinTopupRub(centsToRubValue(data.wallet_topup_min_cents));
+    setMaxTopupRub(centsToRubValue(data.wallet_topup_max_cents));
   }, []);
 
   const load = useCallback(async () => {
@@ -139,11 +140,13 @@ export function AdminPaymentSettingsPage({ embedded = false }: { embedded?: bool
     setError(null);
     setSuccess(null);
     try {
+      const walletTopupMinCents = parseRubToCentsOrZero(minTopupRub);
+      const walletTopupMaxCents = parseRubToCentsOrZero(maxTopupRub);
       const data = await updateAdminPaymentSettings({
         active_provider: "robokassa",
         robokassa,
-        wallet_topup_min_cents: minTopup,
-        wallet_topup_max_cents: maxTopup,
+        wallet_topup_min_cents: walletTopupMinCents,
+        wallet_topup_max_cents: walletTopupMaxCents,
         ...(password1.trim() ? { robokassa_password1: password1.trim() } : {}),
         ...(password2.trim() ? { robokassa_password2: password2.trim() } : {}),
       });
@@ -167,8 +170,8 @@ export function AdminPaymentSettingsPage({ embedded = false }: { embedded?: bool
         const saved = await updateAdminPaymentSettings({
           active_provider: "robokassa",
           robokassa,
-          wallet_topup_min_cents: minTopup,
-          wallet_topup_max_cents: maxTopup,
+          wallet_topup_min_cents: parseRubToCentsOrZero(minTopupRub),
+          wallet_topup_max_cents: parseRubToCentsOrZero(maxTopupRub),
           ...(password1.trim() ? { robokassa_password1: password1.trim() } : {}),
           ...(password2.trim() ? { robokassa_password2: password2.trim() } : {}),
         });
@@ -278,22 +281,24 @@ export function AdminPaymentSettingsPage({ embedded = false }: { embedded?: bool
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <label className="mb-1.5 block text-sm font-medium">Мин. пополнение (коп.)</label>
+            <label className="mb-1.5 block text-sm font-medium">Мин. пополнение, ₽</label>
             <input
               type="number"
-              min={100}
-              value={minTopup}
-              onChange={(e) => setMinTopup(Number(e.target.value))}
+              min={1}
+              step={1}
+              value={minTopupRub}
+              onChange={(e) => setMinTopupRub(e.target.value)}
               className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-sm font-medium">Макс. пополнение (коп.)</label>
+            <label className="mb-1.5 block text-sm font-medium">Макс. пополнение, ₽</label>
             <input
               type="number"
-              min={100}
-              value={maxTopup}
-              onChange={(e) => setMaxTopup(Number(e.target.value))}
+              min={1}
+              step={1}
+              value={maxTopupRub}
+              onChange={(e) => setMaxTopupRub(e.target.value)}
               className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
             />
           </div>

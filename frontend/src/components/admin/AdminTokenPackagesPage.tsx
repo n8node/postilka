@@ -11,6 +11,7 @@ import {
   type TokenPackage,
 } from "@/lib/api";
 import { TokenPackageEditorModal, type TokenPackageFormValues } from "@/components/admin/TokenPackageEditorModal";
+import { parseRubToCentsOrZero } from "@/lib/money";
 
 function formatRub(cents: number) {
   return new Intl.NumberFormat("ru-RU", {
@@ -60,7 +61,7 @@ export function AdminTokenPackagesPage() {
         id: values.id.trim().toLowerCase(),
         name: values.name.trim(),
         tokens: values.tokens,
-        price_cents: values.price_cents,
+        price_cents: parseRubToCentsOrZero(values.price_rub),
         sort_order: values.sort_order,
         is_active: values.is_active,
       };

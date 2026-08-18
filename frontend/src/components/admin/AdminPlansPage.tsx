@@ -11,6 +11,7 @@ import {
   type PlanInput,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { centsToRubValue, parseRubToCents } from "@/lib/money";
 
 function formatRub(cents: number | null) {
   if (cents == null) return "—";
@@ -355,21 +356,21 @@ function PlanFormModal({
             />
           </label>
           <label className="text-xs font-medium text-slate-500">
-            Цена / мес (коп.)
+            Цена / мес, ₽
             <input
-              value={form.price_monthly_cents ?? ""}
+              value={centsToRubValue(form.price_monthly_cents)}
               onChange={(e) =>
-                setField("price_monthly_cents", parseOptionalInt(e.target.value))
+                setField("price_monthly_cents", parseRubToCents(e.target.value))
               }
               className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
             />
           </label>
           <label className="text-xs font-medium text-slate-500">
-            Цена / год (коп.)
+            Цена / год, ₽
             <input
-              value={form.price_yearly_cents ?? ""}
+              value={centsToRubValue(form.price_yearly_cents)}
               onChange={(e) =>
-                setField("price_yearly_cents", parseOptionalInt(e.target.value))
+                setField("price_yearly_cents", parseRubToCents(e.target.value))
               }
               className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
             />
