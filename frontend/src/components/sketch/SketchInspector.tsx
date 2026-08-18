@@ -110,7 +110,7 @@ export function SketchInspector({
     <aside
       onWheel={(e) => e.stopPropagation()}
       data-panel="sketch-inspector"
-      className="absolute right-3 top-3 bottom-3 z-30 flex w-96 sm:w-[420px] max-h-[calc(100%-1.5rem)] flex-col rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-900/95 shadow-2xl backdrop-blur-md"
+      className="flex max-h-[42vh] w-full shrink-0 flex-col border-t border-zinc-200 bg-white/95 dark:border-zinc-800 dark:bg-zinc-900/95 sm:h-full sm:max-h-none sm:w-[420px] sm:border-l sm:border-t-0"
     >
       <div className="flex shrink-0 items-center justify-between border-b border-zinc-100 dark:border-zinc-800 px-4 py-3">
         <div className="flex items-center gap-2">

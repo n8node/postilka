@@ -4,9 +4,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, ImagePlus, Loader2, Save, Trash2, Undo2 } from "lucide-react";
-import { SketchCanvas, type SketchCanvasHandle } from "@/components/sketch/SketchCanvas";
+import type { SketchCanvasHandle } from "@/components/sketch/SketchCanvas";
+import { SketchFlipBook, type SketchFlipBookHandle } from "@/components/sketch/SketchFlipBook";
 import { SketchInspector } from "@/components/sketch/SketchInspector";
-import { SketchPageFlip } from "@/components/sketch/SketchPageFlip";
 import { SketchSaveStrip } from "@/components/sketch/SketchSaveStrip";
 import { useAuth } from "@/context/AuthContext";
 import { ApiError } from "@/lib/api";
@@ -46,6 +46,7 @@ import {
 import {
   computeSketchDisplaySize,
   sketchCanvasMaxHeight,
+  sketchPageMaxWidth,
 } from "@/lib/sketch-display-size";
 
 export function SketchPage() {
@@ -53,6 +54,7 @@ export function SketchPage() {
   const { active_workspace, workspace } = useAuth();
   const workspaceId = active_workspace?.id ?? workspace?.id ?? "";
   const canvasRef = useRef<SketchCanvasHandle>(null);
+  const flipBookRef = useRef<SketchFlipBookHandle>(null);
   const bgInputRef = useRef<HTMLInputElement>(null);
   const pendingLoadRef = useRef<string | null>(null);
 
@@ -80,9 +82,10 @@ export function SketchPage() {
   const [savedSketches, setSavedSketches] = useState<SavedSketch[]>([]);
   const [selectedSaveId, setSelectedSaveId] = useState<string | null>(null);
   const [activeSaveIndex, setActiveSaveIndex] = useState<number | null>(null);
-  const [viewportHeight, setViewportHeight] = useState(
-    typeof window !== "undefined" ? window.innerHeight : 800,
-  );
+  const [viewport, setViewport] = useState({
+    width: typeof window !== "undefined" ? window.innerWidth : 1200,
+    height: typeof window !== "undefined" ? window.innerHeight : 800,
+  });
   const [saveError, setSaveError] = useState<string | null>(null);
   const [hasCanvasContent, setHasCanvasContent] = useState(false);
 
@@ -96,13 +99,15 @@ export function SketchPage() {
       computeSketchDisplaySize(
         canvasSize.width,
         canvasSize.height,
-        sketchCanvasMaxHeight(viewportHeight),
+        sketchCanvasMaxHeight(viewport.height),
+        sketchPageMaxWidth(viewport.width, true),
       ),
-    [canvasSize.width, canvasSize.height, viewportHeight],
+    [canvasSize.width, canvasSize.height, viewport.width, viewport.height],
   );
 
   useEffect(() => {
-    const onResize = () => setViewportHeight(window.innerHeight);
+    const onResize = () =>
+      setViewport({ width: window.innerWidth, height: window.innerHeight });
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
@@ -283,6 +288,7 @@ export function SketchPage() {
       setSelectedSaveId(saved.id);
       setActiveSaveIndex(0);
       reloadSavedSketches();
+      window.setTimeout(() => flipBookRef.current?.turnToDraft(), 0);
     } catch {
       setSaveError("Не удалось сохранить набросок");
     }
@@ -324,7 +330,10 @@ export function SketchPage() {
 
   const handleLoadSavedSketch = (item: SavedSketch) => {
     const index = savedSketches.findIndex((s) => s.id === item.id);
-    if (index >= 0) loadSavedAtIndex(index);
+    if (index >= 0) {
+      loadSavedAtIndex(index);
+      flipBookRef.current?.turnToSaveId(item.id);
+    }
   };
 
   const goToNewPage = useCallback(async () => {
@@ -334,18 +343,33 @@ export function SketchPage() {
     refreshUndo();
   }, [refreshUndo]);
 
-  const goToPrevSavedPage = useCallback(async () => {
-    if (savedSketches.length === 0) return;
-    const nextIndex =
-      activeSaveIndex === null ? 0 : Math.min(activeSaveIndex + 1, savedSketches.length - 1);
-    if (activeSaveIndex !== null && nextIndex === activeSaveIndex) return;
-    loadSavedAtIndex(nextIndex);
-  }, [savedSketches.length, activeSaveIndex, loadSavedAtIndex]);
-
-  const canFlipLeft =
-    savedSketches.length > 0 &&
-    (activeSaveIndex === null || activeSaveIndex < savedSketches.length - 1);
-  const canFlipRight = true;
+  const handleBookPageChange = useCallback(
+    ({
+      kind,
+      save,
+      isNewSheet,
+    }: {
+      kind: "blank" | "save" | "draft";
+      save: SavedSketch | null;
+      isNewSheet: boolean;
+    }) => {
+      if (isNewSheet) {
+        void goToNewPage();
+        window.setTimeout(() => flipBookRef.current?.turnToDraft(), 0);
+        return;
+      }
+      if (kind === "save" && save) {
+        const index = savedSketches.findIndex((s) => s.id === save.id);
+        if (index >= 0) loadSavedAtIndex(index);
+        return;
+      }
+      if (kind === "draft") {
+        setSelectedSaveId(null);
+        setActiveSaveIndex(null);
+      }
+    },
+    [goToNewPage, loadSavedAtIndex, savedSketches],
+  );
 
   if (stylesLoading) {
     return (
@@ -372,10 +396,10 @@ export function SketchPage() {
         </div>
       </header>
 
-      <div className="relative flex flex-1 min-h-0">
-        <div className="relative flex flex-1 min-w-0 items-center justify-center overflow-auto p-4 pr-0 sm:pr-[432px]">
-          <div className="flex items-start gap-3">
-            <div className="shrink-0 self-start pt-9">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden sm:flex-row">
+        <main className="flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-auto p-4">
+          <div className="flex items-start justify-center gap-3">
+            <div className="hidden shrink-0 self-start pt-9 sm:block">
               <SketchSaveStrip
                 saves={savedSketches}
                 selectedId={selectedSaveId}
@@ -384,9 +408,11 @@ export function SketchPage() {
               />
             </div>
 
-            {/* Canvas workspace column — width follows canvas */}
-            <div className="inline-flex min-w-0 max-w-full flex-col">
-              <div className="mb-1.5 flex items-center justify-between gap-2">
+            <div className="flex w-full max-w-full flex-col items-center">
+              <div
+                className="mb-1.5 flex w-full items-center justify-between gap-2"
+                style={{ maxWidth: displaySize.width * 2 }}
+              >
                 <div className="flex min-w-0 items-center gap-2 text-[11px] text-zinc-500">
                   <span className="shrink-0">Подложка: прозрачность</span>
                   <input
@@ -436,29 +462,28 @@ export function SketchPage() {
                 </div>
               </div>
 
-              <SketchPageFlip
-                canFlipLeft={canFlipLeft}
-                canFlipRight={canFlipRight}
+              <SketchFlipBook
+                ref={flipBookRef}
+                savedSketches={savedSketches}
+                pageWidth={displaySize.width}
+                pageHeight={displaySize.height}
+                canvasWidth={canvasSize.width}
+                canvasHeight={canvasSize.height}
+                canvasRef={canvasRef}
+                brush={brush}
+                color={color}
+                brushSize={brushSize}
+                backgroundImage={backgroundImage}
+                backgroundOpacity={backgroundOpacity}
+                onHistoryChange={refreshUndo}
+                onPageChange={handleBookPageChange}
                 disabled={localGenerating}
-                onFlipLeft={goToPrevSavedPage}
-                onFlipRight={goToNewPage}
-              >
-                <SketchCanvas
-                  ref={canvasRef}
-                  width={canvasSize.width}
-                  height={canvasSize.height}
-                  displayWidth={displaySize.width}
-                  displayHeight={displaySize.height}
-                  brush={brush}
-                  color={color}
-                  brushSize={brushSize}
-                  backgroundImage={backgroundImage}
-                  backgroundOpacity={backgroundOpacity}
-                  onHistoryChange={refreshUndo}
-                />
-              </SketchPageFlip>
+              />
 
-              <div className="mt-2 flex items-center justify-end gap-2">
+              <div
+                className="mt-2 flex w-full items-center justify-end gap-2"
+                style={{ maxWidth: displaySize.width * 2 }}
+              >
                 <button
                   type="button"
                   onClick={() => void handleSaveSketch()}
@@ -485,7 +510,7 @@ export function SketchPage() {
               )}
             </div>
           </div>
-        </div>
+        </main>
 
         <SketchInspector
           styles={styles}

@@ -22,3 +22,12 @@ export function computeSketchDisplaySize(
 export function sketchCanvasMaxHeight(windowHeight: number): number {
   return Math.max(280, windowHeight - 224);
 }
+
+/** Max width for one page leaf (landscape spread uses 2× this). */
+export function sketchPageMaxWidth(windowWidth: number, inspectorOpen: boolean): number {
+  const inspector = inspectorOpen ? 436 : 0;
+  const strip = 88;
+  const padding = 48;
+  const spreadBudget = Math.max(320, windowWidth - inspector - strip - padding);
+  return Math.max(160, Math.floor(spreadBudget / 2));
+}
