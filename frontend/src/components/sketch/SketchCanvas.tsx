@@ -16,6 +16,8 @@ import {
 
 export type SketchCanvasHandle = {
   exportPNG: () => Promise<Blob>;
+  exportDataUrl: () => Promise<string>;
+  loadFromDataUrl: (dataUrl: string) => Promise<void>;
   clear: () => void;
   undo: () => void;
   canUndo: () => boolean;
@@ -228,6 +230,23 @@ export const SketchCanvas = forwardRef<SketchCanvasHandle, SketchCanvasProps>(
       onHistoryChange?.();
     };
 
+    const loadImageOntoStroke = useCallback(
+      (image: HTMLImageElement) => {
+        ensureLayers();
+        const stroke = strokeRef.current;
+        if (!stroke) return;
+        const ctx = stroke.getContext("2d");
+        if (!ctx) return;
+        ctx.clearRect(0, 0, width, height);
+        ctx.drawImage(image, 0, 0, width, height);
+        undoStackRef.current = [];
+        hasContentRef.current = true;
+        composite();
+        onHistoryChange?.();
+      },
+      [width, height, ensureLayers, composite, onHistoryChange],
+    );
+
     useImperativeHandle(
       ref,
       () => ({
@@ -251,6 +270,31 @@ export const SketchCanvas = forwardRef<SketchCanvasHandle, SketchCanvasProps>(
             );
           });
           return blob;
+        },
+        exportDataUrl: async () => {
+          ensureLayers();
+          const base = baseRef.current;
+          const stroke = strokeRef.current;
+          if (!base || !stroke) throw new Error("Холст недоступен");
+          const exportCanvas = document.createElement("canvas");
+          exportCanvas.width = width;
+          exportCanvas.height = height;
+          const ctx = exportCanvas.getContext("2d");
+          if (!ctx) throw new Error("Холст недоступен");
+          ctx.drawImage(base, 0, 0);
+          ctx.drawImage(stroke, 0, 0);
+          const dataUrl = exportCanvas.toDataURL("image/png", 0.92);
+          if (!dataUrl) throw new Error("Экспорт не удался");
+          return dataUrl;
+        },
+        loadFromDataUrl: async (dataUrl: string) => {
+          const image = new Image();
+          await new Promise<void>((resolve, reject) => {
+            image.onload = () => resolve();
+            image.onerror = () => reject(new Error("Не удалось загрузить набросок"));
+            image.src = dataUrl;
+          });
+          loadImageOntoStroke(image);
         },
         clear: () => {
           pushUndo();
@@ -279,7 +323,7 @@ export const SketchCanvas = forwardRef<SketchCanvasHandle, SketchCanvasProps>(
         canUndo: () => undoStackRef.current.length > 0,
         hasContent: () => hasContentRef.current,
       }),
-      [width, height, ensureLayers, pushUndo, composite, onHistoryChange],
+      [width, height, ensureLayers, pushUndo, composite, onHistoryChange, loadImageOntoStroke],
     );
 
     return (

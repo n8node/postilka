@@ -2,13 +2,10 @@
 
 import React, { useEffect, useState } from "react";
 import {
-  ImagePlus,
   Loader2,
   Paintbrush,
   RotateCcw,
   Sparkles,
-  Trash2,
-  Undo2,
   X,
 } from "lucide-react";
 import { ProtectedMediaImage } from "@/components/media/ProtectedMediaImage";
@@ -45,10 +42,6 @@ type SketchInspectorProps = {
   onColorChange: (v: string) => void;
   brushSize: number;
   onBrushSizeChange: (v: number) => void;
-  onClear: () => void;
-  onUndo: () => void;
-  canUndo: boolean;
-  onUploadBackground: () => void;
   onGenerate: () => void;
   generating: boolean;
   generateError: string | null;
@@ -82,10 +75,6 @@ export function SketchInspector({
   onColorChange,
   brushSize,
   onBrushSizeChange,
-  onClear,
-  onUndo,
-  canUndo,
-  onUploadBackground,
   onGenerate,
   generating,
   generateError,
@@ -219,39 +208,11 @@ export function SketchInspector({
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={onUndo}
-            disabled={!canUndo}
-            className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 px-2.5 py-1.5 text-[11px] font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-800 dark:text-zinc-300"
-          >
-            <Undo2 className="h-3.5 w-3.5" />
-            Отмена
-          </button>
-          <button
-            type="button"
-            onClick={onClear}
-            className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 px-2.5 py-1.5 text-[11px] font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            Очистить
-          </button>
-          <button
-            type="button"
-            onClick={onUploadBackground}
-            className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 px-2.5 py-1.5 text-[11px] font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300"
-          >
-            <ImagePlus className="h-3.5 w-3.5" />
-            Подложка
-          </button>
-        </div>
-
         <div className="border-t border-zinc-100 pt-3 dark:border-zinc-800">
           <label className="mb-1.5 block font-medium text-zinc-700 dark:text-zinc-300">
             Стиль
           </label>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             {styles.map((style) => {
               const active = style.id === selectedStyleId;
               return (

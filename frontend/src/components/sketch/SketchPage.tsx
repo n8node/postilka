@@ -3,9 +3,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, ImagePlus, Loader2, Save, Trash2, Undo2 } from "lucide-react";
 import { SketchCanvas, type SketchCanvasHandle } from "@/components/sketch/SketchCanvas";
 import { SketchInspector } from "@/components/sketch/SketchInspector";
+import { useAuth } from "@/context/AuthContext";
 import { ApiError } from "@/lib/api";
 import type { AspectRatioId } from "@/lib/generation-data";
 import {
@@ -34,11 +35,21 @@ import {
 } from "@/lib/harmony-brushes";
 import { fetchSketchStyles, generateFromSketch, type SketchStyle } from "@/lib/sketch-api";
 import { mediaUrl } from "@/lib/media-display";
+import {
+  deleteSketchSave,
+  listSketchSaves,
+  saveSketch,
+  type SavedSketch,
+} from "@/lib/sketch-saves";
+import { cn } from "@/lib/utils";
 
 export function SketchPage() {
   const router = useRouter();
+  const { active_workspace, workspace } = useAuth();
+  const workspaceId = active_workspace?.id ?? workspace?.id ?? "";
   const canvasRef = useRef<SketchCanvasHandle>(null);
   const bgInputRef = useRef<HTMLInputElement>(null);
+  const pendingLoadRef = useRef<string | null>(null);
 
   const [styles, setStyles] = useState<SketchStyle[]>([]);
   const [stylesLoading, setStylesLoading] = useState(true);
@@ -61,6 +72,10 @@ export function SketchPage() {
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [resultIsVideo, setResultIsVideo] = useState(false);
   const [resultGenerationId, setResultGenerationId] = useState<string | null>(null);
+  const [savedSketches, setSavedSketches] = useState<SavedSketch[]>([]);
+  const [selectedSaveId, setSelectedSaveId] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [hasCanvasContent, setHasCanvasContent] = useState(false);
 
   const creditsRemaining = useMediaCreditsRemaining();
   const setCreditsRemaining = useGenerationCreditsStore((s) => s.setCreditsRemaining);
@@ -109,7 +124,27 @@ export function SketchPage() {
 
   const refreshUndo = useCallback(() => {
     setCanUndo(canvasRef.current?.canUndo() ?? false);
+    setHasCanvasContent(canvasRef.current?.hasContent() ?? false);
   }, []);
+
+  const reloadSavedSketches = useCallback(() => {
+    if (!workspaceId) {
+      setSavedSketches([]);
+      return;
+    }
+    setSavedSketches(listSketchSaves(workspaceId));
+  }, [workspaceId]);
+
+  useEffect(() => {
+    reloadSavedSketches();
+  }, [reloadSavedSketches]);
+
+  useEffect(() => {
+    if (!pendingLoadRef.current || !canvasRef.current) return;
+    const dataUrl = pendingLoadRef.current;
+    pendingLoadRef.current = null;
+    void canvasRef.current.loadFromDataUrl(dataUrl).then(refreshUndo);
+  }, [canvasSize.width, canvasSize.height, refreshUndo]);
 
   const handleGenerate = async () => {
     setGenerateError(null);
@@ -207,6 +242,44 @@ export function SketchPage() {
     }
   };
 
+  const handleSaveSketch = async () => {
+    setSaveError(null);
+    if (!workspaceId) {
+      setSaveError("Рабочая область не выбрана");
+      return;
+    }
+    if (!canvasRef.current?.hasContent()) {
+      setSaveError("Нечего сохранять — нарисуйте набросок");
+      return;
+    }
+    try {
+      const dataUrl = await canvasRef.current.exportDataUrl();
+      const saved = saveSketch(workspaceId, aspectRatio, dataUrl);
+      setSelectedSaveId(saved.id);
+      reloadSavedSketches();
+    } catch {
+      setSaveError("Не удалось сохранить набросок");
+    }
+  };
+
+  const handleDeleteSavedSketch = () => {
+    if (!workspaceId || !selectedSaveId) return;
+    deleteSketchSave(workspaceId, selectedSaveId);
+    setSelectedSaveId(null);
+    reloadSavedSketches();
+  };
+
+  const handleLoadSavedSketch = (item: SavedSketch) => {
+    setSelectedSaveId(item.id);
+    setSaveError(null);
+    if (item.aspectRatio !== aspectRatio) {
+      pendingLoadRef.current = item.dataUrl;
+      setAspectRatio(item.aspectRatio);
+      return;
+    }
+    void canvasRef.current?.loadFromDataUrl(item.dataUrl).then(refreshUndo);
+  };
+
   if (stylesLoading) {
     return (
       <div className="flex h-[calc(100vh-3.5rem)] items-center justify-center">
@@ -217,7 +290,7 @@ export function SketchPage() {
 
   return (
     <div className="relative flex h-[calc(100vh-3.5rem)] min-h-[480px] w-full flex-col overflow-hidden bg-zinc-50 dark:bg-zinc-950">
-      <header className="z-20 flex h-14 shrink-0 items-center justify-between border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4">
+      <header className="z-20 flex h-14 shrink-0 items-center border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4">
         <div className="flex items-center gap-3">
           <Link
             href="/ai"
@@ -230,41 +303,133 @@ export function SketchPage() {
             <p className="text-[10px] text-zinc-500">Рисунок → стиль → AI фото или видео</p>
           </div>
         </div>
-        <div className="hidden sm:flex items-center gap-2 text-[11px] text-zinc-500">
-          <span>Подложка: прозрачность</span>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            value={Math.round(backgroundOpacity * 100)}
-            onChange={(e) => setBackgroundOpacity(Number(e.target.value) / 100)}
-            className="w-24 accent-indigo-600"
-          />
-          {backgroundImage && (
-            <button
-              type="button"
-              onClick={() => setBackgroundImage(null)}
-              className="rounded-lg border border-zinc-200 px-2 py-1 text-[10px] dark:border-zinc-700"
-            >
-              Убрать подложку
-            </button>
-          )}
-        </div>
       </header>
 
       <div className="relative flex flex-1 min-h-0">
-        <div className="relative flex-1 min-w-0 pr-0 sm:pr-[432px]">
-          <SketchCanvas
-            ref={canvasRef}
-            width={canvasSize.width}
-            height={canvasSize.height}
-            brush={brush}
-            color={color}
-            brushSize={brushSize}
-            backgroundImage={backgroundImage}
-            backgroundOpacity={backgroundOpacity}
-            onHistoryChange={refreshUndo}
-          />
+        <div className="relative flex flex-1 min-w-0 flex-col pr-0 sm:pr-[432px]">
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-zinc-200/80 bg-white/80 px-4 py-2 dark:border-zinc-800 dark:bg-zinc-900/80">
+            <div className="flex min-w-0 items-center gap-2 text-[11px] text-zinc-500">
+              <span className="shrink-0">Подложка: прозрачность</span>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={Math.round(backgroundOpacity * 100)}
+                onChange={(e) => setBackgroundOpacity(Number(e.target.value) / 100)}
+                className="w-24 accent-indigo-600 sm:w-32"
+              />
+              {backgroundImage && (
+                <button
+                  type="button"
+                  onClick={() => setBackgroundImage(null)}
+                  className="hidden rounded-lg border border-zinc-200 px-2 py-1 text-[10px] dark:border-zinc-700 sm:inline-block"
+                >
+                  Убрать
+                </button>
+              )}
+            </div>
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => canvasRef.current?.undo()}
+                disabled={!canUndo}
+                className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 px-2.5 py-1.5 text-[11px] font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 dark:border-zinc-800 dark:text-zinc-300"
+              >
+                <Undo2 className="h-3.5 w-3.5" />
+                Отмена
+              </button>
+              <button
+                type="button"
+                onClick={() => canvasRef.current?.clear()}
+                className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 px-2.5 py-1.5 text-[11px] font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Очистить
+              </button>
+              <button
+                type="button"
+                onClick={() => bgInputRef.current?.click()}
+                className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 px-2.5 py-1.5 text-[11px] font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300"
+              >
+                <ImagePlus className="h-3.5 w-3.5" />
+                Подложка
+              </button>
+            </div>
+          </div>
+
+          <div className="relative min-h-0 flex-1">
+            <SketchCanvas
+              ref={canvasRef}
+              width={canvasSize.width}
+              height={canvasSize.height}
+              brush={brush}
+              color={color}
+              brushSize={brushSize}
+              backgroundImage={backgroundImage}
+              backgroundOpacity={backgroundOpacity}
+              onHistoryChange={refreshUndo}
+            />
+          </div>
+
+          <div className="shrink-0 border-t border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400">
+                Сохранённые наброски
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => void handleSaveSketch()}
+                  disabled={!hasCanvasContent}
+                  className="inline-flex items-center gap-1 rounded-lg bg-zinc-900 px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900"
+                >
+                  <Save className="h-3.5 w-3.5" />
+                  Сохранить
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteSavedSketch}
+                  disabled={!selectedSaveId}
+                  className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 px-3 py-1.5 text-[11px] font-medium text-zinc-700 disabled:opacity-40 dark:border-zinc-700 dark:text-zinc-300"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Удалить
+                </button>
+              </div>
+            </div>
+            {saveError && (
+              <p className="mb-2 text-[11px] text-red-600 dark:text-red-400">{saveError}</p>
+            )}
+            {savedSketches.length === 0 ? (
+              <p className="text-[11px] text-zinc-500">
+                Сохраните текущий рисунок, чтобы вернуться к нему позже.
+              </p>
+            ) : (
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {savedSketches.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => handleLoadSavedSketch(item)}
+                    className={cn(
+                      "h-16 w-16 shrink-0 overflow-hidden rounded-lg border bg-white transition",
+                      selectedSaveId === item.id
+                        ? "border-indigo-500 ring-2 ring-indigo-500/30"
+                        : "border-zinc-200 hover:border-zinc-300 dark:border-zinc-700",
+                    )}
+                    title={new Date(item.createdAt).toLocaleString("ru-RU")}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={item.dataUrl}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         <SketchInspector
@@ -287,10 +452,6 @@ export function SketchPage() {
           onColorChange={setColor}
           brushSize={brushSize}
           onBrushSizeChange={setBrushSize}
-          onClear={() => canvasRef.current?.clear()}
-          onUndo={() => canvasRef.current?.undo()}
-          canUndo={canUndo}
-          onUploadBackground={() => bgInputRef.current?.click()}
           onGenerate={() => void handleGenerate()}
           generating={localGenerating}
           generateError={generateError}
