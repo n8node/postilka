@@ -2475,6 +2475,7 @@ export type NotificationPreferences = {
   ai: boolean;
   files: boolean;
   team: boolean;
+  support: boolean;
 };
 
 export function fetchNotifications(params?: {
@@ -2515,4 +2516,172 @@ export function updateNotificationPreferences(prefs: Partial<NotificationPrefere
   });
 }
 
+export type TicketStatus =
+  | "open"
+  | "awaiting_admin"
+  | "awaiting_user"
+  | "in_progress"
+  | "resolved"
+  | "closed";
+
+export type SupportTicketTheme = {
+  id: string;
+  name: string;
+  slug: string;
+  sort_order?: number;
+  is_active?: boolean;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type SupportTicketMessage = {
+  id: string;
+  author_role: "user" | "admin";
+  body: string;
+  created_at: string;
+};
+
+export type SupportTicket = {
+  id: string;
+  theme?: { name: string; slug: string };
+  user?: { email: string; name: string };
+  subject?: string | null;
+  status: TicketStatus;
+  messages?: SupportTicketMessage[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type SupportSettings = {
+  admin_email_enabled: boolean;
+  admin_email_recipients: string;
+  telegram_enabled: boolean;
+  telegram_chat_id: string;
+  telegram_new_ticket_template: string;
+  telegram_user_reply_template: string;
+  max_enabled: boolean;
+  max_recipient_id: string;
+  max_new_ticket_template: string;
+  max_user_reply_template: string;
+};
+
+export type SupportSettingsAdminView = {
+  settings: SupportSettings;
+  telegram_bot_token_set: boolean;
+  telegram_bot_token_hint?: string;
+  max_bot_token_set: boolean;
+  max_bot_token_hint?: string;
+  updated_at: string;
+};
+
+export function fetchSupportThemes() {
+  return apiFetch<SupportTicketTheme[]>("/support/themes");
+}
+
+export function fetchSupportTickets() {
+  return apiFetch<SupportTicket[]>("/support/tickets");
+}
+
+export function fetchSupportTicketsCount() {
+  return apiFetch<{ awaiting_user_count: number }>("/support/tickets/count");
+}
+
+export function createSupportTicket(body: { theme_id: string; body: string; subject?: string }) {
+  return apiFetch<SupportTicket>("/support/tickets", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function sendSupportTicketMessage(ticketId: string, body: string) {
+  return apiFetch<SupportTicket>(`/support/tickets/${ticketId}/messages`, {
+    method: "POST",
+    body: JSON.stringify({ body }),
+  });
+}
+
+export function fetchAdminSupportSettings() {
+  return apiFetch<SupportSettingsAdminView>("/admin/support/settings");
+}
+
+export function updateAdminSupportSettings(payload: {
+  settings: SupportSettings;
+  telegram_bot_token?: string;
+  max_bot_token?: string;
+}) {
+  return apiFetch<SupportSettingsAdminView>("/admin/support/settings", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function testAdminSupportTelegram() {
+  return apiFetch<{ ok: boolean; message: string }>("/admin/support/settings/test-telegram", {
+    method: "POST",
+  });
+}
+
+export function testAdminSupportMax() {
+  return apiFetch<{ ok: boolean; message: string }>("/admin/support/settings/test-max", {
+    method: "POST",
+  });
+}
+
+export function testAdminSupportEmail() {
+  return apiFetch<{ ok: boolean; message: string }>("/admin/support/settings/test-email", {
+    method: "POST",
+  });
+}
+
+export function fetchAdminSupportThemes() {
+  return apiFetch<SupportTicketTheme[]>("/admin/support/themes");
+}
+
+export function createAdminSupportTheme(body: {
+  name: string;
+  slug?: string;
+  sort_order?: number;
+  is_active?: boolean;
+}) {
+  return apiFetch<SupportTicketTheme>("/admin/support/themes", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function updateAdminSupportTheme(
+  id: string,
+  body: Partial<{ name: string; slug: string; sort_order: number; is_active: boolean }>,
+) {
+  return apiFetch<SupportTicketTheme>(`/admin/support/themes/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteAdminSupportTheme(id: string) {
+  return apiFetch<{ ok: boolean }>(`/admin/support/themes/${id}`, { method: "DELETE" });
+}
+
+export function fetchAdminSupportTickets() {
+  return apiFetch<SupportTicket[]>("/admin/support/tickets");
+}
+
+export function fetchAdminSupportTicketsCount() {
+  return apiFetch<{ awaiting_admin_count: number }>("/admin/support/tickets/count");
+}
+
+export function updateAdminSupportTicketStatus(id: string, status: TicketStatus) {
+  return apiFetch<SupportTicket>(`/admin/support/tickets/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  });
+}
+
+export function replyAdminSupportTicket(id: string, body: string) {
+  return apiFetch<SupportTicket>(`/admin/support/tickets/${id}/reply`, {
+    method: "POST",
+    body: JSON.stringify({ body }),
+  });
+}
 

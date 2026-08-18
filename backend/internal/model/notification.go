@@ -45,6 +45,7 @@ const (
 	NotifyApprovalApproved  NotificationType = "approval_approved"
 	NotifyApprovalRejected  NotificationType = "approval_rejected"
 	NotifyApprovalComment   NotificationType = "approval_comment"
+	NotifySupportTicket     NotificationType = "support_ticket"
 )
 
 type NotificationPrefKey string
@@ -57,6 +58,7 @@ const (
 	NotifyPrefAI       NotificationPrefKey = "ai"
 	NotifyPrefFiles    NotificationPrefKey = "files"
 	NotifyPrefTeam     NotificationPrefKey = "team"
+	NotifyPrefSupport  NotificationPrefKey = "support"
 )
 
 type Notification struct {
@@ -87,6 +89,7 @@ type NotificationPreferences struct {
 	AI       bool `json:"ai"`
 	Files    bool `json:"files"`
 	Team     bool `json:"team"`
+	Support  bool `json:"support"`
 }
 
 func DefaultNotificationPreferences() NotificationPreferences {
@@ -98,6 +101,7 @@ func DefaultNotificationPreferences() NotificationPreferences {
 		AI:       true,
 		Files:    true,
 		Team:     true,
+		Support:  true,
 	}
 }
 
@@ -117,6 +121,8 @@ func (p NotificationPreferences) Enabled(key NotificationPrefKey) bool {
 		return p.Files
 	case NotifyPrefTeam:
 		return p.Team
+	case NotifyPrefSupport:
+		return p.Support
 	default:
 		return true
 	}
@@ -142,6 +148,8 @@ func NotificationPrefKeyForType(t NotificationType) NotificationPrefKey {
 	case NotifyInviteAccepted, NotifyApprovalSubmitted, NotifyApprovalApproved,
 		NotifyApprovalRejected, NotifyApprovalComment:
 		return NotifyPrefTeam
+	case NotifySupportTicket:
+		return NotifyPrefSupport
 	default:
 		return NotifyPrefPosts
 	}

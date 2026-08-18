@@ -247,6 +247,16 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	tokenPackageHandler := handler.NewTokenPackageHandler(tokenPackageSvc, checkoutSvc)
 	notificationHandler := handler.NewNotificationHandler(notificationSvc, wsSvc)
 
+	supportSettingsRepo := repository.NewSupportSettingsRepository(db.Pool)
+	supportTicketRepo := repository.NewSupportTicketRepository(db.Pool)
+	supportSettingsSvc := service.NewSupportSettingsService(supportSettingsRepo)
+	supportTicketSvc := service.NewSupportTicketService(
+		supportTicketRepo, supportSettingsSvc, userRepo, notificationSvc, emailSvc,
+		oauthclient.NewMAXBotClient(), cfg, logger,
+	)
+	supportTicketHandler := handler.NewSupportTicketHandler(supportTicketSvc)
+	adminSupportHandler := handler.NewAdminSupportHandler(supportTicketSvc, supportSettingsSvc)
+
 	r.Get("/health", health.ServeHTTP)
 	r.Get("/go/{code}", linkRedirectHandler.Redirect)
 
@@ -303,6 +313,16 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 		})
 
 		r.With(authMW.Required).Get("/user/invites", inviteHandler.UserInvites)
+
+		r.Group(func(r chi.Router) {
+			r.Use(authMW.Required)
+			r.Get("/support/themes", supportTicketHandler.ListThemes)
+			r.Get("/support/tickets", supportTicketHandler.ListTickets)
+			r.Get("/support/tickets/count", supportTicketHandler.CountTickets)
+			r.Post("/support/tickets", supportTicketHandler.CreateTicket)
+			r.Get("/support/tickets/{id}", supportTicketHandler.GetTicket)
+			r.Post("/support/tickets/{id}/messages", supportTicketHandler.AddMessage)
+		})
 
 		r.Group(func(r chi.Router) {
 			r.Use(authMW.Required)
@@ -625,6 +645,21 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Get("/posts/{postID}", adminHandler.GetPost)
 
 				r.Get("/analytics", adminHandler.Analytics)
+
+				r.Get("/support/settings", adminSupportHandler.GetSettings)
+				r.Put("/support/settings", adminSupportHandler.UpdateSettings)
+				r.Post("/support/settings/test-telegram", adminSupportHandler.TestTelegram)
+				r.Post("/support/settings/test-max", adminSupportHandler.TestMax)
+				r.Post("/support/settings/test-email", adminSupportHandler.TestEmail)
+				r.Get("/support/themes", adminSupportHandler.ListThemes)
+				r.Post("/support/themes", adminSupportHandler.CreateTheme)
+				r.Patch("/support/themes/{id}", adminSupportHandler.UpdateTheme)
+				r.Delete("/support/themes/{id}", adminSupportHandler.DeleteTheme)
+				r.Get("/support/tickets", adminSupportHandler.ListTickets)
+				r.Get("/support/tickets/count", adminSupportHandler.CountTickets)
+				r.Get("/support/tickets/{id}", adminSupportHandler.GetTicket)
+				r.Patch("/support/tickets/{id}", adminSupportHandler.UpdateTicket)
+				r.Post("/support/tickets/{id}/reply", adminSupportHandler.ReplyTicket)
 			})
 		})
 	})

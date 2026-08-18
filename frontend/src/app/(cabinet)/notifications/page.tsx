@@ -47,6 +47,7 @@ const TYPE_LABELS: Record<string, string> = {
   approval_approved: "Согласование",
   approval_rejected: "Согласование",
   approval_comment: "Согласование",
+  support_ticket: "Поддержка",
 };
 
 const FILTERS = [

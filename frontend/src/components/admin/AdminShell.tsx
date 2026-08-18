@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { logout } from "@/lib/api";
+import { useEffect, useState } from "react";
+import { logout, fetchAdminSupportTicketsCount } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 type AdminShellProps = {
@@ -34,6 +35,7 @@ const nav: NavSection[] = [
     label: "Платформа",
     items: [
       { href: "/admin/users", label: "Пользователи" },
+      { href: "/admin/support", label: "Тикеты поддержки" },
       { href: "/admin/posts", label: "Посты" },
       { href: "/admin/workspaces", label: "Workspace" },
       { href: "/admin/files", label: "Файлы" },
@@ -52,6 +54,7 @@ const nav: NavSection[] = [
 
 function breadcrumbLabel(pathname: string) {
   if (pathname.startsWith("/admin/analytics")) return "Аналитика";
+  if (pathname.startsWith("/admin/support")) return "Тикеты поддержки";
   if (pathname.startsWith("/admin/files")) return "Файлы";
   if (pathname.startsWith("/admin/posts")) return "Посты";
   if (pathname.startsWith("/admin/workspaces")) return "Workspace";
@@ -83,6 +86,18 @@ export function AdminShell({
 }: AdminShellProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const [supportAwaitingCount, setSupportAwaitingCount] = useState(0);
+
+  useEffect(() => {
+    function load() {
+      fetchAdminSupportTicketsCount()
+        .then((d) => setSupportAwaitingCount(d.awaiting_admin_count ?? 0))
+        .catch(() => setSupportAwaitingCount(0));
+    }
+    load();
+    const interval = setInterval(load, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   async function handleLogout() {
     await logout();
@@ -129,13 +144,23 @@ export function AdminShell({
                       <Link
                         href={item.href}
                         className={cn(
-                          "block rounded-md px-2.5 py-2 text-sm transition-colors",
+                          "flex items-center justify-between rounded-md px-2.5 py-2 text-sm transition-colors",
                           active
                             ? "bg-blue-600 text-white"
                             : "text-slate-300 hover:bg-white/5 hover:text-white",
                         )}
                       >
-                        {item.label}
+                        <span>{item.label}</span>
+                        {item.href === "/admin/support" && supportAwaitingCount > 0 && (
+                          <span
+                            className={cn(
+                              "rounded-full px-1.5 py-0.5 text-[10px] font-semibold",
+                              active ? "bg-white/20 text-white" : "bg-amber-500/20 text-amber-300",
+                            )}
+                          >
+                            {supportAwaitingCount > 99 ? "99+" : supportAwaitingCount}
+                          </span>
+                        )}
                       </Link>
                     </li>
                   );

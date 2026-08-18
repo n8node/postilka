@@ -15,6 +15,7 @@ const TOGGLES: { key: keyof NotificationPreferences; label: string }[] = [
   { key: "ai", label: "Генерация картинок и видео" },
   { key: "files", label: "Файлы и корзина" },
   { key: "team", label: "Команда и согласование" },
+  { key: "support", label: "Ответы в тикетах поддержки" },
 ];
 
 export function NotificationSettingsBlock() {

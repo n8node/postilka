@@ -15,6 +15,7 @@ import {
   BarChart3,
   Settings,
   Bell,
+  Headphones,
   PanelLeftClose,
   PanelLeft,
   LogOut,
@@ -25,6 +26,7 @@ import { useAuth } from "@/context/AuthContext";
 import { WorkspaceSwitcher } from "@/components/layout/WorkspaceSwitcher";
 import { EmailVerificationBanner } from "@/components/layout/EmailVerificationBanner";
 import { NotificationsBell } from "@/components/layout/NotificationsBell";
+import { SupportWidget } from "@/components/support/SupportWidget";
 import { WalletBalanceBadge } from "@/components/billing/WalletBalanceBadge";
 import { GenerationCompleteToast } from "@/components/generation/GenerationCompleteToast";
 import { GenerationJobSync } from "@/components/generation/GenerationJobSync";
@@ -50,6 +52,7 @@ const mainNav: NavItem[] = [
   { href: "/plans", label: "Тарифные планы", icon: Wallet },
   { href: "/team", label: "Команда", icon: Users },
   { href: "/analytics", label: "Аналитика", icon: BarChart3 },
+  { href: "/support", label: "Поддержка", icon: Headphones },
 ];
 
 const bottomNav: NavItem[] = [
@@ -235,6 +238,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-30 flex h-14 items-center justify-end gap-2 border-b border-border bg-surface/95 px-4 backdrop-blur-md sm:px-6">
+          <SupportWidget />
           <NotificationsBell />
         </header>
         <EmailVerificationBanner />

@@ -241,6 +241,7 @@ func parseNotificationPrefs(raw []byte) model.NotificationPreferences {
 	applyBool("ai", &prefs.AI)
 	applyBool("files", &prefs.Files)
 	applyBool("team", &prefs.Team)
+	applyBool("support", &prefs.Support)
 	return prefs
 }
 
