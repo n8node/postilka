@@ -8,6 +8,7 @@ COPY conf/forwarded-https.conf /etc/apache2/conf-available/forwarded-https.conf
 COPY conf/uploads.ini /usr/local/etc/php/conf.d/uploads.ini
 COPY docker-entrypoint-custom.sh /usr/local/bin/docker-entrypoint-custom.sh
 COPY plugins/ /var/www/html/wp-content/plugins/
+COPY mu-plugins/ /var/www/html/wp-content/mu-plugins/
 RUN a2enconf forwarded-https && \
     chmod +x /usr/local/bin/docker-entrypoint-custom.sh && \
     mkdir -p /var/www/html/wp-content/uploads && \

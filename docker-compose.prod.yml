@@ -123,6 +123,7 @@ services:
   wordpress:
     volumes:
       - ./wordpress/plugins/postilka-voxel:/var/www/html/wp-content/plugins/postilka-voxel
+      - ./wordpress/mu-plugins:/var/www/html/wp-content/mu-plugins
     logging:
       driver: json-file
       options:
