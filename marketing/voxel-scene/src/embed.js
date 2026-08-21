@@ -97,6 +97,10 @@ function mountInto(rootEl, options = {}) {
 
   wireWidget(stageHost, scene);
 
+  requestAnimationFrame(() => scene.onResize());
+  setTimeout(() => scene.onResize(), 120);
+  setTimeout(() => scene.onResize(), 600);
+
   const api = {
     root: rootEl,
     scene,

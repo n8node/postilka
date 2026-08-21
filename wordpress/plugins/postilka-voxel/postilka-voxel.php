@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Postilka Voxel Hero
  * Description: 3D voxel hero embed for Elementor and WordPress. Shortcode: [postilka_voxel_hero]
- * Version: 1.0.0
+ * Version: 1.0.1
  * Author: Postilka
  * Text Domain: postilka-voxel
  */
@@ -36,7 +36,7 @@ final class Postilka_Voxel_Hero {
 
         ob_start();
         ?>
-        <div class="postilka-voxel-root is-preview" data-postilka-voxel-root>
+        <div class="postilka-voxel-root is-preview" data-postilka-voxel-root style="width:100%;max-width:100%;">
             <div data-postilka-voxel-stage aria-label="3D-тур Postilka"></div>
             <div class="postilka-voxel-overlay">
                 <button type="button" class="postilka-voxel-expand" data-voxel-expand>
@@ -67,21 +67,21 @@ final class Postilka_Voxel_Hero {
             'postilka-voxel-scene',
             home_url('/experience/assets/scene.css'),
             ['postilka-voxel-fonts'],
-            '1.0.0'
+            '1.0.1'
         );
 
         wp_enqueue_style(
             'postilka-voxel-embed',
             home_url('/experience/assets/embed.css'),
             ['postilka-voxel-scene'],
-            '1.0.0'
+            '1.0.1'
         );
 
         wp_enqueue_script(
             'postilka-voxel-embed',
             home_url('/experience/assets/embed.js'),
             [],
-            '1.0.0',
+            '1.0.1',
             true
         );
 

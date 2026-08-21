@@ -74,9 +74,26 @@ export class DioramaScene {
   }
 
   getViewportSize() {
-    const width = Math.max(this.container?.clientWidth || 0, 1);
-    const height = Math.max(this.container?.clientHeight || 0, 1);
-    return { width, height };
+    let width = Math.max(this.container?.clientWidth || 0, 0);
+    let height = Math.max(this.container?.clientHeight || 0, 0);
+
+    if (this.embedded && width < 2) {
+      const layoutHost =
+        this.container?.closest('.e-con') ||
+        this.container?.closest('.elementor-section') ||
+        this.container?.closest('[data-postilka-voxel-root]')?.parentElement;
+      width = Math.max(layoutHost?.clientWidth || 0, window.innerWidth);
+    }
+
+    if (height < 2 && this.embedded) {
+      const root = this.container?.closest('[data-postilka-voxel-root]');
+      height = Math.max(root?.clientHeight || 0, 420);
+    }
+
+    return {
+      width: Math.max(width, 1),
+      height: Math.max(height, 1),
+    };
   }
 
   initRenderer() {

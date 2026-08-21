@@ -1,9 +1,25 @@
 /* Host layout for WordPress / Elementor embed */
+/* Elementor flex layouts often give the shortcode widget 0 width */
+.elementor-widget-shortcode:has(.postilka-voxel-root),
+.elementor-element:has(.postilka-voxel-root) {
+  width: 100% !important;
+  max-width: 100% !important;
+  flex: 1 1 100% !important;
+  align-self: stretch !important;
+  min-width: 0 !important;
+}
+
+.elementor-shortcode:has(.postilka-voxel-root) {
+  width: 100% !important;
+  display: block !important;
+}
+
 .postilka-voxel-root {
   position: relative;
   display: flex;
   flex-direction: column;
-  width: 100%;
+  width: 100% !important;
+  max-width: 100% !important;
   overflow: hidden;
   isolation: isolate;
 }
