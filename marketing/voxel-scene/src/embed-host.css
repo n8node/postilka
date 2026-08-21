@@ -132,8 +132,8 @@ body.postilka-voxel-lock header.elementor-sticky {
   position: fixed;
 }
 
-.postilka-voxel-root.is-preview .postilka-voxel-widget .journey-prompt {
-  display: none !important;
+.postilka-voxel-root.is-preview .postilka-voxel-overlay {
+  display: none;
 }
 
 .postilka-voxel-poster {

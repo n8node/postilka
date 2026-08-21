@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Postilka Voxel Hero
  * Description: 3D voxel hero embed for Elementor and WordPress. Shortcode: [postilka_voxel_hero]
- * Version: 1.0.2
+ * Version: 1.0.3
  * Author: Postilka
  * Text Domain: postilka-voxel
  */
@@ -24,14 +24,12 @@ final class Postilka_Voxel_Hero {
 
         $atts = shortcode_atts(
             [
-                'expand_label'  => 'Начать путешествие',
                 'collapse_label'=> 'Вернуться на сайт',
             ],
             $atts,
             'postilka_voxel_hero'
         );
 
-        $expand = esc_html($atts['expand_label']);
         $collapse = esc_html($atts['collapse_label']);
 
         ob_start();
@@ -39,9 +37,6 @@ final class Postilka_Voxel_Hero {
         <div class="postilka-voxel-root is-preview" data-postilka-voxel-root style="width:100%;max-width:100%;">
             <div data-postilka-voxel-stage aria-label="3D-тур Postilka"></div>
             <div class="postilka-voxel-overlay">
-                <button type="button" class="postilka-voxel-expand" data-voxel-expand>
-                    <?php echo $expand; ?>
-                </button>
                 <button type="button" class="postilka-voxel-collapse" data-voxel-collapse hidden>
                     <?php echo $collapse; ?>
                 </button>
@@ -67,21 +62,21 @@ final class Postilka_Voxel_Hero {
             'postilka-voxel-scene',
             home_url('/experience/assets/scene.css'),
             ['postilka-voxel-fonts'],
-            '1.0.1'
+            '1.0.3'
         );
 
         wp_enqueue_style(
             'postilka-voxel-embed',
             home_url('/experience/assets/embed.css'),
             ['postilka-voxel-scene'],
-            '1.0.1'
+            '1.0.3'
         );
 
         wp_enqueue_script(
             'postilka-voxel-embed',
             home_url('/experience/assets/embed.js'),
             [],
-            '1.0.1',
+            '1.0.3',
             true
         );
 

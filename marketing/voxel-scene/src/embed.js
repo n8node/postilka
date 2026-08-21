@@ -98,8 +98,8 @@ function buildWidgetMarkup() {
         <h2 id="pTitle"></h2>
         <p id="pBody"></p>
       </div>
-      <div class="journey-prompt hidden" id="journeyPrompt">
-        <p>Нажмите «Начать путешествие», чтобы идти по маршруту.</p>
+      <div class="journey-prompt" id="journeyPrompt">
+        <p>Хочешь узнать больше о Postilka? Нажми кнопку — и мы отправимся в путешествие по проекту.</p>
         <button type="button" id="journeyStart">Начать путешествие</button>
       </div>
     </div>
@@ -137,7 +137,8 @@ function wireWidget(root, scene) {
   root.querySelector('#panelX')?.addEventListener('click', () => closePanel());
 
   root.querySelector('#journeyStart')?.addEventListener('click', () => {
-    scene.startJourney();
+    const rootEl = root.closest('[data-postilka-voxel-root]');
+    if (rootEl) expandRoot(rootEl);
   });
 
   document.addEventListener('keydown', (event) => {
@@ -210,10 +211,7 @@ function expandRoot(rootEl) {
   rootEl.classList.remove('is-preview');
   document.body.classList.add('postilka-voxel-lock');
 
-  const expandBtn = rootEl.querySelector('[data-voxel-expand]');
-  const collapseBtn = rootEl.querySelector('[data-voxel-collapse]');
-  expandBtn?.setAttribute('hidden', '');
-  collapseBtn?.removeAttribute('hidden');
+  rootEl.querySelector('[data-voxel-collapse]')?.removeAttribute('hidden');
 
   activeScene?.startJourney();
   activeScene?.onResize();
@@ -224,10 +222,7 @@ function collapseRoot(rootEl) {
   rootEl.classList.add('is-preview');
   document.body.classList.remove('postilka-voxel-lock');
 
-  const expandBtn = rootEl.querySelector('[data-voxel-expand]');
-  const collapseBtn = rootEl.querySelector('[data-voxel-collapse]');
-  collapseBtn?.setAttribute('hidden', '');
-  expandBtn?.removeAttribute('hidden');
+  rootEl.querySelector('[data-voxel-collapse]')?.setAttribute('hidden', '');
 
   const api = mounts.get(rootEl);
   api?.scene?.stopJourney();
@@ -240,9 +235,6 @@ function autoMountAll() {
     if (mounts.has(rootEl)) return;
     mountInto(rootEl);
 
-    rootEl.querySelector('[data-voxel-expand]')?.addEventListener('click', () => {
-      expandRoot(rootEl);
-    });
     rootEl.querySelector('[data-voxel-collapse]')?.addEventListener('click', () => {
       collapseRoot(rootEl);
     });

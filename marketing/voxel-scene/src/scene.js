@@ -364,9 +364,14 @@ export class DioramaScene {
   }
 
   initJourneyPrompt() {
-    this.journeyPromptEl = document.getElementById('journeyPrompt');
-    this.journeyStartBtn = document.getElementById('journeyStart');
-    this.journeyStartBtn?.addEventListener('click', () => this.startJourney());
+    const scope = this.overlayRoot?.querySelector ? this.overlayRoot : document;
+    this.journeyPromptEl =
+      scope.querySelector?.('#journeyPrompt') || document.getElementById('journeyPrompt');
+    this.journeyStartBtn =
+      scope.querySelector?.('#journeyStart') || document.getElementById('journeyStart');
+    if (!this.embedded) {
+      this.journeyStartBtn?.addEventListener('click', () => this.startJourney());
+    }
   }
 
   stopJourney() {
