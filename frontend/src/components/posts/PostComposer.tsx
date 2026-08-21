@@ -104,6 +104,7 @@ const PROVIDER_LABEL: Record<ChannelProvider, string> = {
   rutube: "Rutube",
   dzen: "Дзен",
   youtube: "YouTube",
+  photochka: "Photochka",
 };
 
 const PROVIDER_COLOR: Record<ChannelProvider, string> = {
@@ -114,6 +115,7 @@ const PROVIDER_COLOR: Record<ChannelProvider, string> = {
   rutube: "#100943",
   dzen: "#111111",
   youtube: "#ef4444",
+  photochka: "#7C3AED",
 };
 
 const STATUS_LABEL: Record<Post["status"], string> = {

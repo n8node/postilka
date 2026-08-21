@@ -19,6 +19,7 @@ const PROVIDER_LABEL: Record<ChannelProvider, string> = {
   rutube: "Rutube",
   dzen: "Дзен",
   youtube: "YouTube",
+  photochka: "Photochka",
 };
 
 const TELEGRAM_PREVIEW_BG = "/app/telegram-chat-bg.png";

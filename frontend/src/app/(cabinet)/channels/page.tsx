@@ -46,6 +46,7 @@ const providerLabel: Partial<Record<ChannelProvider, string>> = {
   rutube: "Rutube",
   dzen: "Дзен",
   youtube: "YouTube",
+  photochka: "Photochka",
 };
 
 function formatProviderLabel(provider: ChannelProvider, chatType?: string): string {
