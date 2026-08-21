@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <title>Postilka — Фабрика контента</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Zen+Maru+Gothic:wght@500;700&family=JetBrains+Mono:wght@500&display=swap"
+      rel="stylesheet"
+    />
+    <script type="module" crossorigin src="/experience/assets/main-Df7s4Xrx.js"></script>
+    <link rel="modulepreload" crossorigin href="/experience/assets/scene.js">
+    <link rel="stylesheet" crossorigin href="/experience/assets/scene.css">
+  </head>
+  <body>
+    <div id="stage"></div>
+
+    <!-- Top Navigation Header -->
+    <header class="top-navbar" id="topNavbar">
+      <div class="tn-brand">
+        <div class="tn-logo">
+          <span class="tn-logo-glyph">P</span>
+        </div>
+        <div class="tn-brand-info">
+          <span class="tn-brand-title">POSTILKA</span>
+          <span class="tn-brand-sub">AI Фабрика</span>
+        </div>
+      </div>
+
+      <nav class="tn-nav">
+        <button type="button" class="tn-item" data-modal="aboutModal">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="16" x2="12" y2="12"></line>
+            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+          </svg>
+          О проекте
+        </button>
+        <button type="button" class="tn-item" data-modal="featuresModal">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+          </svg>
+          Возможности
+        </button>
+        <button type="button" class="tn-item" data-modal="pricingModal">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="4" width="20" height="16" rx="2"></rect>
+            <line x1="2" y1="10" x2="22" y2="10"></line>
+          </svg>
+          Тарифы
+        </button>
+      </nav>
+
+      <div class="tn-actions">
+        <button class="reset tn-reset" id="reset" title="Сбросить камеру к общему плану">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
+            <path d="M4 12a8 8 0 1 0 2.3-5.6M4 4v3h3" />
+          </svg>
+          Общий план
+        </button>
+
+        <button type="button" class="tn-auth-btn" data-modal="authModal">
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+            <circle cx="12" cy="7" r="4"></circle>
+          </svg>
+          Регистрация / Авторизация
+        </button>
+      </div>
+    </header>
+
+    <div class="controls-guide" id="controlsGuide">
+      <button class="controls-guide-toggle" id="controlsGuideToggle" aria-label="Управление сценой" title="Свернуть / развернуть подсказки">
+        <span class="cg-toggle-icon">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="6" width="20" height="12" rx="3"></rect>
+            <path d="M6 12h4m-2-2v4m9-2h.01m3-2h.01"></path>
+          </svg>
+        </span>
+        <span class="cg-toggle-text">Управление сценой</span>
+        <span class="cg-chevron">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </span>
+      </button>
+
+      <div class="controls-guide-body" id="controlsGuideBody">
+        <div class="cg-section">
+          <div class="cg-section-title">🚶 Прогулка по фабрике</div>
+          <div class="cg-row">
+            <div class="cg-keys">
+              <span class="cg-k">Колесо</span>
+              <span class="cg-or">или</span>
+              <span class="cg-k">W</span><span class="cg-k">S</span>
+              <span class="cg-k">↑</span><span class="cg-k">↓</span>
+            </div>
+            <div class="cg-desc">Идти по маршруту</div>
+          </div>
+          <div class="cg-row">
+            <div class="cg-keys">
+              <span class="cg-k">Пробел</span>
+            </div>
+            <div class="cg-desc">Шаг вперед</div>
+          </div>
+        </div>
+
+        <div class="cg-divider"></div>
+
+        <div class="cg-section">
+          <div class="cg-section-title">🎥 Камера и обзор</div>
+          <div class="cg-row">
+            <div class="cg-keys">
+              <span class="cg-k">ЛКМ + тянуть</span>
+            </div>
+            <div class="cg-desc">Вращение сцены (360°)</div>
+          </div>
+          <div class="cg-row">
+            <div class="cg-keys">
+              <span class="cg-k">ПКМ</span>
+              <span class="cg-or">/</span>
+              <span class="cg-k">Shift+ЛКМ</span>
+            </div>
+            <div class="cg-desc">Сдвиг / Панорама</div>
+          </div>
+          <div class="cg-row">
+            <div class="cg-keys">
+              <span class="cg-k">Колесо</span>
+              <span class="cg-or">или</span>
+              <span class="cg-k">+</span><span class="cg-k">-</span>
+            </div>
+            <div class="cg-desc">Зум (масштаб)</div>
+          </div>
+        </div>
+
+        <div class="cg-divider"></div>
+
+        <div class="cg-section">
+          <div class="cg-section-title">🏛️ Павильоны и интерактив</div>
+          <div class="cg-row">
+            <div class="cg-keys">
+              <span class="cg-k cg-star">★ Клик</span>
+            </div>
+            <div class="cg-desc">Подлёт и описание</div>
+          </div>
+          <div class="cg-row">
+            <div class="cg-keys">
+              <span class="cg-k">Esc</span>
+            </div>
+            <div class="cg-desc">Закрыть инфо-карточку</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" id="panel">
+      <button class="x" id="panelX">×</button>
+      <span class="tag" id="pTag">POSTILKA</span>
+      <h2 id="pTitle"></h2>
+      <p id="pBody"></p>
+    </div>
+
+    <div class="journey-prompt" id="journeyPrompt">
+      <p>Хочешь узнать больше о Postilka? Нажми кнопку — и мы отправимся в путешествие по проекту.</p>
+      <button type="button" id="journeyStart">Начать путешествие</button>
+    </div>
+
+    <!-- Global Modal Overlay -->
+    <div class="modal-backdrop" id="modalBackdrop">
+      <!-- About Modal -->
+      <div class="site-modal" id="aboutModal">
+        <button class="modal-close" data-close aria-label="Закрыть">×</button>
+        <div class="modal-badge">ℹ️ О ПРОЕКТЕ</div>
+        <h2 class="modal-title">Postilka — Фабрика контента</h2>
+        <p class="modal-lead">Единая интеллектуальная платформа для создания, проверки и автоматической дистрибуции контента в 6+ социальных сетей.</p>
+        
+        <div class="modal-grid-3">
+          <div class="modal-card">
+            <div class="modal-card-icon">⚡</div>
+            <div class="modal-card-title">ИИ-генерация</div>
+            <div class="modal-card-desc">От идеи до готового клипа, видеосообщения, лонгрида или рекламного поста за секунды.</div>
+          </div>
+          <div class="modal-card">
+            <div class="modal-card-icon">🌐</div>
+            <div class="modal-card-title">Омниканальность</div>
+            <div class="modal-card-desc">Публикация в VK, Telegram (с кружочками), YouTube Shorts, Дзен и другие сети из одного окна.</div>
+          </div>
+          <div class="modal-card">
+            <div class="modal-card-icon">🛡️</div>
+            <div class="modal-card-title">Контроль качества</div>
+            <div class="modal-card-desc">Авто-проверка стоп-слов, ссылок, таймингов и командное согласование правок.</div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="modal-btn-primary" id="aboutStartTourBtn">🚀 Начать 3D-тур по фабрике</button>
+        </div>
+      </div>
+
+      <!-- Features Modal -->
+      <div class="site-modal site-modal-lg" id="featuresModal">
+        <button class="modal-close" data-close aria-label="Закрыть">×</button>
+        <div class="modal-badge">✨ ВОЗМОЖНОСТИ</div>
+        <h2 class="modal-title">Всё для работы с контентом в одном месте</h2>
+        <p class="modal-lead">Мощные инструменты автоматизации, которые экономят до 80% времени SMM-команд и авторов.</p>
+        
+        <div class="modal-grid-2">
+          <div class="modal-feature-row">
+            <div class="mf-icon" style="background: rgba(139, 92, 246, 0.12); color: #8b5cf6;">🎨</div>
+            <div>
+              <div class="mf-title">AI Студия & Креативы</div>
+              <div class="mf-desc">Генерация промо-постов, анимация картинок, создание видеороликов и уникальный режим наброска (Sketch).</div>
+            </div>
+          </div>
+          <div class="modal-feature-row">
+            <div class="mf-icon" style="background: rgba(14, 165, 233, 0.12); color: #0ea5e9;">⚡</div>
+            <div>
+              <div class="mf-title">Нодовые процессы (Workflows)</div>
+              <div class="mf-desc">Визуальный конструктор DAG-цепочек: связывайте триггеры, ИИ-шаблоны и сценарии публикации.</div>
+            </div>
+          </div>
+          <div class="modal-feature-row">
+            <div class="mf-icon" style="background: rgba(245, 158, 11, 0.12); color: #f59e0b;">📅</div>
+            <div>
+              <div class="mf-title">Смарт-календарь & Очереди</div>
+              <div class="mf-desc">Интеллектуальный тайм-слоттинг, кросс-постинг и автоматический выбор лучшего времени для охватов.</div>
+            </div>
+          </div>
+          <div class="modal-feature-row">
+            <div class="mf-icon" style="background: rgba(99, 102, 241, 0.12); color: #6366f1;">👥</div>
+            <div>
+              <div class="mf-title">Команда & Согласование</div>
+              <div class="mf-desc">Approval-модерация, разграничение прав доступа, комментарии к черновикам и история изменений.</div>
+            </div>
+          </div>
+          <div class="modal-feature-row">
+            <div class="mf-icon" style="background: rgba(16, 185, 129, 0.12); color: #10b981;">📊</div>
+            <div>
+              <div class="mf-title">Сквозная аналитика</div>
+              <div class="mf-desc">Сбор статистики со всех каналов: дочитывания, CTR, просмотры, комментарии и динамика подписчиков.</div>
+            </div>
+          </div>
+          <div class="modal-feature-row">
+            <div class="mf-icon" style="background: rgba(0, 136, 204, 0.12); color: #0088cc;">⭕</div>
+            <div>
+              <div class="mf-title">Telegram & Видео-сообщения</div>
+              <div class="mf-desc">Авто-генерация видеокружочков, создание кнопок реакций и интеграция с Telegram-ботами.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pricing Modal -->
+      <div class="site-modal site-modal-lg" id="pricingModal">
+        <button class="modal-close" data-close aria-label="Закрыть">×</button>
+        <div class="modal-badge">💳 ТАРИФЫ</div>
+        <h2 class="modal-title">Гибкие тарифные планы</h2>
+        <p class="modal-lead">Выберите план под ваши объемы. 14 дней бесплатного пробного периода на всех платных тарифах.</p>
+        
+        <div class="pricing-grid">
+          <div class="pricing-card">
+            <div class="pc-name">Старт</div>
+            <div class="pc-price">0 ₽ <span>/ навсегда</span></div>
+            <div class="pc-desc">Для соло-авторов и знакомства с платформой</div>
+            <ul class="pc-features">
+              <li>✓ 1 проект / 2 соцсети</li>
+              <li>✓ До 30 постов в месяц</li>
+              <li>✓ Базовая AI-генерация текста</li>
+              <li>✓ Смарт-календарь</li>
+            </ul>
+            <button type="button" class="pc-btn pc-btn-outline" data-auth-action="register">Начать бесплатно</button>
+          </div>
+
+          <div class="pricing-card pc-featured">
+            <div class="pc-popular-badge">ХИТ</div>
+            <div class="pc-name">Профессионал</div>
+            <div class="pc-price">1 490 ₽ <span>/ мес</span></div>
+            <div class="pc-desc">Для блогеров, экспертов и SMM-специалистов</div>
+            <ul class="pc-features">
+              <li>✓ Все 6 соцсетей без ограничений</li>
+              <li>✓ Безлимитная AI генерация фото/видео</li>
+              <li>✓ Создание видеокружочков Telegram</li>
+              <li>✓ Сквозная аналитика постов</li>
+              <li>✓ Режим наброска (Sketch)</li>
+            </ul>
+            <button type="button" class="pc-btn pc-btn-primary" data-auth-action="register">Попробовать 14 дней</button>
+          </div>
+
+          <div class="pricing-card">
+            <div class="pc-name">Команда & Агентство</div>
+            <div class="pc-price">4 990 ₽ <span>/ мес</span></div>
+            <div class="pc-desc">Для команд, агентств и медиа-проектов</div>
+            <ul class="pc-features">
+              <li>✓ До 10 участников в команде</li>
+              <li>✓ Approval-согласование постов</li>
+              <li>✓ Визуальные DAG Workflows</li>
+              <li>✓ Приоритетная поддержка 24/7</li>
+              <li>✓ Неограниченное число каналов</li>
+            </ul>
+            <button type="button" class="pc-btn pc-btn-outline" data-auth-action="register">Подключить команду</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Auth / Registration Modal -->
+      <div class="site-modal site-modal-sm" id="authModal">
+        <button class="modal-close" data-close aria-label="Закрыть">×</button>
+        <div class="auth-tabs">
+          <button type="button" class="auth-tab active" data-auth-tab="login">Вход</button>
+          <button type="button" class="auth-tab" data-auth-tab="register">Регистрация</button>
+        </div>
+
+        <div class="auth-oauth">
+          <button type="button" class="oauth-btn oauth-vk" title="Войти через VK ID">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M15.07 2H8.93C4.33 2 2 4.33 2 8.93v6.14C2 19.67 4.33 22 8.93 22h6.14c4.6 0 6.93-2.33 6.93-6.93V8.93C22 4.33 19.67 2 15.07 2zm3.38 13.91c-.48.6-1.5 1.25-2.28 1.25h-.75c-.3 0-.58-.15-.75-.41-.35-.55-.91-1.42-1.5-1.42-.25 0-.41.13-.5.39-.17.51-.25 1.05-.28 1.19-.05.19-.21.25-.43.25H9.6c-1.85 0-3.66-1.76-5.01-4.73-1.07-2.38-1.92-5.18-1.92-5.32 0-.15.11-.27.27-.27h2.3c.18 0 .3.08.37.23.6 1.48 1.54 3.32 2.3 4.14.2.22.35.31.45.31.14 0 .21-.09.21-.48V8.94c-.05-.8-.43-.87-.43-1.16 0-.1.08-.2.18-.2h2.24c.23 0 .34.12.34.36v3.29c0 .35.15.48.26.48.11 0 .22-.09.39-.28 1.1-1.22 1.88-3.32 1.88-3.32.06-.15.19-.24.36-.24h2.33c.21 0 .33.12.27.32-.27 1.2-2.18 3.96-2.29 4.13-.15.22-.19.34 0 .58.26.33 1.14 1.25 1.7 1.95.83 1.02.97 1.45.62 1.93z"/></svg>
+            VK ID
+          </button>
+          <button type="button" class="oauth-btn oauth-tg" title="Войти через Telegram">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15 1.58-.8 5.42-1.13 7.19-.14.75-.42 1-.68 1.03-.58.05-1.02-.38-1.58-.75-.88-.58-1.38-.94-2.23-1.5-.99-.65-.35-1.01.22-1.59.15-.15 2.71-2.48 2.76-2.69a.2.2 0 0 0-.05-.18c-.06-.05-.14-.03-.21-.02-.09.02-1.49.95-4.22 2.79-.4.27-.76.41-1.08.4-.36-.01-1.04-.2-1.55-.37-.63-.2-1.12-.31-1.08-.66.02-.18.27-.36.75-.55 2.92-1.27 4.86-2.11 5.83-2.51 2.78-1.16 3.35-1.36 3.73-1.36.08 0 .27.02.39.12.1.08.13.19.14.27-.01.06.01.24 0 .37z"/></svg>
+            Telegram
+          </button>
+          <button type="button" class="oauth-btn oauth-ya" title="Войти через Яндекс">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1.6 15.2h-2.1V9.5h-1.3c-.9 0-1.5.5-1.5 1.3 0 .7.3 1.2 1 1.9l1.4 1.4-2.1 3.1H6.7l2.8-4.1c-1-1-1.6-2-1.6-3.2 0-2 1.5-3.3 3.6-3.3h3.7v10.6h-1.6z"/></svg>
+            Яндекс
+          </button>
+        </div>
+
+        <div class="auth-divider"><span>или по почте</span></div>
+
+        <form class="auth-form" id="authForm" onsubmit="event.preventDefault();">
+          <div class="auth-field" id="authNameField" style="display: none;">
+            <label for="authName">Имя или название команды</label>
+            <input type="text" id="authName" placeholder="Александр" />
+          </div>
+          <div class="auth-field">
+            <label for="authEmail">Электронная почта</label>
+            <input type="email" id="authEmail" placeholder="you@company.ru" required />
+          </div>
+          <div class="auth-field">
+            <label for="authPassword">Пароль</label>
+            <input type="password" id="authPassword" placeholder="••••••••" required />
+          </div>
+          <button type="submit" class="auth-submit-btn" id="authSubmitBtn">Войти в Postilka</button>
+        </form>
+
+        <p class="auth-terms">Продолжая, вы принимаете <a href="#">Условия сервиса</a> и <a href="#">Политику конфиденциальности</a>.</p>
+      </div>
+    </div>
+
+    <div id="load">
+      <div class="chip"><span class="box"></span>Собираем фабрику из вокселей…</div>
+    </div>
+
+  </body>
+</html>
