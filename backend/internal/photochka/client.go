@@ -47,12 +47,33 @@ type IntegrationMe struct {
 	AvatarURL   string `json:"avatar_url,omitempty"`
 }
 
-type IntegrationPost struct {
+type IntegrationPostAuthor struct {
 	ID          string `json:"id"`
-	Status      string `json:"status"`
-	ScheduledAt string `json:"scheduled_at,omitempty"`
-	PublishedAt string `json:"published_at,omitempty"`
-	Permalink   string `json:"permalink"`
+	Username    string `json:"username"`
+	DisplayName string `json:"display_name"`
+	AvatarURL   string `json:"avatar_url,omitempty"`
+}
+
+type IntegrationReactionCount struct {
+	Emoji string `json:"emoji"`
+	Count int    `json:"count"`
+}
+
+type IntegrationPost struct {
+	ID                string                     `json:"id"`
+	Status            string                     `json:"status"`
+	ScheduledAt       string                     `json:"scheduled_at,omitempty"`
+	PublishedAt       string                     `json:"published_at,omitempty"`
+	CreatedAt         string                     `json:"created_at,omitempty"`
+	Permalink         string                     `json:"permalink"`
+	Author            IntegrationPostAuthor      `json:"author"`
+	LikesCount        int                        `json:"likes_count"`
+	CommentsCount     int                        `json:"comments_count"`
+	SavesCount        int                        `json:"saves_count"`
+	ViewsCount        int64                      `json:"views_count"`
+	ReachCount        int64                      `json:"reach_count"`
+	InteractionsCount int64                      `json:"interactions_count"`
+	ReactionCounts    []IntegrationReactionCount `json:"reaction_counts,omitempty"`
 }
 
 type UploadView struct {

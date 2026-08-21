@@ -10,6 +10,7 @@ import (
 
 	"github.com/postilka/postilka/internal/model"
 	oauthclient "github.com/postilka/postilka/internal/oauth"
+	"github.com/postilka/postilka/internal/photochka"
 	"github.com/postilka/postilka/internal/repository"
 )
 
@@ -23,6 +24,7 @@ type MetricsCollectorService struct {
 	telegram  *TelegramBotClient
 	vkClient  *oauthclient.VKCommunityClient
 	maxClient *oauthclient.MAXBotClient
+	photochka *photochka.Client
 	logger    *slog.Logger
 }
 
@@ -34,6 +36,7 @@ func NewMetricsCollectorService(
 	channelTest *ChannelTestService,
 	metrika *MetrikaConnectionService,
 	telegram *TelegramBotClient,
+	photochkaClient *photochka.Client,
 	logger *slog.Logger,
 ) *MetricsCollectorService {
 	if logger == nil {
@@ -49,6 +52,7 @@ func NewMetricsCollectorService(
 		telegram:    telegram,
 		vkClient:    &oauthclient.VKCommunityClient{},
 		maxClient:   oauthclient.NewMAXBotClient(),
+		photochka:   photochkaClient,
 		logger:      logger,
 	}
 }
@@ -123,6 +127,10 @@ func (s *MetricsCollectorService) collectTarget(ctx context.Context, target repo
 		}
 	case model.ChannelProviderTelegram:
 		if err := s.collectTelegram(ctx, token, target, &input); err != nil {
+			return err
+		}
+	case model.ChannelProviderPhotochka:
+		if err := s.collectPhotochka(ctx, token, target, &input); err != nil {
 			return err
 		}
 	case model.ChannelProviderDzen:
@@ -235,6 +243,46 @@ func (s *MetricsCollectorService) collectMAX(
 	return nil
 }
 
+func (s *MetricsCollectorService) collectPhotochka(
+	ctx context.Context,
+	token string,
+	target repository.MetricsPollTarget,
+	input *repository.MetricsUpsertInput,
+) error {
+	if s.photochka == nil {
+		input.Measurability = model.MeasurabilityPartial
+		input.ProviderNote = "Интеграция Photochka недоступна на сервере."
+		return nil
+	}
+	postID := strings.TrimSpace(target.ProviderPostID)
+	if postID == "" {
+		input.Measurability = model.MeasurabilityPartial
+		input.ProviderNote = "Сохраните id поста Photochka после публикации — метрики появятся при следующем опросе."
+		return nil
+	}
+	post, err := s.photochka.GetPost(ctx, token, postID)
+	if err != nil {
+		return err
+	}
+	input.Views = clampMetricInt(post.ViewsCount)
+	input.Reach = clampMetricInt(post.ReachCount)
+	input.Likes = post.LikesCount
+	input.Comments = post.CommentsCount
+	input.Shares = post.SavesCount
+	input.Measurability = model.MeasurabilityAuto
+	return nil
+}
+
+func clampMetricInt(v int64) int {
+	if v <= 0 {
+		return 0
+	}
+	if v > int64(^uint(0)>>1) {
+		return int(^uint(0) >> 1)
+	}
+	return int(v)
+}
+
 func (s *MetricsCollectorService) collectTelegram(
 	ctx context.Context,
 	token string,
@@ -327,7 +375,7 @@ func (s *MetricsCollectorService) utmCampaignForTarget(ctx context.Context, targ
 
 func measurabilityForProvider(provider string) string {
 	switch model.ChannelProvider(provider) {
-	case model.ChannelProviderVK, model.ChannelProviderYouTube, model.ChannelProviderMAX:
+	case model.ChannelProviderVK, model.ChannelProviderYouTube, model.ChannelProviderMAX, model.ChannelProviderPhotochka:
 		return model.MeasurabilityAuto
 	case model.ChannelProviderDzen:
 		return model.MeasurabilityManual
