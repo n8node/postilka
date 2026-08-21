@@ -1168,6 +1168,9 @@ func (s *ChannelConnectService) ConnectPhotochka(
 	if username != "" {
 		meta.PublicURL = "https://photochka.ru/@" + username
 	}
+	if avatarURL := s.photochka.ResolveUserAvatarURL(me); avatarURL != "" {
+		meta = mergeChannelAvatar(meta, avatarURL)
+	}
 
 	chatID := strings.TrimSpace(me.UserID)
 	if chatID == "" {

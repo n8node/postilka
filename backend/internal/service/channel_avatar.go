@@ -249,7 +249,8 @@ func (s *ChannelService) FetchAvatar(
 	if url := strings.TrimSpace(ch.Metadata.AvatarURL); url != "" &&
 		ch.Provider != model.ChannelProviderMAX &&
 		ch.Provider != model.ChannelProviderTelegram &&
-		ch.Provider != model.ChannelProviderYouTube {
+		ch.Provider != model.ChannelProviderYouTube &&
+		ch.Provider != model.ChannelProviderPhotochka {
 		return fetchRemoteAvatar(ctx, url)
 	}
 
@@ -315,6 +316,19 @@ func (s *ChannelService) FetchAvatar(
 			return fetchYouTubeRemoteAvatar(ctx, avatarURL)
 		}
 		return nil, "", ErrChannelAvatarNotFound
+
+	case model.ChannelProviderPhotochka:
+		if url := strings.TrimSpace(ch.Metadata.AvatarURL); url != "" {
+			if body, ct, err := fetchRemoteAvatar(ctx, url); err == nil {
+				return body, ct, nil
+			}
+		}
+		if s.photochka != nil {
+			if url := s.photochka.UserAvatarURL(ch.ChatID); url != "" {
+				return fetchRemoteAvatar(ctx, url)
+			}
+		}
+		return generateInitialsAvatarSVG(channelAvatarInitials(ch)), "image/svg+xml", nil
 
 	default:
 		if avatarURL, err := s.lookupOAuthAvatar(ctx, ch.Provider, token, ch.ChatID); err == nil && avatarURL != "" {

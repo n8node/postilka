@@ -414,6 +414,9 @@ func (s *ChannelService) VerifyAndRefresh(
 		if username != "" {
 			ch.BotUsername = username
 		}
+		if avatarURL := s.photochka.ResolveUserAvatarURL(me); avatarURL != "" {
+			meta = mergeChannelAvatar(meta, avatarURL)
+		}
 		if display := strings.TrimSpace(me.DisplayName); display != "" {
 			ch.Name = display
 		} else if username != "" {

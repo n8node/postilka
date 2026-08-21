@@ -39,6 +39,7 @@ export function isPublicChannelAvatarURL(url: string, provider?: ChannelProvider
   if (provider === "max") return false;
   if (provider === "telegram") return false;
   if (provider === "youtube") return false;
+  if (provider === "photochka") return false;
   return true;
 }
 
@@ -68,7 +69,7 @@ export function channelAvatarSrc(input: {
   if (direct && isPublicChannelAvatarURL(direct, input.provider)) {
     return direct;
   }
-  if (input.channelId && (input.provider === "telegram" || input.provider === "max" || input.provider === "youtube")) {
+  if (input.channelId && (input.provider === "telegram" || input.provider === "max" || input.provider === "youtube" || input.provider === "photochka")) {
     return channelProxyAvatarURL(input.channelId);
   }
   if (direct) return direct;

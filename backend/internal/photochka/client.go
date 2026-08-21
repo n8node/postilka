@@ -44,6 +44,7 @@ type IntegrationMe struct {
 	Username    string `json:"username"`
 	DisplayName string `json:"display_name"`
 	Plan        string `json:"plan"`
+	AvatarURL   string `json:"avatar_url,omitempty"`
 }
 
 type IntegrationPost struct {
@@ -81,6 +82,42 @@ func (c *Client) Me(ctx context.Context, apiKey string) (IntegrationMe, error) {
 	var out IntegrationMe
 	err := c.doJSON(ctx, http.MethodGet, "/me", apiKey, nil, &out)
 	return out, err
+}
+
+// UserAvatarURL returns the public Photochka media URL for a user's avatar.
+func (c *Client) UserAvatarURL(userID string) string {
+	return UserAvatarURL(c.baseURL, userID)
+}
+
+func UserAvatarURL(integrationBaseURL, userID string) string {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return ""
+	}
+	return PublicAPIBaseURL(integrationBaseURL) + "/media/users/" + userID + "/avatar"
+}
+
+func PublicAPIBaseURL(integrationBaseURL string) string {
+	base := strings.TrimRight(strings.TrimSpace(integrationBaseURL), "/")
+	if strings.HasSuffix(strings.ToLower(base), "/integration") {
+		base = strings.TrimSuffix(base, "/integration")
+		base = strings.TrimSuffix(base, "/Integration")
+	}
+	if base == "" {
+		return "https://photochka.ru/api/v1"
+	}
+	return base
+}
+
+func (me IntegrationMe) AvatarURLFor(integrationBaseURL string) string {
+	if url := strings.TrimSpace(me.AvatarURL); url != "" {
+		return url
+	}
+	return UserAvatarURL(integrationBaseURL, me.UserID)
+}
+
+func (c *Client) ResolveUserAvatarURL(me IntegrationMe) string {
+	return me.AvatarURLFor(c.baseURL)
 }
 
 func (c *Client) UploadMedia(
