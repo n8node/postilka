@@ -81,17 +81,19 @@ body.postilka-voxel-lock header.elementor-sticky {
 }
 
 .postilka-voxel-root.is-preview .postilka-voxel-widget .panel,
+.postilka-voxel-root.is-preview .postilka-voxel-widget .controls-guide,
+.postilka-voxel-root.is-preview .postilka-voxel-widget .touch-dock,
 .postilka-voxel-root.is-preview .postilka-voxel-widget .journey-prompt,
 .postilka-voxel-root.is-preview .postilka-voxel-widget .journey-banner,
-.postilka-voxel-root.is-preview .postilka-voxel-widget .controls-guide,
 .postilka-voxel-root.is-preview .postilka-voxel-widget .spot {
   position: absolute;
 }
 
 .postilka-voxel-root.is-immersive .postilka-voxel-widget .panel,
+.postilka-voxel-root.is-immersive .postilka-voxel-widget .controls-guide,
+.postilka-voxel-root.is-immersive .postilka-voxel-widget .touch-dock,
 .postilka-voxel-root.is-immersive .postilka-voxel-widget .journey-prompt,
 .postilka-voxel-root.is-immersive .postilka-voxel-widget .journey-banner,
-.postilka-voxel-root.is-immersive .postilka-voxel-widget .controls-guide,
 .postilka-voxel-root.is-immersive .postilka-voxel-widget .spot {
   position: fixed;
 }
@@ -134,6 +136,34 @@ body.postilka-voxel-lock header.elementor-sticky {
 
 .postilka-voxel-root.is-preview .postilka-voxel-overlay {
   display: none;
+}
+
+.postilka-voxel-root .touch-dock {
+  display: none;
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 75;
+  flex-direction: column;
+  gap: 8px;
+}
+
+@media (pointer: coarse) {
+  .postilka-voxel-root .touch-dock {
+    display: flex;
+  }
+}
+
+.postilka-voxel-root.is-immersive .touch-dock {
+  position: fixed;
+  right: 18px;
+  bottom: 88px;
+}
+
+.postilka-voxel-root.is-preview .controls-guide {
+  top: 12px;
+  left: 12px;
+  width: min(290px, calc(100% - 88px));
 }
 
 .postilka-voxel-poster {

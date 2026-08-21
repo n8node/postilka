@@ -1,4 +1,3 @@
-import './style.css';
 import './embed-host.css';
 import { DioramaScene } from './scene.js';
 import { DEFAULT_VIEW } from './diorama/hotspots.js';
@@ -7,6 +6,105 @@ const mounts = new Map();
 let activeRoot = null;
 let activeScene = null;
 
+function isTouchDevice() {
+  return typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches === true;
+}
+
+function controlsGuideBodyHtml() {
+  return `
+        <div class="cg-section cg-desktop-only">
+          <div class="cg-section-title">🚶 Прогулка по фабрике</div>
+          <div class="cg-row">
+            <div class="cg-keys">
+              <span class="cg-k">Колесо</span>
+              <span class="cg-or">или</span>
+              <span class="cg-k">W</span><span class="cg-k">S</span>
+              <span class="cg-k">↑</span><span class="cg-k">↓</span>
+            </div>
+            <div class="cg-desc">Идти по маршруту</div>
+          </div>
+          <div class="cg-row">
+            <div class="cg-keys"><span class="cg-k">Пробел</span></div>
+            <div class="cg-desc">Шаг вперед</div>
+          </div>
+        </div>
+        <div class="cg-divider cg-desktop-only"></div>
+        <div class="cg-section cg-desktop-only">
+          <div class="cg-section-title">🎥 Камера и обзор</div>
+          <div class="cg-row">
+            <div class="cg-keys"><span class="cg-k">ЛКМ + тянуть</span></div>
+            <div class="cg-desc">Вращение сцены (360°)</div>
+          </div>
+          <div class="cg-row">
+            <div class="cg-keys">
+              <span class="cg-k">ПКМ</span>
+              <span class="cg-or">/</span>
+              <span class="cg-k">Shift+ЛКМ</span>
+            </div>
+            <div class="cg-desc">Сдвиг / Панорама</div>
+          </div>
+          <div class="cg-row">
+            <div class="cg-keys">
+              <span class="cg-k">Колесо</span>
+              <span class="cg-or">или</span>
+              <span class="cg-k">+</span><span class="cg-k">-</span>
+            </div>
+            <div class="cg-desc">Зум (масштаб)</div>
+          </div>
+        </div>
+        <div class="cg-divider cg-desktop-only"></div>
+        <div class="cg-section cg-touch-only">
+          <div class="cg-section-title">📱 Прогулка по фабрике</div>
+          <div class="cg-row">
+            <div class="cg-keys"><span class="cg-k">Свайп ↑↓</span></div>
+            <div class="cg-desc">Идти по маршруту</div>
+          </div>
+          <div class="cg-row">
+            <div class="cg-keys"><span class="cg-k">Кнопка «Шаг»</span></div>
+            <div class="cg-desc">Шаг вперёд</div>
+          </div>
+        </div>
+        <div class="cg-divider cg-touch-only"></div>
+        <div class="cg-section cg-touch-only">
+          <div class="cg-section-title">📱 Камера и обзор</div>
+          <div class="cg-row">
+            <div class="cg-keys"><span class="cg-k">1 палец</span></div>
+            <div class="cg-desc">Вращение сцены</div>
+          </div>
+          <div class="cg-row">
+            <div class="cg-keys"><span class="cg-k">2 пальца</span></div>
+            <div class="cg-desc">Зум и сдвиг</div>
+          </div>
+          <div class="cg-row">
+            <div class="cg-keys"><span class="cg-k">Кнопки +/−</span></div>
+            <div class="cg-desc">Масштаб</div>
+          </div>
+        </div>
+        <div class="cg-divider"></div>
+        <div class="cg-section">
+          <div class="cg-section-title">🏛️ Павильоны и интерактив</div>
+          <div class="cg-row">
+            <div class="cg-keys"><span class="cg-k cg-star">★ Тап</span></div>
+            <div class="cg-desc">Подлёт и описание</div>
+          </div>
+          <div class="cg-row cg-desktop-only">
+            <div class="cg-keys"><span class="cg-k">Esc</span></div>
+            <div class="cg-desc">Закрыть инфо-карточку</div>
+          </div>
+        </div>
+  `;
+}
+
+function touchDockHtml() {
+  return `
+      <div class="touch-dock" data-touch-dock aria-label="Сенсорное управление">
+        <button type="button" class="touch-dock-btn" data-touch-step title="Шаг вперёд">Шаг</button>
+        <button type="button" class="touch-dock-btn" data-touch-zoom-in title="Приблизить">+</button>
+        <button type="button" class="touch-dock-btn" data-touch-zoom-out title="Отдалить">−</button>
+      </div>
+  `;
+}
+
 function buildWidgetMarkup() {
   return `
     <div class="postilka-voxel-poster" data-voxel-poster>
@@ -14,7 +112,7 @@ function buildWidgetMarkup() {
     </div>
     <div class="postilka-voxel-widget">
       <div id="stage"></div>
-      <div class="controls-guide" id="controlsGuide">
+      <div class="controls-guide${isTouchDevice() ? ' collapsed' : ''}" id="controlsGuide">
         <button class="controls-guide-toggle" id="controlsGuideToggle" type="button" aria-label="Управление сценой" title="Свернуть / развернуть подсказки">
           <span class="cg-toggle-icon">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -30,68 +128,10 @@ function buildWidgetMarkup() {
           </span>
         </button>
         <div class="controls-guide-body" id="controlsGuideBody">
-          <div class="cg-section">
-            <div class="cg-section-title">🚶 Прогулка по фабрике</div>
-            <div class="cg-row">
-              <div class="cg-keys">
-                <span class="cg-k">Колесо</span>
-                <span class="cg-or">или</span>
-                <span class="cg-k">W</span><span class="cg-k">S</span>
-                <span class="cg-k">↑</span><span class="cg-k">↓</span>
-              </div>
-              <div class="cg-desc">Идти по маршруту</div>
-            </div>
-            <div class="cg-row">
-              <div class="cg-keys">
-                <span class="cg-k">Пробел</span>
-              </div>
-              <div class="cg-desc">Шаг вперед</div>
-            </div>
-          </div>
-          <div class="cg-divider"></div>
-          <div class="cg-section">
-            <div class="cg-section-title">🎥 Камера и обзор</div>
-            <div class="cg-row">
-              <div class="cg-keys">
-                <span class="cg-k">ЛКМ + тянуть</span>
-              </div>
-              <div class="cg-desc">Вращение сцены (360°)</div>
-            </div>
-            <div class="cg-row">
-              <div class="cg-keys">
-                <span class="cg-k">ПКМ</span>
-                <span class="cg-or">/</span>
-                <span class="cg-k">Shift+ЛКМ</span>
-              </div>
-              <div class="cg-desc">Сдвиг / Панорама</div>
-            </div>
-            <div class="cg-row">
-              <div class="cg-keys">
-                <span class="cg-k">Колесо</span>
-                <span class="cg-or">или</span>
-                <span class="cg-k">+</span><span class="cg-k">-</span>
-              </div>
-              <div class="cg-desc">Зум (масштаб)</div>
-            </div>
-          </div>
-          <div class="cg-divider"></div>
-          <div class="cg-section">
-            <div class="cg-section-title">🏛️ Павильоны и интерактив</div>
-            <div class="cg-row">
-              <div class="cg-keys">
-                <span class="cg-k cg-star">★ Клик</span>
-              </div>
-              <div class="cg-desc">Подлёт и описание</div>
-            </div>
-            <div class="cg-row">
-              <div class="cg-keys">
-                <span class="cg-k">Esc</span>
-              </div>
-              <div class="cg-desc">Закрыть инфо-карточку</div>
-            </div>
-          </div>
+          ${controlsGuideBodyHtml()}
         </div>
       </div>
+      ${touchDockHtml()}
       <div class="panel" id="panel">
         <button class="x" id="panelX" type="button">×</button>
         <span class="tag" id="pTag">POSTILKA</span>
@@ -140,6 +180,23 @@ function wireWidget(root, scene) {
     const rootEl = root.closest('[data-postilka-voxel-root]');
     if (rootEl) expandRoot(rootEl);
   });
+
+  root.querySelector('[data-touch-step]')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    scene.stepJourneyForward();
+  });
+  root.querySelector('[data-touch-zoom-in]')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    scene.zoomBy(1.12);
+  });
+  root.querySelector('[data-touch-zoom-out]')?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    scene.zoomBy(0.89);
+  });
+
+  if (isTouchDevice()) {
+    controlsGuide?.classList.add('collapsed');
+  }
 
   document.addEventListener('keydown', (event) => {
     if (activeRoot !== root?.closest('[data-postilka-voxel-root]')) return;

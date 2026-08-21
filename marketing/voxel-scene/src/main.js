@@ -1,6 +1,9 @@
-import './style.css';
 import { DioramaScene } from './scene.js';
 import { DEFAULT_VIEW } from './diorama/hotspots.js';
+
+function isTouchDevice() {
+  return typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches === true;
+}
 
 const stage = document.getElementById('stage');
 const panel = document.getElementById('panel');
@@ -9,6 +12,20 @@ const controlsGuide = document.getElementById('controlsGuide');
 const controlsGuideToggle = document.getElementById('controlsGuideToggle');
 const scene = new DioramaScene(stage);
 window.__scene = scene;
+
+if (isTouchDevice()) {
+  controlsGuide?.classList.add('collapsed');
+}
+
+document.querySelector('[data-touch-step]')?.addEventListener('click', () => {
+  scene.stepJourneyForward();
+});
+document.querySelector('[data-touch-zoom-in]')?.addEventListener('click', () => {
+  scene.zoomBy(1.12);
+});
+document.querySelector('[data-touch-zoom-out]')?.addEventListener('click', () => {
+  scene.zoomBy(0.89);
+});
 
 scene.onReady = () => {
   loader.classList.add('hide');

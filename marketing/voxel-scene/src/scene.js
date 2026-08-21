@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import './style.css';
 import { buildCity } from './diorama/buildCity.js';
 import {
   DEFAULT_VIEW,
@@ -57,6 +58,12 @@ export class DioramaScene {
     this.journeyFocus = new THREE.Vector3();
     this.userPanOffset = new THREE.Vector3();
     this.clock = new THREE.Clock();
+    this.isTouchDevice =
+      typeof window !== 'undefined' &&
+      window.matchMedia?.('(pointer: coarse)').matches === true;
+    this.activePointers = new Map();
+    this.lastPinchDistance = 0;
+    this.lastCentroid = null;
 
     this.initRenderer();
     this.initLights();
@@ -123,7 +130,9 @@ export class DioramaScene {
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     const { width, height } = this.getViewportSize();
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setPixelRatio(
+      Math.min(window.devicePixelRatio, this.isTouchDevice ? 1.5 : 2)
+    );
     this.renderer.setSize(width, height);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -182,25 +191,165 @@ export class DioramaScene {
     else if (deltaU < 0) journey.facingDirection = -1;
   }
 
+  stepJourneyForward() {
+    const journey = this.journeyActors?.userData;
+    if (this.journeyStarted && journey?.mode === 'walking') {
+      this.advanceJourneyWalk(journey, 0.008);
+    }
+  }
+
+  stepJourneyBackward() {
+    const journey = this.journeyActors?.userData;
+    if (this.journeyStarted && journey?.mode === 'walking') {
+      this.advanceJourneyWalk(journey, -0.008);
+    }
+  }
+
+  zoomBy(factor) {
+    const el = this.renderer.domElement;
+    const rect = el.getBoundingClientRect();
+    this.applyZoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, factor, el);
+  }
+
+  getPointerCentroid() {
+    const pts = [...this.activePointers.values()];
+    if (!pts.length) return null;
+    const sum = pts.reduce(
+      (acc, pt) => {
+        acc.x += pt.x;
+        acc.y += pt.y;
+        return acc;
+      },
+      { x: 0, y: 0 }
+    );
+    return { x: sum.x / pts.length, y: sum.y / pts.length };
+  }
+
+  getPointerDistance() {
+    const pts = [...this.activePointers.values()];
+    if (pts.length < 2) return 0;
+    const dx = pts[1].x - pts[0].x;
+    const dy = pts[1].y - pts[0].y;
+    return Math.hypot(dx, dy);
+  }
+
+  applyPan(dx, dy, el) {
+    const rect = el.getBoundingClientRect();
+    this.updateCam();
+    this.camera.updateMatrixWorld();
+    const cameraRight = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 0);
+    const cameraUp = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 1);
+
+    const panX = -dx * ((2 * D * this.aspect) / (rect.width * this.ctr.zoom));
+    const panY = dy * ((2 * D) / (rect.height * this.ctr.zoom));
+
+    this.ctr.target.addScaledVector(cameraRight, panX);
+    this.ctr.target.addScaledVector(cameraUp, panY);
+    this.userPanOffset.addScaledVector(cameraRight, panX);
+    this.userPanOffset.addScaledVector(cameraUp, panY);
+  }
+
+  applyZoomAt(clientX, clientY, zoomFactor, el) {
+    this.cancelTweens();
+    this.autoRotate = false;
+    this.idleTimer = 0;
+
+    const rect = el.getBoundingClientRect();
+    const ndcX = ((clientX - rect.left) / rect.width) * 2 - 1;
+    const ndcY = -(((clientY - rect.top) / rect.height) * 2 - 1);
+
+    const oldZoom = this.ctr.zoom;
+    const newZoom = Math.max(
+      this.ctr.minZoom,
+      Math.min(this.ctr.maxZoom, oldZoom * zoomFactor)
+    );
+
+    if (Math.abs(newZoom - oldZoom) <= 0.00001) return;
+
+    const deltaInvZoom = 1 / oldZoom - 1 / newZoom;
+    this.updateCam();
+    this.camera.updateMatrixWorld();
+    const cameraRight = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 0);
+    const cameraUp = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 1);
+
+    const shiftX = ndcX * D * this.aspect * deltaInvZoom;
+    const shiftY = ndcY * D * deltaInvZoom;
+
+    this.ctr.target.addScaledVector(cameraRight, shiftX);
+    this.ctr.target.addScaledVector(cameraUp, shiftY);
+    this.ctr.zoom = newZoom;
+    this.updateCam();
+  }
+
+  handlePinchPan(el) {
+    const dist = this.getPointerDistance();
+    const centroid = this.getPointerCentroid();
+    if (!centroid) return;
+
+    this.cancelTweens();
+    this.autoRotate = false;
+    this.idleTimer = 0;
+
+    if (this.lastPinchDistance > 0 && dist > 0) {
+      const scale = dist / this.lastPinchDistance;
+      if (Math.abs(scale - 1) > 0.002) {
+        this.applyZoomAt(centroid.x, centroid.y, scale, el);
+      }
+    }
+
+    if (this.lastCentroid) {
+      const dx = centroid.x - this.lastCentroid.x;
+      const dy = centroid.y - this.lastCentroid.y;
+      if (Math.abs(dx) + Math.abs(dy) > 0.5) {
+        this.applyPan(dx, dy, el);
+      }
+    }
+
+    this.lastPinchDistance = dist;
+    this.lastCentroid = centroid;
+  }
+
   initControls() {
     const el = this.renderer.domElement;
 
     el.addEventListener('contextmenu', (e) => e.preventDefault());
 
+    const trackPointer = (e) => {
+      this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    };
+
     el.addEventListener('pointerdown', (e) => {
-      this.drag = true;
-      this.dragButton = e.button;
-      this.isPanning = e.button === 2 || e.button === 1 || e.shiftKey;
-      this.moved = false;
-      this.px = e.clientX;
-      this.py = e.clientY;
+      trackPointer(e);
       this.autoRotate = false;
       this.idleTimer = 0;
+
+      if (this.activePointers.size === 1) {
+        this.drag = true;
+        this.isPanning = e.button === 2 || e.button === 1 || e.shiftKey;
+        this.moved = false;
+        this.px = e.clientX;
+        this.py = e.clientY;
+      } else if (this.activePointers.size === 2) {
+        this.drag = false;
+        this.lastPinchDistance = this.getPointerDistance();
+        this.lastCentroid = this.getPointerCentroid();
+        this.cancelTweens();
+      }
+
       el.setPointerCapture(e.pointerId);
     });
 
     el.addEventListener('pointermove', (e) => {
-      if (!this.drag) return;
+      trackPointer(e);
+
+      if (this.activePointers.size >= 2) {
+        this.moved = true;
+        this.handlePinchPan(el);
+        return;
+      }
+
+      if (!this.drag || this.activePointers.size !== 1) return;
+
       const dx = e.clientX - this.px;
       const dy = e.clientY - this.py;
       this.px = e.clientX;
@@ -209,30 +358,38 @@ export class DioramaScene {
 
       this.cancelTweens();
 
+      const journey = this.journeyActors?.userData;
+      const inJourneyWalk = this.journeyStarted && journey?.mode === 'walking';
+
       if (this.isPanning) {
-        const rect = el.getBoundingClientRect();
-        this.updateCam();
-        this.camera.updateMatrixWorld();
-        const cameraRight = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 0);
-        const cameraUp = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 1);
-
-        const panX = -dx * ((2 * D * this.aspect) / (rect.width * this.ctr.zoom));
-        const panY = dy * ((2 * D) / (rect.height * this.ctr.zoom));
-
-        this.ctr.target.addScaledVector(cameraRight, panX);
-        this.ctr.target.addScaledVector(cameraUp, panY);
-        this.userPanOffset.addScaledVector(cameraRight, panX);
-        this.userPanOffset.addScaledVector(cameraUp, panY);
+        this.applyPan(dx, dy, el);
+      } else if (inJourneyWalk && this.isTouchDevice && Math.abs(dy) > Math.abs(dx) * 1.15) {
+        this.advanceJourneyWalk(journey, dy * 0.0004);
       } else {
         this.ctr.theta -= dx * 0.006;
         this.ctr.phi -= dy * 0.006;
       }
     });
 
-    el.addEventListener('pointerup', () => {
-      this.drag = false;
+    const releasePointer = (e) => {
+      this.activePointers.delete(e.pointerId);
+      if (this.activePointers.size === 0) {
+        this.drag = false;
+        this.lastPinchDistance = 0;
+        this.lastCentroid = null;
+      } else if (this.activePointers.size === 1) {
+        const remaining = [...this.activePointers.values()][0];
+        this.drag = true;
+        this.px = remaining.x;
+        this.py = remaining.y;
+        this.lastPinchDistance = 0;
+        this.lastCentroid = null;
+      }
       this.idleTimer = 0;
-    });
+    };
+
+    el.addEventListener('pointerup', releasePointer);
+    el.addEventListener('pointercancel', releasePointer);
 
     el.addEventListener(
       'wheel',
@@ -252,44 +409,12 @@ export class DioramaScene {
           return;
         }
 
-        this.cancelTweens();
-        this.autoRotate = false;
-        this.idleTimer = 0;
-
-        const rect = el.getBoundingClientRect();
-        const ndcX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-        const ndcY = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
-
-        const oldZoom = this.ctr.zoom;
         const zoomFactor = 1 - e.deltaY * 0.0012;
-        const newZoom = Math.max(
-          this.ctr.minZoom,
-          Math.min(this.ctr.maxZoom, oldZoom * zoomFactor)
-        );
-
-        if (Math.abs(newZoom - oldZoom) > 0.00001) {
-          const deltaInvZoom = 1 / oldZoom - 1 / newZoom;
-
-          // Camera right and up orientation in world space
-          this.updateCam();
-          this.camera.updateMatrixWorld();
-          const cameraRight = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 0);
-          const cameraUp = new THREE.Vector3().setFromMatrixColumn(this.camera.matrixWorld, 1);
-
-          // Shift target so the exact world point under the cursor stays fixed
-          const shiftX = ndcX * D * this.aspect * deltaInvZoom;
-          const shiftY = ndcY * D * deltaInvZoom;
-
-          this.ctr.target.addScaledVector(cameraRight, shiftX);
-          this.ctr.target.addScaledVector(cameraUp, shiftY);
-          this.ctr.zoom = newZoom;
-          this.updateCam();
-        }
+        this.applyZoomAt(e.clientX, e.clientY, zoomFactor, el);
       },
       { passive: false }
     );
 
-    // Keyboard controls for journey and zoom
     window.addEventListener('keydown', (e) => {
       const journey = this.journeyActors?.userData;
       if (
@@ -312,9 +437,9 @@ export class DioramaScene {
           this.advanceJourneyWalk(journey, -0.004);
         }
       } else if (e.key === '+' || e.key === '=') {
-        this.ctr.zoom = Math.min(this.ctr.maxZoom, this.ctr.zoom * 1.15);
+        this.zoomBy(1.15);
       } else if (e.key === '-' || e.key === '_') {
-        this.ctr.zoom = Math.max(this.ctr.minZoom, this.ctr.zoom * 0.87);
+        this.zoomBy(0.87);
       }
     });
   }
@@ -602,7 +727,9 @@ export class DioramaScene {
     this.camera.bottom = -D;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height);
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setPixelRatio(
+      Math.min(window.devicePixelRatio, this.isTouchDevice ? 1.5 : 2)
+    );
   }
 
   destroy() {

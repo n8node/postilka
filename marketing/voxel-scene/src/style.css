@@ -1284,11 +1284,65 @@ body.voxel-standalone #stage {
   margin: 1px 0;
 }
 
+.cg-touch-only {
+  display: none;
+}
+
+@media (pointer: coarse) {
+  .cg-touch-only {
+    display: block;
+  }
+
+  .cg-desktop-only {
+    display: none !important;
+  }
+}
+
+.touch-dock {
+  display: none;
+  position: fixed;
+  right: 18px;
+  bottom: 24px;
+  z-index: 8;
+  flex-direction: column;
+  gap: 8px;
+}
+
+@media (pointer: coarse) {
+  .touch-dock {
+    display: flex;
+  }
+}
+
+.touch-dock-btn {
+  min-width: 52px;
+  min-height: 52px;
+  padding: 0 14px;
+  border: 1px solid rgba(74, 67, 62, 0.16);
+  border-radius: 14px;
+  background: rgba(255, 252, 246, 0.94);
+  box-shadow: 0 8px 20px rgba(45, 38, 55, 0.16);
+  font: 800 16px/1 'Baloo 2', system-ui, sans-serif;
+  color: #334769;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.touch-dock-btn:active {
+  transform: scale(0.96);
+}
+
 @media (max-width: 640px) {
   .controls-guide {
     left: 14px;
-    bottom: 14px;
+    top: 74px;
+    bottom: auto;
     width: calc(100vw - 28px);
+  }
+
+  .touch-dock {
+    bottom: 18px;
+    right: 14px;
   }
 }
 

@@ -10,20 +10,30 @@ export default defineConfig({
   },
   build: {
     cssCodeSplit: true,
+    modulePreload: {
+      polyfill: false,
+    },
     rollupOptions: {
       input: {
         main: resolve(__dirname, 'index.html'),
         embed: resolve(__dirname, 'embed.html'),
       },
       output: {
+        manualChunks(id) {
+          if (
+            id.includes('node_modules/three') ||
+            id.includes('/src/scene.js') ||
+            id.includes('/src/diorama/')
+          ) {
+            return 'scene';
+          }
+        },
         entryFileNames: (chunk) => {
           if (chunk.name === 'embed') return 'assets/embed.js';
           return 'assets/[name]-[hash].js';
         },
         chunkFileNames: (chunk) => {
-          if (chunk.name === 'scene' || chunk.facadeModuleId?.includes('/scene.js')) {
-            return 'assets/scene.js';
-          }
+          if (chunk.name === 'scene') return 'assets/scene.js';
           return 'assets/[name]-[hash].js';
         },
         assetFileNames: (assetInfo) => {

@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Zen+Maru+Gothic:wght@500;700&family=JetBrains+Mono:wght@500&display=swap"
       rel="stylesheet"
     />
-    <script type="module" crossorigin src="/experience/assets/main-Df7s4Xrx.js"></script>
+    <script type="module" crossorigin src="/experience/assets/main-DLuoCAtB.js"></script>
     <link rel="modulepreload" crossorigin href="/experience/assets/scene.js">
     <link rel="stylesheet" crossorigin href="/experience/assets/scene.css">
   </head>
@@ -88,7 +88,7 @@
       </button>
 
       <div class="controls-guide-body" id="controlsGuideBody">
-        <div class="cg-section">
+        <div class="cg-section cg-desktop-only">
           <div class="cg-section-title">🚶 Прогулка по фабрике</div>
           <div class="cg-row">
             <div class="cg-keys">
@@ -107,9 +107,9 @@
           </div>
         </div>
 
-        <div class="cg-divider"></div>
+        <div class="cg-divider cg-desktop-only"></div>
 
-        <div class="cg-section">
+        <div class="cg-section cg-desktop-only">
           <div class="cg-section-title">🎥 Камера и обзор</div>
           <div class="cg-row">
             <div class="cg-keys">
@@ -135,6 +135,38 @@
           </div>
         </div>
 
+        <div class="cg-divider cg-touch-only"></div>
+
+        <div class="cg-section cg-touch-only">
+          <div class="cg-section-title">📱 Прогулка по фабрике</div>
+          <div class="cg-row">
+            <div class="cg-keys"><span class="cg-k">Свайп ↑↓</span></div>
+            <div class="cg-desc">Идти по маршруту</div>
+          </div>
+          <div class="cg-row">
+            <div class="cg-keys"><span class="cg-k">Кнопка «Шаг»</span></div>
+            <div class="cg-desc">Шаг вперёд</div>
+          </div>
+        </div>
+
+        <div class="cg-divider cg-touch-only"></div>
+
+        <div class="cg-section cg-touch-only">
+          <div class="cg-section-title">📱 Камера и обзор</div>
+          <div class="cg-row">
+            <div class="cg-keys"><span class="cg-k">1 палец</span></div>
+            <div class="cg-desc">Вращение сцены</div>
+          </div>
+          <div class="cg-row">
+            <div class="cg-keys"><span class="cg-k">2 пальца</span></div>
+            <div class="cg-desc">Зум и сдвиг</div>
+          </div>
+          <div class="cg-row">
+            <div class="cg-keys"><span class="cg-k">Кнопки +/−</span></div>
+            <div class="cg-desc">Масштаб</div>
+          </div>
+        </div>
+
         <div class="cg-divider"></div>
 
         <div class="cg-section">
@@ -145,7 +177,7 @@
             </div>
             <div class="cg-desc">Подлёт и описание</div>
           </div>
-          <div class="cg-row">
+          <div class="cg-row cg-desktop-only">
             <div class="cg-keys">
               <span class="cg-k">Esc</span>
             </div>
@@ -153,6 +185,12 @@
           </div>
         </div>
       </div>
+    </div>
+
+    <div class="touch-dock" data-touch-dock aria-label="Сенсорное управление">
+      <button type="button" class="touch-dock-btn" data-touch-step title="Шаг вперёд">Шаг</button>
+      <button type="button" class="touch-dock-btn" data-touch-zoom-in title="Приблизить">+</button>
+      <button type="button" class="touch-dock-btn" data-touch-zoom-out title="Отдалить">−</button>
     </div>
 
     <div class="panel" id="panel">
