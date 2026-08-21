@@ -21,6 +21,8 @@ type TelegramProviderSettings struct {
 type ChannelProviderInfo struct {
 	TelegramEnabled                 bool   `json:"telegram_enabled"`
 	TelegramBusinessStoriesEnabled  bool   `json:"telegram_business_stories_enabled"`
+	PhotochkaEnabled                bool   `json:"photochka_enabled"`
+	PhotochkaConnectHelpText        string `json:"photochka_connect_help_text,omitempty"`
 	BusinessConnectHelpText         string `json:"business_connect_help_text,omitempty"`
 	ConnectHelpText                 string `json:"connect_help_text"`
 	ConnectHelpURL          string `json:"connect_help_url"`

@@ -10,12 +10,14 @@ import (
 
 	"github.com/postilka/postilka/internal/model"
 	oauthclient "github.com/postilka/postilka/internal/oauth"
+	"github.com/postilka/postilka/internal/photochka"
 	"github.com/postilka/postilka/internal/repository"
 )
 
 var (
 	ErrTelegramProviderDisabled = errors.New("telegram channel provider disabled")
 	ErrInvalidBotToken          = errors.New("invalid bot token")
+	ErrInvalidPhotochkaAPIKey   = errors.New("invalid photochka api key")
 	ErrChannelAlreadyConnected  = errors.New("channel already connected")
 )
 
@@ -25,6 +27,7 @@ type ChannelService struct {
 	socialSettings *SocialProviderSettingsService
 	botClient      *TelegramBotClient
 	maxClient      *oauthclient.MAXBotClient
+	photochka      *photochka.Client
 	wsSvc          *WorkspaceService
 	quota          *QuotaService
 	cipher         *SecretCipher
@@ -40,6 +43,7 @@ func NewChannelService(
 	wsSvc *WorkspaceService,
 	quota *QuotaService,
 	cipher *SecretCipher,
+	photochkaClient *photochka.Client,
 ) *ChannelService {
 	return &ChannelService{
 		channels:       channels,
@@ -47,6 +51,7 @@ func NewChannelService(
 		socialSettings: socialSettings,
 		botClient:      botClient,
 		maxClient:      oauthclient.NewMAXBotClient(),
+		photochka:      photochkaClient,
 		wsSvc:          wsSvc,
 		quota:          quota,
 		cipher:         cipher,

@@ -14,6 +14,7 @@ import (
 
 	"github.com/postilka/postilka/internal/model"
 	oauthclient "github.com/postilka/postilka/internal/oauth"
+	"github.com/postilka/postilka/internal/photochka"
 	"github.com/postilka/postilka/internal/repository"
 )
 
@@ -25,6 +26,7 @@ type PublicationService struct {
 	channelTest *ChannelTestService
 	telegram    *TelegramBotClient
 	maxClient   *oauthclient.MAXBotClient
+	photochka   *photochka.Client
 	quota       *QuotaService
 	shortener   *LinkShortenerService
 	notify      *NotificationService
@@ -38,6 +40,7 @@ func NewPublicationService(
 	channelTest *ChannelTestService,
 	telegram *TelegramBotClient,
 	maxClient *oauthclient.MAXBotClient,
+	photochkaClient *photochka.Client,
 	quota *QuotaService,
 	shortener *LinkShortenerService,
 ) *PublicationService {
@@ -47,6 +50,7 @@ func NewPublicationService(
 	return &PublicationService{
 		posts: posts, channels: channels, files: files, storage: storage,
 		channelTest: channelTest, telegram: telegram, maxClient: maxClient,
+		photochka: photochkaClient,
 		quota: quota, shortener: shortener,
 	}
 }
@@ -660,6 +664,17 @@ func (s *PublicationService) publishTarget(
 			return msgID, nil
 		}
 		return s.maxClient.SendChannelMessageReturningID(ctx, token, channel.ChatID, text, nil, buttons)
+	}
+
+	if channel.Provider == model.ChannelProviderPhotochka {
+		if format != "message" {
+			return "", fmt.Errorf("формат %s не поддерживается Photochka", format)
+		}
+		text := readableProviderText(content)
+		if len(post.Media) == 0 && strings.TrimSpace(text) == "" {
+			return "", fmt.Errorf("%w: для Photochka укажите текст или медиа", ErrInvalidPost)
+		}
+		return s.publishPhotochka(ctx, post, target, channel, content, token)
 	}
 
 	if channel.Provider == model.ChannelProviderYouTube {

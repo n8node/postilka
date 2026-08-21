@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/postilka/postilka/internal/model"
 	oauthclient "github.com/postilka/postilka/internal/oauth"
+	"github.com/postilka/postilka/internal/photochka"
 	"github.com/postilka/postilka/internal/repository"
 	tzpkg "github.com/postilka/postilka/internal/timezone"
 )
@@ -23,6 +25,7 @@ type ChannelTestService struct {
 	wsSvc          *WorkspaceService
 	cipher         *SecretCipher
 	maxClient      *oauthclient.MAXBotClient
+	photochka      *photochka.Client
 	notify         *NotificationService
 }
 
@@ -34,6 +37,7 @@ func NewChannelTestService(
 	socialSettings *SocialProviderSettingsService,
 	wsSvc *WorkspaceService,
 	cipher *SecretCipher,
+	photochkaClient *photochka.Client,
 ) *ChannelTestService {
 	return &ChannelTestService{
 		channels:       channels,
@@ -44,6 +48,7 @@ func NewChannelTestService(
 		wsSvc:          wsSvc,
 		cipher:         cipher,
 		maxClient:      oauthclient.NewMAXBotClient(),
+		photochka:      photochkaClient,
 	}
 }
 
@@ -275,6 +280,36 @@ func (s *ChannelTestService) publish(
 			return "", err
 		}
 		return verified.ID, nil
+
+	case model.ChannelProviderPhotochka:
+		if s.photochka == nil {
+			return "", fmt.Errorf("интеграция Photochka недоступна")
+		}
+		me, err := s.photochka.Me(ctx, token)
+		if err != nil {
+			if errors.Is(err, photochka.ErrUnauthorized) {
+				return "", fmt.Errorf("API-ключ Photochka недействителен — переподключите канал")
+			}
+			return "", err
+		}
+		caption := strings.TrimSpace(text)
+		if caption == "" {
+			caption = model.DefaultChannelTestMessage
+		}
+		postResult, err := s.photochka.CreatePost(ctx, token, photochka.CreatePostRequest{
+			UploadIDs: nil,
+			Caption:   caption,
+			Hashtags:  []string{},
+			Status:    "published",
+		})
+		if err != nil {
+			if errors.Is(err, photochka.ErrUnauthorized) {
+				return "", fmt.Errorf("API-ключ Photochka недействителен — переподключите канал")
+			}
+			return "", err
+		}
+		_ = me
+		return postResult.ID, nil
 
 	default:
 		return "", fmt.Errorf("провайдер %s не поддерживает тестовую публикацию", ch.Provider)

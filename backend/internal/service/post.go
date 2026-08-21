@@ -370,6 +370,18 @@ func validatePostTargets(ctx context.Context, channels *repository.ChannelReposi
 				return err
 			}
 		}
+		if channel.Provider == model.ChannelProviderPhotochka {
+			if len(post.Media) == 0 && strings.TrimSpace(readableProviderText(content)) == "" {
+				return fmt.Errorf("%w: для Photochka укажите текст или медиа", ErrInvalidPost)
+			}
+			maxMedia := channel.Provider.PublishCapabilities().MaxMedia
+			if maxMedia <= 0 {
+				maxMedia = 10
+			}
+			if len(post.Media) > maxMedia {
+				return fmt.Errorf("%w: Photochka принимает не более %d вложений", ErrInvalidPost, maxMedia)
+			}
+		}
 	}
 	return nil
 }
@@ -619,6 +631,14 @@ func validateContentForChannel(content model.PostContent, channel *model.Channel
 		}
 		if (format == "video" || format == "shorts") && textLength > 5000 {
 			return fmt.Errorf("%w: описание YouTube не должно превышать 5000 символов", ErrInvalidPost)
+		}
+	}
+	if channel.Provider == model.ChannelProviderPhotochka {
+		if textLength > 3000 {
+			return fmt.Errorf("%w: текст Photochka не должен превышать 3000 символов", ErrInvalidPost)
+		}
+		if len(content.Buttons) > 0 {
+			return fmt.Errorf("%w: inline-кнопки не поддерживаются Photochka", ErrInvalidPost)
 		}
 	}
 	return nil

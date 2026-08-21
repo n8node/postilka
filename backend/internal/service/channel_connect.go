@@ -14,6 +14,7 @@ import (
 	"github.com/postilka/postilka/internal/config"
 	"github.com/postilka/postilka/internal/model"
 	oauthclient "github.com/postilka/postilka/internal/oauth"
+	"github.com/postilka/postilka/internal/photochka"
 	"github.com/postilka/postilka/internal/repository"
 )
 
@@ -34,6 +35,7 @@ type ChannelConnectService struct {
 	quota          *QuotaService
 	cipher         *SecretCipher
 	maxClient      *oauthclient.MAXBotClient
+	photochka      *photochka.Client
 	cfg            *config.Config
 	notify         *NotificationService
 }
@@ -59,6 +61,7 @@ func NewChannelConnectService(
 		quota:          quota,
 		cipher:         cipher,
 		maxClient:      oauthclient.NewMAXBotClient(),
+		photochka:      photochka.NewClient(cfg.PhotochkaAPIBaseURL),
 		cfg:            cfg,
 	}
 }
@@ -70,6 +73,8 @@ func (s *ChannelConnectService) SetNotifier(n *NotificationService) {
 func (s *ChannelConnectService) CombinedProviderInfo(ctx context.Context) model.ChannelProviderInfo {
 	info := s.telegram.ChannelProviderInfo(ctx)
 	info.Providers = s.socialSettings.AllPublicInfo(ctx)
+	info.PhotochkaEnabled = true
+	info.PhotochkaConnectHelpText = "1. В Photochka откройте Настройки → API-ключи (тариф Business).\n2. Создайте ключ и скопируйте значение phk_live_…\n3. Вставьте ключ в Postilka и нажмите «Подключить»."
 	return info
 }
 
@@ -1097,4 +1102,123 @@ func oauthConnectMetadataRefreshed(meta model.ChannelMetadata) *time.Time {
 	}
 	now := time.Now()
 	return &now
+}
+
+func (s *ChannelConnectService) ConnectPhotochka(
+	ctx context.Context,
+	userID string,
+	r *http.Request,
+	req model.PhotochkaConnectRequest,
+) (*model.ChannelConnectResult, error) {
+	ws, err := s.requireAdmin(ctx, userID, r)
+	if err != nil {
+		return nil, err
+	}
+	if s.cipher == nil {
+		return nil, ErrCryptoUnavailable
+	}
+	if s.photochka == nil {
+		return nil, fmt.Errorf("интеграция Photochka недоступна")
+	}
+
+	apiKey := strings.TrimSpace(req.APIKey)
+	if err := s.photochka.ValidateAPIKey(apiKey); err != nil {
+		return nil, err
+	}
+
+	me, err := s.photochka.Me(ctx, apiKey)
+	if err != nil {
+		if errors.Is(err, photochka.ErrUnauthorized) {
+			return nil, ErrInvalidPhotochkaAPIKey
+		}
+		return nil, fmt.Errorf("не удалось проверить API-ключ Photochka: %w", err)
+	}
+
+	encrypted, err := s.cipher.Encrypt(apiKey)
+	if err != nil {
+		return nil, err
+	}
+
+	username := strings.TrimPrefix(strings.TrimSpace(me.Username), "@")
+	displayName := strings.TrimSpace(me.DisplayName)
+	name := displayName
+	if name == "" && username != "" {
+		name = "@" + username
+	}
+	if name == "" {
+		name = "Photochka"
+	}
+
+	now := time.Now()
+	meta := model.ChannelMetadata{
+		ProviderTitle: displayName,
+		PublicURL:     "https://photochka.ru/@" + username,
+	}
+	if username != "" {
+		meta.PublicURL = "https://photochka.ru/@" + username
+	}
+
+	chatID := strings.TrimSpace(me.UserID)
+	if chatID == "" {
+		return nil, fmt.Errorf("Photochka не вернула user_id")
+	}
+
+	existing, err := s.channels.GetByChat(ctx, ws.ID, string(model.ChannelProviderPhotochka), chatID)
+	if err != nil && !errors.Is(err, repository.ErrNotFound) {
+		return nil, err
+	}
+	if existing != nil && existing.Provider != model.ChannelProviderPhotochka {
+		existing = nil
+	}
+
+	var ch *model.Channel
+	if existing != nil {
+		ch, err = s.channels.SaveChannel(ctx, repository.ChannelSaveParams{
+			WorkspaceID:         ws.ID,
+			ChannelID:           existing.ID,
+			Provider:            model.ChannelProviderPhotochka,
+			Name:                name,
+			ChatType:            "profile",
+			BotUsername:         username,
+			BotTokenEncrypted:   encrypted,
+			Status:              model.ChannelStatusActive,
+			Metadata:            meta,
+			MetadataRefreshedAt: &now,
+		})
+	} else {
+		currentCount, err := s.channels.CountByWorkspace(ctx, ws.ID)
+		if err != nil {
+			return nil, err
+		}
+		if err := s.quota.CheckChannelQuota(ctx, ws.ID, currentCount); err != nil {
+			return nil, err
+		}
+		ch, err = s.channels.Create(ctx, repository.ChannelCreateParams{
+			WorkspaceID:         ws.ID,
+			Provider:            model.ChannelProviderPhotochka,
+			Name:                name,
+			ChatID:              chatID,
+			ChatType:            "profile",
+			BotUsername:         username,
+			BotTokenEncrypted:   encrypted,
+			Status:              model.ChannelStatusActive,
+			Metadata:            meta,
+			MetadataRefreshedAt: &now,
+		})
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	item := model.ChannelListItem{
+		Channel:      *ch,
+		BotTokenSet:  true,
+		BotTokenHint: maskSecret(apiKey),
+	}
+	if s.notify != nil {
+		s.notify.MaybeUsageWarnings(ctx, ws.ID)
+	}
+	return &model.ChannelConnectResult{
+		Connected: []model.ChannelListItem{item},
+	}, nil
 }

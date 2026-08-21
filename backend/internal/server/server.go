@@ -13,6 +13,7 @@ import (
 	"github.com/postilka/postilka/internal/handler"
 	"github.com/postilka/postilka/internal/middleware"
 	oauthclient "github.com/postilka/postilka/internal/oauth"
+	"github.com/postilka/postilka/internal/photochka"
 	"github.com/postilka/postilka/internal/repository"
 	"github.com/postilka/postilka/internal/service"
 )
@@ -98,7 +99,8 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 		encKey = cfg.JWTSecret
 	}
 	secretCipher, _ := service.NewSecretCipher(encKey)
-	channelSvc := service.NewChannelService(channelRepo, telegramProviderSettingsSvc, socialProviderSettingsSvc, telegramBotClient, wsSvc, quotaSvc, secretCipher)
+	photochkaClient := photochka.NewClient(cfg.PhotochkaAPIBaseURL)
+	channelSvc := service.NewChannelService(channelRepo, telegramProviderSettingsSvc, socialProviderSettingsSvc, telegramBotClient, wsSvc, quotaSvc, secretCipher, photochkaClient)
 	telegramBusinessSvc := service.NewTelegramBusinessService(
 		telegramBusinessRegRepo, channelRepo, telegramProviderSettingsSvc, telegramBotClient, wsSvc, quotaSvc, secretCipher, cfg,
 	)
@@ -108,7 +110,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 		telegramProviderSettingsSvc, youtubeAPIClient, wsSvc, quotaSvc, secretCipher, cfg,
 	)
 	channelTestSvc := service.NewChannelTestService(
-		channelRepo, userRepo, telegramBotClient, youtubeAPIClient, socialProviderSettingsSvc, wsSvc, secretCipher,
+		channelRepo, userRepo, telegramBotClient, youtubeAPIClient, socialProviderSettingsSvc, wsSvc, secretCipher, photochkaClient,
 	)
 	fileStorageRepo := repository.NewWorkspaceFileRepository(db.Pool)
 	objectStorage := service.NewObjectStorage(storageSettingsSvc)
@@ -117,7 +119,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	linkShortener := service.NewLinkShortenerService(linkCodeRepo, cfg.LinkBaseURL)
 	postApprovalRepo := repository.NewPostApprovalRepository(db.Pool)
 	publicationSvc := service.NewPublicationService(
-		postRepo, channelRepo, fileStorageRepo, objectStorage, channelTestSvc, telegramBotClient, oauthclient.NewMAXBotClient(), quotaSvc, linkShortener,
+		postRepo, channelRepo, fileStorageRepo, objectStorage, channelTestSvc, telegramBotClient, oauthclient.NewMAXBotClient(), photochkaClient, quotaSvc, linkShortener,
 	)
 	postSvc := service.NewPostService(postRepo, channelRepo, wsSvc, publicationSvc, postApprovalRepo)
 	telegramSvc := service.NewTelegramService(telegramSettingsSvc, telegramQueueRepo, cfg.TelegramLocalProxy, logger)
@@ -372,6 +374,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Post("/channels/telegram/business/sync", telegramBusinessHandler.Sync)
 			r.Post("/channels/max/discover", channelConnectHandler.DiscoverMAX)
 			r.Post("/channels/max/connect", channelConnectHandler.ConnectMAX)
+			r.Post("/channels/photochka/connect", channelConnectHandler.ConnectPhotochka)
 			r.Get("/channels/oauth/{provider}/start", channelConnectHandler.OAuthStart)
 			r.Post("/channels/oauth/{provider}/start", channelConnectHandler.OAuthStart)
 			r.Get("/channels/oauth/{provider}/discover", channelConnectHandler.OAuthDiscover)

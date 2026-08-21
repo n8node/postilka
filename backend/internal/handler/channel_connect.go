@@ -163,6 +163,29 @@ func (h *ChannelConnectHandler) ConnectMAX(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, result)
 }
 
+func (h *ChannelConnectHandler) ConnectPhotochka(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
+		return
+	}
+	var req model.PhotochkaConnectRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Некорректное тело запроса")
+		return
+	}
+	result, err := h.connect.ConnectPhotochka(r.Context(), userID, r, req)
+	if err != nil {
+		if errors.Is(err, service.ErrChannelAlreadyConnected) && result != nil {
+			writeJSON(w, http.StatusConflict, result)
+			return
+		}
+		writeChannelConnectError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
 func writeChannelConnectError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, service.ErrSocialProviderDisabled):
@@ -171,6 +194,8 @@ func writeChannelConnectError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusServiceUnavailable, "Провайдер не настроен администратором")
 	case errors.Is(err, service.ErrInvalidBotToken):
 		writeError(w, http.StatusBadRequest, "Некорректный токен")
+	case errors.Is(err, service.ErrInvalidPhotochkaAPIKey):
+		writeError(w, http.StatusBadRequest, "Неверный API-ключ Photochka")
 	case errors.Is(err, service.ErrQuotaExceeded):
 		writeError(w, http.StatusPaymentRequired, "Достигнут лимит каналов по тарифу")
 	case errors.Is(err, service.ErrForbidden):

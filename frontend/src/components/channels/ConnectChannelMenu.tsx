@@ -16,6 +16,7 @@ import { ConnectMAXDialog } from "./ConnectMAXDialog";
 import { ConnectDzenDialog } from "./ConnectDzenDialog";
 import { ConnectYouTubeDialog } from "./ConnectYouTubeDialog";
 import { ConnectTelegramBusinessDialog } from "./ConnectTelegramBusinessDialog";
+import { ConnectPhotochkaDialog } from "./ConnectPhotochkaDialog";
 
 const PROVIDER_LABELS: Partial<Record<ChannelProvider, string>> = {
   telegram: "Telegram",
@@ -24,6 +25,7 @@ const PROVIDER_LABELS: Partial<Record<ChannelProvider, string>> = {
   rutube: "Rutube",
   dzen: "Дзен",
   youtube: "YouTube",
+  photochka: "Photochka",
 };
 
 type ConnectMenuItem = {
@@ -76,6 +78,9 @@ export function ConnectChannelMenu({ onConnected }: ConnectChannelMenuProps) {
         label: p.label,
       });
     }
+  }
+  if (providerInfo?.photochka_enabled !== false) {
+    enabledProviders.push({ key: "photochka", label: "Photochka" });
   }
 
   function pickProvider(key: ChannelProvider | "telegram_business") {
@@ -171,6 +176,12 @@ export function ConnectChannelMenu({ onConnected }: ConnectChannelMenuProps) {
           onConnected={handleConnected}
         />
       )}
+
+      <ConnectPhotochkaDialog
+        open={activeProvider === "photochka"}
+        onClose={() => setActiveProvider(null)}
+        onConnected={handleConnected}
+      />
     </>
   );
 }

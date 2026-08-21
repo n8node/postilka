@@ -86,6 +86,17 @@ func (p ChannelProvider) PublishCapabilities() PublishCapabilities {
 			MaxMedia: 1,
 			MaxTextLength: 5000,
 		}
+	case ChannelProviderPhotochka:
+		return PublishCapabilities{
+			Text:          true,
+			Photo:         true,
+			Video:         true,
+			Formats:       []string{"message"},
+			ComposerMedia: true,
+			MediaAlbum:    true,
+			MaxMedia:      10,
+			MaxTextLength: 3000,
+		}
 	default:
 		return PublishCapabilities{}
 	}

@@ -20,6 +20,7 @@ const (
 	ChannelProviderRutube   ChannelProvider = "rutube"
 	ChannelProviderDzen     ChannelProvider = "dzen"
 	ChannelProviderYouTube  ChannelProvider = "youtube"
+	ChannelProviderPhotochka ChannelProvider = "photochka"
 )
 
 func (p ChannelProvider) Label() string {
@@ -38,6 +39,8 @@ func (p ChannelProvider) Label() string {
 		return "Дзен"
 	case ChannelProviderYouTube:
 		return "YouTube"
+	case ChannelProviderPhotochka:
+		return "Photochka"
 	default:
 		return string(p)
 	}
@@ -161,6 +164,10 @@ type TelegramBusinessSyncRequest struct {
 
 type TelegramDiscoverRequest struct {
 	BotToken string `json:"bot_token"`
+}
+
+type PhotochkaConnectRequest struct {
+	APIKey string `json:"api_key"`
 }
 
 const DefaultChannelTestMessage = "✅ Тестовое сообщение от Postilka. Канал подключён корректно."

@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/postilka/postilka/internal/model"
 	oauthclient "github.com/postilka/postilka/internal/oauth"
+	"github.com/postilka/postilka/internal/photochka"
 	"github.com/postilka/postilka/internal/repository"
 )
 
@@ -22,6 +24,9 @@ func channelPostModeLabel(ch model.Channel) string {
 	}
 	if ch.Provider == model.ChannelProviderYouTube {
 		return "Своё приложение Google"
+	}
+	if ch.Provider == model.ChannelProviderPhotochka {
+		return "API-ключ"
 	}
 	if ch.Provider != model.ChannelProviderMAX {
 	if ch.Provider == model.ChannelProviderTelegram {
@@ -381,6 +386,38 @@ func (s *ChannelService) VerifyAndRefresh(
 		}
 		if title := strings.TrimSpace(maxChat.Title); title != "" && (ch.Name == "" || strings.HasPrefix(ch.Name, "http")) {
 			ch.Name = title
+		}
+
+	case model.ChannelProviderPhotochka:
+		token, err := resolveChannelPublishToken(ctx, &ch, s.channels, s.cipher, s.socialSettings)
+		if err != nil {
+			return nil, err
+		}
+		if s.photochka == nil {
+			verifyErr = fmt.Errorf("интеграция Photochka недоступна")
+			break
+		}
+		me, err := s.photochka.Me(ctx, token)
+		if err != nil {
+			if errors.Is(err, photochka.ErrUnauthorized) {
+				verifyErr = fmt.Errorf("API-ключ Photochka недействителен — переподключите канал")
+			} else {
+				verifyErr = err
+			}
+			break
+		}
+		username := strings.TrimPrefix(strings.TrimSpace(me.Username), "@")
+		meta = model.ChannelMetadata{
+			ProviderTitle: me.DisplayName,
+			PublicURL:     "https://photochka.ru/@" + username,
+		}
+		if username != "" {
+			ch.BotUsername = username
+		}
+		if display := strings.TrimSpace(me.DisplayName); display != "" {
+			ch.Name = display
+		} else if username != "" {
+			ch.Name = "@" + username
 		}
 
 	default:

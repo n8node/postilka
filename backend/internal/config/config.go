@@ -39,6 +39,8 @@ type Config struct {
 	KIEVideoAPIKey    string `env:"KIE_VIDEO_API_KEY"`
 	YandexMetrikaClientID     string `env:"YANDEX_METRIKA_CLIENT_ID"`
 	YandexMetrikaClientSecret string `env:"YANDEX_METRIKA_CLIENT_SECRET"`
+
+	PhotochkaAPIBaseURL string `env:"PHOTOCHKA_API_BASE_URL" envDefault:"https://photochka.ru/api/v1/integration"`
 }
 
 func Load() (*Config, error) {

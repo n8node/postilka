@@ -1860,7 +1860,8 @@ export type ChannelProvider =
   | "max"
   | "rutube"
   | "dzen"
-  | "youtube";
+  | "youtube"
+  | "photochka";
 
 export type ChannelMetadata = {
   provider_title?: string;
@@ -1985,6 +1986,8 @@ export type SocialProviderPublicInfo = {
 export type ChannelProviderInfo = {
   telegram_enabled: boolean;
   telegram_business_stories_enabled: boolean;
+  photochka_enabled?: boolean;
+  photochka_connect_help_text?: string;
   business_connect_help_text?: string;
   connect_help_text: string;
   connect_help_url: string;
@@ -2186,6 +2189,16 @@ export function connectMAXChannels(payload: {
     {
       method: "POST",
       body: JSON.stringify(payload),
+    },
+  );
+}
+
+export function connectPhotochkaChannel(apiKey: string) {
+  return apiFetch<{ connected: ChannelListItem[]; skipped?: string[] }>(
+    "/channels/photochka/connect",
+    {
+      method: "POST",
+      body: JSON.stringify({ api_key: apiKey }),
     },
   );
 }

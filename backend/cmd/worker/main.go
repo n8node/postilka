@@ -11,6 +11,7 @@ import (
 
 	"github.com/postilka/postilka/internal/config"
 	oauthclient "github.com/postilka/postilka/internal/oauth"
+	"github.com/postilka/postilka/internal/photochka"
 	"github.com/postilka/postilka/internal/repository"
 	"github.com/postilka/postilka/internal/service"
 )
@@ -76,8 +77,9 @@ func main() {
 	telegramBotClient := service.NewTelegramBotClient(telegramProviderSettingsSvc, cfg.TelegramLocalProxy)
 	youtubeAPIClient := service.NewYouTubeAPIClient(youtubeProviderSettingsSvc, cfg.YouTubeLocalProxy)
 	service.SetYouTubeAPIClient(youtubeAPIClient)
+	photochkaClient := photochka.NewClient(cfg.PhotochkaAPIBaseURL)
 	channelTestSvc := service.NewChannelTestService(
-		channelRepo, userRepo, telegramBotClient, youtubeAPIClient, socialProviderSettingsSvc, wsSvc, secretCipher,
+		channelRepo, userRepo, telegramBotClient, youtubeAPIClient, socialProviderSettingsSvc, wsSvc, secretCipher, photochkaClient,
 	)
 	postRepo := repository.NewPostRepository(db.Pool)
 	usageRepo := repository.NewUsageRepository(db.Pool)
@@ -85,7 +87,7 @@ func main() {
 	linkCodeRepo := repository.NewLinkCodeRepository(db.Pool)
 	linkShortener := service.NewLinkShortenerService(linkCodeRepo, cfg.LinkBaseURL)
 	publicationSvc := service.NewPublicationService(
-		postRepo, channelRepo, fileStorageRepo, objectStorage, channelTestSvc, telegramBotClient, oauthclient.NewMAXBotClient(), quotaSvc, linkShortener,
+		postRepo, channelRepo, fileStorageRepo, objectStorage, channelTestSvc, telegramBotClient, oauthclient.NewMAXBotClient(), photochkaClient, quotaSvc, linkShortener,
 	)
 	notificationRepo := repository.NewNotificationRepository(db.Pool)
 	notificationSvc := service.NewNotificationService(

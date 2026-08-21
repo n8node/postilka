@@ -9,6 +9,7 @@ export const PROVIDER_LABEL: Record<ChannelProvider, string> = {
   rutube: "Rutube",
   dzen: "Дзен",
   youtube: "YouTube",
+  photochka: "Photochka",
 };
 
 export function formatProviderLabel(provider: ChannelProvider, chatType?: string) {
@@ -24,6 +25,7 @@ const ICON_COLOR: Record<ChannelProvider, string> = {
   rutube: "#100943",
   dzen: "#111111",
   youtube: "#FF0000",
+  photochka: "#7C3AED",
 };
 
 export function ProviderIcon({
@@ -81,6 +83,15 @@ export function ProviderIcon({
           <path
             fill={color}
             d="M6.6 13.2c2.1 2 4.7 2.5 5.4 2.6-.7.1-3.3.6-5.4 2.6l1.7 1.7c1.2-1.1 2.5-1.7 3.7-2v2.8h2.4V18.1c1.2.3 2.5.9 3.7 2l1.7-1.7c-2.1-2-4.7-2.5-5.4-2.6.7-.1 3.3-.6 5.4-2.6l-1.7-1.7c-1.4 1.3-3.4 2.1-5.4 2.1s-4-.8-5.4-2.1z"
+          />
+        </>
+      ) : null}
+      {provider === "photochka" ? (
+        <>
+          <rect width="24" height="24" rx="6" fill={color} />
+          <path
+            fill="#fff"
+            d="M7.5 8.2h9v1.8h-3.4v6.8H10.9v-6.8H7.5zm4.8 0h4.7c1.8 0 3.1 1.2 3.1 2.9 0 1.1-.6 2-1.5 2.5l2 3.2h-2.4l-1.7-2.8h-1.2v2.8h-2.3zm2.4 1.6v1.5h2.1c.6 0 1-.4 1-.9s-.4-.9-1-.9z"
           />
         </>
       ) : null}
