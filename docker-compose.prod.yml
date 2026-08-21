@@ -122,7 +122,7 @@ services:
 
   wordpress:
     volumes:
-      - ./wordpress/plugins/postilka-voxel:/var/www/html/wp-content/plugins/postilka-voxel:ro
+      - ./wordpress/plugins/postilka-voxel:/var/www/html/wp-content/plugins/postilka-voxel
     logging:
       driver: json-file
       options:

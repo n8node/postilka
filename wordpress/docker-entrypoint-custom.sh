@@ -6,8 +6,8 @@ fix_wp_content_permissions() {
 	for subdir in uploads themes plugins upgrade cache; do
 		local dir="${wp_content}/${subdir}"
 		mkdir -p "${dir}"
-		chown -R www-data:www-data "${dir}"
-		chmod -R ug+rwX "${dir}"
+		chown -R www-data:www-data "${dir}" 2>/dev/null || true
+		chmod -R ug+rwX "${dir}" 2>/dev/null || true
 	done
 }
 
