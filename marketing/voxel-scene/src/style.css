@@ -10,8 +10,16 @@ html,
 body,
 #app { width: 100%; min-height: 100%; }
 
-body {
+body.voxel-standalone {
   overflow: hidden;
+  background: linear-gradient(135deg, #fae9bf, #f4d5d1 46%, #dce5f3);
+}
+
+body:not(.voxel-standalone) {
+  overflow: auto;
+}
+
+body {
   background: linear-gradient(135deg, #fae9bf, #f4d5d1 46%, #dce5f3);
 }
 
@@ -167,9 +175,17 @@ body {
     linear-gradient(135deg, #fbe2bd 0%, #f5cdc7 58%, #d8e2f3 100%);
 }
 
-#stage {
+body.voxel-standalone #stage {
   position: fixed;
   inset: 0;
+  touch-action: none;
+}
+
+.postilka-voxel-root #stage {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   touch-action: none;
 }
 
