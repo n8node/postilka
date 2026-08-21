@@ -14,14 +14,81 @@ function buildWidgetMarkup() {
     </div>
     <div class="postilka-voxel-widget">
       <div id="stage"></div>
-      <div class="controls-guide collapsed" id="controlsGuide">
-        <button class="controls-guide-toggle" id="controlsGuideToggle" type="button" aria-label="Управление сценой">
+      <div class="controls-guide" id="controlsGuide">
+        <button class="controls-guide-toggle" id="controlsGuideToggle" type="button" aria-label="Управление сценой" title="Свернуть / развернуть подсказки">
+          <span class="cg-toggle-icon">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="6" width="20" height="12" rx="3"></rect>
+              <path d="M6 12h4m-2-2v4m9-2h.01m3-2h.01"></path>
+            </svg>
+          </span>
           <span class="cg-toggle-text">Управление сценой</span>
+          <span class="cg-chevron">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+          </span>
         </button>
         <div class="controls-guide-body" id="controlsGuideBody">
           <div class="cg-section">
-            <div class="cg-section-title">Прогулка</div>
-            <div class="cg-row"><div class="cg-keys"><span class="cg-k">W</span><span class="cg-k">S</span></div><div class="cg-desc">Идти по маршруту</div></div>
+            <div class="cg-section-title">🚶 Прогулка по фабрике</div>
+            <div class="cg-row">
+              <div class="cg-keys">
+                <span class="cg-k">Колесо</span>
+                <span class="cg-or">или</span>
+                <span class="cg-k">W</span><span class="cg-k">S</span>
+                <span class="cg-k">↑</span><span class="cg-k">↓</span>
+              </div>
+              <div class="cg-desc">Идти по маршруту</div>
+            </div>
+            <div class="cg-row">
+              <div class="cg-keys">
+                <span class="cg-k">Пробел</span>
+              </div>
+              <div class="cg-desc">Шаг вперед</div>
+            </div>
+          </div>
+          <div class="cg-divider"></div>
+          <div class="cg-section">
+            <div class="cg-section-title">🎥 Камера и обзор</div>
+            <div class="cg-row">
+              <div class="cg-keys">
+                <span class="cg-k">ЛКМ + тянуть</span>
+              </div>
+              <div class="cg-desc">Вращение сцены (360°)</div>
+            </div>
+            <div class="cg-row">
+              <div class="cg-keys">
+                <span class="cg-k">ПКМ</span>
+                <span class="cg-or">/</span>
+                <span class="cg-k">Shift+ЛКМ</span>
+              </div>
+              <div class="cg-desc">Сдвиг / Панорама</div>
+            </div>
+            <div class="cg-row">
+              <div class="cg-keys">
+                <span class="cg-k">Колесо</span>
+                <span class="cg-or">или</span>
+                <span class="cg-k">+</span><span class="cg-k">-</span>
+              </div>
+              <div class="cg-desc">Зум (масштаб)</div>
+            </div>
+          </div>
+          <div class="cg-divider"></div>
+          <div class="cg-section">
+            <div class="cg-section-title">🏛️ Павильоны и интерактив</div>
+            <div class="cg-row">
+              <div class="cg-keys">
+                <span class="cg-k cg-star">★ Клик</span>
+              </div>
+              <div class="cg-desc">Подлёт и описание</div>
+            </div>
+            <div class="cg-row">
+              <div class="cg-keys">
+                <span class="cg-k">Esc</span>
+              </div>
+              <div class="cg-desc">Закрыть инфо-карточку</div>
+            </div>
           </div>
         </div>
       </div>
@@ -78,6 +145,17 @@ function wireWidget(root, scene) {
     if (event.key === 'Escape') {
       if (panel.classList.contains('on')) closePanel();
       else if (root.closest('.is-immersive')) window.PostilkaVoxel?.collapse?.();
+    }
+    if (
+      (event.key === 'h' || event.key === 'H' || event.key === 'р' || event.key === 'Р') &&
+      !event.ctrlKey &&
+      !event.altKey &&
+      !event.metaKey
+    ) {
+      const tag = document.activeElement?.tagName?.toLowerCase();
+      if (tag !== 'input' && tag !== 'textarea') {
+        controlsGuide?.classList.toggle('collapsed');
+      }
     }
   });
 }

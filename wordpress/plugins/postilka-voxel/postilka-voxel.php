@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Postilka Voxel Hero
  * Description: 3D voxel hero embed for Elementor and WordPress. Shortcode: [postilka_voxel_hero]
- * Version: 1.0.1
+ * Version: 1.0.2
  * Author: Postilka
  * Text Domain: postilka-voxel
  */
