@@ -9,6 +9,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"strings"
 	"time"
 )
@@ -97,7 +98,10 @@ func (c *Client) UploadMedia(
 
 	var body bytes.Buffer
 	w := multipart.NewWriter(&body)
-	part, err := w.CreateFormFile("file", filename)
+	partHeader := make(textproto.MIMEHeader)
+	partHeader.Set("Content-Disposition", fmt.Sprintf(`form-data; name="file"; filename="%s"`, multipartEscapeFilename(filename)))
+	partHeader.Set("Content-Type", contentType)
+	part, err := w.CreatePart(partHeader)
 	if err != nil {
 		return "", err
 	}
@@ -262,4 +266,8 @@ func parseAPIError(status int, raw []byte) error {
 		return fmt.Errorf("%w: %s", ErrAPI, strings.TrimSpace(parsed.Error.Message))
 	}
 	return fmt.Errorf("%w: HTTP %d", ErrAPI, status)
+}
+
+func multipartEscapeFilename(name string) string {
+	return strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(name)
 }

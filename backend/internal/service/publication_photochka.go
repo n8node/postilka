@@ -110,6 +110,9 @@ func (s *PublicationService) photochkaUploadIDs(
 			if errors.Is(err, photochka.ErrUnauthorized) {
 				return nil, fmt.Errorf("API-ключ Photochka недействителен — переподключите канал")
 			}
+			if errors.Is(err, photochka.ErrAPI) && strings.Contains(strings.ToLower(err.Error()), "unsupported file type") {
+				return nil, fmt.Errorf("%w: Photochka не поддерживает формат %s (допустимы JPEG, PNG, WebP, GIF, HEIC/AVIF; видео: MP4, MOV, WebM)", ErrInvalidPost, mime)
+			}
 			return nil, fmt.Errorf("не удалось загрузить медиа в Photochka: %w", err)
 		}
 		uploadIDs = append(uploadIDs, uploadID)
