@@ -986,6 +986,9 @@ func (s *ChannelConnectService) requireAdmin(ctx context.Context, userID string,
 	if err != nil {
 		return nil, err
 	}
+	if ws == nil {
+		return nil, ErrWorkspaceNotFound
+	}
 	if _, err := s.wsSvc.RequireMembership(ctx, userID, ws.ID, model.RoleAdmin); err != nil {
 		return nil, err
 	}
@@ -1131,7 +1134,15 @@ func (s *ChannelConnectService) ConnectPhotochka(
 		if errors.Is(err, photochka.ErrUnauthorized) {
 			return nil, ErrInvalidPhotochkaAPIKey
 		}
-		return nil, fmt.Errorf("не удалось проверить API-ключ Photochka: %w", err)
+		if errors.Is(err, photochka.ErrAPI) {
+			detail := strings.TrimSpace(strings.TrimPrefix(err.Error(), "photochka api error:"))
+			lower := strings.ToLower(detail)
+			if strings.Contains(lower, "not found") || strings.Contains(detail, "404") {
+				return nil, fmt.Errorf("не удалось связаться с Photochka — на сервере Postilka проверьте PHOTOCHKA_API_BASE_URL (https://photochka.ru/api/v1/integration)")
+			}
+			return nil, fmt.Errorf("Photochka: %s", detail)
+		}
+		return nil, fmt.Errorf("не удалось связаться с Photochka: %w", err)
 	}
 
 	encrypted, err := s.cipher.Encrypt(apiKey)
@@ -1207,6 +1218,9 @@ func (s *ChannelConnectService) ConnectPhotochka(
 		})
 	}
 	if err != nil {
+		if isPhotochkaProviderConstraint(err) {
+			return nil, fmt.Errorf("провайдер Photochka ещё не активирован на сервере — обновите backend и примените миграции")
+		}
 		return nil, err
 	}
 
@@ -1221,4 +1235,13 @@ func (s *ChannelConnectService) ConnectPhotochka(
 	return &model.ChannelConnectResult{
 		Connected: []model.ChannelListItem{item},
 	}, nil
+}
+
+func isPhotochkaProviderConstraint(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "channels_provider_check") ||
+		strings.Contains(msg, "photochka") && strings.Contains(msg, "check constraint")
 }

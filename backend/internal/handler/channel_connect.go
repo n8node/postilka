@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/postilka/postilka/internal/middleware"
 	"github.com/postilka/postilka/internal/model"
+	"github.com/postilka/postilka/internal/repository"
 	"github.com/postilka/postilka/internal/service"
 )
 
@@ -196,6 +197,10 @@ func writeChannelConnectError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusBadRequest, "Некорректный токен")
 	case errors.Is(err, service.ErrInvalidPhotochkaAPIKey):
 		writeError(w, http.StatusBadRequest, "Неверный API-ключ Photochka")
+	case errors.Is(err, service.ErrWorkspaceNotFound):
+		writeError(w, http.StatusBadRequest, "Сначала создайте или выберите workspace")
+	case errors.Is(err, repository.ErrNotFound):
+		writeError(w, http.StatusBadRequest, "Не найден тариф workspace — обратитесь в поддержку")
 	case errors.Is(err, service.ErrQuotaExceeded):
 		writeError(w, http.StatusPaymentRequired, "Достигнут лимит каналов по тарифу")
 	case errors.Is(err, service.ErrForbidden):

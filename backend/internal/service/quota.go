@@ -152,6 +152,14 @@ func (s *QuotaService) CheckAIMediaCredits(ctx context.Context, workspaceID, use
 func (s *QuotaService) getWorkspacePlan(ctx context.Context, workspaceID string) (*model.Plan, time.Time, error) {
 	planID, assignedAt, err := s.workspaces.GetPlanMeta(ctx, workspaceID)
 	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			// Workspace without assigned plan — use default free tier for quota checks.
+			free, freeErr := s.plans.GetDefaultFree(ctx)
+			if freeErr != nil {
+				return nil, time.Time{}, freeErr
+			}
+			return free, assignedAt, nil
+		}
 		return nil, time.Time{}, err
 	}
 	plan, err := s.plans.GetByID(ctx, planID)
