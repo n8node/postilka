@@ -85,6 +85,19 @@ function planPriceLabel(plan: Plan, period: BillingPeriod, preview?: SubscribePr
   return formatRub(cents ?? 0);
 }
 
+/** Popular plan is pinned to the second slot; others keep sort_order. */
+function sortPlansForDisplay(plans: Plan[]): Plan[] {
+  const sorted = [...plans].sort((a, b) => a.sort_order - b.sort_order);
+  const popularIndex = sorted.findIndex((p) => p.is_popular);
+  if (popularIndex === -1 || sorted.length <= 1) return sorted;
+
+  const popular = sorted[popularIndex];
+  const rest = sorted.filter((_, index) => index !== popularIndex);
+  const insertAt = Math.min(1, rest.length);
+  rest.splice(insertAt, 0, popular);
+  return rest;
+}
+
 export function PlansWalletPage() {
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
@@ -99,6 +112,8 @@ export function PlansWalletPage() {
   const [checkoutTarget, setCheckoutTarget] = useState<string | null>(null);
   const [previews, setPreviews] = useState<Record<string, SubscribePreview>>({});
   const [busy, setBusy] = useState<string | null>(null);
+
+  const displayPlans = useMemo(() => sortPlansForDisplay(plans), [plans]);
 
   const reload = useCallback(async () => {
     setLoading(true);
@@ -283,8 +298,9 @@ export function PlansWalletPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-3">
-        {plans.map((plan) => {
+        {displayPlans.map((plan) => {
           const isCurrent = plan.id === currentPlanId;
+          const isPopular = plan.is_popular;
           const preview = previews[plan.id];
           const paidPlan = !plan.is_free && (plan.price_monthly_cents ?? 0) > 0;
           const canBuy = paymentsEnabled && !isCurrent && paidPlan;
@@ -294,13 +310,27 @@ export function PlansWalletPage() {
             <div
               key={plan.id}
               className={cn(
-                "relative flex flex-col rounded-xl bg-surface p-4 shadow-sm",
-                isCurrent ? "border-2 border-teal-500" : "border border-border",
+                "relative flex flex-col rounded-xl p-4 shadow-sm",
+                isCurrent
+                  ? "border-2 border-teal-500 bg-surface"
+                  : isPopular
+                    ? "z-[1] border-2 border-amber-400 bg-gradient-to-b from-amber-50 to-surface shadow-md shadow-amber-100/80 xl:-translate-y-1"
+                    : "border border-border bg-surface",
               )}
             >
               {isCurrent && (
                 <span className="absolute -top-2.5 left-4 rounded-full bg-teal-100 px-2.5 py-0.5 text-[11px] font-medium text-teal-800">
                   Текущий план
+                </span>
+              )}
+              {!isCurrent && isPopular && (
+                <span className="absolute -top-2.5 left-4 rounded-full bg-amber-400 px-2.5 py-0.5 text-[11px] font-semibold text-amber-950">
+                  Популярный
+                </span>
+              )}
+              {isCurrent && isPopular && (
+                <span className="absolute -top-2.5 right-4 rounded-full bg-amber-400 px-2.5 py-0.5 text-[11px] font-semibold text-amber-950">
+                  Популярный
                 </span>
               )}
               <div className="mb-1.5 text-sm font-semibold text-text">{plan.name}</div>
@@ -339,7 +369,9 @@ export function PlansWalletPage() {
                   isCurrent
                     ? "cursor-default border border-border bg-zinc-50 text-muted"
                     : canBuy
-                      ? "bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-60"
+                      ? isPopular
+                        ? "bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-60"
+                        : "bg-teal-600 text-white hover:bg-teal-700 disabled:opacity-60"
                       : "cursor-default border border-border bg-zinc-50 text-muted",
                 )}
               >
