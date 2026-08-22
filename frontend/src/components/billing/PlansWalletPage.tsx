@@ -66,7 +66,7 @@ function planFeatures(plan: Plan): string[] {
   }
   items.push(`Каналы — ${formatQuota(plan.max_channels)}`);
   items.push(`Посты / период — ${formatQuota(plan.max_posts_per_period)}`);
-  items.push(`AI-токены — ${formatQuota(plan.ai_text_tokens_quota)}`);
+  items.push(`Текстовые кредиты — ${formatQuota(plan.ai_text_tokens_quota)}`);
   items.push(`Медиа-кредиты — ${formatQuota(plan.ai_media_credits_quota)}`);
   if (plan.storage_bytes != null) {
     items.push(`Хранилище — ${Math.round(plan.storage_bytes / (1024 ** 3))} ГБ`);
@@ -154,7 +154,7 @@ export function PlansWalletPage() {
 
   const paymentNotice = useMemo(() => {
     if (searchParams.get("payment") === "success") {
-      return "Оплата принята. Тариф или токены обновятся после подтверждения Robokassa.";
+      return "Оплата принята. Тариф или кредиты обновятся после подтверждения Robokassa.";
     }
     if (searchParams.get("payment") === "failed") {
       return "Оплата не завершена. Попробуйте снова.";
@@ -214,7 +214,7 @@ export function PlansWalletPage() {
         Ваш текущий план:{" "}
         <strong className="font-medium text-text">{overview?.plan?.name ?? "—"}</strong>
         {paymentsEnabled
-          ? ". Оплата тарифов и пакетов токенов — через Robokassa."
+          ? ". Оплата тарифов и пакетов медиа-кредитов — через Robokassa."
           : ". Оплата временно недоступна — администратор ещё не включил Robokassa."}
       </p>
 
@@ -240,21 +240,25 @@ export function PlansWalletPage() {
             <div>
               <p className="flex items-center gap-1.5 text-xs font-medium text-teal-800">
                 <Zap className="h-3.5 w-3.5 text-teal-600" />
-                Баланс токенов
+                Баланс текстовых кредитов
               </p>
               <p className="mt-1 text-2xl font-semibold text-text">
-                {formatTokenCount(balance.total_remaining)}
+                {balance.unlimited ? "∞" : formatTokenCount(balance.total_remaining)}
               </p>
               <p className="mt-1 text-xs text-muted">
-                {formatTokenCount(balance.plan_tokens_remaining)} из тарифа
-                {balance.purchased_tokens_remaining > 0 &&
+                {balance.unlimited
+                  ? "Текстовые кредиты без лимита"
+                  : `${formatTokenCount(balance.plan_tokens_remaining)} текстовых кредитов из тарифа`}
+                {!balance.unlimited && balance.purchased_tokens_remaining > 0 &&
                   ` · ${formatTokenCount(balance.purchased_tokens_remaining)} докуплено`}
               </p>
             </div>
-            <p className="max-w-sm text-xs text-muted">
-              Токены тарифа обновятся {formatPeriodEnd(balance.plan_period_end)} и сгорят, если не
-              использованы. Докупленные не сгорают.
-            </p>
+            {!balance.unlimited && (
+              <p className="max-w-sm text-xs text-muted">
+                Текстовые кредиты тарифа обновятся {formatPeriodEnd(balance.plan_period_end)} и сгорят, если не
+                использованы. Докупленные не сгорают.
+              </p>
+            )}
           </div>
         </div>
       )}
@@ -382,9 +386,9 @@ export function PlansWalletPage() {
       )}
 
       <div className="mt-8">
-        <h3 className="mb-1 text-base font-semibold text-text">Дополнительные пакеты токенов</h3>
+        <h3 className="mb-1 text-base font-semibold text-text">Дополнительные пакеты медиа-кредитов</h3>
         <p className="mb-4 text-sm text-muted">
-          Сначала расходуются токены тарифа, затем докупленные. Докупленные токены не сгорают.
+          Сначала расходуются медиа-кредиты тарифа, затем докупленные. Докупленные медиа-кредиты не сгорают.
         </p>
         {packages.length === 0 ? (
           <p className="text-sm text-muted">Пакеты пока недоступны.</p>
@@ -405,7 +409,7 @@ export function PlansWalletPage() {
                   </div>
                   <p className="text-2xl font-semibold text-text">
                     {formatTokenCount(pkg.tokens)}
-                    <span className="ml-1 text-xs font-normal text-muted">токенов</span>
+                    <span className="ml-1 text-xs font-normal text-muted">медиа-кредитов</span>
                   </p>
                   <p className="mt-2 text-sm font-medium text-text">{formatRub(pkg.price_cents)}</p>
                   <button

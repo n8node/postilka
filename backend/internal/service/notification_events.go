@@ -362,8 +362,8 @@ func (s *NotificationService) MaybeUsageWarnings(ctx context.Context, workspaceI
 			usage.PostsUsed, *plan.MaxPostsPerPeriod, 80, "/plans")
 	}
 	if plan.AITextTokensQuota != nil && *plan.AITextTokensQuota > 0 {
-		s.maybePercentWarning(ctx, workspaceID, model.NotifyQuotaAIText80, "Лимит текста ИИ почти исчерпан",
-			fmt.Sprintf("Использовано %d из %d единиц текста за период.", usage.AITextTokensUsed, *plan.AITextTokensQuota),
+		s.maybePercentWarning(ctx, workspaceID, model.NotifyQuotaAIText80, "Лимит текстовых кредитов почти исчерпан",
+			fmt.Sprintf("Использовано %d из %d текстовых кредитов за период.", usage.AITextTokensUsed, *plan.AITextTokensQuota),
 			usage.AITextTokensUsed, *plan.AITextTokensQuota, 80, "/plans")
 	}
 	if plan.AIMediaCreditsQuota != nil && *plan.AIMediaCreditsQuota > 0 {

@@ -87,11 +87,7 @@ func NewTokenBalanceService(
 }
 
 func (s *TokenBalanceService) GetBalance(ctx context.Context, workspaceID, userID string) (model.TokenBalanceView, error) {
-	purchased, _, err := s.wallet.GetPurchasedCredits(ctx, userID)
-	if err != nil {
-		return model.TokenBalanceView{}, err
-	}
-
+	_ = userID
 	planRemaining, unlimited, allowance, periodEnd, err := s.planTokenBalance(ctx, workspaceID)
 	if err != nil {
 		return model.TokenBalanceView{}, err
@@ -99,7 +95,7 @@ func (s *TokenBalanceService) GetBalance(ctx context.Context, workspaceID, userI
 
 	out := model.TokenBalanceView{
 		PlanTokensRemaining:      planRemaining,
-		PurchasedTokensRemaining: purchased,
+		PurchasedTokensRemaining: 0,
 		PlanPeriodEnd:            periodEnd.Format(time.RFC3339),
 		Unlimited:                unlimited,
 	}
@@ -107,9 +103,9 @@ func (s *TokenBalanceService) GetBalance(ctx context.Context, workspaceID, userI
 		out.PlanTokensAllowance = allowance
 	}
 	if unlimited {
-		out.TotalRemaining = purchased
+		out.TotalRemaining = 0
 	} else {
-		out.TotalRemaining = planRemaining + purchased
+		out.TotalRemaining = planRemaining
 	}
 	return out, nil
 }
@@ -120,15 +116,15 @@ func (s *TokenBalanceService) planTokenBalance(ctx context.Context, workspaceID 
 		return 0, false, nil, time.Time{}, err
 	}
 	periodEnd = s.quota.periodEndForWorkspace(ctx, workspaceID, assignedAt)
-	if plan.AIMediaCreditsQuota == nil {
+	if plan.AITextTokensQuota == nil {
 		return 0, true, nil, periodEnd, nil
 	}
 	usage, err := s.quota.GetUsage(ctx, workspaceID, assignedAt)
 	if err != nil {
 		return 0, false, nil, time.Time{}, err
 	}
-	allow := *plan.AIMediaCreditsQuota
-	remaining = allow - usage.AIMediaCreditsUsed
+	allow := *plan.AITextTokensQuota
+	remaining = allow - usage.AITextTokensUsed
 	if remaining < 0 {
 		remaining = 0
 	}

@@ -471,7 +471,7 @@ function PlanFormModal({
             />
           </label>
           <label className="text-xs font-medium text-slate-500">
-            AI-токены в тарифе
+            Текстовые кредиты
             <input
               value={form.ai_text_tokens_quota ?? ""}
               onChange={(e) =>

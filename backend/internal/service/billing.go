@@ -228,7 +228,7 @@ func (s *BillingService) PaymentHistory(ctx context.Context, userID string) ([]m
 		})
 	}
 	for _, pc := range pkgCheckouts {
-		desc := fmt.Sprintf("%d токенов", pc.Tokens)
+		desc := fmt.Sprintf("%d медиа-кредитов", pc.Tokens)
 		if pkg, err := s.packages.GetByID(ctx, pc.PackageID); err == nil {
 			desc = pkg.Name
 		}

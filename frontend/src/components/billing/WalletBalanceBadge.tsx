@@ -10,12 +10,21 @@ function formatTokenCount(value: number) {
   return new Intl.NumberFormat("ru-RU").format(value);
 }
 
+type BalanceView = "loading" | "unlimited" | number;
+
 export function WalletBalanceBadge({ collapsed }: { collapsed: boolean }) {
-  const [total, setTotal] = useState<number | null>(null);
+  const [balanceView, setBalanceView] = useState<BalanceView>("loading");
 
   useEffect(() => {
     fetchBillingOverview()
-      .then((data) => setTotal(data.token_balance?.total_remaining ?? 0))
+      .then((data) => {
+        const balance = data.token_balance;
+        if (balance?.unlimited) {
+          setBalanceView("unlimited");
+          return;
+        }
+        setBalanceView(balance?.total_remaining ?? 0);
+      })
       .catch((e) => {
         if (!(e instanceof ApiError)) {
           /* ignore */
@@ -23,15 +32,22 @@ export function WalletBalanceBadge({ collapsed }: { collapsed: boolean }) {
       });
   }, []);
 
-  if (total == null) return null;
+  if (balanceView === "loading") return null;
+
+  const valueLabel =
+    balanceView === "unlimited" ? "∞" : formatTokenCount(balanceView);
+  const title =
+    balanceView === "unlimited"
+      ? "Текстовые кредиты без лимита"
+      : `Текстовые кредиты: ${valueLabel}`;
 
   if (collapsed) {
     return (
       <Link
         href="/plans"
         className="mx-auto flex h-9 w-9 items-center justify-center rounded-md border border-border bg-zinc-50 text-muted hover:bg-zinc-100 hover:text-text"
-        title={`Токены: ${formatTokenCount(total)}`}
-        aria-label="Токены"
+        title={title}
+        aria-label="Текстовые кредиты"
       >
         <Zap className="h-4 w-4" />
       </Link>
@@ -44,9 +60,10 @@ export function WalletBalanceBadge({ collapsed }: { collapsed: boolean }) {
       className={cn(
         "block w-full rounded-md border border-border bg-zinc-50 px-2.5 py-2 text-left text-xs transition-colors hover:bg-zinc-100",
       )}
+      title={title}
     >
-      <span className="text-muted">Токены</span>
-      <span className="mt-0.5 block font-semibold text-text">{formatTokenCount(total)}</span>
+      <span className="text-muted">Текст. кредиты</span>
+      <span className="mt-0.5 block font-semibold text-text">{valueLabel}</span>
     </Link>
   );
 }

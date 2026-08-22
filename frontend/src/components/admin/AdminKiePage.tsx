@@ -200,7 +200,7 @@ export function AdminKiePage({ embedded = false }: { embedded?: boolean }) {
           <h1 className="text-2xl font-semibold text-slate-900">KIE.ai — генерация и фильтры</h1>
         )}
         <p className="mt-1 text-sm text-slate-500">
-          Провайдер для AI-генерации изображений: ключ, модели и списание AI-токенов по операциям.
+          Провайдер для AI-генерации изображений: ключ, модели и списание медиа-кредитов по операциям.
         </p>
       </div>
 

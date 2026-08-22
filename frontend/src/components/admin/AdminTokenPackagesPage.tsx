@@ -103,9 +103,9 @@ export function AdminTokenPackagesPage() {
     <div>
       <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-text">Пакеты токенов</h1>
+          <h1 className="text-xl font-semibold text-text">Пакеты медиа-кредитов</h1>
           <p className="mt-1 text-sm text-muted">
-            Фиксированные пакеты для докупки AI-токенов. Оплата через Robokassa.
+            Фиксированные пакеты для докупки медиа-кредитов. Оплата через Robokassa.
           </p>
         </div>
         <button
@@ -139,7 +139,7 @@ export function AdminTokenPackagesPage() {
             <tr className="border-b border-border bg-zinc-50 text-xs uppercase tracking-wide text-muted">
               <th className="px-4 py-3">ID</th>
               <th className="px-4 py-3">Название</th>
-              <th className="px-4 py-3">Токены</th>
+              <th className="px-4 py-3">Медиа-кредиты</th>
               <th className="px-4 py-3">Цена</th>
               <th className="px-4 py-3">Порядок</th>
               <th className="px-4 py-3">Статус</th>

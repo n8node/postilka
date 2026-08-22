@@ -86,7 +86,7 @@ export function TokenPackageEditorModal({
           </label>
           <div className="grid grid-cols-2 gap-3">
             <label className="block text-sm">
-              <span className="text-muted">Токены</span>
+              <span className="text-muted">Медиа-кредиты</span>
               <input
                 type="number"
                 min={1}
