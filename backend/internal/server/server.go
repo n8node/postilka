@@ -79,8 +79,9 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	subscriptionRepo := repository.NewSubscriptionRepository(db.Pool)
 	subscriptionSvc := service.NewSubscriptionService(subscriptionRepo, planRepo, wsRepo)
 	channelRepo := repository.NewChannelRepository(db.Pool)
+	workflowRepo := repository.NewWorkflowRepository(db.Pool)
 	telegramBusinessRegRepo := repository.NewTelegramBusinessRegistrationRepository(db.Pool)
-	quotaSvc := service.NewQuotaService(planRepo, wsRepo, subscriptionRepo, usageRepo, channelRepo)
+	quotaSvc := service.NewQuotaService(planRepo, wsRepo, subscriptionRepo, usageRepo, channelRepo, workflowRepo)
 	telegramSettingsRepo := repository.NewTelegramSettingsRepository(db.Pool)
 	telegramQueueRepo := repository.NewTelegramNotificationQueueRepository(db.Pool)
 	telegramSettingsSvc := service.NewTelegramSettingsService(telegramSettingsRepo)
@@ -225,9 +226,8 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	sketchSvc := service.NewSketchService(sketchStyleRepo, generationSvc, objectStorage)
 	sketchHandler := handler.NewSketchHandler(sketchSvc)
 
-	workflowRepo := repository.NewWorkflowRepository(db.Pool)
 	workflowSvc := service.NewWorkflowService(
-		workflowRepo, channelRepo, postSvc, generationSvc, aiBillingSvc, yandexGptConfigSvc, wsSvc, fileStorageSvc, planRepo, notificationSvc, logger,
+		workflowRepo, channelRepo, postSvc, generationSvc, aiBillingSvc, yandexGptConfigSvc, wsSvc, fileStorageSvc, planRepo, quotaSvc, notificationSvc, logger,
 	)
 	workflowSvc.SetWorkflowConfig(cfg)
 	workflowHandler := handler.NewWorkflowHandler(workflowSvc, wsSvc)

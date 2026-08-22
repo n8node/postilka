@@ -83,7 +83,8 @@ func main() {
 	)
 	postRepo := repository.NewPostRepository(db.Pool)
 	usageRepo := repository.NewUsageRepository(db.Pool)
-	quotaSvc := service.NewQuotaService(planRepo, wsRepo, subscriptionRepo, usageRepo, channelRepo)
+	workflowRepo := repository.NewWorkflowRepository(db.Pool)
+	quotaSvc := service.NewQuotaService(planRepo, wsRepo, subscriptionRepo, usageRepo, channelRepo, workflowRepo)
 	linkCodeRepo := repository.NewLinkCodeRepository(db.Pool)
 	linkShortener := service.NewLinkShortenerService(linkCodeRepo, cfg.LinkBaseURL)
 	publicationSvc := service.NewPublicationService(
@@ -122,11 +123,11 @@ func main() {
 	generationSvc := service.NewGenerationService(
 		nil, nil, genRepo, genJobRepo, genUploadRepo, aiBillingSvc, objectStorage, fileStorageSvc, wsSvc, yandexGptConfigSvc, quotaSvc,
 	)
-	workflowRepo := repository.NewWorkflowRepository(db.Pool)
 	workflowSvc := service.NewWorkflowService(
-		workflowRepo, channelRepo, postSvc, generationSvc, aiBillingSvc, yandexGptConfigSvc, wsSvc, fileStorageSvc, planRepo, notificationSvc, logger,
+		workflowRepo, channelRepo, postSvc, generationSvc, aiBillingSvc, yandexGptConfigSvc, wsSvc, fileStorageSvc, planRepo, quotaSvc, notificationSvc, logger,
 	)
 	workflowSvc.SetWorkflowConfig(cfg)
+	workflowSvc.SetNotifier(notificationSvc)
 
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()

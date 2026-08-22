@@ -1427,6 +1427,7 @@ export type BillingPeriod = "monthly" | "yearly";
 export type BillingUsage = {
   channels_used: number;
   posts_used: number;
+  workflows_used: number;
   ai_text_tokens_used: number;
   ai_media_credits_used: number;
   period_start: string;

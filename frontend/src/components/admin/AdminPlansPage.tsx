@@ -174,7 +174,7 @@ export function AdminPlansPage() {
                 <th className="px-4 py-3">Каналы</th>
                 <th className="px-4 py-3">Посты</th>
                 <th className="px-4 py-3">Участники</th>
-                <th className="px-4 py-3">Воркфлоу</th>
+                <th className="px-4 py-3">Процессы</th>
                 <th className="px-4 py-3">Статус</th>
                 <th className="px-4 py-3" />
               </tr>
@@ -419,7 +419,7 @@ function PlanFormModal({
             />
           </label>
           <label className="text-xs font-medium text-slate-500">
-            Воркфлоу (пусто = ∞)
+            Процессы (пусто = ∞)
             <input
               value={form.max_workflows ?? ""}
               onChange={(e) =>
@@ -492,6 +492,14 @@ function PlanFormModal({
               }
               className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
             />
+          </label>
+          <label className="flex items-center gap-2 text-sm text-slate-700 sm:col-span-2">
+            <input
+              type="checkbox"
+              checked={!!form.push_on_ready}
+              onChange={(e) => setField("push_on_ready", e.target.checked)}
+            />
+            Пуш по готовности процесса
           </label>
           <label className="flex items-center gap-2 text-sm text-slate-700">
             <input

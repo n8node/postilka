@@ -16,17 +16,22 @@ import {
   cloneWorkflowTemplate,
   type WorkflowTemplate,
 } from "@/lib/workflows-api";
+import { ApiError } from "@/lib/api";
 
 interface WorkflowTemplatesModalProps {
   isOpen: boolean;
   onClose: () => void;
   onTemplateCloned: (clonedWorkflowId: string) => void;
+  disabled?: boolean;
+  onError?: (message: string) => void;
 }
 
 export const WorkflowTemplatesModal: React.FC<WorkflowTemplatesModalProps> = ({
   isOpen,
   onClose,
   onTemplateCloned,
+  disabled = false,
+  onError,
 }) => {
   const [templates, setTemplates] = useState<WorkflowTemplate[]>([]);
   const [loading, setLoading] = useState(false);
@@ -43,11 +48,14 @@ export const WorkflowTemplatesModal: React.FC<WorkflowTemplatesModalProps> = ({
   if (!isOpen) return null;
 
   const handleClone = async (tplId: string) => {
+    if (disabled) return;
     setCloningId(tplId);
     try {
       const cloned = await cloneWorkflowTemplate(tplId);
       onTemplateCloned(cloned.id);
       onClose();
+    } catch (err) {
+      onError?.(err instanceof ApiError ? err.message : "Не удалось создать процесс из шаблона");
     } finally {
       setCloningId(null);
     }
@@ -117,7 +125,7 @@ export const WorkflowTemplatesModal: React.FC<WorkflowTemplatesModalProps> = ({
 
                   <button
                     onClick={() => handleClone(tpl.id)}
-                    disabled={cloningId === tpl.id}
+                    disabled={disabled || cloningId === tpl.id}
                     className="flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 py-2.5 text-xs font-semibold text-white shadow-md hover:bg-indigo-500 disabled:opacity-50 transition"
                   >
                     {cloningId === tpl.id ? (

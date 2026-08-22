@@ -38,6 +38,7 @@ type WorkflowService struct {
 	wsSvc          *WorkspaceService
 	fileStorageSvc *FileStorageService
 	planRepo       *repository.PlanRepository
+	quota          *QuotaService
 	notify         *NotificationService
 	logger         *slog.Logger
 	cfg            *config.Config
@@ -54,6 +55,7 @@ func NewWorkflowService(
 	wsSvc *WorkspaceService,
 	fileStorageSvc *FileStorageService,
 	planRepo *repository.PlanRepository,
+	quota *QuotaService,
 	notify *NotificationService,
 	logger *slog.Logger,
 ) *WorkflowService {
@@ -67,6 +69,7 @@ func NewWorkflowService(
 		wsSvc:          wsSvc,
 		fileStorageSvc: fileStorageSvc,
 		planRepo:       planRepo,
+		quota:          quota,
 		notify:         notify,
 		logger:         logger,
 	}
@@ -74,6 +77,24 @@ func NewWorkflowService(
 
 func (s *WorkflowService) SetNotifier(notify *NotificationService) {
 	s.notify = notify
+}
+
+func (s *WorkflowService) checkCreateWorkflowQuota(ctx context.Context, workspaceID string) error {
+	if s.quota == nil {
+		return nil
+	}
+	count, err := s.repo.CountByWorkspace(ctx, workspaceID)
+	if err != nil {
+		return err
+	}
+	return s.quota.CheckWorkflowQuota(ctx, workspaceID, count)
+}
+
+func (s *WorkflowService) notifyRunFinished(ctx context.Context, run *model.WorkflowRun, workflowName string) {
+	if s.notify == nil || run == nil {
+		return
+	}
+	s.notify.NotifyWorkflowRunFinished(ctx, *run, workflowName)
 }
 
 // Workflows CRUD
@@ -163,6 +184,10 @@ func (s *WorkflowService) CreateWorkflow(ctx context.Context, workspaceID, userI
 		Graph:                  graph,
 	}
 	s.syncWorkflowMetaFromGraph(wf)
+
+	if err := s.checkCreateWorkflowQuota(ctx, workspaceID); err != nil {
+		return nil, err
+	}
 
 	created, err := s.repo.Create(ctx, wf)
 	if err != nil {
@@ -343,6 +368,9 @@ func (s *WorkflowService) CloneTemplate(ctx context.Context, templateID, workspa
 	if wf.RSSPollIntervalMinutes <= 0 {
 		wf.RSSPollIntervalMinutes = 15
 	}
+	if err := s.checkCreateWorkflowQuota(ctx, workspaceID); err != nil {
+		return nil, err
+	}
 	return s.repo.Create(ctx, wf)
 }
 
@@ -414,6 +442,11 @@ func (s *WorkflowService) executeWorkflowGraph(ctx context.Context, runID string
 		return
 	}
 
+	workflowName := "Процесс"
+	if wf, wfErr := s.repo.GetByID(ctx, run.WorkflowID, workspaceID); wfErr == nil && wf != nil {
+		workflowName = wf.Name
+	}
+
 	// 1. Topological Sort of DAG
 	orderedNodes, err := s.topologicalSort(graph)
 	if err != nil {
@@ -422,10 +455,9 @@ func (s *WorkflowService) executeWorkflowGraph(ctx context.Context, runID string
 		run.ErrorMessage = fmt.Sprintf("Ошибка структуры графа: %v", err)
 		run.FinishedAt = &now
 		_ = s.repo.UpdateRun(ctx, run)
+		s.notifyRunFinished(ctx, run, workflowName)
 		return
 	}
-
-	// Context accumulator for outputs: map[nodeID]map[string]interface{}
 	executionOutputs := make(map[string]map[string]interface{})
 	for k, v := range initialInputs {
 		if executionOutputs["trigger"] == nil {
@@ -545,6 +577,7 @@ func (s *WorkflowService) executeWorkflowGraph(ctx context.Context, runID string
 			run.KopecksSpent = totalKopecks
 			run.FinishedAt = &finished
 			_ = s.repo.UpdateRun(ctx, run)
+			s.notifyRunFinished(ctx, run, workflowName)
 			return
 		}
 
@@ -560,6 +593,7 @@ func (s *WorkflowService) executeWorkflowGraph(ctx context.Context, runID string
 				run.ErrorMessage = fmt.Sprintf("Ошибка на шаге '%s': %v", createdStep.NodeTitle, itemsErr)
 				run.FinishedAt = &finished
 				_ = s.repo.UpdateRun(ctx, run)
+				s.notifyRunFinished(ctx, run, workflowName)
 				return
 			}
 
@@ -619,6 +653,7 @@ func (s *WorkflowService) executeWorkflowGraph(ctx context.Context, runID string
 							run.KopecksSpent = totalKopecks
 							run.FinishedAt = &childFinished
 							_ = s.repo.UpdateRun(ctx, run)
+							s.notifyRunFinished(ctx, run, workflowName)
 							return
 						}
 						continue
@@ -672,6 +707,7 @@ func (s *WorkflowService) executeWorkflowGraph(ctx context.Context, runID string
 	}
 
 	_ = s.repo.UpdateRun(ctx, run)
+	s.notifyRunFinished(ctx, run, workflowName)
 }
 
 // Single node executor

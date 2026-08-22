@@ -15,6 +15,7 @@ type QuotaService struct {
 	subs       *repository.SubscriptionRepository
 	usage      *repository.UsageRepository
 	channels   *repository.ChannelRepository
+	workflows  *repository.WorkflowRepository
 }
 
 func NewQuotaService(
@@ -23,8 +24,12 @@ func NewQuotaService(
 	subs *repository.SubscriptionRepository,
 	usage *repository.UsageRepository,
 	channels *repository.ChannelRepository,
+	workflows *repository.WorkflowRepository,
 ) *QuotaService {
-	return &QuotaService{plans: plans, workspaces: workspaces, subs: subs, usage: usage, channels: channels}
+	return &QuotaService{
+		plans: plans, workspaces: workspaces, subs: subs,
+		usage: usage, channels: channels, workflows: workflows,
+	}
 }
 
 func (s *QuotaService) periodStartForWorkspace(ctx context.Context, workspaceID string, fallback time.Time) time.Time {
@@ -64,9 +69,16 @@ func (s *QuotaService) GetUsage(ctx context.Context, workspaceID string, planAss
 			channelsUsed = n
 		}
 	}
+	workflowsUsed := 0
+	if s.workflows != nil {
+		if n, err := s.workflows.CountByWorkspace(ctx, workspaceID); err == nil {
+			workflowsUsed = n
+		}
+	}
 	return model.BillingUsage{
 		ChannelsUsed:       channelsUsed,
 		PostsUsed:          posts,
+		WorkflowsUsed:      workflowsUsed,
 		AITextTokensUsed:   aiText,
 		AIMediaCreditsUsed: aiMedia,
 		PeriodStart:        periodStart.Format("2006-01-02"),
@@ -100,6 +112,20 @@ func (s *QuotaService) CheckChannelQuota(ctx context.Context, workspaceID string
 		return nil
 	}
 	if currentCount >= *plan.MaxChannels {
+		return ErrQuotaExceeded
+	}
+	return nil
+}
+
+func (s *QuotaService) CheckWorkflowQuota(ctx context.Context, workspaceID string, currentCount int) error {
+	plan, _, err := s.getWorkspacePlan(ctx, workspaceID)
+	if err != nil {
+		return err
+	}
+	if plan.MaxWorkflows == nil {
+		return nil
+	}
+	if currentCount >= *plan.MaxWorkflows {
 		return ErrQuotaExceeded
 	}
 	return nil

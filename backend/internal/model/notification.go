@@ -34,6 +34,7 @@ const (
 	NotifyQuotaAIMedia80    NotificationType = "quota_ai_media_80"
 	NotifyQuotaStorage90    NotificationType = "quota_storage_90"
 	NotifyQuotaChannels80   NotificationType = "quota_channels_80"
+	NotifyQuotaWorkflows80  NotificationType = "quota_workflows_80"
 	NotifyAIImageDone       NotificationType = "ai_image_done"
 	NotifyAIVideoDone       NotificationType = "ai_video_done"
 	NotifyAIImageFailed     NotificationType = "ai_image_failed"
@@ -46,6 +47,8 @@ const (
 	NotifyApprovalRejected  NotificationType = "approval_rejected"
 	NotifyApprovalComment   NotificationType = "approval_comment"
 	NotifySupportTicket     NotificationType = "support_ticket"
+	NotifyWorkflowRunDone   NotificationType = "workflow_run_done"
+	NotifyWorkflowRunFailed NotificationType = "workflow_run_failed"
 )
 
 type NotificationPrefKey string
@@ -139,9 +142,10 @@ func NotificationPrefKeyForType(t NotificationType) NotificationPrefKey {
 		NotifyPlanRenewed, NotifyPlanDowngraded, NotifyWalletLow:
 		return NotifyPrefBilling
 	case NotifyQuotaPosts80, NotifyQuotaAIText80, NotifyQuotaAIMedia80,
-		NotifyQuotaStorage90, NotifyQuotaChannels80:
+		NotifyQuotaStorage90, NotifyQuotaChannels80, NotifyQuotaWorkflows80:
 		return NotifyPrefQuota
-	case NotifyAIImageDone, NotifyAIVideoDone, NotifyAIImageFailed, NotifyAIVideoFailed:
+	case NotifyAIImageDone, NotifyAIVideoDone, NotifyAIImageFailed, NotifyAIVideoFailed,
+		NotifyWorkflowRunDone, NotifyWorkflowRunFailed:
 		return NotifyPrefAI
 	case NotifyTrashExpiring, NotifyTrashPurged:
 		return NotifyPrefFiles

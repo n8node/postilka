@@ -344,6 +344,72 @@ func (s *NotificationService) NotifyTrashPurged(ctx context.Context, workspaceID
 	})
 }
 
+func (s *NotificationService) NotifyWorkflowRunFinished(ctx context.Context, run model.WorkflowRun, workflowName string) {
+	if s == nil || s.quota == nil {
+		return
+	}
+	plan, _, err := s.quota.getWorkspacePlan(ctx, run.WorkspaceID)
+	if err != nil || !plan.PushOnReady {
+		return
+	}
+
+	userID := ""
+	if run.TriggeredBy != nil {
+		userID = strings.TrimSpace(*run.TriggeredBy)
+	}
+	if userID == "" && s.ws != nil {
+		userID, _ = s.ws.GetOwnerID(ctx, run.WorkspaceID)
+	}
+	if userID == "" {
+		return
+	}
+
+	name := strings.TrimSpace(workflowName)
+	if name == "" {
+		name = "Процесс"
+	}
+
+	switch run.Status {
+	case model.WorkflowRunStatusCompleted:
+		s.Create(ctx, NotificationInput{
+			UserID:      userID,
+			WorkspaceID: ptrString(run.WorkspaceID),
+			Type:        model.NotifyWorkflowRunDone,
+			Category:    model.NotificationSuccess,
+			Title:       "Процесс завершён",
+			Body:        fmt.Sprintf("«%s» выполнен успешно.", name),
+			Payload:     map[string]any{"run_id": run.ID, "workflow_id": run.WorkflowID},
+			Href:        "/workflows/" + run.WorkflowID,
+		})
+	case model.WorkflowRunStatusAwaitingApproval:
+		s.Create(ctx, NotificationInput{
+			UserID:      userID,
+			WorkspaceID: ptrString(run.WorkspaceID),
+			Type:        model.NotifyWorkflowRunDone,
+			Category:    model.NotificationInfo,
+			Title:       "Процесс ждёт проверки",
+			Body:        fmt.Sprintf("«%s» остановлен на шаге согласования.", name),
+			Payload:     map[string]any{"run_id": run.ID, "workflow_id": run.WorkflowID},
+			Href:        "/workflows/" + run.WorkflowID,
+		})
+	case model.WorkflowRunStatusFailed:
+		body := strings.TrimSpace(run.ErrorMessage)
+		if body == "" {
+			body = "Откройте процесс, чтобы посмотреть детали ошибки."
+		}
+		s.Create(ctx, NotificationInput{
+			UserID:      userID,
+			WorkspaceID: ptrString(run.WorkspaceID),
+			Type:        model.NotifyWorkflowRunFailed,
+			Category:    model.NotificationError,
+			Title:       "Ошибка процесса",
+			Body:        fmt.Sprintf("«%s»: %s", name, body),
+			Payload:     map[string]any{"run_id": run.ID, "workflow_id": run.WorkflowID},
+			Href:        "/workflows/" + run.WorkflowID,
+		})
+	}
+}
+
 func (s *NotificationService) MaybeUsageWarnings(ctx context.Context, workspaceID string) {
 	if s == nil || s.quota == nil || workspaceID == "" {
 		return
@@ -375,6 +441,11 @@ func (s *NotificationService) MaybeUsageWarnings(ctx context.Context, workspaceI
 		s.maybePercentWarning(ctx, workspaceID, model.NotifyQuotaChannels80, "Лимит каналов почти выбран",
 			fmt.Sprintf("Подключено %d из %d каналов.", usage.ChannelsUsed, *plan.MaxChannels),
 			usage.ChannelsUsed, *plan.MaxChannels, 80, "/channels")
+	}
+	if plan.MaxWorkflows != nil && *plan.MaxWorkflows > 0 {
+		s.maybePercentWarning(ctx, workspaceID, model.NotifyQuotaWorkflows80, "Лимит процессов почти исчерпан",
+			fmt.Sprintf("Создано %d из %d процессов.", usage.WorkflowsUsed, *plan.MaxWorkflows),
+			usage.WorkflowsUsed, *plan.MaxWorkflows, 80, "/workflows")
 	}
 	if plan.StorageBytes != nil && *plan.StorageBytes > 0 && s.ws != nil {
 		used, err := s.ws.GetStorageUsed(ctx, workspaceID)

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -9,13 +9,11 @@ import {
   Play,
   Sparkles,
   Clock,
-  MoreVertical,
   Trash2,
   CheckCircle2,
   AlertCircle,
   Loader2,
   Search,
-  Copy,
   Layers,
 } from "lucide-react";
 import {
@@ -26,6 +24,14 @@ import {
   type Workflow,
 } from "@/lib/workflows-api";
 import { WorkflowTemplatesModal } from "@/components/workflows/WorkflowTemplatesModal";
+import { ApiError, fetchBillingOverview, type BillingOverview } from "@/lib/api";
+
+function formatWorkflowQuota(overview: BillingOverview | null): string | null {
+  const limit = overview?.plan?.max_workflows;
+  if (limit == null) return null;
+  const used = overview?.usage.workflows_used ?? 0;
+  return `${used} / ${limit}`;
+}
 
 export default function WorkflowsPage() {
   const router = useRouter();
@@ -34,27 +40,42 @@ export default function WorkflowsPage() {
   const [search, setSearch] = useState("");
   const [isTemplatesOpen, setIsTemplatesOpen] = useState(false);
   const [runningId, setRunningId] = useState<string | null>(null);
+  const [overview, setOverview] = useState<BillingOverview | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
     try {
-      const res = await fetchWorkflows();
+      const [res, billing] = await Promise.all([fetchWorkflows(), fetchBillingOverview()]);
       setWorkflows(res.items || []);
+      setOverview(billing);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    load();
+    void load();
   }, []);
 
+  const workflowQuota = useMemo(() => formatWorkflowQuota(overview), [overview]);
+  const atWorkflowLimit = useMemo(() => {
+    const limit = overview?.plan?.max_workflows;
+    if (limit == null) return false;
+    return (overview?.usage.workflows_used ?? 0) >= limit;
+  }, [overview]);
+
   const handleCreateNew = async () => {
-    const created = await createWorkflow({
-      name: "Новый процесс",
-      description: "Нажмите, чтобы настроить цепочку нод и логику публикации",
-    });
-    router.push(`/workflows/${created.id}`);
+    setActionError(null);
+    try {
+      const created = await createWorkflow({
+        name: "Новый процесс",
+        description: "Нажмите, чтобы настроить цепочку нод и логику публикации",
+      });
+      router.push(`/workflows/${created.id}`);
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : "Не удалось создать процесс");
+    }
   };
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
@@ -62,6 +83,15 @@ export default function WorkflowsPage() {
     if (!confirm("Вы уверены, что хотите удалить этот процесс?")) return;
     await deleteWorkflow(id);
     setWorkflows((prev) => prev.filter((w) => w.id !== id));
+    if (overview) {
+      setOverview({
+        ...overview,
+        usage: {
+          ...overview.usage,
+          workflows_used: Math.max(0, overview.usage.workflows_used - 1),
+        },
+      });
+    }
   };
 
   const handleRun = async (id: string, e: React.MouseEvent) => {
@@ -75,14 +105,14 @@ export default function WorkflowsPage() {
     }
   };
 
-  const filteredWorkflows = workflows.filter((w) =>
-    w.name.toLowerCase().includes(search.toLowerCase()) ||
-    w.description.toLowerCase().includes(search.toLowerCase())
+  const filteredWorkflows = workflows.filter(
+    (w) =>
+      w.name.toLowerCase().includes(search.toLowerCase()) ||
+      w.description.toLowerCase().includes(search.toLowerCase()),
   );
 
   return (
     <div className="w-full space-y-6">
-      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
@@ -96,20 +126,28 @@ export default function WorkflowsPage() {
           <p className="mt-1 text-sm text-zinc-500">
             Визуальный холст для создания многошаговых процессов генерации контента и постинга
           </p>
+          {workflowQuota && (
+            <p className="mt-2 text-xs text-zinc-500">
+              Процессов по тарифу:{" "}
+              <span className="font-medium text-zinc-700 dark:text-zinc-300">{workflowQuota}</span>
+            </p>
+          )}
         </div>
 
         <div className="flex items-center gap-2.5">
           <button
             onClick={() => setIsTemplatesOpen(true)}
-            className="flex items-center gap-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4 py-2.5 text-xs font-semibold text-zinc-700 dark:text-zinc-300 shadow-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
+            disabled={atWorkflowLimit}
+            className="flex items-center gap-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4 py-2.5 text-xs font-semibold text-zinc-700 dark:text-zinc-300 shadow-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 transition disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Sparkles className="h-4 w-4 text-purple-500" />
             Галерея шаблонов
           </button>
 
           <button
-            onClick={handleCreateNew}
-            className="flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-semibold text-white shadow-md hover:bg-indigo-500 transition"
+            onClick={() => void handleCreateNew()}
+            disabled={atWorkflowLimit}
+            className="flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-semibold text-white shadow-md hover:bg-indigo-500 transition disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Plus className="h-4 w-4" />
             Создать процесс
@@ -117,7 +155,21 @@ export default function WorkflowsPage() {
         </div>
       </div>
 
-      {/* Search Bar */}
+      {atWorkflowLimit && (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          Достигнут лимит процессов по тарифу. Удалите лишние или{" "}
+          <Link href="/plans" className="font-medium underline">
+            смените план
+          </Link>
+          .
+        </p>
+      )}
+      {actionError && (
+        <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+          {actionError}
+        </p>
+      )}
+
       <div className="relative max-w-md">
         <Search className="absolute left-3.5 top-3 h-4 w-4 text-zinc-400" />
         <input
@@ -129,7 +181,6 @@ export default function WorkflowsPage() {
         />
       </div>
 
-      {/* Workflows Grid */}
       {loading ? (
         <div className="flex items-center justify-center py-24 text-zinc-400">
           <Loader2 className="h-6 w-6 animate-spin mr-2" />
@@ -149,14 +200,16 @@ export default function WorkflowsPage() {
           <div className="flex items-center justify-center gap-3">
             <button
               onClick={() => setIsTemplatesOpen(true)}
-              className="flex items-center gap-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+              disabled={atWorkflowLimit}
+              className="flex items-center gap-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4 py-2 text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50"
             >
               <Sparkles className="h-4 w-4 text-purple-500" />
               Выбрать из шаблонов
             </button>
             <button
-              onClick={handleCreateNew}
-              className="flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500"
+              onClick={() => void handleCreateNew()}
+              disabled={atWorkflowLimit}
+              className="flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white hover:bg-indigo-500 disabled:opacity-50"
             >
               <Plus className="h-4 w-4" />
               Создать с нуля
@@ -172,7 +225,6 @@ export default function WorkflowsPage() {
               className="group relative flex flex-col justify-between rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-5 shadow-sm transition hover:border-indigo-500/50 hover:shadow-xl cursor-pointer"
             >
               <div>
-                {/* Card Top Row */}
                 <div className="mb-3 flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <span
@@ -191,7 +243,6 @@ export default function WorkflowsPage() {
                   </span>
                 </div>
 
-                {/* Title & Description */}
                 <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition mb-1">
                   {w.name}
                 </h3>
@@ -200,10 +251,8 @@ export default function WorkflowsPage() {
                 </p>
               </div>
 
-              {/* Bottom Card Metadata & Actions */}
               <div className="border-t border-zinc-100 dark:border-zinc-800/80 pt-3">
                 <div className="flex items-center justify-between">
-                  {/* Last Run Indicator */}
                   <div className="flex items-center gap-1.5 text-[11px] text-zinc-500">
                     {w.last_run ? (
                       <>
@@ -225,7 +274,6 @@ export default function WorkflowsPage() {
                     )}
                   </div>
 
-                  {/* Run & Delete Buttons */}
                   <div className="flex items-center gap-1.5">
                     <button
                       title="Запустить процесс сейчас"
@@ -255,13 +303,14 @@ export default function WorkflowsPage() {
         </div>
       )}
 
-      {/* Templates Modal */}
       <WorkflowTemplatesModal
         isOpen={isTemplatesOpen}
         onClose={() => setIsTemplatesOpen(false)}
         onTemplateCloned={(clonedId) => {
           router.push(`/workflows/${clonedId}`);
         }}
+        disabled={atWorkflowLimit}
+        onError={setActionError}
       />
     </div>
   );

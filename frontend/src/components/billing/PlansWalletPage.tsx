@@ -68,6 +68,10 @@ function planFeatures(plan: Plan): string[] {
   items.push(`Посты / период — ${formatQuota(plan.max_posts_per_period)}`);
   items.push(`Текстовые кредиты — ${formatQuota(plan.ai_text_tokens_quota)}`);
   items.push(`Медиа-кредиты — ${formatQuota(plan.ai_media_credits_quota)}`);
+  items.push(`Процессы — ${formatQuota(plan.max_workflows)}`);
+  if (plan.push_on_ready) {
+    items.push("Пуш по готовности процесса");
+  }
   if (plan.storage_bytes != null) {
     items.push(`Хранилище — ${Math.round(plan.storage_bytes / (1024 ** 3))} ГБ`);
   } else {

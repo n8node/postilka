@@ -430,6 +430,8 @@ func writeWorkflowError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusConflict, "Прослушивание webhook уже активно")
 	case errors.Is(err, service.ErrWorkflowWebhookInvalid):
 		writeError(w, http.StatusNotFound, "Webhook не найден")
+	case errors.Is(err, service.ErrQuotaExceeded):
+		writeError(w, http.StatusForbidden, "Достигнут лимит процессов по тарифу. Удалите лишние или смените план.")
 	default:
 		writeError(w, http.StatusInternalServerError, err.Error())
 	}

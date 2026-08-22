@@ -81,6 +81,12 @@ func (r *WorkflowRepository) ListByWorkspace(ctx context.Context, workspaceID st
 	return list, nil
 }
 
+func (r *WorkflowRepository) CountByWorkspace(ctx context.Context, workspaceID string) (int, error) {
+	var count int
+	err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM workflows WHERE workspace_id = $1`, workspaceID).Scan(&count)
+	return count, err
+}
+
 func (r *WorkflowRepository) GetByID(ctx context.Context, id, workspaceID string) (*model.Workflow, error) {
 	query := fmt.Sprintf(`
 		SELECT %s FROM workflows

@@ -80,11 +80,12 @@ type BillingOverview struct {
 }
 
 type BillingUsage struct {
-	ChannelsUsed      int  `json:"channels_used"`
-	PostsUsed         int  `json:"posts_used"`
-	AITextTokensUsed  int  `json:"ai_text_tokens_used"`
-	AIMediaCreditsUsed int `json:"ai_media_credits_used"`
-	PeriodStart       string `json:"period_start"`
+	ChannelsUsed       int    `json:"channels_used"`
+	PostsUsed          int    `json:"posts_used"`
+	WorkflowsUsed      int    `json:"workflows_used"`
+	AITextTokensUsed   int    `json:"ai_text_tokens_used"`
+	AIMediaCreditsUsed int    `json:"ai_media_credits_used"`
+	PeriodStart        string `json:"period_start"`
 }
 
 type PaymentHistoryItem struct {
