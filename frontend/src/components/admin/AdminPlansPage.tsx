@@ -86,6 +86,19 @@ function parseOptionalInt(raw: string): number | null {
   return Number.isFinite(n) ? Math.trunc(n) : null;
 }
 
+const BYTES_PER_MB = 1024 * 1024;
+
+function bytesToMbValue(bytes: number | null | undefined): string {
+  if (bytes == null) return "";
+  return String(Math.round(bytes / BYTES_PER_MB));
+}
+
+function parseMbToBytes(raw: string): number | null {
+  const mb = parseOptionalInt(raw);
+  if (mb == null) return null;
+  return mb * BYTES_PER_MB;
+}
+
 export function AdminPlansPage() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
@@ -426,24 +439,21 @@ function PlanFormModal({
             />
           </label>
           <label className="text-xs font-medium text-slate-500">
-            Хранилище (байты, пусто = ∞)
+            Хранилище (МБ, пусто = ∞)
             <input
-              value={form.storage_bytes ?? ""}
+              value={bytesToMbValue(form.storage_bytes)}
               onChange={(e) =>
-                setField("storage_bytes", parseOptionalInt(e.target.value) as number | null)
+                setField("storage_bytes", parseMbToBytes(e.target.value))
               }
               className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
             />
           </label>
           <label className="text-xs font-medium text-slate-500">
-            Макс. размер файла (байты, пусто = только глобальные лимиты)
+            Макс. размер файла (МБ, пусто = только глобальные лимиты)
             <input
-              value={form.max_file_size_bytes ?? ""}
+              value={bytesToMbValue(form.max_file_size_bytes)}
               onChange={(e) =>
-                setField(
-                  "max_file_size_bytes",
-                  parseOptionalInt(e.target.value) as number | null,
-                )
+                setField("max_file_size_bytes", parseMbToBytes(e.target.value))
               }
               className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
             />
@@ -482,14 +492,6 @@ function PlanFormModal({
               }
               className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
             />
-          </label>
-          <label className="flex items-center gap-2 text-sm text-slate-700">
-            <input
-              type="checkbox"
-              checked={!!form.push_on_ready}
-              onChange={(e) => setField("push_on_ready", e.target.checked)}
-            />
-            Пуш по готовности
           </label>
           <label className="flex items-center gap-2 text-sm text-slate-700">
             <input
