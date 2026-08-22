@@ -244,6 +244,8 @@ func writeAnalyticsError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusNotFound, "Рабочая область не найдена")
 	case errors.Is(err, service.ErrMetrikaNotConfigured):
 		writeError(w, http.StatusServiceUnavailable, "OAuth Яндекс Метрики не настроен на сервере")
+	case errors.Is(err, service.ErrAnalyticsNotAvailable):
+		writeErrorWithCode(w, http.StatusForbidden, "analytics_not_available", "Статистика недоступна на вашем тарифе. Перейдите на платный план.")
 	default:
 		writeError(w, http.StatusBadRequest, err.Error())
 	}

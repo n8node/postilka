@@ -27,6 +27,7 @@ type MetrikaConnectionService struct {
 	platform *MetrikaPlatformConfigService
 	cipher   *SecretCipher
 	cfg      *config.Config
+	quota    *QuotaService
 }
 
 func NewMetrikaConnectionService(
@@ -35,6 +36,7 @@ func NewMetrikaConnectionService(
 	platform *MetrikaPlatformConfigService,
 	cipher *SecretCipher,
 	cfg *config.Config,
+	quota *QuotaService,
 ) *MetrikaConnectionService {
 	return &MetrikaConnectionService{
 		repo:     repo,
@@ -42,7 +44,15 @@ func NewMetrikaConnectionService(
 		platform: platform,
 		cipher:   cipher,
 		cfg:      cfg,
+		quota:    quota,
 	}
+}
+
+func (s *MetrikaConnectionService) ensureAnalyticsAccess(ctx context.Context, workspaceID string) error {
+	if s.quota == nil {
+		return nil
+	}
+	return s.quota.CheckAnalyticsAccess(ctx, workspaceID)
 }
 
 func (s *MetrikaConnectionService) OAuthReady(ctx context.Context) (bool, error) {
@@ -64,6 +74,9 @@ func (s *MetrikaConnectionService) Status(
 	}
 	if ws == nil {
 		return nil, ErrWorkspaceNotFound
+	}
+	if err := s.ensureAnalyticsAccess(ctx, ws.ID); err != nil {
+		return nil, err
 	}
 	oauthReady, err := s.OAuthReady(ctx)
 	if err != nil {
@@ -98,6 +111,9 @@ func (s *MetrikaConnectionService) ConnectStart(
 	counterID int64,
 ) (authorizeURL, state string, err error) {
 	if _, err := s.wsSvc.RequireMembership(ctx, userID, workspaceID, model.RoleEditor); err != nil {
+		return "", "", err
+	}
+	if err := s.ensureAnalyticsAccess(ctx, workspaceID); err != nil {
 		return "", "", err
 	}
 	oauthReady, err := s.OAuthReady(ctx)
@@ -168,6 +184,9 @@ func (s *MetrikaConnectionService) finishOAuthSession(
 	session *repository.MetrikaOAuthSessionRow,
 	code, label string,
 ) error {
+	if err := s.ensureAnalyticsAccess(ctx, session.WorkspaceID); err != nil {
+		return err
+	}
 	if time.Now().After(session.ExpiresAt) {
 		_ = s.repo.DeleteOAuthSession(ctx, session.ID)
 		return fmt.Errorf("сессия подключения Метрики истекла — повторите попытку")
@@ -225,6 +244,9 @@ func (s *MetrikaConnectionService) Disconnect(ctx context.Context, userID string
 	if _, err := s.wsSvc.RequireMembership(ctx, userID, ws.ID, model.RoleAdmin); err != nil {
 		return err
 	}
+	if err := s.ensureAnalyticsAccess(ctx, ws.ID); err != nil {
+		return err
+	}
 	return s.repo.DeleteConnection(ctx, ws.ID)
 }
 
@@ -239,6 +261,9 @@ func (s *MetrikaConnectionService) DisconnectCounter(
 		return ErrWorkspaceNotFound
 	}
 	if _, err := s.wsSvc.RequireMembership(ctx, userID, ws.ID, model.RoleAdmin); err != nil {
+		return err
+	}
+	if err := s.ensureAnalyticsAccess(ctx, ws.ID); err != nil {
 		return err
 	}
 	if counterID <= 0 {

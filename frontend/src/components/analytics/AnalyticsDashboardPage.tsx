@@ -16,7 +16,7 @@ import {
 } from "recharts";
 import { Loader2, Unplug, Link2 } from "lucide-react";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { ApiError } from "@/lib/api";
+import { ApiError, fetchBillingOverview, type BillingOverview } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import {
   connectMetrika,
@@ -386,6 +386,9 @@ function MetrikaUTMMapSection({
 
 export function AnalyticsDashboardPage() {
   const { active_workspace } = useAuth();
+  const [billing, setBilling] = useState<BillingOverview | null>(null);
+  const [billingLoading, setBillingLoading] = useState(true);
+  const analyticsEnabled = billing?.plan?.analytics_enabled === true;
   const [from, setFrom] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() - 29);
@@ -401,8 +404,24 @@ export function AnalyticsDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const loadBilling = useCallback(async () => {
+    setBillingLoading(true);
+    try {
+      const overview = await fetchBillingOverview();
+      setBilling(overview);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Не удалось проверить тариф");
+    } finally {
+      setBillingLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadBilling();
+  }, [loadBilling]);
+
   const load = useCallback(async () => {
-    if (!active_workspace?.id) return;
+    if (!active_workspace?.id || !analyticsEnabled) return;
     setLoading(true);
     setError(null);
     try {
@@ -423,11 +442,15 @@ export function AnalyticsDashboardPage() {
     } finally {
       setLoading(false);
     }
-  }, [active_workspace?.id, from, to]);
+  }, [active_workspace?.id, analyticsEnabled, from, to]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (!billingLoading && analyticsEnabled) {
+      void load();
+    } else if (!billingLoading && !analyticsEnabled) {
+      setLoading(false);
+    }
+  }, [load, billingLoading, analyticsEnabled]);
 
   const chartData = useMemo(
     () =>
@@ -445,6 +468,27 @@ export function AnalyticsDashboardPage() {
         description="Эффективность публикаций: охват на площадках, переходы по ссылкам и визиты на сайт."
       />
 
+      {billingLoading ? (
+        <div className="flex items-center gap-2 text-muted">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          Проверка тарифа…
+        </div>
+      ) : !analyticsEnabled ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-950">
+          <p className="font-medium">Статистика недоступна на вашем тарифе</p>
+          <p className="mt-1 text-amber-900/90">
+            Просмотры, переходы по ссылкам и данные Яндекс Метрики доступны на платных тарифах со включённой
+            статистикой.
+          </p>
+          <Link
+            href="/plans"
+            className="mt-3 inline-flex rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-500"
+          >
+            Выбрать тариф
+          </Link>
+        </div>
+      ) : (
+        <>
       <div className="mb-4 flex flex-wrap items-end gap-3">
         <label className="text-sm">
           <span className="mb-1 block text-muted">С</span>
@@ -566,6 +610,8 @@ export function AnalyticsDashboardPage() {
           </div>
         </>
       ) : null}
+        </>
+      )}
     </div>
   );
 }

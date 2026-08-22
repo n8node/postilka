@@ -43,6 +43,7 @@ function emptyForm(): PlanInput {
     max_workflows: 1,
     max_workflow_invites: 3,
     push_on_ready: false,
+    analytics_enabled: false,
     storage_bytes: 5 * 1024 * 1024 * 1024,
     max_file_size_bytes: 100 * 1024 * 1024,
     trash_retention_days: 7,
@@ -69,6 +70,7 @@ function planToForm(p: Plan): PlanInput {
     max_workflows: p.max_workflows,
     max_workflow_invites: p.max_workflow_invites,
     push_on_ready: p.push_on_ready,
+    analytics_enabled: p.analytics_enabled,
     storage_bytes: p.storage_bytes,
     max_file_size_bytes: p.max_file_size_bytes,
     trash_retention_days: p.trash_retention_days,
@@ -175,6 +177,7 @@ export function AdminPlansPage() {
                 <th className="px-4 py-3">Посты</th>
                 <th className="px-4 py-3">Участники</th>
                 <th className="px-4 py-3">Процессы</th>
+                <th className="px-4 py-3">Статистика</th>
                 <th className="px-4 py-3">Статус</th>
                 <th className="px-4 py-3" />
               </tr>
@@ -182,21 +185,21 @@ export function AdminPlansPage() {
             <tbody className="divide-y divide-slate-100">
               {loading && (
                 <tr>
-                  <td colSpan={9} className="px-4 py-10 text-center text-slate-500">
+                  <td colSpan={10} className="px-4 py-10 text-center text-slate-500">
                     Загрузка…
                   </td>
                 </tr>
               )}
               {!loading && error && (
                 <tr>
-                  <td colSpan={9} className="px-4 py-10 text-center text-rose-600">
+                  <td colSpan={10} className="px-4 py-10 text-center text-rose-600">
                     {error}
                   </td>
                 </tr>
               )}
               {!loading && !error && plans.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="px-4 py-10 text-center text-slate-500">
+                  <td colSpan={10} className="px-4 py-10 text-center text-slate-500">
                     Тарифов нет
                   </td>
                 </tr>
@@ -219,6 +222,13 @@ export function AdminPlansPage() {
                     <td className="px-4 py-3">{formatQuota(p.max_posts_per_period)}</td>
                     <td className="px-4 py-3">{formatQuota(p.max_seats)}</td>
                     <td className="px-4 py-3">{formatQuota(p.max_workflows)}</td>
+                    <td className="px-4 py-3">
+                      {p.analytics_enabled ? (
+                        <span className="text-emerald-700">Да</span>
+                      ) : (
+                        <span className="text-slate-400">Нет</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3">
                       <span
                         className={cn(
@@ -500,6 +510,14 @@ function PlanFormModal({
               onChange={(e) => setField("push_on_ready", e.target.checked)}
             />
             Пуш по готовности процесса
+          </label>
+          <label className="flex items-center gap-2 text-sm text-slate-700 sm:col-span-2">
+            <input
+              type="checkbox"
+              checked={!!form.analytics_enabled}
+              onChange={(e) => setField("analytics_enabled", e.target.checked)}
+            />
+            Статистика публикаций
           </label>
           <label className="flex items-center gap-2 text-sm text-slate-700">
             <input

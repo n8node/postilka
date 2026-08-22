@@ -133,6 +133,7 @@ type planBody struct {
 	MaxWorkflows         *int   `json:"max_workflows"`
 	MaxWorkflowInvites   *int   `json:"max_workflow_invites"`
 	PushOnReady          *bool  `json:"push_on_ready"`
+	AnalyticsEnabled     *bool  `json:"analytics_enabled"`
 	StorageBytes         *int64 `json:"storage_bytes"`
 	MaxFileSizeBytes     *int64 `json:"max_file_size_bytes"`
 	TrashRetentionDays   int    `json:"trash_retention_days"`
@@ -151,6 +152,10 @@ func (b planBody) toInput() service.PlanInput {
 	if b.PushOnReady != nil {
 		pushOnReady = *b.PushOnReady
 	}
+	analyticsEnabled := false
+	if b.AnalyticsEnabled != nil {
+		analyticsEnabled = *b.AnalyticsEnabled
+	}
 	return service.PlanInput{
 		Slug:                 b.Slug,
 		Name:                 b.Name,
@@ -166,6 +171,7 @@ func (b planBody) toInput() service.PlanInput {
 		MaxWorkflows:         b.MaxWorkflows,
 		MaxWorkflowInvites:   b.MaxWorkflowInvites,
 		PushOnReady:          pushOnReady,
+		AnalyticsEnabled:     analyticsEnabled,
 		StorageBytes:         b.StorageBytes,
 		MaxFileSizeBytes:     b.MaxFileSizeBytes,
 		TrashRetentionDays:   b.TrashRetentionDays,

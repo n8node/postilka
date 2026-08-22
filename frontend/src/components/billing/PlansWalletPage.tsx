@@ -72,6 +72,9 @@ function planFeatures(plan: Plan): string[] {
   if (plan.push_on_ready) {
     items.push("Пуш по готовности процесса");
   }
+  if (plan.analytics_enabled) {
+    items.push("Статистика публикаций");
+  }
   if (plan.storage_bytes != null) {
     items.push(`Хранилище — ${Math.round(plan.storage_bytes / (1024 ** 3))} ГБ`);
   } else {

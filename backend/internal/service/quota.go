@@ -9,6 +9,8 @@ import (
 	"github.com/postilka/postilka/internal/repository"
 )
 
+var ErrAnalyticsNotAvailable = errors.New("analytics not available on current plan")
+
 type QuotaService struct {
 	plans      *repository.PlanRepository
 	workspaces *repository.WorkspaceRepository
@@ -127,6 +129,17 @@ func (s *QuotaService) CheckWorkflowQuota(ctx context.Context, workspaceID strin
 	}
 	if currentCount >= *plan.MaxWorkflows {
 		return ErrQuotaExceeded
+	}
+	return nil
+}
+
+func (s *QuotaService) CheckAnalyticsAccess(ctx context.Context, workspaceID string) error {
+	plan, _, err := s.getWorkspacePlan(ctx, workspaceID)
+	if err != nil {
+		return err
+	}
+	if !plan.AnalyticsEnabled {
+		return ErrAnalyticsNotAvailable
 	}
 	return nil
 }

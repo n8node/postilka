@@ -16,6 +16,7 @@ type AnalyticsService struct {
 	posts     *repository.PostRepository
 	metrika   *MetrikaConnectionService
 	wsSvc     *WorkspaceService
+	quota     *QuotaService
 }
 
 func NewAnalyticsService(
@@ -23,18 +24,30 @@ func NewAnalyticsService(
 	posts *repository.PostRepository,
 	metrika *MetrikaConnectionService,
 	wsSvc *WorkspaceService,
+	quota *QuotaService,
 ) *AnalyticsService {
 	return &AnalyticsService{
 		analytics: analytics,
 		posts:     posts,
 		metrika:   metrika,
 		wsSvc:     wsSvc,
+		quota:     quota,
 	}
+}
+
+func (s *AnalyticsService) ensureAnalyticsAccess(ctx context.Context, workspaceID string) error {
+	if s.quota == nil {
+		return nil
+	}
+	return s.quota.CheckAnalyticsAccess(ctx, workspaceID)
 }
 
 func (s *AnalyticsService) Overview(ctx context.Context, userID string, r *http.Request, from, to time.Time) (*model.AnalyticsOverview, []model.AnalyticsDailyPoint, []model.AnalyticsProviderBreakdown, error) {
 	ws, err := s.activeWorkspace(ctx, userID, r)
 	if err != nil {
+		return nil, nil, nil, err
+	}
+	if err := s.ensureAnalyticsAccess(ctx, ws.ID); err != nil {
 		return nil, nil, nil, err
 	}
 	overview, err := s.analytics.Overview(ctx, ws.ID, from, to)
@@ -69,6 +82,9 @@ func (s *AnalyticsService) ListPosts(
 	if err != nil {
 		return nil, 0, err
 	}
+	if err := s.ensureAnalyticsAccess(ctx, ws.ID); err != nil {
+		return nil, 0, err
+	}
 	return s.analytics.ListPostSummaries(ctx, ws.ID, from, to, limit, offset)
 }
 
@@ -78,6 +94,9 @@ func (s *AnalyticsService) PostAnalytics(ctx context.Context, userID string, r *
 		return nil, err
 	}
 	if _, err := s.wsSvc.RequireMembership(ctx, userID, ws.ID, model.RoleViewer); err != nil {
+		return nil, err
+	}
+	if err := s.ensureAnalyticsAccess(ctx, ws.ID); err != nil {
 		return nil, err
 	}
 	post, err := s.posts.Get(ctx, ws.ID, postID)
@@ -130,6 +149,9 @@ func (s *AnalyticsService) MetrikaUTMBindings(
 ) ([]model.MetrikaUTMBinding, error) {
 	ws, err := s.activeWorkspace(ctx, userID, r)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.ensureAnalyticsAccess(ctx, ws.ID); err != nil {
 		return nil, err
 	}
 	rows, err := s.analytics.ListMetrikaUTMMetricRows(ctx, ws.ID, from, to)
@@ -220,6 +242,9 @@ func (s *AnalyticsService) DisconnectMetrikaCounter(
 ) error {
 	ws, err := s.activeWorkspace(ctx, userID, r)
 	if err != nil {
+		return err
+	}
+	if err := s.ensureAnalyticsAccess(ctx, ws.ID); err != nil {
 		return err
 	}
 	if err := s.metrika.DisconnectCounter(ctx, userID, r, counterID); err != nil {

@@ -72,6 +72,7 @@ export type Plan = {
   max_workflows: number | null;
   max_workflow_invites: number | null;
   push_on_ready: boolean;
+  analytics_enabled: boolean;
   storage_bytes: number | null;
   max_file_size_bytes: number | null;
   trash_retention_days: number;
@@ -98,6 +99,7 @@ export type PlanInput = {
   max_workflows?: number | null;
   max_workflow_invites?: number | null;
   push_on_ready?: boolean;
+  analytics_enabled?: boolean;
   storage_bytes?: number | null;
   max_file_size_bytes?: number | null;
   trash_retention_days?: number;

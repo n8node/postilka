@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   CartesianGrid,
@@ -12,7 +13,7 @@ import {
   YAxis,
 } from "recharts";
 import { BarChart3, Info, Loader2 } from "lucide-react";
-import { ApiError } from "@/lib/api";
+import { ApiError, fetchBillingOverview } from "@/lib/api";
 import {
   fetchPostAnalytics,
   formatMetric,
@@ -34,15 +35,26 @@ export function PostStatsPanel({ postId, published }: { postId: string; publishe
   const [data, setData] = useState<PostAnalyticsResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [upgradeRequired, setUpgradeRequired] = useState(false);
 
   const load = useCallback(async () => {
     if (!published || !postId) return;
     setLoading(true);
     setError(null);
+    setUpgradeRequired(false);
     try {
+      const billing = await fetchBillingOverview();
+      if (!billing.plan?.analytics_enabled) {
+        setUpgradeRequired(true);
+        return;
+      }
       const res = await fetchPostAnalytics(postId);
       setData(res);
     } catch (e) {
+      if (e instanceof ApiError && e.code === "analytics_not_available") {
+        setUpgradeRequired(true);
+        return;
+      }
       setError(e instanceof ApiError ? e.message : "Не удалось загрузить статистику");
     } finally {
       setLoading(false);
@@ -86,6 +98,13 @@ export function PostStatsPanel({ postId, published }: { postId: string; publishe
         <div className="flex items-center gap-2 py-6 text-sm text-muted">
           <Loader2 className="h-4 w-4 animate-spin" />
           Загрузка статистики…
+        </div>
+      ) : upgradeRequired ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+          <p>Статистика публикаций недоступна на вашем тарифе.</p>
+          <Link href="/plans" className="mt-2 inline-block font-medium underline">
+            Повысить тариф
+          </Link>
         </div>
       ) : error ? (
         <p className="text-sm text-red-600">{error}</p>

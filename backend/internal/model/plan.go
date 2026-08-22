@@ -19,6 +19,7 @@ type Plan struct {
 	MaxWorkflows          *int      `json:"max_workflows"`
 	MaxWorkflowInvites    *int      `json:"max_workflow_invites"`
 	PushOnReady           bool      `json:"push_on_ready"`
+	AnalyticsEnabled      bool      `json:"analytics_enabled"`
 	StorageBytes          *int64    `json:"storage_bytes"`
 	MaxFileSizeBytes      *int64    `json:"max_file_size_bytes"`
 	TrashRetentionDays    int       `json:"trash_retention_days"`
