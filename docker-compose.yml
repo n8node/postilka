@@ -31,6 +31,16 @@ services:
     env_file: .env
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      WP_DB_HOST: mysql
+      BACKUP_DIR: /var/lib/postilka/backups
+      BACKUP_SRC_DIR: /var/lib/postilka/src
+    volumes:
+      - ./backups:/var/lib/postilka/backups
+      - ./.env:/var/lib/postilka/src/dotenv:ro
+      - ./nginx/ssl:/var/lib/postilka/src/ssl:ro
+      - ./wordpress:/var/lib/postilka/src/wordpress-git:ro
+      - wp_uploads:/var/lib/postilka/src/wp-uploads:ro
+      - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       postgres:
         condition: service_healthy

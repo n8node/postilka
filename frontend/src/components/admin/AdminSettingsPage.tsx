@@ -20,11 +20,13 @@ import { AdminMetrikaPage } from "@/components/admin/AdminMetrikaPage";
 import { AdminYandexGptPage } from "@/components/admin/AdminYandexGptPage";
 import { AdminAdStudioPage } from "@/components/admin/AdminAdStudioPage";
 import { AdminSketchStylesPage } from "@/components/admin/AdminSketchStylesPage";
+import { AdminBackupSettingsPage } from "@/components/admin/AdminBackupSettingsPage";
 // Hidden until agents return: import { AdminAgentTemplatesPage } from "@/components/admin/AdminAgentTemplatesPage";
 import { cn } from "@/lib/utils";
 
 type SettingsKey =
   | "upload-files"
+  | "backups"
   | "invites"
   | "telegram-notifications"
   | "payment"
@@ -42,6 +44,11 @@ const SETTINGS_MENU: { key: SettingsKey; label: string; description: string }[] 
     key: "upload-files",
     label: "Загрузка файлов",
     description: "Форматы и лимиты размера",
+  },
+  {
+    key: "backups",
+    label: "Бекапы",
+    description: "Расписание и восстановление",
   },
   {
     key: "invites",
@@ -231,6 +238,9 @@ function SettingsSectionContent({
       return <p className="text-sm text-slate-500">Загрузка…</p>;
     }
     return <UploadFilesSettingsForm form={uploadForm} onChange={onUploadFormChange} />;
+  }
+  if (selected === "backups") {
+    return <AdminBackupSettingsPage embedded />;
   }
   if (selected === "invites") {
     return <AdminInvitesPage embedded />;

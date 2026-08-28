@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -61,6 +62,8 @@ func main() {
 	fileStorageSvc := service.NewFileStorageService(
 		fileStorageRepo, folderStorageRepo, wsRepo, planRepo, wsSvc, objectStorage, uploadSessions, uploadFileSettingsSvc,
 	)
+	backupRepo := repository.NewBackupRepository(db.Pool)
+	backupSvc := service.NewBackupService(backupRepo, objectStorage, cfg, logger)
 
 	encKey := cfg.EncryptionKey
 	if strings.TrimSpace(encKey) == "" {
@@ -132,6 +135,7 @@ func main() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 	var lastMetricsRun time.Time
+	var backupRunning atomic.Bool
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
@@ -142,6 +146,16 @@ func main() {
 			if err := db.Ping(ctx); err != nil {
 				logger.Warn("worker db ping failed", "error", err)
 				continue
+			}
+			if backupRunning.CompareAndSwap(false, true) {
+				go func() {
+					defer backupRunning.Store(false)
+					runCtx, cancel := context.WithTimeout(context.Background(), 90*time.Minute)
+					defer cancel()
+					if err := backupSvc.Process(runCtx); err != nil {
+						logger.Warn("platform backup tick failed", "error", err)
+					}
+				}()
 			}
 			if err := renewalSvc.Process(ctx); err != nil {
 				logger.Warn("subscription renewal tick failed", "error", err)

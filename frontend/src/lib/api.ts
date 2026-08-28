@@ -1399,6 +1399,70 @@ export function testAdminStorageConnection() {
   });
 }
 
+export type BackupFrequency = "daily" | "weekly";
+
+export type BackupSettings = {
+  enabled: boolean;
+  frequency: BackupFrequency;
+  hour: number;
+  minute: number;
+  weekday: number;
+  retain_count: number;
+  next_run_at?: string | null;
+  updated_at?: string;
+};
+
+export type BackupRun = {
+  id: string;
+  trigger: "manual" | "schedule";
+  status: "queued" | "running" | "succeeded" | "failed";
+  s3_key?: string;
+  local_name?: string;
+  size_bytes: number;
+  media_files: number;
+  error?: string;
+  started_at?: string | null;
+  finished_at?: string | null;
+  created_at: string;
+};
+
+export type BackupAdminView = {
+  settings: BackupSettings;
+  storage_ready: boolean;
+  restore_hint: string;
+  runs: BackupRun[];
+  timezone: string;
+};
+
+export function fetchAdminBackups() {
+  return apiFetch<BackupAdminView>("/admin/backups");
+}
+
+export function updateAdminBackups(payload: {
+  enabled: boolean;
+  frequency: BackupFrequency;
+  hour: number;
+  minute: number;
+  weekday: number;
+  retain_count: number;
+}) {
+  return apiFetch<BackupAdminView>("/admin/backups", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function runAdminBackup() {
+  return apiFetch<BackupRun>("/admin/backups/run", {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
+export function fetchAdminBackupDownload(id: string) {
+  return apiFetch<{ url: string }>(`/admin/backups/runs/${encodeURIComponent(id)}/download`);
+}
+
 export type UploadFileSettings = {
   allowed_extensions: string[];
   max_size_image_mb: number;

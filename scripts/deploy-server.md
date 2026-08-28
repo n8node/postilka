@@ -122,11 +122,16 @@ make prod-nginx        # только если меняли nginx/*.conf, зат
 # make verify-release
 ```
 
-## 8. Бэкапы (рекомендуется до prod data)
+## 8. Бекапы
+
+В админке: **Настройки → Бекапы**. Расписание и кнопка пишут архив в `backups/` и в S3 (`platform-backups/`). Пользовательские медиа кабинета в архив не входят — только ключи S3 в Postgres.
+
+Восстановление одной командой (на сервере, контейнеры должны быть подняты):
 
 ```bash
-docker compose exec -T postgres pg_dump -U postilka postilka > backups/postgres-$(date +%F).sql
-docker compose exec -T mysql mysqldump -u root -p"$WP_DB_ROOT_PASSWORD" wordpress > backups/wp-$(date +%F).sql
+cd /opt/postilka && bash scripts/restore-full.sh --latest
+# или
+cd /opt/postilka && bash scripts/restore-full.sh backups/postilka-full-YYYY-MM-DD_HHMM.tar.gz
 ```
 
 ## Troubleshooting

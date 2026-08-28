@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -182,6 +183,57 @@ func (o *ObjectStorage) DeleteObject(ctx context.Context, s3Key string) error {
 		Key:    aws.String(s3Key),
 	})
 	return err
+}
+
+func (o *ObjectStorage) PutObjectFromFile(ctx context.Context, s3Key, contentType, path string) error {
+	client, st, err := o.client(ctx)
+	if err != nil {
+		return err
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	_, err = client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket:        aws.String(st.Bucket),
+		Key:           aws.String(s3Key),
+		Body:          f,
+		ContentLength: aws.Int64(info.Size()),
+		ContentType:   aws.String(contentType),
+	})
+	return err
+}
+
+func (o *ObjectStorage) ListPrefix(ctx context.Context, prefix string) ([]string, error) {
+	client, st, err := o.client(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var keys []string
+	paginator := s3.NewListObjectsV2Paginator(client, &s3.ListObjectsV2Input{
+		Bucket: aws.String(st.Bucket),
+		Prefix: aws.String(prefix),
+	})
+	for paginator.HasMorePages() {
+		page, err := paginator.NextPage(ctx)
+		if err != nil {
+			return nil, err
+		}
+		for _, obj := range page.Contents {
+			if obj.Key != nil {
+				keys = append(keys, *obj.Key)
+			}
+		}
+	}
+	return keys, nil
 }
 
 func (o *ObjectStorage) PutObject(ctx context.Context, s3Key, contentType string, data []byte) error {

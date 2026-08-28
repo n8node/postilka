@@ -1,4 +1,4 @@
-.PHONY: up down prod prod-backend prod-backend-nocache prod-frontend prod-nginx verify-release migrate test lint logs logs-prod logs-prod-backend setup psql wp-cli status create-superadmin
+.PHONY: up down prod prod-backend prod-backend-nocache prod-frontend prod-nginx verify-release migrate test lint logs logs-prod logs-prod-backend setup restore-latest psql wp-cli status create-superadmin
 
 COMPOSE := docker compose --env-file .env
 COMPOSE_PROD := $(COMPOSE) -f docker-compose.yml -f docker-compose.prod.yml
@@ -71,6 +71,9 @@ status:
 
 setup:
 	bash scripts/setup.sh
+
+restore-latest:
+	bash scripts/restore-full.sh --latest
 
 %:
 	@:
