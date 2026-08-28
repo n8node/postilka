@@ -369,15 +369,17 @@ func (s *NotificationService) NotifyApprovalComment(ctx context.Context, post mo
 		Payload:     map[string]any{"post_id": post.ID},
 		Href:        "/posts/" + post.ID,
 	}
-	if post.CreatedByUserID != "" && post.CreatedByUserID != actorID {
-		in.UserID = post.CreatedByUserID
-		s.Create(ctx, in)
-		return
+	ids := post.Settings.NormalizedApproverIDs()
+	if post.CreatedByUserID != "" {
+		ids = append(ids, post.CreatedByUserID)
 	}
-	ids, err := s.ws.ListMemberUserIDs(ctx, post.WorkspaceID, adminRoles())
-	if err != nil {
-		s.warn("list approval comment recipients", err)
-		return
+	if len(ids) == 0 {
+		listed, err := s.ws.ListMemberUserIDs(ctx, post.WorkspaceID, adminRoles())
+		if err != nil {
+			s.warn("list approval comment recipients", err)
+			return
+		}
+		ids = listed
 	}
 	s.CreateForUsers(ctx, skipUserIDs(ids, actorID), in)
 }

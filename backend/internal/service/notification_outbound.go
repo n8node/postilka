@@ -8,13 +8,8 @@ import (
 	"github.com/postilka/postilka/internal/model"
 )
 
-func (s *NotificationService) dispatchApprovalOutbound(ctx context.Context, in NotificationInput) {
-	switch in.Type {
-	case model.NotifyApprovalSubmitted, model.NotifyApprovalApproved, model.NotifyApprovalRejected:
-	default:
-		return
-	}
-	if s.users == nil {
+func (s *NotificationService) dispatchOutbound(ctx context.Context, in NotificationInput) {
+	if s.users == nil || strings.TrimSpace(in.UserID) == "" {
 		return
 	}
 	user, err := s.users.GetByID(ctx, in.UserID)
@@ -22,8 +17,8 @@ func (s *NotificationService) dispatchApprovalOutbound(ctx context.Context, in N
 		return
 	}
 	appURL := s.appURL(in.Href)
-	if s.email != nil && strings.TrimSpace(user.Email) != "" {
-		s.email.SendApprovalNoticeBestEffort(ctx, user, in, appURL)
+	if s.email != nil && strings.TrimSpace(user.Email) != "" && !notificationHasDedicatedEmail(in.Type) {
+		s.email.SendNotificationNoticeBestEffort(ctx, user, in, appURL)
 	}
 	if s.messenger != nil {
 		text := strings.TrimSpace(in.Title)
@@ -35,6 +30,15 @@ func (s *NotificationService) dispatchApprovalOutbound(ctx context.Context, in N
 			ButtonText: "Открыть в Postilka",
 			URL:        appURL,
 		})
+	}
+}
+
+func notificationHasDedicatedEmail(t model.NotificationType) bool {
+	switch t {
+	case model.NotifyPlanPaid, model.NotifyWalletTopup, model.NotifyYouTubeReconnect, model.NotifySupportTicket:
+		return true
+	default:
+		return false
 	}
 }
 

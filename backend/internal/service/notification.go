@@ -153,7 +153,7 @@ func (s *NotificationService) Create(ctx context.Context, in NotificationInput) 
 		s.warn("create notification", err)
 		return
 	}
-	s.dispatchApprovalOutbound(ctx, in)
+	s.dispatchOutbound(ctx, in)
 }
 
 func (s *NotificationService) CreateForUsers(ctx context.Context, userIDs []string, in NotificationInput) {

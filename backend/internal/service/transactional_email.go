@@ -199,17 +199,17 @@ func workspaceInviteURL(publicAppURL, token string) string {
 	return fmt.Sprintf("%s/auth/accept-invite?token=%s", strings.TrimSuffix(publicAppURL, "/"), token)
 }
 
-func (s *TransactionalEmailService) SendApprovalNoticeBestEffort(ctx context.Context, user *model.User, in NotificationInput, appURL string) {
+func (s *TransactionalEmailService) SendNotificationNoticeBestEffort(ctx context.Context, user *model.User, in NotificationInput, appURL string) {
 	if s == nil || s.email == nil || user == nil || strings.TrimSpace(user.Email) == "" {
 		return
 	}
-	subject, body := approvalNoticeEmail(user.Name, in, appURL)
+	subject, body := notificationNoticeEmail(user.Name, in, appURL)
 	if err := s.email.Send(ctx, user.Email, subject, body); err != nil && s.log != nil {
-		s.log.Warn("approval email failed", "user_id", user.ID, "type", string(in.Type), "error", err)
+		s.log.Warn("notification email failed", "user_id", user.ID, "type", string(in.Type), "error", err)
 	}
 }
 
-func approvalNoticeEmail(name string, in NotificationInput, appURL string) (string, EmailBody) {
+func notificationNoticeEmail(name string, in NotificationInput, appURL string) (string, EmailBody) {
 	displayName := strings.TrimSpace(name)
 	if displayName == "" {
 		displayName = "друг"
@@ -225,12 +225,14 @@ func approvalNoticeEmail(name string, in NotificationInput, appURL string) (stri
 			dueLabel = approvalDueLabel(&t, "")
 		}
 	}
+	title := strings.TrimSpace(in.Title)
+	bodyText := strings.TrimSpace(in.Body)
 
 	switch in.Type {
 	case model.NotifyApprovalSubmitted:
 		content := emailGreetingRow(displayName) +
 			emailParagraphRow("В Postilka появился пост, который ждёт вашего согласования.") +
-			emailParagraphRow(html.EscapeString(strings.TrimSpace(in.Body))) +
+			emailParagraphRow(html.EscapeString(bodyText)) +
 			emailNoteRow("Опубликовать его можно после решения в кабинете.")
 		return "Postilka — пост нуждается в согласовании", EmailBody{
 			Preheader:   "Пост ждёт согласования",
@@ -241,7 +243,7 @@ func approvalNoticeEmail(name string, in NotificationInput, appURL string) (stri
 	case model.NotifyApprovalRejected:
 		content := emailGreetingRow(displayName) +
 			emailParagraphRow("Пост вернули на доработку.") +
-			emailParagraphRow(html.EscapeString(strings.TrimSpace(in.Body))) +
+			emailParagraphRow(html.EscapeString(bodyText)) +
 			emailNoteRow("Исправьте черновик и отправьте на согласование снова.")
 		return "Postilka — пост вернули на доработку", EmailBody{
 			Preheader:   "Нужна доработка поста",
@@ -249,13 +251,13 @@ func approvalNoticeEmail(name string, in NotificationInput, appURL string) (stri
 			CTALabel:    "Открыть черновик",
 			CTAURL:      ctaURL,
 		}
-	default:
+	case model.NotifyApprovalApproved:
 		when := ""
 		if payloadString(in.Payload, "outcome") == "scheduled" && dueLabel != "" {
 			when = emailParagraphRow("Запланированная публикация: <strong>" + html.EscapeString(dueLabel) + "</strong>")
 		}
 		content := emailGreetingRow(displayName) +
-			emailParagraphRow(html.EscapeString(strings.TrimSpace(in.Title)+". "+strings.TrimSpace(in.Body))) +
+			emailParagraphRow(html.EscapeString(title+". "+bodyText)) +
 			when +
 			emailNoteRow("Подробности доступны в кабинете Postilka.")
 		subject := "Postilka — пост согласован"
@@ -266,6 +268,34 @@ func approvalNoticeEmail(name string, in NotificationInput, appURL string) (stri
 			Preheader:   "Решение по согласованию",
 			ContentHTML: content,
 			CTALabel:    "Открыть пост",
+			CTAURL:      ctaURL,
+		}
+	case model.NotifyApprovalComment:
+		content := emailGreetingRow(displayName) +
+			emailParagraphRow("К согласованию добавлен комментарий.") +
+			emailParagraphRow(html.EscapeString(bodyText)) +
+			emailNoteRow("Ответ можно оставить в кабинете Postilka.")
+		return "Postilka — комментарий к согласованию", EmailBody{
+			Preheader:   "Новый комментарий",
+			ContentHTML: content,
+			CTALabel:    "Открыть обсуждение",
+			CTAURL:      ctaURL,
+		}
+	default:
+		content := emailGreetingRow(displayName) +
+			emailParagraphRow(html.EscapeString(title))
+		if bodyText != "" && bodyText != title {
+			content += emailParagraphRow(html.EscapeString(bodyText))
+		}
+		content += emailNoteRow("Подробности доступны в кабинете Postilka.")
+		subject := "Postilka — " + title
+		if title == "" {
+			subject = "Postilka — уведомление"
+		}
+		return subject, EmailBody{
+			Preheader:   title,
+			ContentHTML: content,
+			CTALabel:    "Открыть в Postilka",
 			CTAURL:      ctaURL,
 		}
 	}
