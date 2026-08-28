@@ -278,7 +278,10 @@ func (s *NotificationService) NotifyApprovalSubmitted(ctx context.Context, post 
 		s.warn("list approval recipients", err)
 		return
 	}
-	ids = skipUserIDs(ids, actorID)
+	skipped := skipUserIDs(ids, actorID)
+	if len(skipped) > 0 {
+		ids = skipped
+	}
 	if len(ids) == 0 {
 		return
 	}

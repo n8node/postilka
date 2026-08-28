@@ -156,7 +156,11 @@ func (s *PostService) Create(
 	if err := s.validate(ctx, ws.ID, req, false); err != nil {
 		return nil, err
 	}
-	return s.posts.Create(ctx, ws.ID, userID, req)
+	created, err := s.posts.Create(ctx, ws.ID, userID, req)
+	if err != nil {
+		return nil, err
+	}
+	return s.maybeSubmitForApproval(ctx, userID, r, created)
 }
 
 func (s *PostService) CreateAgentDraft(
@@ -210,7 +214,7 @@ func (s *PostService) Update(
 		_ = s.posts.MarkPlanManuallyChanged(ctx, ws.ID, postID)
 		updated.PlanManuallyChanged = true
 	}
-	return updated, nil
+	return s.maybeSubmitForApproval(ctx, userID, r, updated)
 }
 
 func (s *PostService) Delete(ctx context.Context, userID string, r *http.Request, postID string) error {

@@ -62,6 +62,9 @@ func (s *PostService) SubmitForApproval(
 	if err != nil {
 		return nil, err
 	}
+	if post.Status == model.PostStatusPendingApproval {
+		return updated, nil
+	}
 	if _, err := s.approvals.AddEvent(ctx, ws.ID, postID, userID, "submit", req.Comment); err != nil {
 		return nil, err
 	}
@@ -209,28 +212,35 @@ func (s *PostService) requireAdmin(
 	return member, nil
 }
 
-func (s *PostService) workspaceRole(
+func (s *PostService) maybeSubmitForApproval(
 	ctx context.Context,
-	userID, workspaceID string,
-) (model.WorkspaceRole, error) {
-	ws, err := s.workspaces.RequireMembership(ctx, userID, workspaceID, model.RoleViewer)
-	if err != nil {
-		return "", err
+	userID string,
+	r *http.Request,
+	post *model.Post,
+) (*model.Post, error) {
+	if post == nil {
+		return post, nil
 	}
-	return model.WorkspaceRole(ws.Role), nil
+	submit, err := s.shouldSubmitForApproval(ctx, userID, *post)
+	if err != nil {
+		return nil, err
+	}
+	if !submit {
+		return post, nil
+	}
+	if err := ValidatePostForPublication(*post); err != nil {
+		return post, nil
+	}
+	if err := s.validateExistingTargets(ctx, post); err != nil {
+		return post, nil
+	}
+	return s.SubmitForApproval(ctx, userID, r, post.ID, model.PostApprovalSubmitRequest{DueAt: post.DueAt})
 }
 
 func (s *PostService) shouldSubmitForApproval(
-	ctx context.Context,
-	userID string,
+	_ context.Context,
+	_ string,
 	post model.Post,
 ) (bool, error) {
-	if !post.Settings.ApprovalRequired {
-		return false, nil
-	}
-	role, err := s.workspaceRole(ctx, userID, post.WorkspaceID)
-	if err != nil {
-		return false, err
-	}
-	return !role.AtLeast(model.RoleAdmin), nil
+	return post.Settings.ApprovalRequired, nil
 }

@@ -2319,11 +2319,13 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
       setSuccess(
         finalPost.status === "pending_approval"
           ? "Отправлено на согласование"
-          : action === "draft"
-            ? "Черновик сохранён"
-            : action === "schedule"
-              ? "Публикация запланирована"
-              : "Публикация передана в очередь",
+          : action === "draft" && approvalRequired
+            ? "Черновик сохранён. Запрос на согласование уйдёт, когда пост будет готов к публикации."
+            : action === "draft"
+              ? "Черновик сохранён"
+              : action === "schedule"
+                ? "Публикация запланирована"
+                : "Публикация передана в очередь",
       );
     } catch (saveError) {
       if (postId && action === "now") {
@@ -3980,7 +3982,8 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
               <div>
                 <h3 className="text-base font-semibold">Согласование</h3>
                 <p className="mt-1 text-xs text-muted">
-                  Запрос уйдёт владельцу и администраторам. Редакторы сами публиковать не смогут.
+                  Запрос уйдёт владельцу и администраторам сразу после сохранения готового
+                  поста — в кабинет и на почту. Пока пост неполный, он останется черновиком.
                 </p>
               </div>
               <button
@@ -4007,7 +4010,8 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
               <span>
                 <span className="font-semibold">Требовать согласование</span>
                 <span className="mt-1 block text-xs text-muted">
-                  Редакторы отправляют пост администратору перед публикацией.
+                  Редакторы не смогут опубликовать без решения. Запрос уходит при сохранении,
+                  если заполнены текст и каналы.
                 </span>
               </span>
             </label>
