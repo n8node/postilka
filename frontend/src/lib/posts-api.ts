@@ -97,6 +97,7 @@ export type PostSettings = {
     shorten?: boolean;
   };
   approval_required?: boolean;
+  approver_user_ids?: string[];
   recurrence?: PostRecurrenceSettings;
   /** separate = media then text; caption = text on media (Telegram only) */
   telegram_media_layout?: "separate" | "caption";

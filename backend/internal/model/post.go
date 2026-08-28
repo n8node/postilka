@@ -2,6 +2,7 @@ package model
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 )
 
@@ -193,6 +194,7 @@ type PostSettings struct {
 	Link                    *PostLinkSettings       `json:"link,omitempty"`
 	UTM                     *PostUTMSettings        `json:"utm,omitempty"`
 	ApprovalRequired        bool                    `json:"approval_required,omitempty"`
+	ApproverUserIDs         []string                `json:"approver_user_ids,omitempty"`
 	Recurrence              *PostRecurrenceSettings `json:"recurrence,omitempty"`
 	TelegramMediaLayout     string                   `json:"telegram_media_layout,omitempty"`
 	TelegramCaptionPosition string                   `json:"telegram_caption_position,omitempty"`
@@ -271,4 +273,44 @@ type PostSaveRequest struct {
 
 type PostScheduleRequest struct {
 	DueAt time.Time `json:"due_at"`
+}
+
+func NormalizeUserIDs(ids []string) []string {
+	if len(ids) == 0 {
+		return nil
+	}
+	seen := make(map[string]struct{}, len(ids))
+	out := make([]string, 0, len(ids))
+	for _, id := range ids {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		out = append(out, id)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func (s PostSettings) NormalizedApproverIDs() []string {
+	return NormalizeUserIDs(s.ApproverUserIDs)
+}
+
+func (s PostSettings) HasApprover(userID string) bool {
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return false
+	}
+	for _, id := range s.NormalizedApproverIDs() {
+		if id == userID {
+			return true
+		}
+	}
+	return false
 }

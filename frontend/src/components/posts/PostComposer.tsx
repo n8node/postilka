@@ -26,6 +26,7 @@ import {
   Smartphone,
   Sparkles,
   Trash2,
+  Undo2,
   Upload,
   Users,
   X,
@@ -142,6 +143,38 @@ const HASHTAG_SETS = [
 
 type Override = { detached: boolean; html: string; plain: string };
 const TELEGRAM_CIRCLE_LABEL = "Кружок Telegram";
+
+function selectableApproverMembers(members: WorkspaceMember[]) {
+  return members.filter(
+    (member) =>
+      member.status !== "suspended" &&
+      (member.role === "owner" || member.role === "admin" || member.role === "editor"),
+  );
+}
+
+function memberRoleLabel(role: string) {
+  if (role === "owner") return "Владелец";
+  if (role === "admin") return "Администратор";
+  if (role === "editor") return "Редактор";
+  return role;
+}
+
+function memberDisplayName(member: WorkspaceMember) {
+  return member.name?.trim() || member.email;
+}
+
+function canDecideApproval(
+  status: Post["status"] | null | undefined,
+  approverIds: string[],
+  userId: string | null,
+  isAdmin: boolean,
+) {
+  if (status !== "pending_approval") return false;
+  if (approverIds.length > 0) {
+    return Boolean(userId && approverIds.includes(userId)) || isAdmin;
+  }
+  return isAdmin;
+}
 
 type SelectedMedia = { file: WorkspaceFile; alt: string };
 type ArticleBlock = TelegramRichBlock;
@@ -1228,6 +1261,9 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
   const [telegramMediaOrder, setTelegramMediaOrder] = useState<"media_first" | "text_first">("media_first");
   const [utm, setUTM] = useState({ source: "", medium: "social", campaign: "", shorten: false });
   const [approvalRequired, setApprovalRequired] = useState(false);
+  const [selectedApproverIds, setSelectedApproverIds] = useState<string[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [decisionComment, setDecisionComment] = useState("");
   const [needsRevision, setNeedsRevision] = useState(false);
   const [approvalModalOpen, setApprovalModalOpen] = useState(false);
   const [workspaceMembers, setWorkspaceMembers] = useState<WorkspaceMember[]>([]);
@@ -1260,6 +1296,12 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
 
   const isAdmin = workspaceRole === "owner" || workspaceRole === "admin";
   const isPendingApproval = currentStatus === "pending_approval";
+  const canDecide = canDecideApproval(
+    currentStatus,
+    selectedApproverIds,
+    currentUserId,
+    isAdmin,
+  );
   const isPublishedStory =
     currentStatus === "published" && (postKind === "story" || format === "story");
   const isViewOnly =
@@ -1293,13 +1335,16 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
   }, []);
 
   const approverMembers = useMemo(
-    () =>
-      workspaceMembers.filter(
-        (member) =>
-          member.status !== "suspended" &&
-          (member.role === "owner" || member.role === "admin"),
-      ),
+    () => selectableApproverMembers(workspaceMembers),
     [workspaceMembers],
+  );
+  const waitingApproverNames = useMemo(
+    () =>
+      approverMembers
+        .filter((member) => selectedApproverIds.includes(member.user_id))
+        .map(memberDisplayName)
+        .join(", "),
+    [approverMembers, selectedApproverIds],
   );
 
   const load = useCallback(async () => {
@@ -1314,14 +1359,16 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
       setChannels(channelData.items);
       setRecentFiles(fileData.files);
       setWorkspaceRole(meData.active_workspace?.role ?? meData.workspace?.role ?? null);
+      setCurrentUserId(meData.user.id);
       setSelectedIds([]);
       setActiveChannelId(null);
+      void loadWorkspaceMembers();
     } catch (loadError) {
       setError(errorText(loadError, "Не удалось загрузить композер"));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [loadWorkspaceMembers]);
 
   useEffect(() => {
     void load();
@@ -1572,6 +1619,8 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
     setLongitude("");
     setUTM({ source: "", medium: "social", campaign: "", shorten: false });
     setApprovalRequired(false);
+    setSelectedApproverIds([]);
+    setDecisionComment("");
     setApprovalModalOpen(false);
     setCurrentStatus(null);
     setApprovalEvents([]);
@@ -1660,6 +1709,8 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
       shorten: storedUTM?.shorten ?? false,
     });
     setApprovalRequired(Boolean(post.settings.approval_required));
+    setSelectedApproverIds(post.settings.approver_user_ids ?? []);
+    setDecisionComment("");
     setNeedsRevision(Boolean(post.needs_revision));
     setCurrentStatus(post.status);
     void loadApprovalEvents(post.id);
@@ -1730,6 +1781,7 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
           }
         : undefined,
       approval_required: approvalRequired || undefined,
+      approver_user_ids: approvalRequired ? selectedApproverIds : undefined,
       telegram_media_layout:
         media.length > 0 && telegramChannels.length > 0 ? telegramMediaLayout : undefined,
       telegram_caption_position:
@@ -2202,12 +2254,15 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
     if (action === "schedule" && (!scheduleAt || new Date(scheduleAt) <= new Date())) {
       return "Выберите дату и время в будущем";
     }
+    if (approvalRequired && selectedApproverIds.length === 0) {
+      return "Выберите, кто должен согласовать публикацию";
+    }
     return null;
   }
 
-  async function handleApprovalDecision(action: "approve" | "reject") {
+  async function handleApprovalDecision(action: "approve" | "reject", publishNow = true) {
     if (!postId) return;
-    if (action === "reject" && !discussionComment.trim()) {
+    if (action === "reject" && !decisionComment.trim()) {
       setError("Укажите, что нужно доработать");
       return;
     }
@@ -2218,18 +2273,18 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
       const finalPost =
         action === "approve"
           ? await approvePost(postId, {
-              comment: discussionComment.trim() || undefined,
+              comment: decisionComment.trim() || undefined,
               due_at:
-                timing === "schedule" && scheduleAt
+                !publishNow && scheduleAt
                   ? new Date(scheduleAt).toISOString()
                   : undefined,
-              publish: timing === "now",
+              publish: publishNow,
             })
-          : await rejectPost(postId, { comment: discussionComment.trim() });
+          : await rejectPost(postId, { comment: decisionComment.trim() });
       setCurrentStatus(finalPost.status);
       setNeedsRevision(Boolean(finalPost.needs_revision) || action === "reject");
       await loadApprovalEvents(finalPost.id);
-      setDiscussionComment("");
+      setDecisionComment("");
       setSuccess(
         action === "approve"
           ? "Публикация одобрена"
@@ -2562,9 +2617,11 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
               <p className="font-semibold">Публикация на согласовании</p>
               <p className="mt-1 text-xs">
-                {isAdmin
-                  ? "Одобрите публикацию или верните её на доработку во вкладке «Обсуждение»."
-                  : "Редактирование заблокировано до решения администратора."}
+                {canDecide
+                  ? "Одобрите публикацию или верните её на доработку — кнопки справа внизу."
+                  : waitingApproverNames
+                    ? `Ждёт решения: ${waitingApproverNames}. Редактирование заблокировано.`
+                    : "Редактирование заблокировано до решения согласующего."}
               </p>
             </div>
           )}
@@ -3659,7 +3716,7 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
                     <p className="text-sm font-semibold">Обсуждений пока нет</p>
                     <p className="mt-1 max-w-64 text-xs text-muted">
                       {approvalRequired || isPendingApproval
-                        ? "Добавьте комментарий или дождитесь решения администратора."
+                        ? "Здесь переписка по этому посту. Решение согласования — кнопками справа внизу."
                         : "Включите «Согласование» или отправьте пост на публикацию, чтобы начать обсуждение."}
                     </p>
                   </div>
@@ -3689,27 +3746,9 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
                       placeholder="Комментарий для команды"
                       className="w-full rounded-lg border border-border px-3 py-2 text-sm"
                     />
-                    <div className="flex flex-wrap gap-2">
-                      <SmallButton onClick={() => void sendDiscussionComment()} disabled={busy}>
-                        Добавить комментарий
-                      </SmallButton>
-                      {isPendingApproval && isAdmin && (
-                        <>
-                          <SmallButton
-                            onClick={() => void handleApprovalDecision("approve")}
-                            disabled={busy}
-                          >
-                            {timing === "schedule" ? "Одобрить и запланировать" : "Одобрить и опубликовать"}
-                          </SmallButton>
-                          <SmallButton
-                            onClick={() => void handleApprovalDecision("reject")}
-                            disabled={busy}
-                          >
-                            Вернуть на доработку
-                          </SmallButton>
-                        </>
-                      )}
-                    </div>
+                    <SmallButton onClick={() => void sendDiscussionComment()} disabled={busy}>
+                      Добавить комментарий
+                    </SmallButton>
                   </div>
                 )}
               </div>
@@ -3802,7 +3841,11 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
               )}
               {isPendingApproval && (
                 <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                  Публикация ожидает согласования администратора workspace.
+                  {canDecide
+                    ? "Этот пост ждёт вашего решения."
+                    : waitingApproverNames
+                      ? `Ждёт согласования: ${waitingApproverNames}.`
+                      : "Публикация ожидает согласования."}
                 </p>
               )}
               {isPublishedStory ? (
@@ -3835,6 +3878,63 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
                     Удалить из Telegram
                   </button>
                 </>
+              ) : isPendingApproval ? (
+                canDecide ? (
+                  <>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
+                      Ваше решение
+                    </p>
+                    <textarea
+                      value={decisionComment}
+                      onChange={(event) => setDecisionComment(event.target.value)}
+                      rows={3}
+                      placeholder="Если возвращаете пост — напишите, что изменить. Для одобрения комментарий не обязателен."
+                      className="w-full rounded-lg border border-border px-3 py-2 text-sm"
+                    />
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void handleApprovalDecision("approve", true)}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-accent px-4 py-2.5 text-sm font-semibold text-white hover:bg-accent/90 disabled:opacity-50"
+                    >
+                      {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                      Одобрить и опубликовать
+                    </button>
+                    {scheduleAt && (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void handleApprovalDecision("approve", false)}
+                        className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-border bg-white px-4 py-2.5 text-sm font-semibold hover:bg-zinc-50 disabled:opacity-50"
+                      >
+                        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarClock className="h-4 w-4" />}
+                        Одобрить и запланировать
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void handleApprovalDecision("reject")}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+                    >
+                      {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Undo2 className="h-4 w-4" />}
+                      Вернуть на доработку
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActivePreviewTab("discussion")}
+                      className="w-full text-center text-xs font-medium text-accent hover:underline"
+                    >
+                      Открыть обсуждение
+                    </button>
+                  </>
+                ) : (
+                  <p className="text-xs text-muted">
+                    {waitingApproverNames
+                      ? `Решение принимает: ${waitingApproverNames}.`
+                      : "Дождитесь решения согласующего."}
+                  </p>
+                )
               ) : (
                 <>
               <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
@@ -3955,7 +4055,12 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
               >
                 <Users className="h-4 w-4" />
                 Согласование
-                {approvalRequired && (
+                {approvalRequired && selectedApproverIds.length > 0 && (
+                  <span className="rounded-full bg-amber-200 px-1.5 py-0.5 text-[10px] font-bold uppercase">
+                    {selectedApproverIds.length}
+                  </span>
+                )}
+                {approvalRequired && selectedApproverIds.length === 0 && (
                   <span className="rounded-full bg-amber-200 px-1.5 py-0.5 text-[10px] font-bold uppercase">
                     вкл
                   </span>
@@ -3982,8 +4087,8 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
               <div>
                 <h3 className="text-base font-semibold">Согласование</h3>
                 <p className="mt-1 text-xs text-muted">
-                  Запрос уйдёт владельцу и администраторам сразу после сохранения готового
-                  поста — в кабинет и на почту. Пока пост неполный, он останется черновиком.
+                  Отметьте, кто должен принять решение. Запрос уйдёт только выбранным — в кабинет
+                  и на почту — после сохранения готового поста.
                 </p>
               </div>
               <button
@@ -4010,14 +4115,14 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
               <span>
                 <span className="font-semibold">Требовать согласование</span>
                 <span className="mt-1 block text-xs text-muted">
-                  Редакторы не смогут опубликовать без решения. Запрос уходит при сохранении,
-                  если заполнены текст и каналы.
+                  Без решения выбранных людей опубликовать будет нельзя. Если пост ещё неполный,
+                  он сохранится как черновик.
                 </span>
               </span>
             </label>
 
             <p className="mb-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted">
-              Кто получит запрос
+              Кто согласует
             </p>
             {membersLoading ? (
               <div className="flex items-center gap-2 py-6 text-sm text-muted">
@@ -4027,9 +4132,9 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
             ) : approverMembers.length === 0 ? (
               <div className="rounded-lg border border-dashed border-border bg-zinc-50 px-4 py-5 text-center">
                 <Users className="mx-auto mb-2 h-8 w-8 text-zinc-300" />
-                <p className="text-sm font-semibold">Нет администраторов</p>
+                <p className="text-sm font-semibold">Нет сотрудников</p>
                 <p className="mt-1 text-xs text-muted">
-                  Владелец и администраторы workspace получат запрос на согласование.
+                  Добавьте участников в разделе «Команда», чтобы назначить согласующего.
                 </p>
                 <Link
                   href="/team"
@@ -4041,29 +4146,57 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
               </div>
             ) : (
               <ul className="space-y-2">
-                {approverMembers.map((member) => (
-                  <li
-                    key={member.user_id}
-                    className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm"
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate font-medium">
-                        {member.name?.trim() || member.email}
-                      </span>
-                      {member.name?.trim() && (
-                        <span className="block truncate text-xs text-muted">{member.email}</span>
-                      )}
-                    </span>
-                    <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-muted">
-                      {member.role === "owner"
-                        ? "Владелец"
-                        : member.role === "admin"
-                          ? "Администратор"
-                          : member.role}
-                    </span>
-                  </li>
-                ))}
+                {approverMembers.map((member) => {
+                  const checked = selectedApproverIds.includes(member.user_id);
+                  return (
+                    <li key={member.user_id}>
+                      <label
+                        className={cn(
+                          "flex cursor-pointer items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm",
+                          checked ? "border-accent bg-accent/5" : "border-border",
+                          composerLocked && "cursor-not-allowed opacity-70",
+                        )}
+                      >
+                        <span className="flex min-w-0 items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={composerLocked}
+                            onChange={() => {
+                              setSelectedApproverIds((current) => {
+                                const next = current.includes(member.user_id)
+                                  ? current.filter((id) => id !== member.user_id)
+                                  : [...current, member.user_id];
+                                if (next.length > 0) setApprovalRequired(true);
+                                return next;
+                              });
+                              markDirty();
+                            }}
+                          />
+                          <span className="min-w-0">
+                            <span className="block truncate font-medium">
+                              {memberDisplayName(member)}
+                            </span>
+                            {member.name?.trim() && (
+                              <span className="block truncate text-xs text-muted">
+                                {member.email}
+                              </span>
+                            )}
+                          </span>
+                        </span>
+                        <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-muted">
+                          {memberRoleLabel(member.role)}
+                        </span>
+                      </label>
+                    </li>
+                  );
+                })}
               </ul>
+            )}
+            {approvalRequired && selectedApproverIds.length === 0 && !membersLoading && (
+              <p className="mt-3 text-xs text-amber-800">
+                Отметьте хотя бы одного сотрудника, иначе запрос не уйдёт.
+              </p>
             )}
           </div>
         </div>

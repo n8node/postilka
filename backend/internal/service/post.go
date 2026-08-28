@@ -757,6 +757,10 @@ func sanitizePostContent(content *model.PostContent) {
 
 func sanitizePostSaveRequest(req *model.PostSaveRequest) {
 	sanitizePostContent(&req.Content)
+	req.Settings.ApproverUserIDs = model.NormalizeUserIDs(req.Settings.ApproverUserIDs)
+	if !req.Settings.ApprovalRequired {
+		req.Settings.ApproverUserIDs = nil
+	}
 	for i := range req.Targets {
 		settings, err := DecodePostTargetSettings(req.Targets[i].Settings)
 		if err != nil || settings.Content == nil {

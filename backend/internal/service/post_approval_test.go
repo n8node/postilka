@@ -15,6 +15,15 @@ func TestShouldSubmitForApproval_HonorsFlagForAnyRole(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if ok {
+		t.Fatal("approval without selected people should not submit")
+	}
+	ok, err = s.shouldSubmitForApproval(context.Background(), "user", model.Post{
+		Settings: model.PostSettings{ApprovalRequired: true, ApproverUserIDs: []string{"admin-1"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !ok {
 		t.Fatal("approval_required should submit even if the author is an admin")
 	}

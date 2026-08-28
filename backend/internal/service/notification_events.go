@@ -273,10 +273,14 @@ func (s *NotificationService) NotifyApprovalSubmitted(ctx context.Context, post 
 	if s == nil || post.WorkspaceID == "" {
 		return
 	}
-	ids, err := s.ws.ListMemberUserIDs(ctx, post.WorkspaceID, adminRoles())
-	if err != nil {
-		s.warn("list approval recipients", err)
-		return
+	ids := post.Settings.NormalizedApproverIDs()
+	if len(ids) == 0 {
+		listed, err := s.ws.ListMemberUserIDs(ctx, post.WorkspaceID, adminRoles())
+		if err != nil {
+			s.warn("list approval recipients", err)
+			return
+		}
+		ids = listed
 	}
 	skipped := skipUserIDs(ids, actorID)
 	if len(skipped) > 0 {

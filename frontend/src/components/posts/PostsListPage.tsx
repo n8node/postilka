@@ -207,6 +207,7 @@ export function PostsListPage() {
   const [error, setError] = useState<string | null>(null);
   const [pendingCount, setPendingCount] = useState(0);
   const [workspaceRole, setWorkspaceRole] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [reviewPost, setReviewPost] = useState<Post | null>(null);
   const [rejectComment, setRejectComment] = useState("");
   const [reviewBusy, setReviewBusy] = useState(false);
@@ -214,6 +215,15 @@ export function PostsListPage() {
 
   const isAdmin = workspaceRole === "owner" || workspaceRole === "admin";
   const showApprovalColumns = statusFilter === "pending_approval";
+
+  function canReviewPost(post: Post) {
+    if (post.status !== "pending_approval") return false;
+    const ids = post.settings.approver_user_ids ?? [];
+    if (ids.length > 0) {
+      return Boolean(currentUserId && ids.includes(currentUserId)) || isAdmin;
+    }
+    return isAdmin;
+  }
 
   const channelMap = useMemo(
     () => new Map(channels.map((channel) => [channel.id, channel])),
@@ -258,10 +268,14 @@ export function PostsListPage() {
       .then((data) => setMembers(data.members))
       .catch(() => setMembers([]));
     void fetchMe()
-      .then((data) =>
-        setWorkspaceRole(data.active_workspace?.role ?? data.workspace?.role ?? null),
-      )
-      .catch(() => setWorkspaceRole(null));
+      .then((data) => {
+        setWorkspaceRole(data.active_workspace?.role ?? data.workspace?.role ?? null);
+        setCurrentUserId(data.user.id);
+      })
+      .catch(() => {
+        setWorkspaceRole(null);
+        setCurrentUserId(null);
+      });
   }, []);
 
   useEffect(() => {
@@ -691,17 +705,17 @@ export function PostsListPage() {
                   Желаемое время: {formatDateTime(reviewPost.due_at)}
                 </p>
               )}
-              {isAdmin ? (
+              {canReviewPost(reviewPost) ? (
                 <>
                   <label className="block text-sm">
                     <span className="mb-1 block text-xs font-medium text-muted">
-                      Комментарий для доработки
+                      Комментарий, если возвращаете на доработку
                     </span>
                     <textarea
                       value={rejectComment}
                       onChange={(event) => setRejectComment(event.target.value)}
                       rows={4}
-                      placeholder="Что изменить перед публикацией"
+                      placeholder="Что изменить перед публикацией. Для одобрения не обязательно."
                       className="w-full rounded-lg border border-border px-3 py-2 text-sm"
                     />
                   </label>
@@ -739,7 +753,7 @@ export function PostsListPage() {
                 </>
               ) : (
                 <p className="text-sm text-muted">
-                  Ожидается решение владельца или администратора. Редактирование недоступно.
+                  Этот пост ожидает решения назначенных согласующих. Редактирование недоступно.
                 </p>
               )}
               <Link

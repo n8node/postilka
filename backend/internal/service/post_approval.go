@@ -44,6 +44,9 @@ func (s *PostService) SubmitForApproval(
 	if !post.Settings.ApprovalRequired {
 		return nil, fmt.Errorf("%w: для этой публикации согласование не включено", ErrInvalidPost)
 	}
+	if len(post.Settings.NormalizedApproverIDs()) == 0 {
+		return nil, fmt.Errorf("%w: выберите, кто должен согласовать публикацию", ErrInvalidPost)
+	}
 	if err := ValidatePostForPublication(*post); err != nil {
 		return nil, err
 	}
@@ -81,12 +84,15 @@ func (s *PostService) ApprovePost(
 	postID string,
 	req model.PostApprovalDecisionRequest,
 ) (*model.Post, error) {
-	ws, err := s.requireAdmin(ctx, userID, r)
+	ws, err := s.requireEditor(ctx, userID, r)
 	if err != nil {
 		return nil, err
 	}
 	post, err := s.posts.Get(ctx, ws.ID, postID)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.ensureCanDecideApproval(ctx, userID, ws.ID, *post); err != nil {
 		return nil, err
 	}
 	if post.Status != model.PostStatusPendingApproval {
@@ -138,12 +144,15 @@ func (s *PostService) RejectPost(
 	postID string,
 	req model.PostApprovalDecisionRequest,
 ) (*model.Post, error) {
-	ws, err := s.requireAdmin(ctx, userID, r)
+	ws, err := s.requireEditor(ctx, userID, r)
 	if err != nil {
 		return nil, err
 	}
 	post, err := s.posts.Get(ctx, ws.ID, postID)
 	if err != nil {
+		return nil, err
+	}
+	if err := s.ensureCanDecideApproval(ctx, userID, ws.ID, *post); err != nil {
 		return nil, err
 	}
 	if post.Status != model.PostStatusPendingApproval {
@@ -196,22 +205,6 @@ func (s *PostService) CommentPost(
 	return event, nil
 }
 
-func (s *PostService) requireAdmin(
-	ctx context.Context,
-	userID string,
-	r *http.Request,
-) (*model.Workspace, error) {
-	ws, err := s.requireEditor(ctx, userID, r)
-	if err != nil {
-		return nil, err
-	}
-	member, err := s.workspaces.RequireMembership(ctx, userID, ws.ID, model.RoleAdmin)
-	if err != nil {
-		return nil, err
-	}
-	return member, nil
-}
-
 func (s *PostService) maybeSubmitForApproval(
 	ctx context.Context,
 	userID string,
@@ -242,5 +235,15 @@ func (s *PostService) shouldSubmitForApproval(
 	_ string,
 	post model.Post,
 ) (bool, error) {
-	return post.Settings.ApprovalRequired, nil
+	return post.Settings.ApprovalRequired && len(post.Settings.NormalizedApproverIDs()) > 0, nil
+}
+
+func (s *PostService) ensureCanDecideApproval(ctx context.Context, userID, workspaceID string, post model.Post) error {
+	if post.Settings.HasApprover(userID) {
+		return nil
+	}
+	if _, err := s.workspaces.RequireMembership(ctx, userID, workspaceID, model.RoleAdmin); err != nil {
+		return fmt.Errorf("%w: вас не назначили согласующим эту публикацию", ErrForbidden)
+	}
+	return nil
 }
