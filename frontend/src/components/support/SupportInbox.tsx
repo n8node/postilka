@@ -64,7 +64,7 @@ export function SupportInbox({
   );
 
   return (
-    <div className="grid min-h-[calc(100vh-10rem)] overflow-hidden rounded-2xl border border-border bg-surface lg:grid-cols-[320px_minmax(0,1fr)]">
+    <div className="grid min-h-[calc(100vh-10rem)] overflow-hidden rounded-2xl border border-border bg-surface lg:grid-cols-[400px_minmax(0,1fr)]">
       <section className="flex min-h-0 flex-col border-b border-border lg:border-b-0 lg:border-r">
         <div className="border-b border-border px-4 py-3">
           <div className="flex items-center justify-between gap-2">
@@ -88,14 +88,14 @@ export function SupportInbox({
               className="h-9 w-full rounded-lg border border-border bg-zinc-50 pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-accent/30"
             />
           </div>
-          <div className="mt-3 flex gap-1 overflow-x-auto">
+          <div className="mt-3 flex flex-wrap gap-1">
             {TICKET_FILTER_TABS.map((item) => (
               <button
                 key={item.id}
                 type="button"
                 onClick={() => setTab(item.id)}
                 className={cn(
-                  "shrink-0 rounded-full px-3 py-1 text-xs font-medium",
+                  "rounded-full px-2.5 py-1 text-xs font-medium",
                   tab === item.id
                     ? "bg-zinc-900 text-white"
                     : "bg-zinc-100 text-slate-600 hover:bg-zinc-200",
