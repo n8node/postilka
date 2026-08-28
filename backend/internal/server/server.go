@@ -262,7 +262,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	supportSettingsSvc := service.NewSupportSettingsService(supportSettingsRepo)
 	supportTicketSvc := service.NewSupportTicketService(
 		supportTicketRepo, supportSettingsSvc, userRepo, notificationSvc, emailSvc,
-		oauthclient.NewMAXBotClient(), objectStorage, cfg, logger,
+		oauthclient.NewMAXBotClient(), telegramBotClient, objectStorage, cfg, logger,
 	)
 	supportTicketHandler := handler.NewSupportTicketHandler(supportTicketSvc)
 	adminSupportHandler := handler.NewAdminSupportHandler(supportTicketSvc, supportSettingsSvc)

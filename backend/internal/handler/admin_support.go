@@ -51,7 +51,7 @@ func (h *AdminSupportHandler) UpdateSettings(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *AdminSupportHandler) TestTelegram(w http.ResponseWriter, r *http.Request) {
-	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
 	defer cancel()
 	ok, msg := h.tickets.SendTestTelegram(ctx)
 	writeJSON(w, http.StatusOK, model.SupportNotifyTestResult{OK: ok, Message: msg})

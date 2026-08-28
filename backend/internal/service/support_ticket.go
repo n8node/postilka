@@ -1,15 +1,11 @@
 package service
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"html"
-	"io"
 	"log/slog"
-	"net/http"
 	"regexp"
 	"strings"
 	"time"
@@ -32,10 +28,10 @@ type SupportTicketService struct {
 	notify     *NotificationService
 	email      *EmailService
 	maxClient  *oauthclient.MAXBotClient
+	telegram   *TelegramBotClient
 	store      *ObjectStorage
 	cfg        *config.Config
 	log        *slog.Logger
-	httpClient *http.Client
 }
 
 func NewSupportTicketService(
@@ -45,6 +41,7 @@ func NewSupportTicketService(
 	notify *NotificationService,
 	email *EmailService,
 	maxClient *oauthclient.MAXBotClient,
+	telegram *TelegramBotClient,
 	store *ObjectStorage,
 	cfg *config.Config,
 	logger *slog.Logger,
@@ -59,12 +56,10 @@ func NewSupportTicketService(
 		notify:    notify,
 		email:     email,
 		maxClient: maxClient,
+		telegram:  telegram,
 		store:     store,
 		cfg:       cfg,
 		log:       logger,
-		httpClient: &http.Client{
-			Timeout: 20 * time.Second,
-		},
 	}
 }
 
@@ -386,7 +381,7 @@ func (s *SupportTicketService) SendTestTelegram(ctx context.Context) (bool, stri
 	}
 	text := "✅ Тестовое сообщение Postilka Support\nБот поддержки подключён."
 	if err := s.sendTelegram(ctx, cfg.TelegramBotToken, cfg.TelegramChatID, text); err != nil {
-		return false, err.Error()
+		return false, mapSupportTelegramError(err)
 	}
 	return true, "Тестовое сообщение отправлено"
 }
@@ -532,34 +527,22 @@ func (s *SupportTicketService) sendTelegram(ctx context.Context, token, chatID, 
 	if token == "" || chatID == "" || text == "" {
 		return errors.New("telegram not configured")
 	}
-	payload := map[string]any{"chat_id": chatID, "text": text}
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return err
+	if s.telegram == nil {
+		return errors.New("telegram client not configured")
 	}
-	url := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", token)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
-	if err != nil {
-		return err
+	return s.telegram.SendMessage(ctx, token, chatID, text)
+}
+
+func mapSupportTelegramError(err error) string {
+	if err == nil {
+		return ""
 	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := s.httpClient.Do(req)
-	if err != nil {
-		return err
+	msg := sanitizeTelegramError(err).Error()
+	lower := strings.ToLower(msg)
+	if strings.Contains(lower, "deadline") || strings.Contains(lower, "timeout") || strings.Contains(lower, "ожидания заголовков") {
+		return "Telegram не отвечает с сервера. Нужен исходящий прокси (админка → настройки Telegram / outbound proxy), как для публикации в каналы."
 	}
-	defer resp.Body.Close()
-	respBody, _ := io.ReadAll(resp.Body)
-	if resp.StatusCode >= 300 {
-		return fmt.Errorf("telegram HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
-	}
-	var parsed struct {
-		OK          bool   `json:"ok"`
-		Description string `json:"description"`
-	}
-	if err := json.Unmarshal(respBody, &parsed); err == nil && !parsed.OK {
-		return fmt.Errorf("telegram: %s", parsed.Description)
-	}
-	return nil
+	return msg
 }
 
 func (s *SupportTicketService) sendMax(ctx context.Context, token, recipientID, text string) error {
