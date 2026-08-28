@@ -44,6 +44,8 @@ func (s *SupportTicketService) validateUploads(files []SupportUpload) error {
 	}
 	return nil
 }
+
+func (s *SupportTicketService) decorateTicket(ticket *model.SupportTicket, admin bool) {
 	if ticket == nil {
 		return
 	}
