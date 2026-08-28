@@ -29,7 +29,7 @@ const SETTINGS_MENU: {
   description: string;
 }[] = [
   { key: "profile", label: "Профиль", description: "Аватар, имя и email" },
-  { key: "workspace", label: "Workspace", description: "Команда и доступ" },
+  { key: "workspace", label: "Workspace", description: "Название и удаление" },
   { key: "email", label: "Смена email", description: "Подтверждение адреса" },
   { key: "invites", label: "Мои инвайты", description: "Ключи регистрации" },
   { key: "login", label: "Вход через соцсети", description: "VK и MAX" },

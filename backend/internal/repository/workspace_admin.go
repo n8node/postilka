@@ -219,7 +219,7 @@ func (r *WorkspaceRepository) DeleteAll(ctx context.Context) (int, error) {
 func (r *WorkspaceRepository) adminMembers(ctx context.Context, workspaceID string) ([]model.AdminWorkspaceMember, error) {
 	const q = `
 		SELECT
-			u.id, u.email, u.name, wm.role, wm.created_at,
+			u.id, u.email, u.name, wm.role, wm.status, wm.created_at,
 			EXISTS (
 				SELECT 1 FROM workspace_invites wi
 				WHERE wi.workspace_id = wm.workspace_id
@@ -248,7 +248,7 @@ func (r *WorkspaceRepository) adminMembers(ctx context.Context, workspaceID stri
 	for rows.Next() {
 		var m model.AdminWorkspaceMember
 		if err := rows.Scan(
-			&m.UserID, &m.Email, &m.Name, &m.Role, &m.JoinedAt, &m.JoinedViaInvite,
+			&m.UserID, &m.Email, &m.Name, &m.Role, &m.Status, &m.JoinedAt, &m.JoinedViaInvite,
 		); err != nil {
 			return nil, err
 		}

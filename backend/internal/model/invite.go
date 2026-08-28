@@ -14,14 +14,16 @@ const (
 
 // WorkspaceInvite is the future team-invite entity (wave 8). Schema only for now.
 type WorkspaceInvite struct {
-	ID          string                `json:"id"`
-	WorkspaceID string                `json:"workspace_id"`
-	Email       string                `json:"email"`
-	Role        WorkspaceRole         `json:"role"`
-	InvitedBy   string                `json:"invited_by"`
-	Status      WorkspaceInviteStatus `json:"status"`
-	ExpiresAt   time.Time             `json:"expires_at"`
-	CreatedAt   time.Time             `json:"created_at"`
+	ID             string                `json:"id"`
+	WorkspaceID    string                `json:"workspace_id"`
+	Email          string                `json:"email"`
+	Role           WorkspaceRole         `json:"role"`
+	InvitedBy      string                `json:"invited_by"`
+	InvitedByName  string                `json:"invited_by_name,omitempty"`
+	InvitedByEmail string                `json:"invited_by_email,omitempty"`
+	Status         WorkspaceInviteStatus `json:"status"`
+	ExpiresAt      time.Time             `json:"expires_at"`
+	CreatedAt      time.Time             `json:"created_at"`
 }
 
 // WorkspaceInvitePreview is public invite metadata for accept flow routing.

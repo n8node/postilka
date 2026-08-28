@@ -20,6 +20,13 @@ var (
 	ErrInvalidWorkspaceName      = errors.New("invalid workspace name")
 	ErrWorkspaceLimitReached     = errors.New("workspace limit reached")
 	ErrCannotDeleteLastWorkspace = errors.New("cannot delete last workspace")
+	ErrAlreadyMember             = errors.New("already a workspace member")
+	ErrCannotManageOwner         = errors.New("cannot manage workspace owner")
+	ErrCannotManageSelf          = errors.New("cannot change own membership")
+	ErrCannotLeaveAsOwner        = errors.New("owner cannot leave workspace")
+	ErrInvalidMemberStatus       = errors.New("invalid member status")
+	ErrMemberNotFound            = errors.New("workspace member not found")
+	ErrSeatQuotaExceeded         = errors.New("workspace seat quota exceeded")
 )
 
 const MaxOwnedWorkspacesPerUser = 20
@@ -228,6 +235,220 @@ func (s *WorkspaceService) ListMembers(ctx context.Context, userID, workspaceID 
 		return nil, err
 	}
 	return s.workspaces.ListMembers(ctx, workspaceID)
+}
+
+func (s *WorkspaceService) SeatSnapshot(ctx context.Context, userID, workspaceID string) (*model.WorkspaceSeatSnapshot, error) {
+	if _, err := s.RequireMembership(ctx, userID, workspaceID, model.RoleViewer); err != nil {
+		return nil, err
+	}
+	return s.seatSnapshot(ctx, workspaceID)
+}
+
+func (s *WorkspaceService) seatSnapshot(ctx context.Context, workspaceID string) (*model.WorkspaceSeatSnapshot, error) {
+	used, err := s.workspaces.CountActiveMembers(ctx, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	pending, err := s.workspaces.CountPendingInvites(ctx, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	snap := &model.WorkspaceSeatSnapshot{Used: used, Pending: pending}
+	plan, err := s.planForWorkspace(ctx, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	if plan != nil {
+		snap.Limit = plan.MaxSeats
+	}
+	return snap, nil
+}
+
+func canManageMember(actor, target model.WorkspaceRole) bool {
+	return actor.Rank() > target.Rank()
+}
+
+func (s *WorkspaceService) UpdateMember(
+	ctx context.Context,
+	actorID, workspaceID, targetUserID string,
+	role *model.WorkspaceRole,
+	status *model.MemberStatus,
+) (*model.WorkspaceMember, error) {
+	actor, err := s.RequireMembership(ctx, actorID, workspaceID, model.RoleAdmin)
+	if err != nil {
+		return nil, err
+	}
+	if targetUserID == actorID {
+		return nil, ErrCannotManageSelf
+	}
+
+	target, err := s.workspaces.GetMember(ctx, workspaceID, targetUserID)
+	if errors.Is(err, repository.ErrNotFound) {
+		return nil, ErrMemberNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	if target.Role == model.RoleOwner {
+		return nil, ErrCannotManageOwner
+	}
+	if !canManageMember(model.WorkspaceRole(actor.Role), target.Role) {
+		return nil, ErrForbidden
+	}
+
+	if role != nil {
+		if *role == model.RoleOwner || *role == "" {
+			return nil, ErrInvalidInput
+		}
+		if !canManageMember(model.WorkspaceRole(actor.Role), *role) && *role != target.Role {
+			return nil, ErrForbidden
+		}
+		if err := s.workspaces.SetMemberRole(ctx, workspaceID, targetUserID, *role); err != nil {
+			return nil, err
+		}
+	}
+
+	if status != nil {
+		switch *status {
+		case model.MemberActive, model.MemberSuspended:
+		default:
+			return nil, ErrInvalidMemberStatus
+		}
+		if *status == model.MemberActive && target.Status != model.MemberActive {
+			if err := s.CheckSeatRoom(ctx, workspaceID, 1); err != nil {
+				return nil, err
+			}
+		}
+		if err := s.workspaces.SetMemberStatus(ctx, workspaceID, targetUserID, *status); err != nil {
+			return nil, err
+		}
+	}
+
+	return s.memberByUserID(ctx, workspaceID, targetUserID)
+}
+
+func (s *WorkspaceService) RemoveMember(ctx context.Context, actorID, workspaceID, targetUserID string) error {
+	actor, err := s.RequireMembership(ctx, actorID, workspaceID, model.RoleAdmin)
+	if err != nil {
+		return err
+	}
+	if targetUserID == actorID {
+		return ErrCannotManageSelf
+	}
+	target, err := s.workspaces.GetMember(ctx, workspaceID, targetUserID)
+	if errors.Is(err, repository.ErrNotFound) {
+		return ErrMemberNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if target.Role == model.RoleOwner {
+		return ErrCannotManageOwner
+	}
+	if !canManageMember(model.WorkspaceRole(actor.Role), target.Role) {
+		return ErrForbidden
+	}
+	return s.workspaces.RemoveMember(ctx, workspaceID, targetUserID)
+}
+
+func (s *WorkspaceService) Leave(ctx context.Context, userID, workspaceID string) ([]model.Workspace, error) {
+	ws, err := s.RequireMembership(ctx, userID, workspaceID, model.RoleViewer)
+	if err != nil {
+		return nil, err
+	}
+	if model.WorkspaceRole(ws.Role) == model.RoleOwner || ws.OwnerID == userID {
+		return nil, ErrCannotLeaveAsOwner
+	}
+	if err := s.workspaces.RemoveMember(ctx, workspaceID, userID); err != nil {
+		return nil, err
+	}
+	return s.workspaces.ListForUser(ctx, userID)
+}
+
+func (s *WorkspaceService) TransferOwnership(ctx context.Context, actorID, workspaceID, targetUserID string) (*model.WorkspaceMember, error) {
+	ws, err := s.RequireMembership(ctx, actorID, workspaceID, model.RoleOwner)
+	if err != nil {
+		return nil, err
+	}
+	if ws.OwnerID != actorID {
+		return nil, ErrForbidden
+	}
+	if targetUserID == actorID {
+		return nil, ErrCannotManageSelf
+	}
+	target, err := s.workspaces.GetMember(ctx, workspaceID, targetUserID)
+	if errors.Is(err, repository.ErrNotFound) {
+		return nil, ErrMemberNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	if target.Status != model.MemberActive {
+		return nil, ErrNotWorkspaceMember
+	}
+	if err := s.workspaces.TransferOwnership(ctx, workspaceID, actorID, targetUserID); err != nil {
+		return nil, err
+	}
+	return s.memberByUserID(ctx, workspaceID, targetUserID)
+}
+
+func (s *WorkspaceService) memberByUserID(ctx context.Context, workspaceID, userID string) (*model.WorkspaceMember, error) {
+	members, err := s.workspaces.ListMembers(ctx, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range members {
+		if members[i].UserID == userID {
+			return &members[i], nil
+		}
+	}
+	return nil, ErrMemberNotFound
+}
+
+func (s *WorkspaceService) CheckSeatRoom(ctx context.Context, workspaceID string, extra int) error {
+	snap, err := s.seatSnapshot(ctx, workspaceID)
+	if err != nil {
+		return err
+	}
+	if snap.Limit == nil {
+		return nil
+	}
+	if snap.Used+snap.Pending+extra > *snap.Limit {
+		return ErrSeatQuotaExceeded
+	}
+	return nil
+}
+
+func (s *WorkspaceService) IsActiveMember(ctx context.Context, workspaceID, userID string) (bool, error) {
+	_, err := s.workspaces.GetMembership(ctx, workspaceID, userID)
+	if errors.Is(err, repository.ErrNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (s *WorkspaceService) planForWorkspace(ctx context.Context, workspaceID string) (*model.Plan, error) {
+	if s.plans == nil {
+		return nil, nil
+	}
+	planID, _, err := s.workspaces.GetPlanMeta(ctx, workspaceID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return s.plans.GetDefaultFree(ctx)
+		}
+		return nil, err
+	}
+	plan, err := s.plans.GetByID(ctx, planID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return s.plans.GetDefaultFree(ctx)
+		}
+		return nil, err
+	}
+	return plan, nil
 }
 
 func SetActiveWorkspaceCookie(w http.ResponseWriter, workspaceID string, secure bool) {

@@ -4,9 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/postilka/postilka/internal/middleware"
 	"github.com/postilka/postilka/internal/model"
+	"github.com/postilka/postilka/internal/repository"
 	"github.com/postilka/postilka/internal/service"
 	"github.com/postilka/postilka/internal/timezone"
 )
@@ -229,6 +232,96 @@ func (h *WorkspaceInviteHandler) Create(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusCreated, map[string]any{"invite": inv})
 }
 
+func (h *WorkspaceInviteHandler) resolveWorkspaceID(w http.ResponseWriter, r *http.Request, userID string) (string, bool) {
+	workspaceID := strings.TrimSpace(r.URL.Query().Get("workspace_id"))
+	if workspaceID != "" {
+		return workspaceID, true
+	}
+	active, _, err := h.workspaces.ResolveActive(r.Context(), userID, r)
+	if err != nil || active == nil {
+		writeError(w, http.StatusBadRequest, "Workspace не найден")
+		return "", false
+	}
+	return active.ID, true
+}
+
+func (h *WorkspaceInviteHandler) Revoke(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Не авторизован")
+		return
+	}
+	workspaceID, ok := h.resolveWorkspaceID(w, r, userID)
+	if !ok {
+		return
+	}
+	inviteID := strings.TrimSpace(chi.URLParam(r, "inviteID"))
+	if inviteID == "" {
+		writeError(w, http.StatusBadRequest, "Укажите приглашение")
+		return
+	}
+	if err := h.invites.Revoke(r.Context(), userID, workspaceID, inviteID); err != nil {
+		h.writeInviteError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+type updateWorkspaceInviteRequest struct {
+	Role model.WorkspaceRole `json:"role"`
+}
+
+func (h *WorkspaceInviteHandler) Update(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Не авторизован")
+		return
+	}
+	workspaceID, ok := h.resolveWorkspaceID(w, r, userID)
+	if !ok {
+		return
+	}
+	inviteID := strings.TrimSpace(chi.URLParam(r, "inviteID"))
+	if inviteID == "" {
+		writeError(w, http.StatusBadRequest, "Укажите приглашение")
+		return
+	}
+	var req updateWorkspaceInviteRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Некорректное тело запроса")
+		return
+	}
+	inv, err := h.invites.UpdateRole(r.Context(), userID, workspaceID, inviteID, req.Role)
+	if err != nil {
+		h.writeInviteError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"invite": inv})
+}
+
+func (h *WorkspaceInviteHandler) Resend(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Не авторизован")
+		return
+	}
+	workspaceID, ok := h.resolveWorkspaceID(w, r, userID)
+	if !ok {
+		return
+	}
+	inviteID := strings.TrimSpace(chi.URLParam(r, "inviteID"))
+	if inviteID == "" {
+		writeError(w, http.StatusBadRequest, "Укажите приглашение")
+		return
+	}
+	inv, err := h.invites.Resend(r.Context(), userID, workspaceID, inviteID)
+	if err != nil {
+		h.writeInviteError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"invite": inv})
+}
+
 func (h *WorkspaceInviteHandler) List(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
@@ -299,9 +392,13 @@ func (h *WorkspaceInviteHandler) writeInviteError(w http.ResponseWriter, err err
 	switch {
 	case errors.Is(err, service.ErrForbidden), errors.Is(err, service.ErrNotWorkspaceMember):
 		writeError(w, http.StatusForbidden, "Нет доступа")
+	case errors.Is(err, service.ErrAlreadyMember):
+		writeError(w, http.StatusBadRequest, "Этот email уже в команде")
+	case errors.Is(err, service.ErrSeatQuotaExceeded), errors.Is(err, service.ErrQuotaExceeded):
+		writeError(w, http.StatusForbidden, "Достигнут лимит мест тарифа. Отстраните участника или смените тариф.")
 	case errors.Is(err, service.ErrInvalidInput):
 		writeError(w, http.StatusBadRequest, "Проверьте email и роль")
-	case errors.Is(err, service.ErrWorkspaceInviteInvalid):
+	case errors.Is(err, service.ErrWorkspaceInviteInvalid), errors.Is(err, repository.ErrNotFound):
 		writeError(w, http.StatusBadRequest, "Приглашение недействительно или истекло")
 	case errors.Is(err, service.ErrWorkspaceInviteEmail):
 		writeErrorWithCode(w, http.StatusForbidden, "invite_email_mismatch", "Войдите под email, указанным в приглашении")

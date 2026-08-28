@@ -2,7 +2,8 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Trash2 } from "lucide-react";
+import Link from "next/link";
+import { Trash2, Users } from "lucide-react";
 import {
   ApiError,
   deleteWorkspace,
@@ -10,7 +11,6 @@ import {
   type Workspace,
 } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { TeamInvitePanel } from "@/components/team/TeamInvitePanel";
 
 const roleLabels: Record<string, string> = {
   owner: "Владелец",
@@ -189,8 +189,18 @@ export function WorkspaceSettingsBlock({ embedded = false }: { embedded?: boolea
             )}
 
             <div className="border-t border-border pt-4">
-              <h3 className="text-sm font-semibold">Приглашения</h3>
-              <TeamInvitePanel workspaceId={selected.id} />
+              <h3 className="text-sm font-semibold">Команда</h3>
+              <p className="mt-2 text-sm text-muted">
+                Приглашения, роли и доступ участников перенесены в отдельный
+                раздел.
+              </p>
+              <Link
+                href="/team"
+                className="mt-3 inline-flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-medium hover:bg-zinc-50"
+              >
+                <Users className="h-4 w-4" />
+                Открыть раздел «Команда»
+              </Link>
             </div>
 
             {selected.role === "owner" && (
@@ -235,7 +245,7 @@ export function WorkspaceSettingsBlock({ embedded = false }: { embedded?: boolea
     <section className="rounded-xl border border-border bg-surface p-5 shadow-sm">
       <h2 className="text-sm font-semibold">Workspace</h2>
       <p className="mt-1 text-sm text-muted">
-        Переименование, удаление и приглашение участников по email.
+        Переименование и удаление. Состав команды — в разделе «Команда».
       </p>
       {inner}
     </section>

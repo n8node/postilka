@@ -1292,7 +1292,11 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
   }, []);
 
   const invitedMembers = useMemo(
-    () => workspaceMembers.filter((member) => member.joined_via_invite),
+    () =>
+      workspaceMembers.filter(
+        (member) =>
+          member.joined_via_invite && member.status !== "suspended",
+      ),
     [workspaceMembers],
   );
 

@@ -23,6 +23,7 @@ type AdminWorkspaceMember struct {
 	Email           string    `json:"email"`
 	Name            string    `json:"name"`
 	Role            string    `json:"role"`
+	Status          string    `json:"status"`
 	JoinedAt        time.Time `json:"joined_at"`
 	JoinedViaInvite bool      `json:"joined_via_invite"`
 }

@@ -301,5 +301,195 @@ func (h *WorkspaceHandler) Members(w http.ResponseWriter, r *http.Request) {
 	if members == nil {
 		members = []model.WorkspaceMember{}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"members": members})
+	seats, err := h.workspaces.SeatSnapshot(r.Context(), userID, workspaceID)
+	if err != nil {
+		h.writeMemberError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"members": members, "seats": seats})
+}
+
+func (h *WorkspaceHandler) resolveWorkspaceID(w http.ResponseWriter, r *http.Request, userID string) (string, bool) {
+	workspaceID := strings.TrimSpace(r.URL.Query().Get("workspace_id"))
+	if workspaceID != "" {
+		return workspaceID, true
+	}
+	active, _, err := h.workspaces.ResolveActive(r.Context(), userID, r)
+	if err != nil || active == nil {
+		writeError(w, http.StatusBadRequest, "Workspace не найден")
+		return "", false
+	}
+	return active.ID, true
+}
+
+type updateMemberRequest struct {
+	Role   *string `json:"role"`
+	Status *string `json:"status"`
+}
+
+func (h *WorkspaceHandler) UpdateMember(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Не авторизован")
+		return
+	}
+	workspaceID, ok := h.resolveWorkspaceID(w, r, userID)
+	if !ok {
+		return
+	}
+	targetID := strings.TrimSpace(chi.URLParam(r, "userID"))
+	if targetID == "" {
+		writeError(w, http.StatusBadRequest, "Укажите участника")
+		return
+	}
+
+	var req updateMemberRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Некорректное тело запроса")
+		return
+	}
+	if req.Role == nil && req.Status == nil {
+		writeError(w, http.StatusBadRequest, "Укажите роль или статус")
+		return
+	}
+
+	var role *model.WorkspaceRole
+	if req.Role != nil {
+		parsed := model.WorkspaceRole(strings.TrimSpace(*req.Role))
+		role = &parsed
+	}
+	var status *model.MemberStatus
+	if req.Status != nil {
+		parsed := model.MemberStatus(strings.TrimSpace(*req.Status))
+		status = &parsed
+	}
+
+	member, err := h.workspaces.UpdateMember(r.Context(), userID, workspaceID, targetID, role, status)
+	if err != nil {
+		h.writeMemberError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"member": member})
+}
+
+func (h *WorkspaceHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Не авторизован")
+		return
+	}
+	workspaceID, ok := h.resolveWorkspaceID(w, r, userID)
+	if !ok {
+		return
+	}
+	targetID := strings.TrimSpace(chi.URLParam(r, "userID"))
+	if targetID == "" {
+		writeError(w, http.StatusBadRequest, "Укажите участника")
+		return
+	}
+	if err := h.workspaces.RemoveMember(r.Context(), userID, workspaceID, targetID); err != nil {
+		h.writeMemberError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (h *WorkspaceHandler) TransferOwnership(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Не авторизован")
+		return
+	}
+	workspaceID, ok := h.resolveWorkspaceID(w, r, userID)
+	if !ok {
+		return
+	}
+	targetID := strings.TrimSpace(chi.URLParam(r, "userID"))
+	if targetID == "" {
+		writeError(w, http.StatusBadRequest, "Укажите участника")
+		return
+	}
+	member, err := h.workspaces.TransferOwnership(r.Context(), userID, workspaceID, targetID)
+	if err != nil {
+		h.writeMemberError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"member": member})
+}
+
+func (h *WorkspaceHandler) Leave(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Не авторизован")
+		return
+	}
+	workspaceID, ok := h.resolveWorkspaceID(w, r, userID)
+	if !ok {
+		return
+	}
+
+	list, err := h.workspaces.Leave(r.Context(), userID, workspaceID)
+	if err != nil {
+		h.writeMemberError(w, err)
+		return
+	}
+	if list == nil {
+		list = []model.Workspace{}
+	}
+
+	preferred := strings.TrimSpace(r.Header.Get(service.ActiveWorkspaceHeader))
+	if preferred == "" {
+		if c, err := r.Cookie(service.ActiveWorkspaceCookie); err == nil {
+			preferred = strings.TrimSpace(c.Value)
+		}
+	}
+	if preferred == workspaceID {
+		preferred = ""
+	}
+
+	var active *model.Workspace
+	if len(list) > 0 {
+		if preferred != "" {
+			for i := range list {
+				if list[i].ID == preferred {
+					active = &list[i]
+					break
+				}
+			}
+		}
+		if active == nil {
+			active = &list[0]
+			service.SetActiveWorkspaceCookie(w, list[0].ID, h.cfg.IsProduction())
+		}
+	} else {
+		service.ClearActiveWorkspaceCookie(w)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"workspaces":       list,
+		"active_workspace": active,
+	})
+}
+
+func (h *WorkspaceHandler) writeMemberError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, service.ErrNotWorkspaceMember):
+		writeError(w, http.StatusForbidden, "Нет доступа к workspace")
+	case errors.Is(err, service.ErrForbidden):
+		writeError(w, http.StatusForbidden, "Недостаточно прав")
+	case errors.Is(err, service.ErrCannotManageOwner):
+		writeError(w, http.StatusForbidden, "Владельца нельзя изменить этим действием")
+	case errors.Is(err, service.ErrCannotManageSelf):
+		writeError(w, http.StatusBadRequest, "Нельзя изменить своё участие этим действием")
+	case errors.Is(err, service.ErrCannotLeaveAsOwner):
+		writeError(w, http.StatusBadRequest, "Сначала передайте владение другому участнику")
+	case errors.Is(err, service.ErrMemberNotFound), errors.Is(err, repository.ErrNotFound):
+		writeError(w, http.StatusNotFound, "Участник не найден")
+	case errors.Is(err, service.ErrInvalidInput), errors.Is(err, service.ErrInvalidMemberStatus):
+		writeError(w, http.StatusBadRequest, "Проверьте роль и статус")
+	case errors.Is(err, service.ErrSeatQuotaExceeded), errors.Is(err, service.ErrQuotaExceeded):
+		writeError(w, http.StatusForbidden, "Достигнут лимит мест тарифа. Отстраните участника или смените тариф.")
+	default:
+		writeError(w, http.StatusInternalServerError, "Внутренняя ошибка")
+	}
 }

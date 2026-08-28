@@ -51,10 +51,13 @@ func (r *WorkspaceInviteRepository) FindValidByTokenHash(ctx context.Context, to
 
 func (r *WorkspaceInviteRepository) ListPendingForWorkspace(ctx context.Context, workspaceID string) ([]model.WorkspaceInvite, error) {
 	const q = `
-		SELECT id, workspace_id, email, role, invited_by, status, expires_at, created_at
-		FROM workspace_invites
-		WHERE workspace_id = $1 AND status = 'pending' AND expires_at > NOW()
-		ORDER BY created_at DESC
+		SELECT
+			wi.id, wi.workspace_id, wi.email, wi.role, wi.invited_by, wi.status, wi.expires_at, wi.created_at,
+			COALESCE(NULLIF(ib.name, ''), ib.email), ib.email
+		FROM workspace_invites wi
+		JOIN users ib ON ib.id = wi.invited_by
+		WHERE wi.workspace_id = $1 AND wi.status = 'pending'
+		ORDER BY wi.created_at DESC
 	`
 	rows, err := r.pool.Query(ctx, q, workspaceID)
 	if err != nil {
@@ -64,13 +67,84 @@ func (r *WorkspaceInviteRepository) ListPendingForWorkspace(ctx context.Context,
 
 	out := make([]model.WorkspaceInvite, 0)
 	for rows.Next() {
-		inv, err := scanWorkspaceInviteRow(rows)
+		inv, err := scanWorkspaceInviteListRow(rows)
 		if err != nil {
 			return nil, err
 		}
 		out = append(out, *inv)
 	}
 	return out, rows.Err()
+}
+
+func (r *WorkspaceInviteRepository) CountPendingOpen(ctx context.Context, workspaceID string) (int, error) {
+	var count int
+	err := r.pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM workspace_invites
+		WHERE workspace_id = $1 AND status = 'pending' AND expires_at > NOW()
+	`, workspaceID).Scan(&count)
+	return count, err
+}
+
+func (r *WorkspaceInviteRepository) GetByID(ctx context.Context, inviteID string) (*model.WorkspaceInvite, error) {
+	const q = `
+		SELECT id, workspace_id, email, role, invited_by, status, expires_at, created_at
+		FROM workspace_invites
+		WHERE id = $1
+	`
+	rec, err := scanWorkspaceInvite(r.pool.QueryRow(ctx, q, inviteID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	return rec, err
+}
+
+func (r *WorkspaceInviteRepository) RevokeByID(ctx context.Context, inviteID string) error {
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE workspace_invites
+		SET status = 'revoked'
+		WHERE id = $1 AND status = 'pending'
+	`, inviteID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (r *WorkspaceInviteRepository) UpdatePendingRole(ctx context.Context, inviteID string, role model.WorkspaceRole) error {
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE workspace_invites
+		SET role = $2
+		WHERE id = $1 AND status = 'pending'
+	`, inviteID, role)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (r *WorkspaceInviteRepository) RotatePendingToken(
+	ctx context.Context,
+	inviteID, tokenHash string,
+	expiresAt time.Time,
+) error {
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE workspace_invites
+		SET token_hash = $2, expires_at = $3
+		WHERE id = $1 AND status = 'pending'
+	`, inviteID, tokenHash, expiresAt)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (r *WorkspaceInviteRepository) RevokePendingForEmail(ctx context.Context, workspaceID, email string) error {
@@ -107,6 +181,21 @@ func scanWorkspaceInviteRow(row pgx.Row) (*model.WorkspaceInvite, error) {
 	err := row.Scan(
 		&inv.ID, &inv.WorkspaceID, &inv.Email, &role, &inv.InvitedBy,
 		&inv.Status, &inv.ExpiresAt, &inv.CreatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+	inv.Role = model.WorkspaceRole(role)
+	return &inv, nil
+}
+
+func scanWorkspaceInviteListRow(row pgx.Row) (*model.WorkspaceInvite, error) {
+	var inv model.WorkspaceInvite
+	var role string
+	err := row.Scan(
+		&inv.ID, &inv.WorkspaceID, &inv.Email, &role, &inv.InvitedBy,
+		&inv.Status, &inv.ExpiresAt, &inv.CreatedAt,
+		&inv.InvitedByName, &inv.InvitedByEmail,
 	)
 	if err != nil {
 		return nil, err

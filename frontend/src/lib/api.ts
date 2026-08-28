@@ -412,18 +412,29 @@ export type WorkspaceInvite = {
   email: string;
   role: string;
   invited_by: string;
+  invited_by_name?: string;
+  invited_by_email?: string;
   status: string;
   expires_at: string;
   created_at: string;
 };
+
+export type WorkspaceMemberStatus = "active" | "suspended";
 
 export type WorkspaceMember = {
   user_id: string;
   email: string;
   name: string;
   role: string;
+  status: WorkspaceMemberStatus;
   joined_at: string;
   joined_via_invite: boolean;
+};
+
+export type WorkspaceSeats = {
+  used: number;
+  pending: number;
+  limit: number | null;
 };
 
 export function fetchWorkspaceInvites(workspaceId?: string) {
@@ -433,7 +444,9 @@ export function fetchWorkspaceInvites(workspaceId?: string) {
 
 export function fetchWorkspaceMembers(workspaceId?: string) {
   const q = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : "";
-  return apiFetch<{ members: WorkspaceMember[] }>(`/workspaces/members${q}`);
+  return apiFetch<{ members: WorkspaceMember[]; seats?: WorkspaceSeats }>(
+    `/workspaces/members${q}`,
+  );
 }
 
 export function createWorkspaceInvite(
@@ -446,6 +459,76 @@ export function createWorkspaceInvite(
     method: "POST",
     body: JSON.stringify({ email, role }),
   });
+}
+
+export function updateWorkspaceInvite(
+  inviteId: string,
+  role: string,
+  workspaceId?: string,
+) {
+  const q = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : "";
+  return apiFetch<{ invite: WorkspaceInvite }>(
+    `/workspaces/invites/${encodeURIComponent(inviteId)}${q}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ role }),
+    },
+  );
+}
+
+export function revokeWorkspaceInvite(inviteId: string, workspaceId?: string) {
+  const q = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : "";
+  return apiFetch<{ ok: boolean }>(
+    `/workspaces/invites/${encodeURIComponent(inviteId)}${q}`,
+    { method: "DELETE" },
+  );
+}
+
+export function resendWorkspaceInvite(inviteId: string, workspaceId?: string) {
+  const q = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : "";
+  return apiFetch<{ invite: WorkspaceInvite }>(
+    `/workspaces/invites/${encodeURIComponent(inviteId)}/resend${q}`,
+    { method: "POST" },
+  );
+}
+
+export function updateWorkspaceMember(
+  userId: string,
+  payload: { role?: string; status?: WorkspaceMemberStatus },
+  workspaceId?: string,
+) {
+  const q = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : "";
+  return apiFetch<{ member: WorkspaceMember }>(
+    `/workspaces/members/${encodeURIComponent(userId)}${q}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export function removeWorkspaceMember(userId: string, workspaceId?: string) {
+  const q = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : "";
+  return apiFetch<{ ok: boolean }>(
+    `/workspaces/members/${encodeURIComponent(userId)}${q}`,
+    { method: "DELETE" },
+  );
+}
+
+export function transferWorkspaceOwnership(userId: string, workspaceId?: string) {
+  const q = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : "";
+  return apiFetch<{ member: WorkspaceMember }>(
+    `/workspaces/members/${encodeURIComponent(userId)}/transfer-ownership${q}`,
+    { method: "POST" },
+  );
+}
+
+export function leaveWorkspace(workspaceId?: string) {
+  const q = workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : "";
+  return apiFetch<{
+    workspaces: Workspace[];
+    active_workspace: Workspace | null;
+  }>(`/workspaces/leave${q}`, { method: "POST" });
 }
 
 export function acceptWorkspaceInvite(token: string) {
@@ -930,6 +1013,7 @@ export type AdminWorkspaceMember = {
   email: string;
   name: string;
   role: string;
+  status?: string;
   joined_at: string;
   joined_via_invite: boolean;
 };

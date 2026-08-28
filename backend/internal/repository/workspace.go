@@ -109,6 +109,7 @@ func (r *WorkspaceRepository) GetPrimaryForUser(ctx context.Context, userID stri
 		FROM workspaces w
 		JOIN workspace_members wm ON wm.workspace_id = w.id
 		WHERE wm.user_id = $1
+		  AND wm.status = 'active'
 		ORDER BY w.created_at ASC
 		LIMIT 1
 	`
@@ -133,6 +134,7 @@ func (r *WorkspaceRepository) ListForUser(ctx context.Context, userID string) ([
 		FROM workspaces w
 		JOIN workspace_members wm ON wm.workspace_id = w.id
 		WHERE wm.user_id = $1
+		  AND wm.status = 'active'
 		ORDER BY w.created_at ASC
 	`
 	rows, err := r.pool.Query(ctx, q, userID)
@@ -162,7 +164,7 @@ func (r *WorkspaceRepository) GetMembership(ctx context.Context, workspaceID, us
 		SELECT w.id, w.name, w.slug, w.owner_id, wm.role, w.created_at
 		FROM workspaces w
 		JOIN workspace_members wm ON wm.workspace_id = w.id
-		WHERE w.id = $1 AND wm.user_id = $2
+		WHERE w.id = $1 AND wm.user_id = $2 AND wm.status = 'active'
 	`
 	var ws model.Workspace
 	var createdAt time.Time
@@ -210,7 +212,8 @@ func (r *WorkspaceRepository) UpdateNameAndSlug(ctx context.Context, workspaceID
 func (r *WorkspaceRepository) CountMembershipsForUser(ctx context.Context, userID string) (int, error) {
 	var count int
 	err := r.pool.QueryRow(ctx, `
-		SELECT COUNT(*) FROM workspace_members WHERE user_id = $1::uuid
+		SELECT COUNT(*) FROM workspace_members
+		WHERE user_id = $1::uuid AND status = 'active'
 	`, userID).Scan(&count)
 	return count, err
 }
@@ -223,9 +226,11 @@ func (r *WorkspaceRepository) CountOwnedByUser(ctx context.Context, userID strin
 
 func (r *WorkspaceRepository) AddMember(ctx context.Context, workspaceID, userID string, role model.WorkspaceRole) error {
 	_, err := r.pool.Exec(ctx, `
-		INSERT INTO workspace_members (workspace_id, user_id, role)
-		VALUES ($1, $2, $3)
-		ON CONFLICT (workspace_id, user_id) DO UPDATE SET role = EXCLUDED.role
+		INSERT INTO workspace_members (workspace_id, user_id, role, status)
+		VALUES ($1, $2, $3, 'active')
+		ON CONFLICT (workspace_id, user_id) DO UPDATE SET
+			role = EXCLUDED.role,
+			status = 'active'
 	`, workspaceID, userID, role)
 	return err
 }
@@ -254,6 +259,7 @@ func (r *WorkspaceRepository) ListMemberUserIDs(ctx context.Context, workspaceID
 		FROM workspace_members wm
 		JOIN users u ON u.id = wm.user_id
 		WHERE wm.workspace_id = $1::uuid
+		  AND wm.status = 'active'
 		  AND u.is_blocked = false
 	`
 	args := []any{workspaceID}
@@ -284,6 +290,7 @@ func (r *WorkspaceRepository) ListEditorMemberEmails(ctx context.Context, worksp
 		FROM workspace_members wm
 		JOIN users u ON u.id = wm.user_id
 		WHERE wm.workspace_id = $1
+		  AND wm.status = 'active'
 		  AND wm.role IN ('admin', 'editor')
 		  AND u.is_blocked = false
 		  AND NULLIF(u.email, '') IS NOT NULL
@@ -309,7 +316,7 @@ func (r *WorkspaceRepository) ListEditorMemberEmails(ctx context.Context, worksp
 func (r *WorkspaceRepository) ListMembers(ctx context.Context, workspaceID string) ([]model.WorkspaceMember, error) {
 	const q = `
 		SELECT
-			u.id, u.email, u.name, wm.role, wm.created_at,
+			u.id, u.email, u.name, wm.role, wm.status, wm.created_at,
 			EXISTS (
 				SELECT 1 FROM workspace_invites wi
 				WHERE wi.workspace_id = wm.workspace_id
@@ -320,6 +327,10 @@ func (r *WorkspaceRepository) ListMembers(ctx context.Context, workspaceID strin
 		JOIN users u ON u.id = wm.user_id
 		WHERE wm.workspace_id = $1::uuid
 		ORDER BY
+			CASE wm.status
+				WHEN 'active' THEN 0
+				ELSE 1
+			END,
 			CASE wm.role
 				WHEN 'owner' THEN 0
 				WHEN 'admin' THEN 1
@@ -337,14 +348,146 @@ func (r *WorkspaceRepository) ListMembers(ctx context.Context, workspaceID strin
 	out := make([]model.WorkspaceMember, 0)
 	for rows.Next() {
 		var m model.WorkspaceMember
+		var status string
 		if err := rows.Scan(
-			&m.UserID, &m.Email, &m.Name, &m.Role, &m.JoinedAt, &m.JoinedViaInvite,
+			&m.UserID, &m.Email, &m.Name, &m.Role, &status, &m.JoinedAt, &m.JoinedViaInvite,
 		); err != nil {
 			return nil, err
 		}
+		m.Status = model.MemberStatus(status)
 		out = append(out, m)
 	}
 	return out, rows.Err()
+}
+
+type WorkspaceMemberRecord struct {
+	UserID string
+	Role   model.WorkspaceRole
+	Status model.MemberStatus
+}
+
+func (r *WorkspaceRepository) GetMember(ctx context.Context, workspaceID, userID string) (*WorkspaceMemberRecord, error) {
+	const q = `
+		SELECT user_id::text, role, status
+		FROM workspace_members
+		WHERE workspace_id = $1::uuid AND user_id = $2::uuid
+	`
+	var rec WorkspaceMemberRecord
+	var role, status string
+	err := r.pool.QueryRow(ctx, q, workspaceID, userID).Scan(&rec.UserID, &role, &status)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	rec.Role = model.WorkspaceRole(role)
+	rec.Status = model.MemberStatus(status)
+	return &rec, nil
+}
+
+func (r *WorkspaceRepository) CountPendingInvites(ctx context.Context, workspaceID string) (int, error) {
+	var count int
+	err := r.pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM workspace_invites
+		WHERE workspace_id = $1::uuid AND status = 'pending' AND expires_at > NOW()
+	`, workspaceID).Scan(&count)
+	return count, err
+}
+
+func (r *WorkspaceRepository) CountActiveMembers(ctx context.Context, workspaceID string) (int, error) {
+	var count int
+	err := r.pool.QueryRow(ctx, `
+		SELECT COUNT(*) FROM workspace_members
+		WHERE workspace_id = $1::uuid AND status = 'active'
+	`, workspaceID).Scan(&count)
+	return count, err
+}
+
+func (r *WorkspaceRepository) SetMemberRole(ctx context.Context, workspaceID, userID string, role model.WorkspaceRole) error {
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE workspace_members
+		SET role = $3
+		WHERE workspace_id = $1::uuid AND user_id = $2::uuid AND role <> 'owner'
+	`, workspaceID, userID, role)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (r *WorkspaceRepository) SetMemberStatus(ctx context.Context, workspaceID, userID string, status model.MemberStatus) error {
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE workspace_members
+		SET status = $3
+		WHERE workspace_id = $1::uuid AND user_id = $2::uuid AND role <> 'owner'
+	`, workspaceID, userID, status)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (r *WorkspaceRepository) RemoveMember(ctx context.Context, workspaceID, userID string) error {
+	tag, err := r.pool.Exec(ctx, `
+		DELETE FROM workspace_members
+		WHERE workspace_id = $1::uuid AND user_id = $2::uuid AND role <> 'owner'
+	`, workspaceID, userID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (r *WorkspaceRepository) TransferOwnership(ctx context.Context, workspaceID, fromUserID, toUserID string) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	tag, err := tx.Exec(ctx, `
+		UPDATE workspaces
+		SET owner_id = $2::uuid, updated_at = NOW()
+		WHERE id = $1::uuid AND owner_id = $3::uuid
+	`, workspaceID, toUserID, fromUserID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+
+	if _, err := tx.Exec(ctx, `
+		UPDATE workspace_members
+		SET role = 'admin', status = 'active'
+		WHERE workspace_id = $1::uuid AND user_id = $2::uuid AND role = 'owner'
+	`, workspaceID, fromUserID); err != nil {
+		return err
+	}
+
+	tag, err = tx.Exec(ctx, `
+		UPDATE workspace_members
+		SET role = 'owner', status = 'active'
+		WHERE workspace_id = $1::uuid AND user_id = $2::uuid AND status = 'active'
+	`, workspaceID, toUserID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+
+	return tx.Commit(ctx)
 }
 
 func scanWorkspace(row pgx.Row) (*model.Workspace, error) {

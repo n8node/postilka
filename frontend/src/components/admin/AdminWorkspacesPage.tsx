@@ -361,6 +361,9 @@ function WorkspaceDrawer({
                             {m.joined_via_invite && (
                               <span className="text-[10px] text-emerald-700">по приглашению</span>
                             )}
+                            {m.status === "suspended" && (
+                              <span className="text-[10px] text-amber-700">отстранён</span>
+                            )}
                           </div>
                         </div>
                       </li>
