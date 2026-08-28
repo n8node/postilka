@@ -126,8 +126,9 @@ function Rank(role: string) {
 function SeatChip({ seats }: { seats?: WorkspaceSeats }) {
   if (!seats) return null;
   const occupied = seats.used + seats.pending;
-  const limited = seats.limit != null;
-  const full = limited && occupied >= seats.limit;
+  const limit = seats.limit;
+  const limited = limit != null;
+  const full = limit != null && occupied >= limit;
   return (
     <span
       className={cn(
@@ -138,7 +139,7 @@ function SeatChip({ seats }: { seats?: WorkspaceSeats }) {
       )}
     >
       Места: {occupied}
-      {limited ? ` из ${seats.limit}` : " · без лимита"}
+      {limited ? ` из ${limit}` : " · без лимита"}
     </span>
   );
 }
@@ -309,7 +310,8 @@ export function TeamPage() {
   ];
 
   const occupied = seats ? seats.used + seats.pending : members.filter((m) => m.status !== "suspended").length + invites.filter((i) => !inviteExpired(i)).length;
-  const seatsFull = Boolean(seats?.limit != null && occupied >= seats.limit);
+  const seatLimit = seats?.limit;
+  const seatsFull = seatLimit != null && occupied >= seatLimit;
 
   const rightTitle =
     selection?.kind === "invite-new"
