@@ -186,3 +186,28 @@ func (r *PostApprovalRepository) ListByPost(ctx context.Context, workspaceID, po
 	}
 	return items, rows.Err()
 }
+
+func (r *PostApprovalRepository) LatestActionByPostIDs(ctx context.Context, postIDs []string) (map[string]string, error) {
+	out := make(map[string]string, len(postIDs))
+	if len(postIDs) == 0 {
+		return out, nil
+	}
+	rows, err := r.pool.Query(ctx, `
+		SELECT DISTINCT ON (post_id) post_id::text, action
+		FROM post_approval_events
+		WHERE post_id = ANY($1::uuid[])
+		ORDER BY post_id, created_at DESC
+	`, postIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var postID, action string
+		if err := rows.Scan(&postID, &action); err != nil {
+			return nil, err
+		}
+		out[postID] = action
+	}
+	return out, rows.Err()
+}

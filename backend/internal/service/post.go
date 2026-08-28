@@ -93,7 +93,12 @@ func (s *PostService) List(
 		return nil, 0, err
 	}
 	filter.WorkspaceID = ws.ID
-	return s.posts.List(ctx, filter)
+	items, total, err := s.posts.List(ctx, filter)
+	if err != nil {
+		return nil, 0, err
+	}
+	s.stampApprovalMeta(ctx, items)
+	return items, total, nil
 }
 
 func (s *PostService) Get(ctx context.Context, userID string, r *http.Request, postID string) (*model.Post, error) {
@@ -101,7 +106,38 @@ func (s *PostService) Get(ctx context.Context, userID string, r *http.Request, p
 	if err != nil {
 		return nil, err
 	}
-	return s.posts.Get(ctx, ws.ID, postID)
+	post, err := s.posts.Get(ctx, ws.ID, postID)
+	if err != nil {
+		return nil, err
+	}
+	tmp := []model.Post{*post}
+	s.stampApprovalMeta(ctx, tmp)
+	*post = tmp[0]
+	return post, nil
+}
+
+func (s *PostService) stampApprovalMeta(ctx context.Context, posts []model.Post) {
+	if s.approvals == nil || len(posts) == 0 {
+		return
+	}
+	ids := make([]string, 0, len(posts))
+	for _, post := range posts {
+		if post.Status == model.PostStatusDraft || post.Status == model.PostStatusPendingApproval {
+			ids = append(ids, post.ID)
+		}
+	}
+	if len(ids) == 0 {
+		return
+	}
+	actions, err := s.approvals.LatestActionByPostIDs(ctx, ids)
+	if err != nil {
+		return
+	}
+	for i := range posts {
+		if posts[i].Status == model.PostStatusDraft && actions[posts[i].ID] == "reject" {
+			posts[i].NeedsRevision = true
+		}
+	}
 }
 
 func (s *PostService) Create(

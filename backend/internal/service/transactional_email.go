@@ -198,3 +198,75 @@ func WorkspaceInviteEmailBody(inviterName, workspaceName, inviteURL string, role
 func workspaceInviteURL(publicAppURL, token string) string {
 	return fmt.Sprintf("%s/auth/accept-invite?token=%s", strings.TrimSuffix(publicAppURL, "/"), token)
 }
+
+func (s *TransactionalEmailService) SendApprovalNoticeBestEffort(ctx context.Context, user *model.User, in NotificationInput, appURL string) {
+	if s == nil || s.email == nil || user == nil || strings.TrimSpace(user.Email) == "" {
+		return
+	}
+	subject, body := approvalNoticeEmail(user.Name, in, appURL)
+	if err := s.email.Send(ctx, user.Email, subject, body); err != nil && s.log != nil {
+		s.log.Warn("approval email failed", "user_id", user.ID, "type", string(in.Type), "error", err)
+	}
+}
+
+func approvalNoticeEmail(name string, in NotificationInput, appURL string) (string, EmailBody) {
+	displayName := strings.TrimSpace(name)
+	if displayName == "" {
+		displayName = "друг"
+	}
+	ctaURL := strings.TrimSpace(appURL)
+	if ctaURL == "" {
+		ctaURL = "/"
+	}
+	dueAt := payloadString(in.Payload, "due_at")
+	dueLabel := ""
+	if dueAt != "" {
+		if t, err := time.Parse(time.RFC3339, dueAt); err == nil {
+			dueLabel = approvalDueLabel(&t, "")
+		}
+	}
+
+	switch in.Type {
+	case model.NotifyApprovalSubmitted:
+		content := emailGreetingRow(displayName) +
+			emailParagraphRow("В Postilka появился пост, который ждёт вашего согласования.") +
+			emailParagraphRow(html.EscapeString(strings.TrimSpace(in.Body))) +
+			emailNoteRow("Опубликовать его можно после решения в кабинете.")
+		return "Postilka — пост нуждается в согласовании", EmailBody{
+			Preheader:   "Пост ждёт согласования",
+			ContentHTML: content,
+			CTALabel:    "Открыть пост",
+			CTAURL:      ctaURL,
+		}
+	case model.NotifyApprovalRejected:
+		content := emailGreetingRow(displayName) +
+			emailParagraphRow("Пост вернули на доработку.") +
+			emailParagraphRow(html.EscapeString(strings.TrimSpace(in.Body))) +
+			emailNoteRow("Исправьте черновик и отправьте на согласование снова.")
+		return "Postilka — пост вернули на доработку", EmailBody{
+			Preheader:   "Нужна доработка поста",
+			ContentHTML: content,
+			CTALabel:    "Открыть черновик",
+			CTAURL:      ctaURL,
+		}
+	default:
+		when := ""
+		if payloadString(in.Payload, "outcome") == "scheduled" && dueLabel != "" {
+			when = emailParagraphRow("Запланированная публикация: <strong>" + html.EscapeString(dueLabel) + "</strong>")
+		}
+		content := emailGreetingRow(displayName) +
+			emailParagraphRow(html.EscapeString(strings.TrimSpace(in.Title)+". "+strings.TrimSpace(in.Body))) +
+			when +
+			emailNoteRow("Подробности доступны в кабинете Postilka.")
+		subject := "Postilka — пост согласован"
+		if payloadString(in.Payload, "outcome") == "publish_now" {
+			subject = "Postilka — пост согласован и публикуется"
+		}
+		return subject, EmailBody{
+			Preheader:   "Решение по согласованию",
+			ContentHTML: content,
+			CTALabel:    "Открыть пост",
+			CTAURL:      ctaURL,
+		}
+	}
+}

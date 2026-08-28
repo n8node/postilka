@@ -156,6 +156,11 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 		notificationRepo, wsRepo, quotaSvc, planRepo, channelRepo, subscriptionRepo,
 		fileStorageRepo, folderStorageRepo, walletRepo, logger,
 	)
+	userMessenger := service.NewUserMessengerService(
+		identityRepo, oauthSettingsRepo, telegramSettingsSvc, telegramBotClient,
+		oauthclient.NewMAXBotClient(), logger,
+	)
+	notificationSvc.BindOutbound(userRepo, txEmailSvc, userMessenger, cfg)
 	adminAnalyticsRepo := repository.NewAdminAnalyticsRepository(db.Pool)
 	adminHandler := handler.NewAdminHandler(userRepo, adminUserSvc, adminWalletSvc, planSvc, oauthSvc, adminWorkspaceSvc, fileStorageRepo, folderStorageRepo, postRepo, adminAnalyticsRepo, objectStorage)
 	inviteHandler := handler.NewInviteHandler(inviteSvc, oauthSvc)

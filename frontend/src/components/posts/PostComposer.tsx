@@ -131,7 +131,7 @@ const STATUS_LABEL: Record<Post["status"], string> = {
 const APPROVAL_ACTION_LABEL: Record<PostApprovalEvent["action"], string> = {
   submit: "Отправлено на согласование",
   approve: "Одобрено",
-  reject: "Отклонено",
+  reject: "Вернули на доработку",
   comment: "Комментарий",
 };
 
@@ -1228,6 +1228,7 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
   const [telegramMediaOrder, setTelegramMediaOrder] = useState<"media_first" | "text_first">("media_first");
   const [utm, setUTM] = useState({ source: "", medium: "social", campaign: "", shorten: false });
   const [approvalRequired, setApprovalRequired] = useState(false);
+  const [needsRevision, setNeedsRevision] = useState(false);
   const [approvalModalOpen, setApprovalModalOpen] = useState(false);
   const [workspaceMembers, setWorkspaceMembers] = useState<WorkspaceMember[]>([]);
   const [membersLoading, setMembersLoading] = useState(false);
@@ -1291,11 +1292,12 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
     }
   }, []);
 
-  const invitedMembers = useMemo(
+  const approverMembers = useMemo(
     () =>
       workspaceMembers.filter(
         (member) =>
-          member.joined_via_invite && member.status !== "suspended",
+          member.status !== "suspended" &&
+          (member.role === "owner" || member.role === "admin"),
       ),
     [workspaceMembers],
   );
@@ -1614,6 +1616,7 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
       shorten: storedUTM?.shorten ?? false,
     });
     setApprovalRequired(Boolean(post.settings.approval_required));
+    setNeedsRevision(Boolean(post.needs_revision));
     setCurrentStatus(post.status);
     void loadApprovalEvents(post.id);
     setTiming("draft");
@@ -2154,6 +2157,10 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
 
   async function handleApprovalDecision(action: "approve" | "reject") {
     if (!postId) return;
+    if (action === "reject" && !discussionComment.trim()) {
+      setError("Укажите, что нужно доработать");
+      return;
+    }
     setBusy(true);
     setError(null);
     setSuccess(null);
@@ -2168,11 +2175,16 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
                   : undefined,
               publish: timing === "now",
             })
-          : await rejectPost(postId, { comment: discussionComment.trim() || undefined });
+          : await rejectPost(postId, { comment: discussionComment.trim() });
       setCurrentStatus(finalPost.status);
+      setNeedsRevision(Boolean(finalPost.needs_revision) || action === "reject");
       await loadApprovalEvents(finalPost.id);
       setDiscussionComment("");
-      setSuccess(action === "approve" ? "Публикация одобрена" : "Публикация возвращена в черновик");
+      setSuccess(
+        action === "approve"
+          ? "Публикация одобрена"
+          : "Публикация возвращена на доработку",
+      );
     } catch (decisionError) {
       setError(errorText(decisionError, "Не удалось обработать согласование"));
     } finally {
@@ -2245,6 +2257,7 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
       }
       setPostId(finalPost.id);
       setCurrentStatus(finalPost.status);
+      setNeedsRevision(Boolean(finalPost.needs_revision));
       if (!postId) {
         router.replace(`/posts/${finalPost.id}`, { scroll: false });
       }
@@ -2484,12 +2497,21 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
             </p>
           )}
 
+          {needsRevision && currentStatus === "draft" && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <p className="font-semibold">Нужна доработка</p>
+              <p className="mt-1 text-xs">
+                Администратор вернул пост. Внесите правки и отправьте на согласование снова.
+              </p>
+            </div>
+          )}
+
           {isPendingApproval && (
             <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
               <p className="font-semibold">Публикация на согласовании</p>
               <p className="mt-1 text-xs">
                 {isAdmin
-                  ? "Вы можете одобрить или отклонить запись во вкладке «Обсуждение»."
+                  ? "Одобрите публикацию или верните её на доработку во вкладке «Обсуждение»."
                   : "Редактирование заблокировано до решения администратора."}
               </p>
             </div>
@@ -3618,13 +3640,13 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
                             onClick={() => void handleApprovalDecision("approve")}
                             disabled={busy}
                           >
-                            Одобрить
+                            {timing === "schedule" ? "Одобрить и запланировать" : "Одобрить и опубликовать"}
                           </SmallButton>
                           <SmallButton
                             onClick={() => void handleApprovalDecision("reject")}
                             disabled={busy}
                           >
-                            Отклонить
+                            Вернуть на доработку
                           </SmallButton>
                         </>
                       )}
@@ -3901,7 +3923,7 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
               <div>
                 <h3 className="text-base font-semibold">Согласование</h3>
                 <p className="mt-1 text-xs text-muted">
-                  Перед публикацией пост может пройти проверку участниками workspace.
+                  Запрос уйдёт владельцу и администраторам. Редакторы сами публиковать не смогут.
                 </p>
               </div>
               <button
@@ -3934,19 +3956,19 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
             </label>
 
             <p className="mb-2 text-xs font-semibold uppercase tracking-[0.08em] text-muted">
-              Участники по приглашению
+              Кто получит запрос
             </p>
             {membersLoading ? (
               <div className="flex items-center gap-2 py-6 text-sm text-muted">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Загружаем участников…
               </div>
-            ) : invitedMembers.length === 0 ? (
+            ) : approverMembers.length === 0 ? (
               <div className="rounded-lg border border-dashed border-border bg-zinc-50 px-4 py-5 text-center">
                 <Users className="mx-auto mb-2 h-8 w-8 text-zinc-300" />
-                <p className="text-sm font-semibold">Нет принявших приглашение</p>
+                <p className="text-sm font-semibold">Нет администраторов</p>
                 <p className="mt-1 text-xs text-muted">
-                  Пригласите коллег в workspace — они смогут участвовать в согласовании.
+                  Владелец и администраторы workspace получат запрос на согласование.
                 </p>
                 <Link
                   href="/team"
@@ -3958,7 +3980,7 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
               </div>
             ) : (
               <ul className="space-y-2">
-                {invitedMembers.map((member) => (
+                {approverMembers.map((member) => (
                   <li
                     key={member.user_id}
                     className="flex items-center justify-between rounded-lg border border-border px-3 py-2 text-sm"
@@ -3972,7 +3994,11 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
                       )}
                     </span>
                     <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-muted">
-                      {member.role}
+                      {member.role === "owner"
+                        ? "Владелец"
+                        : member.role === "admin"
+                          ? "Администратор"
+                          : member.role}
                     </span>
                   </li>
                 ))}

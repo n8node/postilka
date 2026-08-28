@@ -140,9 +140,11 @@ export type PostMedia = {
 export type Post = {
   id: string;
   workspace_id: string;
+  created_by_user_id?: string;
   mission_id?: string;
   origin?: "user" | "agent";
   plan_manually_changed?: boolean;
+  needs_revision?: boolean;
   status:
     | "draft"
     | "pending_approval"

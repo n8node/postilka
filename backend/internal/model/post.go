@@ -247,6 +247,7 @@ type Post struct {
 	Media                []PostMedia `json:"media"`
 	CreatedAt            time.Time  `json:"created_at"`
 	UpdatedAt            time.Time  `json:"updated_at"`
+	NeedsRevision        bool       `json:"needs_revision,omitempty"`
 }
 
 type PostTargetInput struct {

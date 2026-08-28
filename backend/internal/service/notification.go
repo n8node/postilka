@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/postilka/postilka/internal/config"
 	"github.com/postilka/postilka/internal/model"
 	"github.com/postilka/postilka/internal/repository"
 )
@@ -27,16 +28,20 @@ type NotificationInput struct {
 }
 
 type NotificationService struct {
-	repo     *repository.NotificationRepository
-	ws       *repository.WorkspaceRepository
-	quota    *QuotaService
-	plans    *repository.PlanRepository
-	channels *repository.ChannelRepository
-	subs     *repository.SubscriptionRepository
-	files    *repository.WorkspaceFileRepository
-	folders  *repository.WorkspaceFolderRepository
-	wallet   *repository.WalletRepository
-	log      *slog.Logger
+	repo      *repository.NotificationRepository
+	ws        *repository.WorkspaceRepository
+	quota     *QuotaService
+	plans     *repository.PlanRepository
+	channels  *repository.ChannelRepository
+	subs      *repository.SubscriptionRepository
+	files     *repository.WorkspaceFileRepository
+	folders   *repository.WorkspaceFolderRepository
+	wallet    *repository.WalletRepository
+	users     *repository.UserRepository
+	email     *TransactionalEmailService
+	messenger *UserMessengerService
+	cfg       *config.Config
+	log       *slog.Logger
 }
 
 func NewNotificationService(
@@ -55,6 +60,21 @@ func NewNotificationService(
 		repo: repo, ws: ws, quota: quota, plans: plans, channels: channels,
 		subs: subs, files: files, folders: folders, wallet: wallet, log: logger,
 	}
+}
+
+func (s *NotificationService) BindOutbound(
+	users *repository.UserRepository,
+	email *TransactionalEmailService,
+	messenger *UserMessengerService,
+	cfg *config.Config,
+) {
+	if s == nil {
+		return
+	}
+	s.users = users
+	s.email = email
+	s.messenger = messenger
+	s.cfg = cfg
 }
 
 func (s *NotificationService) List(
@@ -131,7 +151,9 @@ func (s *NotificationService) Create(ctx context.Context, in NotificationInput) 
 	})
 	if err != nil {
 		s.warn("create notification", err)
+		return
 	}
+	s.dispatchApprovalOutbound(ctx, in)
 }
 
 func (s *NotificationService) CreateForUsers(ctx context.Context, userIDs []string, in NotificationInput) {

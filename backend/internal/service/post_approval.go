@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/postilka/postilka/internal/model"
@@ -103,16 +104,28 @@ func (s *PostService) ApprovePost(
 		next := req.DueAt.UTC()
 		dueAt = &next
 	}
-	if s.notify != nil {
-		s.notify.NotifyApprovalDecision(ctx, *post, true, req.Comment)
+	publishNow := req.Publish || dueAt == nil || !dueAt.After(time.Now())
+	notifyPost := *post
+	if dueAt != nil {
+		notifyPost.DueAt = dueAt
 	}
-	if req.Publish || dueAt == nil || !dueAt.After(time.Now()) {
+	if publishNow {
 		if err := s.posts.SetPublishing(ctx, ws.ID, postID); err != nil {
 			return nil, ErrPostConflict
 		}
+		if s.notify != nil {
+			s.notify.NotifyApprovalDecision(ctx, notifyPost, userID, true, true, req.Comment)
+		}
 		return s.publishAndGet(ctx, ws.ID, postID)
 	}
-	return s.posts.SetScheduled(ctx, ws.ID, postID, *dueAt)
+	scheduled, err := s.posts.SetScheduled(ctx, ws.ID, postID, *dueAt)
+	if err != nil {
+		return nil, err
+	}
+	if s.notify != nil {
+		s.notify.NotifyApprovalDecision(ctx, *scheduled, userID, true, false, req.Comment)
+	}
+	return scheduled, nil
 }
 
 func (s *PostService) RejectPost(
@@ -133,6 +146,9 @@ func (s *PostService) RejectPost(
 	if post.Status != model.PostStatusPendingApproval {
 		return nil, fmt.Errorf("%w: публикация не ожидает согласования", ErrInvalidPost)
 	}
+	if strings.TrimSpace(req.Comment) == "" {
+		return nil, fmt.Errorf("%w: укажите комментарий, что нужно доработать", ErrInvalidPost)
+	}
 	updated, err := s.posts.RejectApproval(ctx, ws.ID, postID)
 	if err != nil {
 		return nil, err
@@ -141,9 +157,11 @@ func (s *PostService) RejectPost(
 		return nil, err
 	}
 	if s.notify != nil {
-		s.notify.NotifyApprovalDecision(ctx, *updated, false, req.Comment)
+		s.notify.NotifyApprovalDecision(ctx, *updated, userID, false, false, req.Comment)
 	}
-	return updated, nil
+	tmp := []model.Post{*updated}
+	s.stampApprovalMeta(ctx, tmp)
+	return &tmp[0], nil
 }
 
 func (s *PostService) CommentPost(

@@ -270,64 +270,109 @@ func (s *NotificationService) NotifyInviteAccepted(ctx context.Context, workspac
 }
 
 func (s *NotificationService) NotifyApprovalSubmitted(ctx context.Context, post model.Post, actorID string) {
-	s.CreateForWorkspace(ctx, post.WorkspaceID, adminRoles(), NotificationInput{
-		Type:     model.NotifyApprovalSubmitted,
-		Category: model.NotificationInfo,
-		Title:    "Пост на согласовании",
-		Body:     fmt.Sprintf("«%s» ждёт решения.", postLabel(post)),
-		Payload:  map[string]any{"post_id": post.ID, "actor_id": actorID},
-		Href:     "/posts/" + post.ID,
+	if s == nil || post.WorkspaceID == "" {
+		return
+	}
+	ids, err := s.ws.ListMemberUserIDs(ctx, post.WorkspaceID, adminRoles())
+	if err != nil {
+		s.warn("list approval recipients", err)
+		return
+	}
+	ids = skipUserIDs(ids, actorID)
+	if len(ids) == 0 {
+		return
+	}
+	wsID := post.WorkspaceID
+	s.CreateForUsers(ctx, ids, NotificationInput{
+		WorkspaceID: &wsID,
+		Type:        model.NotifyApprovalSubmitted,
+		Category:    model.NotificationInfo,
+		Title:       "Пост нуждается в согласовании",
+		Body:        fmt.Sprintf("«%s» ждёт решения.", postLabel(post)),
+		Payload:     map[string]any{"post_id": post.ID, "actor_id": actorID},
+		Href:        "/posts/" + post.ID,
 	})
 }
 
-func (s *NotificationService) NotifyApprovalDecision(ctx context.Context, post model.Post, approved bool, comment string) {
+func (s *NotificationService) NotifyApprovalDecision(ctx context.Context, post model.Post, actorID string, approved bool, publishNow bool, comment string) {
 	typ := model.NotifyApprovalApproved
 	title := "Пост согласован"
 	cat := model.NotificationSuccess
+	outcome := "scheduled"
+	if publishNow {
+		outcome = "publish_now"
+		title = "Пост согласован и публикуется"
+	}
 	if !approved {
 		typ = model.NotifyApprovalRejected
-		title = "Пост отклонён"
+		title = "Пост вернули на доработку"
 		cat = model.NotificationWarning
+		outcome = "rejected"
 	}
 	body := fmt.Sprintf("«%s».", postLabel(post))
-	if strings.TrimSpace(comment) != "" {
+	if !approved && strings.TrimSpace(comment) != "" {
 		body += " " + strings.TrimSpace(comment)
 	}
-	if post.CreatedByUserID == "" {
-		s.CreateForWorkspace(ctx, post.WorkspaceID, editorRoles(), NotificationInput{
-			Type: typ, Category: cat, Title: title, Body: body,
-			Payload: map[string]any{"post_id": post.ID},
-			Href:    "/posts/" + post.ID,
-		})
+	if approved && !publishNow && post.DueAt != nil {
+		body = fmt.Sprintf("«%s» запланирован на %s.", postLabel(post), approvalDueLabel(post.DueAt, ""))
+	}
+	payload := map[string]any{"post_id": post.ID, "outcome": outcome}
+	if strings.TrimSpace(comment) != "" {
+		payload["comment"] = strings.TrimSpace(comment)
+	}
+	if post.DueAt != nil {
+		payload["due_at"] = post.DueAt.UTC().Format(time.RFC3339)
+	}
+
+	targets := []string{}
+	if post.CreatedByUserID != "" {
+		targets = []string{post.CreatedByUserID}
+	} else {
+		ids, err := s.ws.ListMemberUserIDs(ctx, post.WorkspaceID, editorRoles())
+		if err != nil {
+			s.warn("list approval decision recipients", err)
+			return
+		}
+		targets = ids
+	}
+	targets = skipUserIDs(targets, actorID)
+	if len(targets) == 0 {
 		return
 	}
-	s.Create(ctx, NotificationInput{
-		UserID:      post.CreatedByUserID,
-		WorkspaceID: ptrString(post.WorkspaceID),
+	wsID := post.WorkspaceID
+	s.CreateForUsers(ctx, targets, NotificationInput{
+		WorkspaceID: &wsID,
 		Type:        typ,
 		Category:    cat,
 		Title:       title,
 		Body:        body,
-		Payload:     map[string]any{"post_id": post.ID},
+		Payload:     payload,
 		Href:        "/posts/" + post.ID,
 	})
 }
 
 func (s *NotificationService) NotifyApprovalComment(ctx context.Context, post model.Post, actorID, comment string) {
-	target := post.CreatedByUserID
-	if target == "" || target == actorID {
-		return
-	}
-	s.Create(ctx, NotificationInput{
-		UserID:      target,
-		WorkspaceID: ptrString(post.WorkspaceID),
+	wsID := post.WorkspaceID
+	in := NotificationInput{
+		WorkspaceID: ptrString(wsID),
 		Type:        model.NotifyApprovalComment,
 		Category:    model.NotificationInfo,
 		Title:       "Новый комментарий к согласованию",
 		Body:        fmt.Sprintf("«%s»: %s", postLabel(post), strings.TrimSpace(comment)),
 		Payload:     map[string]any{"post_id": post.ID},
 		Href:        "/posts/" + post.ID,
-	})
+	}
+	if post.CreatedByUserID != "" && post.CreatedByUserID != actorID {
+		in.UserID = post.CreatedByUserID
+		s.Create(ctx, in)
+		return
+	}
+	ids, err := s.ws.ListMemberUserIDs(ctx, post.WorkspaceID, adminRoles())
+	if err != nil {
+		s.warn("list approval comment recipients", err)
+		return
+	}
+	s.CreateForUsers(ctx, skipUserIDs(ids, actorID), in)
 }
 
 func (s *NotificationService) NotifyTrashPurged(ctx context.Context, workspaceID string, count int) {

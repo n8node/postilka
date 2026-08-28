@@ -57,6 +57,9 @@ export function postPreviewText(post: Post) {
 }
 
 export function postDisplayDate(post: Post) {
+  if (post.status === "pending_approval" && post.due_at) {
+    return { label: "Желаемое время", value: post.due_at };
+  }
   if (post.status === "scheduled" && post.due_at) {
     return { label: "Запланирован", value: post.due_at };
   }
