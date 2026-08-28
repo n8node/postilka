@@ -32,6 +32,7 @@ type SupportTicketService struct {
 	notify     *NotificationService
 	email      *EmailService
 	maxClient  *oauthclient.MAXBotClient
+	store      *ObjectStorage
 	cfg        *config.Config
 	log        *slog.Logger
 	httpClient *http.Client
@@ -44,6 +45,7 @@ func NewSupportTicketService(
 	notify *NotificationService,
 	email *EmailService,
 	maxClient *oauthclient.MAXBotClient,
+	store *ObjectStorage,
 	cfg *config.Config,
 	logger *slog.Logger,
 ) *SupportTicketService {
@@ -57,6 +59,7 @@ func NewSupportTicketService(
 		notify:    notify,
 		email:     email,
 		maxClient: maxClient,
+		store:     store,
 		cfg:       cfg,
 		log:       logger,
 		httpClient: &http.Client{
@@ -78,7 +81,14 @@ func (s *SupportTicketService) ListUserTickets(ctx context.Context, userID strin
 	if err != nil {
 		return nil, err
 	}
-	return s.tickets.AttachMessages(ctx, items)
+	items, err = s.tickets.AttachMessages(ctx, items)
+	if err != nil {
+		return nil, err
+	}
+	for i := range items {
+		s.decorateTicket(&items[i], false)
+	}
+	return items, nil
 }
 
 func (s *SupportTicketService) ListAdminTickets(ctx context.Context) ([]model.SupportTicket, error) {
@@ -86,7 +96,14 @@ func (s *SupportTicketService) ListAdminTickets(ctx context.Context) ([]model.Su
 	if err != nil {
 		return nil, err
 	}
-	return s.tickets.AttachMessages(ctx, items)
+	items, err = s.tickets.AttachMessages(ctx, items)
+	if err != nil {
+		return nil, err
+	}
+	for i := range items {
+		s.decorateTicket(&items[i], true)
+	}
+	return items, nil
 }
 
 func (s *SupportTicketService) CountAwaitingUser(ctx context.Context, userID string) (int, error) {
@@ -107,6 +124,7 @@ func (s *SupportTicketService) GetUserTicket(ctx context.Context, ticketID, user
 		return nil, err
 	}
 	ticket.Messages = msgs
+	s.decorateTicket(ticket, false)
 	return ticket, nil
 }
 
@@ -120,14 +138,18 @@ func (s *SupportTicketService) GetAdminTicket(ctx context.Context, ticketID stri
 		return nil, err
 	}
 	ticket.Messages = msgs
+	s.decorateTicket(ticket, true)
 	return ticket, nil
 }
 
-func (s *SupportTicketService) CreateTicket(ctx context.Context, userID string, req model.SupportTicketCreateRequest) (*model.SupportTicket, error) {
+func (s *SupportTicketService) CreateTicket(ctx context.Context, userID string, req model.SupportTicketCreateRequest, files []SupportUpload) (*model.SupportTicket, error) {
 	themeID := strings.TrimSpace(req.ThemeID)
 	body := strings.TrimSpace(req.Body)
-	if themeID == "" || body == "" {
+	if themeID == "" || (body == "" && len(files) == 0) {
 		return nil, fmt.Errorf("%w: theme and message required", ErrInvalidSupportInput)
+	}
+	if err := s.validateUploads(files); err != nil {
+		return nil, err
 	}
 	if _, err := s.tickets.GetActiveThemeByID(ctx, themeID); err != nil {
 		return nil, err
@@ -140,12 +162,20 @@ func (s *SupportTicketService) CreateTicket(ctx context.Context, userID string, 
 			subject = &v
 		}
 	}
+	priority := model.NormalizeTicketPriority(string(req.Priority))
 
-	ticket, err := s.tickets.CreateTicket(ctx, userID, themeID, subject)
+	ticket, err := s.tickets.CreateTicket(ctx, userID, themeID, subject, priority)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := s.tickets.AddMessage(ctx, ticket.ID, userID, model.TicketAuthorUser, body); err != nil {
+	if body == "" {
+		body = " "
+	}
+	msg, err := s.tickets.AddMessage(ctx, ticket.ID, userID, model.TicketAuthorUser, body)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.saveUploads(ctx, ticket.ID, msg.ID, files); err != nil {
 		return nil, err
 	}
 
@@ -157,10 +187,13 @@ func (s *SupportTicketService) CreateTicket(ctx context.Context, userID string, 
 	return s.GetUserTicket(ctx, ticket.ID, userID)
 }
 
-func (s *SupportTicketService) AddUserMessage(ctx context.Context, ticketID, userID, body string) (*model.SupportTicket, error) {
+func (s *SupportTicketService) AddUserMessage(ctx context.Context, ticketID, userID, body string, files []SupportUpload) (*model.SupportTicket, error) {
 	body = strings.TrimSpace(body)
-	if body == "" {
+	if body == "" && len(files) == 0 {
 		return nil, fmt.Errorf("%w: message required", ErrInvalidSupportInput)
+	}
+	if err := s.validateUploads(files); err != nil {
+		return nil, err
 	}
 	ticket, err := s.tickets.GetByIDForUser(ctx, ticketID, userID)
 	if err != nil {
@@ -169,7 +202,14 @@ func (s *SupportTicketService) AddUserMessage(ctx context.Context, ticketID, use
 	if model.IsTicketClosed(ticket.Status) {
 		return nil, ErrSupportTicketClosed
 	}
-	if _, err := s.tickets.AddMessage(ctx, ticketID, userID, model.TicketAuthorUser, body); err != nil {
+	if body == "" {
+		body = " "
+	}
+	msg, err := s.tickets.AddMessage(ctx, ticketID, userID, model.TicketAuthorUser, body)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.saveUploads(ctx, ticketID, msg.ID, files); err != nil {
 		return nil, err
 	}
 	if err := s.tickets.UpdateTicketStatus(ctx, ticketID, model.TicketStatusAwaitingAdmin); err != nil {
@@ -183,10 +223,13 @@ func (s *SupportTicketService) AddUserMessage(ctx context.Context, ticketID, use
 	return s.GetUserTicket(ctx, ticketID, userID)
 }
 
-func (s *SupportTicketService) AdminReply(ctx context.Context, ticketID, adminUserID, body string) (*model.SupportTicket, error) {
+func (s *SupportTicketService) AdminReply(ctx context.Context, ticketID, adminUserID, body string, files []SupportUpload) (*model.SupportTicket, error) {
 	body = strings.TrimSpace(body)
-	if body == "" {
+	if body == "" && len(files) == 0 {
 		return nil, fmt.Errorf("%w: message required", ErrInvalidSupportInput)
+	}
+	if err := s.validateUploads(files); err != nil {
+		return nil, err
 	}
 	ticket, err := s.tickets.GetByID(ctx, ticketID)
 	if err != nil {
@@ -195,7 +238,14 @@ func (s *SupportTicketService) AdminReply(ctx context.Context, ticketID, adminUs
 	if model.IsTicketClosed(ticket.Status) {
 		return nil, ErrSupportTicketClosed
 	}
-	if _, err := s.tickets.AddMessage(ctx, ticketID, adminUserID, model.TicketAuthorAdmin, body); err != nil {
+	if body == "" {
+		body = " "
+	}
+	msg, err := s.tickets.AddMessage(ctx, ticketID, adminUserID, model.TicketAuthorAdmin, body)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.saveUploads(ctx, ticketID, msg.ID, files); err != nil {
 		return nil, err
 	}
 	if err := s.tickets.UpdateTicketStatus(ctx, ticketID, model.TicketStatusAwaitingUser); err != nil {
@@ -208,6 +258,20 @@ func (s *SupportTicketService) AdminReply(ctx context.Context, ticketID, adminUs
 	}
 	s.notifyUserReply(ctx, full, body)
 	return full, nil
+}
+
+func (s *SupportTicketService) UpdateUserStatus(ctx context.Context, ticketID, userID string, status model.TicketStatus) (*model.SupportTicket, error) {
+	if status != model.TicketStatusResolved && status != model.TicketStatusClosed {
+		return nil, fmt.Errorf("%w: invalid status", ErrInvalidSupportInput)
+	}
+	ticket, err := s.tickets.GetByIDForUser(ctx, ticketID, userID)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.tickets.UpdateTicketStatus(ctx, ticket.ID, status); err != nil {
+		return nil, err
+	}
+	return s.GetUserTicket(ctx, ticketID, userID)
 }
 
 func (s *SupportTicketService) UpdateStatus(ctx context.Context, ticketID string, status model.TicketStatus) (*model.SupportTicket, error) {
@@ -238,10 +302,12 @@ func (s *SupportTicketService) CreateTheme(ctx context.Context, req model.Suppor
 		isActive = *req.IsActive
 	}
 	return s.tickets.CreateTheme(ctx, model.SupportTicketTheme{
-		Name:      name,
-		Slug:      slug,
-		SortOrder: req.SortOrder,
-		IsActive:  isActive,
+		Name:        name,
+		Slug:        slug,
+		Description: strings.TrimSpace(req.Description),
+		Icon:        normalizeSupportThemeIcon(req.Icon),
+		SortOrder:   req.SortOrder,
+		IsActive:    isActive,
 	})
 }
 
@@ -252,6 +318,8 @@ func (s *SupportTicketService) UpdateTheme(ctx context.Context, id string, req m
 	}
 	name := current.Name
 	slug := current.Slug
+	description := current.Description
+	icon := current.Icon
 	sortOrder := current.SortOrder
 	isActive := current.IsActive
 
@@ -272,6 +340,12 @@ func (s *SupportTicketService) UpdateTheme(ctx context.Context, id string, req m
 	if req.IsActive != nil {
 		isActive = *req.IsActive
 	}
+	if req.Description != nil {
+		description = strings.TrimSpace(*req.Description)
+	}
+	if req.Icon != nil {
+		icon = normalizeSupportThemeIcon(*req.Icon)
+	}
 
 	exists, err := s.tickets.ThemeExistsByNameOrSlug(ctx, name, slug, id)
 	if err != nil {
@@ -282,10 +356,12 @@ func (s *SupportTicketService) UpdateTheme(ctx context.Context, id string, req m
 	}
 
 	return s.tickets.UpdateTheme(ctx, id, model.SupportTicketTheme{
-		Name:      name,
-		Slug:      slug,
-		SortOrder: sortOrder,
-		IsActive:  isActive,
+		Name:        name,
+		Slug:        slug,
+		Description: description,
+		Icon:        icon,
+		SortOrder:   sortOrder,
+		IsActive:    isActive,
 	})
 }
 
@@ -609,5 +685,14 @@ func validateTicketStatus(status model.TicketStatus) error {
 		return nil
 	default:
 		return fmt.Errorf("%w: invalid status", ErrInvalidSupportInput)
+	}
+}
+
+func normalizeSupportThemeIcon(raw string) string {
+	switch strings.TrimSpace(strings.ToLower(raw)) {
+	case "wrench", "credit-card", "radio", "help", "plus", "bug", "message":
+		return strings.TrimSpace(strings.ToLower(raw))
+	default:
+		return "help"
 	}
 }

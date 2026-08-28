@@ -248,7 +248,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             isActive(pathname, "/posts") ||
             isActive(pathname, "/ai") ||
             isActive(pathname, "/workflows") ||
-            isActive(pathname, "/calendar")
+            isActive(pathname, "/calendar") ||
+            isActive(pathname, "/support")
               ? "overflow-x-visible"
               : "overflow-x-clip",
           )}
@@ -265,7 +266,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   isActive(pathname, "/files") ||
                   isActive(pathname, "/settings") ||
                   isActive(pathname, "/ai") ||
-                  isActive(pathname, "/team")
+                  isActive(pathname, "/team") ||
+                  isActive(pathname, "/support")
                 ? "max-w-none px-4 py-6 sm:px-6 lg:px-8"
                 : "max-w-7xl px-4 py-6 sm:px-6 lg:px-8",
             )}

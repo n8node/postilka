@@ -262,7 +262,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	supportSettingsSvc := service.NewSupportSettingsService(supportSettingsRepo)
 	supportTicketSvc := service.NewSupportTicketService(
 		supportTicketRepo, supportSettingsSvc, userRepo, notificationSvc, emailSvc,
-		oauthclient.NewMAXBotClient(), cfg, logger,
+		oauthclient.NewMAXBotClient(), objectStorage, cfg, logger,
 	)
 	supportTicketHandler := handler.NewSupportTicketHandler(supportTicketSvc)
 	adminSupportHandler := handler.NewAdminSupportHandler(supportTicketSvc, supportSettingsSvc)
@@ -331,7 +331,9 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Get("/support/tickets/count", supportTicketHandler.CountTickets)
 			r.Post("/support/tickets", supportTicketHandler.CreateTicket)
 			r.Get("/support/tickets/{id}", supportTicketHandler.GetTicket)
+			r.Patch("/support/tickets/{id}", supportTicketHandler.UpdateTicket)
 			r.Post("/support/tickets/{id}/messages", supportTicketHandler.AddMessage)
+			r.Get("/support/tickets/{id}/attachments/{attachmentID}", supportTicketHandler.DownloadAttachment)
 		})
 
 		r.Group(func(r chi.Router) {
@@ -682,6 +684,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Get("/support/tickets/{id}", adminSupportHandler.GetTicket)
 				r.Patch("/support/tickets/{id}", adminSupportHandler.UpdateTicket)
 				r.Post("/support/tickets/{id}/reply", adminSupportHandler.ReplyTicket)
+				r.Get("/support/tickets/{id}/attachments/{attachmentID}", adminSupportHandler.DownloadAttachment)
 			})
 		})
 	})

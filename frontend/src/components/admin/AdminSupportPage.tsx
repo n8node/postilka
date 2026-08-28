@@ -3,16 +3,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
-  Bell,
-  Headphones,
   Loader2,
   MessageSquare,
   Save,
-  Send,
   Settings,
   Tag,
-  User,
 } from "lucide-react";
+import { SupportInbox } from "@/components/support/SupportInbox";
 import {
   createAdminSupportTheme,
   fetchAdminSupportSettings,
@@ -33,15 +30,6 @@ import {
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-const STATUS_LABELS: Record<TicketStatus, string> = {
-  open: "Открыт",
-  awaiting_admin: "Ожидает ответа",
-  awaiting_user: "Ожидает пользователя",
-  in_progress: "В работе",
-  resolved: "Решён",
-  closed: "Закрыт",
-};
-
 const DEFAULT_SETTINGS: SupportSettings = {
   admin_email_enabled: true,
   admin_email_recipients: "",
@@ -55,16 +43,6 @@ const DEFAULT_SETTINGS: SupportSettings = {
   max_user_reply_template: "",
 };
 
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleString("ru-RU", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
 export function AdminSupportPage() {
   const searchParams = useSearchParams();
   const ticketIdFromUrl = searchParams.get("ticket");
@@ -76,7 +54,6 @@ export function AdminSupportPage() {
   const [selectedTicket, setSelectedTicket] = useState<SupportTicket | null>(null);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
-  const [replyBody, setReplyBody] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
@@ -90,6 +67,7 @@ export function AdminSupportPage() {
 
   const [newThemeName, setNewThemeName] = useState("");
   const [newThemeSlug, setNewThemeSlug] = useState("");
+  const [newThemeDescription, setNewThemeDescription] = useState("");
   const [savingTheme, setSavingTheme] = useState(false);
 
   const loadCount = useCallback(() => {
@@ -103,10 +81,12 @@ export function AdminSupportPage() {
       .then((data) => {
         const list = Array.isArray(data) ? data : [];
         setTickets(list);
-        if (ticketIdFromUrl) {
-          const t = list.find((x) => x.id === ticketIdFromUrl);
-          if (t) setSelectedTicket(t);
-        }
+        setSelectedTicket((current) => {
+          const fromUrl = ticketIdFromUrl ? list.find((x) => x.id === ticketIdFromUrl) : undefined;
+          if (fromUrl) return fromUrl;
+          if (current) return list.find((x) => x.id === current.id) ?? current;
+          return current;
+        });
       })
       .catch(() => setTickets([]));
   }, [ticketIdFromUrl]);
@@ -134,8 +114,8 @@ export function AdminSupportPage() {
     );
   }, [loadTickets, loadThemes, loadSettings, loadCount]);
 
-  async function handleReply() {
-    if (!selectedTicket || !replyBody.trim()) return;
+  async function handleReply(body: string, files: File[]) {
+    if (!selectedTicket) return;
     if (selectedTicket.status === "resolved" || selectedTicket.status === "closed") {
       setError("Тикет закрыт");
       return;
@@ -143,9 +123,8 @@ export function AdminSupportPage() {
     setSending(true);
     setError("");
     try {
-      const updated = await replyAdminSupportTicket(selectedTicket.id, replyBody.trim());
+      const updated = await replyAdminSupportTicket(selectedTicket.id, body, files);
       setSelectedTicket(updated);
-      setReplyBody("");
       await loadTickets();
       loadCount();
       setMessage("Ответ отправлен. Пользователь получит уведомление и email.");
@@ -179,10 +158,12 @@ export function AdminSupportPage() {
       await createAdminSupportTheme({
         name: newThemeName.trim(),
         slug: newThemeSlug.trim() || undefined,
+        description: newThemeDescription.trim() || undefined,
         sort_order: themes.length,
       });
       setNewThemeName("");
       setNewThemeSlug("");
+      setNewThemeDescription("");
       loadThemes();
       setMessage("Тема добавлена");
     } catch (e) {
@@ -309,135 +290,24 @@ export function AdminSupportPage() {
       </div>
 
       {tab === "tickets" && (
-        <div className="grid gap-6 lg:grid-cols-3">
-          <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:col-span-1">
-            <h2 className="mb-3 flex items-center gap-2 text-base font-semibold">
-              <Headphones className="h-4 w-4" />
-              Список тикетов
-            </h2>
-            {tickets.length === 0 ? (
-              <p className="py-4 text-sm text-slate-500">Нет тикетов</p>
-            ) : (
-              <ul className="space-y-1">
-                {tickets.map((t) => (
-                  <li key={t.id}>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedTicket(t)}
-                      className={cn(
-                        "w-full rounded-lg px-3 py-2.5 text-left text-sm transition-colors",
-                        selectedTicket?.id === t.id
-                          ? "bg-blue-50 text-blue-700 ring-1 ring-blue-200"
-                          : "hover:bg-slate-50",
-                      )}
-                    >
-                      <div className="flex items-center gap-2">
-                        <User className="h-4 w-4 shrink-0" />
-                        <span className="truncate font-medium">{t.user?.email}</span>
-                        {t.status === "awaiting_admin" && (
-                          <Bell className="h-3.5 w-3.5 shrink-0 text-amber-500" />
-                        )}
-                      </div>
-                      <p className="truncate text-xs text-slate-500">
-                        {t.theme?.name} · {formatDate(t.updated_at)}
-                      </p>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
-
-          <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:col-span-2">
-            {selectedTicket ? (
-              <>
-                <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
-                  <div>
-                    <h2 className="text-base font-semibold">{selectedTicket.theme?.name}</h2>
-                    <p className="mt-1 flex items-center gap-1 text-sm text-slate-500">
-                      <User className="h-3.5 w-3.5" />
-                      {selectedTicket.user?.email}
-                      {selectedTicket.user?.name ? ` (${selectedTicket.user.name})` : ""}
-                    </p>
-                  </div>
-                  <select
-                    value={selectedTicket.status}
-                    onChange={(e) =>
-                      handleUpdateStatus(selectedTicket.id, e.target.value as TicketStatus)
-                    }
-                    className="h-8 rounded-lg border border-slate-200 bg-white px-2 text-xs"
-                  >
-                    {(Object.entries(STATUS_LABELS) as [TicketStatus, string][]).map(([v, l]) => (
-                      <option key={v} value={v}>
-                        {l}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="max-h-[280px] space-y-3 overflow-y-auto">
-                  {(selectedTicket.messages ?? []).map((m) => (
-                    <div
-                      key={m.id}
-                      className={cn(
-                        "rounded-lg px-4 py-3",
-                        m.author_role === "admin"
-                          ? "ml-4 border border-blue-200 bg-blue-50"
-                          : "mr-4 bg-slate-50",
-                      )}
-                    >
-                      <div className="mb-1 flex items-center gap-2 text-xs text-slate-500">
-                        {m.author_role === "admin" ? "Вы" : "Пользователь"}
-                        <span>{formatDate(m.created_at)}</span>
-                      </div>
-                      <p className="whitespace-pre-wrap text-sm">{m.body}</p>
-                    </div>
-                  ))}
-                </div>
-
-                {selectedTicket.status !== "resolved" && selectedTicket.status !== "closed" && (
-                  <div className="mt-4 border-t border-slate-100 pt-4">
-                    <textarea
-                      value={replyBody}
-                      onChange={(e) => setReplyBody(e.target.value)}
-                      placeholder="Введите ответ..."
-                      rows={3}
-                      className="mb-2 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleReply}
-                      disabled={sending || !replyBody.trim()}
-                      className="inline-flex h-10 items-center rounded-lg bg-blue-600 px-4 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-                    >
-                      {sending ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <Send className="mr-2 h-4 w-4" />
-                      )}
-                      Отправить ответ
-                    </button>
-                    <p className="mt-2 text-xs text-slate-500">
-                      Пользователь получит in-app уведомление и email
-                    </p>
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="flex flex-col items-center justify-center py-16 text-center text-slate-400">
-                <MessageSquare className="mb-3 h-12 w-12 opacity-50" />
-                <p>Выберите тикет</p>
-              </div>
-            )}
-          </section>
-        </div>
+        <SupportInbox
+          mode="admin"
+          tickets={tickets}
+          selected={selectedTicket}
+          sending={sending}
+          onSelect={setSelectedTicket}
+          onSend={handleReply}
+          onResolve={() => selectedTicket && handleUpdateStatus(selectedTicket.id, "resolved")}
+          onCloseTicket={() => selectedTicket && handleUpdateStatus(selectedTicket.id, "closed")}
+          onStatusChange={(status) => selectedTicket && handleUpdateStatus(selectedTicket.id, status)}
+        />
       )}
 
       {tab === "themes" && (
         <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="text-base font-semibold">Темы тикетов</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Темы отображаются в выпадающем списке при создании тикета
+            Темы отображаются плитками при создании тикета
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
             <input
@@ -450,6 +320,12 @@ export function AdminSupportPage() {
               placeholder="slug (опционально)"
               value={newThemeSlug}
               onChange={(e) => setNewThemeSlug(e.target.value)}
+              className="h-10 max-w-xs rounded-lg border border-slate-200 px-3 text-sm"
+            />
+            <input
+              placeholder="Подпись на плитке"
+              value={newThemeDescription}
+              onChange={(e) => setNewThemeDescription(e.target.value)}
               className="h-10 max-w-xs rounded-lg border border-slate-200 px-3 text-sm"
             />
             <button
@@ -466,7 +342,10 @@ export function AdminSupportPage() {
               <li key={theme.id} className="flex items-center justify-between py-3">
                 <div>
                   <p className="font-medium">{theme.name}</p>
-                  <p className="text-xs text-slate-500">{theme.slug}</p>
+                  <p className="text-xs text-slate-500">
+                    {theme.slug}
+                    {theme.description ? ` · ${theme.description}` : ""}
+                  </p>
                 </div>
                 <button
                   type="button"

@@ -202,29 +202,28 @@ func (h *AdminSupportHandler) ReplyTicket(w http.ResponseWriter, r *http.Request
 		return
 	}
 	ticketID := chi.URLParam(r, "id")
-	var req model.SupportTicketAdminReplyRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	body, files, err := parseSupportMessageRequest(r)
+	if err != nil {
 		writeError(w, http.StatusBadRequest, "Некорректное тело запроса")
 		return
 	}
-	ticket, err := h.tickets.AdminReply(r.Context(), ticketID, adminUserID, req.Body)
+	ticket, err := h.tickets.AdminReply(r.Context(), ticketID, adminUserID, body, files)
 	if err != nil {
-		if errors.Is(err, repository.ErrNotFound) {
-			writeError(w, http.StatusNotFound, "Тикет не найден")
-			return
-		}
-		if errors.Is(err, service.ErrSupportTicketClosed) {
-			writeError(w, http.StatusBadRequest, "Тикет закрыт")
-			return
-		}
-		if errors.Is(err, service.ErrInvalidSupportInput) {
-			writeError(w, http.StatusBadRequest, err.Error())
-			return
-		}
-		writeError(w, http.StatusInternalServerError, "Не удалось отправить ответ")
+		writeSupportTicketError(w, err, "Не удалось отправить ответ")
 		return
 	}
 	writeJSON(w, http.StatusOK, ticket)
+}
+
+func (h *AdminSupportHandler) DownloadAttachment(w http.ResponseWriter, r *http.Request) {
+	ticketID := chi.URLParam(r, "id")
+	attachmentID := chi.URLParam(r, "attachmentID")
+	att, body, contentType, err := h.tickets.GetAdminAttachment(r.Context(), ticketID, attachmentID)
+	if err != nil {
+		writeSupportTicketError(w, err, "Не удалось загрузить файл")
+		return
+	}
+	writeSupportAttachment(w, att, body, contentType)
 }
 
 func middlewareUserID(r *http.Request) (string, bool) {

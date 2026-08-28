@@ -2689,29 +2689,49 @@ export type TicketStatus =
   | "resolved"
   | "closed";
 
+export type TicketPriority = "low" | "normal" | "high" | "urgent";
+
 export type SupportTicketTheme = {
   id: string;
   name: string;
   slug: string;
+  description?: string;
+  icon?: string;
   sort_order?: number;
   is_active?: boolean;
   created_at?: string;
   updated_at?: string;
 };
 
+export type SupportTicketAttachment = {
+  id: string;
+  ticket_id: string;
+  message_id: string;
+  filename: string;
+  mime_type: string;
+  size_bytes: number;
+  url: string;
+  created_at: string;
+};
+
 export type SupportTicketMessage = {
   id: string;
   author_role: "user" | "admin";
+  author_name?: string;
+  author_email?: string;
   body: string;
+  attachments?: SupportTicketAttachment[];
   created_at: string;
 };
 
 export type SupportTicket = {
   id: string;
-  theme?: { name: string; slug: string };
+  ticket_number?: number;
+  theme?: { name: string; slug: string; description?: string; icon?: string };
   user?: { email: string; name: string };
   subject?: string | null;
   status: TicketStatus;
+  priority?: TicketPriority;
   messages?: SupportTicketMessage[];
   created_at: string;
   updated_at: string;
@@ -2751,17 +2771,64 @@ export function fetchSupportTicketsCount() {
   return apiFetch<{ awaiting_user_count: number }>("/support/tickets/count");
 }
 
-export function createSupportTicket(body: { theme_id: string; body: string; subject?: string }) {
+function postSupportMultipart<T>(path: string, formData: FormData): Promise<T> {
+  return postUserAvatarMultipart<T>(path, formData);
+}
+
+export function supportAttachmentUrl(path: string) {
+  if (!path) return "";
+  if (path.startsWith("http://") || path.startsWith("https://")) return path;
+  return `${clientBase()}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+export function createSupportTicket(body: {
+  theme_id: string;
+  body: string;
+  subject?: string;
+  priority?: TicketPriority;
+  files?: File[];
+}) {
+  if (body.files && body.files.length > 0) {
+    const form = new FormData();
+    form.append("theme_id", body.theme_id);
+    form.append("body", body.body);
+    if (body.subject) form.append("subject", body.subject);
+    if (body.priority) form.append("priority", body.priority);
+    for (const file of body.files) form.append("files", file);
+    return postSupportMultipart<SupportTicket>("/support/tickets", form);
+  }
   return apiFetch<SupportTicket>("/support/tickets", {
     method: "POST",
-    body: JSON.stringify(body),
+    body: JSON.stringify({
+      theme_id: body.theme_id,
+      body: body.body,
+      subject: body.subject,
+      priority: body.priority,
+    }),
   });
 }
 
-export function sendSupportTicketMessage(ticketId: string, body: string) {
+export function sendSupportTicketMessage(
+  ticketId: string,
+  body: string,
+  files?: File[],
+) {
+  if (files && files.length > 0) {
+    const form = new FormData();
+    form.append("body", body);
+    for (const file of files) form.append("files", file);
+    return postSupportMultipart<SupportTicket>(`/support/tickets/${ticketId}/messages`, form);
+  }
   return apiFetch<SupportTicket>(`/support/tickets/${ticketId}/messages`, {
     method: "POST",
     body: JSON.stringify({ body }),
+  });
+}
+
+export function updateSupportTicketStatus(ticketId: string, status: TicketStatus) {
+  return apiFetch<SupportTicket>(`/support/tickets/${ticketId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
   });
 }
 
@@ -2805,6 +2872,8 @@ export function fetchAdminSupportThemes() {
 export function createAdminSupportTheme(body: {
   name: string;
   slug?: string;
+  description?: string;
+  icon?: string;
   sort_order?: number;
   is_active?: boolean;
 }) {
@@ -2816,7 +2885,7 @@ export function createAdminSupportTheme(body: {
 
 export function updateAdminSupportTheme(
   id: string,
-  body: Partial<{ name: string; slug: string; sort_order: number; is_active: boolean }>,
+  body: Partial<{ name: string; slug: string; description: string; icon: string; sort_order: number; is_active: boolean }>,
 ) {
   return apiFetch<SupportTicketTheme>(`/admin/support/themes/${id}`, {
     method: "PATCH",
@@ -2843,7 +2912,13 @@ export function updateAdminSupportTicketStatus(id: string, status: TicketStatus)
   });
 }
 
-export function replyAdminSupportTicket(id: string, body: string) {
+export function replyAdminSupportTicket(id: string, body: string, files?: File[]) {
+  if (files && files.length > 0) {
+    const form = new FormData();
+    form.append("body", body);
+    for (const file of files) form.append("files", file);
+    return postSupportMultipart<SupportTicket>(`/admin/support/tickets/${id}/reply`, form);
+  }
   return apiFetch<SupportTicket>(`/admin/support/tickets/${id}/reply`, {
     method: "POST",
     body: JSON.stringify({ body }),
