@@ -399,31 +399,54 @@ export function AdStudioPage() {
     };
   }, [selected]);
 
-  const selectTemplate = useCallback(
+  const selectedIdRef = useRef<string | undefined>(undefined);
+  selectedIdRef.current = selected?.id;
+  const prevTemplateParamRef = useRef<string | null | undefined>(undefined);
+
+  const applyTemplate = useCallback(
     (item: AdStudioTemplate) => {
+      selectedIdRef.current = item.id;
       setSelected(item);
       setEdit("");
       clearImageError();
       clearVideoError();
       clearImageResult();
       clearVideoResult();
-      router.replace(`/ai?template=${encodeURIComponent(item.id)}`, { scroll: false });
     },
-    [
-      clearImageError,
-      clearImageResult,
-      clearVideoError,
-      clearVideoResult,
-      router,
-    ],
+    [clearImageError, clearImageResult, clearVideoError, clearVideoResult],
   );
 
+  const selectTemplate = useCallback(
+    (item: AdStudioTemplate) => {
+      applyTemplate(item);
+      if (templateParam !== item.id) {
+        router.replace(`/ai?template=${encodeURIComponent(item.id)}`, { scroll: false });
+      }
+    },
+    [applyTemplate, router, templateParam],
+  );
+
+  // Apply the query only when `?template=` actually changes. Do not depend on
+  // `selected`: `router.replace` is async, and a stale param would snap back.
   useEffect(() => {
-    if (!templateParam || loading || items.length === 0) return;
+    if (loading) return;
+    const prevParam = prevTemplateParamRef.current;
+    if (prevParam === templateParam && prevParam !== undefined) return;
+
+    if (!templateParam) {
+      prevTemplateParamRef.current = templateParam;
+      if (prevParam) {
+        selectedIdRef.current = undefined;
+        setSelected(null);
+      }
+      return;
+    }
+    if (items.length === 0) return;
+    prevTemplateParamRef.current = templateParam;
     const match = items.find((item) => item.id === templateParam);
-    if (!match || selected?.id === match.id) return;
-    selectTemplate(match);
-  }, [templateParam, loading, items, selected?.id, selectTemplate]);
+    if (!match || selectedIdRef.current === match.id) return;
+    applyTemplate(match);
+  }, [templateParam, loading, items, applyTemplate]);
 
   const applyUpload = (slot: "product" | "avatar", next: GenerationUpload) => {
     if (slot === "product") setProduct(next);
@@ -729,6 +752,7 @@ export function AdStudioPage() {
             <button
               type="button"
               onClick={() => {
+                selectedIdRef.current = undefined;
                 setSelected(null);
                 if (templateParam) {
                   router.replace("/ai", { scroll: false });
