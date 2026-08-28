@@ -313,7 +313,9 @@ function ChatBubble({
   const mine = mode === "admin" ? message.author_role === "admin" : message.author_role === "user";
   const name =
     message.author_role === "admin"
-      ? message.author_name || "Поддержка"
+      ? mode === "user"
+        ? "Специалист поддержки"
+        : message.author_name || "Поддержка"
       : message.author_email || ticket.user?.email || message.author_name || "Вы";
   const avatar = message.author_role === "admin" ? "SUP" : mine ? "ВЫ" : initialsFrom(message.author_name, name);
 

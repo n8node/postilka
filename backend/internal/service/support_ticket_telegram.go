@@ -363,13 +363,6 @@ func supportTelegramIngestBody(msg *supportBotMessage) string {
 	if text == "" && len(extras) == 0 {
 		return ""
 	}
-	if from := formatSupportTelegramSender(msg.From); from != "" {
-		if text != "" {
-			text = from + "\n\n" + text
-		} else {
-			text = from
-		}
-	}
 	if len(extras) > 0 {
 		if text != "" {
 			text += "\n" + strings.Join(extras, "\n")
@@ -380,21 +373,15 @@ func supportTelegramIngestBody(msg *supportBotMessage) string {
 	return strings.TrimSpace(text)
 }
 
-func formatSupportTelegramSender(from *supportBotUser) string {
-	if from == nil {
-		return ""
+func stripSupportTelegramSenderPrefix(body string) string {
+	body = strings.TrimSpace(body)
+	if !strings.HasPrefix(body, "Telegram: ") {
+		return body
 	}
-	name := strings.TrimSpace(strings.TrimSpace(from.FirstName + " " + from.LastName))
-	switch {
-	case from.Username != "" && name != "":
-		return fmt.Sprintf("Telegram: %s (@%s)", name, from.Username)
-	case from.Username != "":
-		return "Telegram: @" + from.Username
-	case name != "":
-		return "Telegram: " + name
-	default:
-		return ""
+	if i := strings.Index(body, "\n\n"); i >= 0 {
+		return strings.TrimSpace(body[i+2:])
 	}
+	return strings.TrimSpace(body)
 }
 
 func appendSupportAttachmentNames(text string, ticket *model.SupportTicket) string {

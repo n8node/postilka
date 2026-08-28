@@ -40,13 +40,23 @@ func TestSupportChatIDEqual(t *testing.T) {
 
 func TestSupportTelegramIngestBody(t *testing.T) {
 	msg := &supportBotMessage{
-		Text: "Нужна помощь",
-		From: &supportBotUser{FirstName: "Анна", Username: "anna"},
+		Text:     "Нужна помощь",
+		From:     &supportBotUser{FirstName: "Анна", Username: "anna"},
 		Document: &supportBotFile{FileName: "log.txt"},
 	}
 	got := supportTelegramIngestBody(msg)
-	if !strings.Contains(got, "Нужна помощь") || !strings.Contains(got, "@anna") || !strings.Contains(got, "log.txt") {
+	if !strings.Contains(got, "Нужна помощь") || !strings.Contains(got, "log.txt") {
 		t.Fatalf("unexpected ingest body: %q", got)
+	}
+	if strings.Contains(got, "Telegram:") || strings.Contains(got, "@anna") {
+		t.Fatalf("telegram identity should not appear in ticket body: %q", got)
+	}
+}
+
+func TestStripSupportTelegramSenderPrefix(t *testing.T) {
+	got := stripSupportTelegramSenderPrefix("Telegram: George Erman (@ermangeorge)\n\nGggggg")
+	if got != "Gggggg" {
+		t.Fatalf("got %q", got)
 	}
 }
 

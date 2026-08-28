@@ -54,8 +54,14 @@ func (s *SupportTicketService) decorateTicket(ticket *model.SupportTicket, admin
 		prefix = "/admin/support/tickets/"
 	}
 	for i := range ticket.Messages {
-		for j := range ticket.Messages[i].Attachments {
-			att := &ticket.Messages[i].Attachments[j]
+		msg := &ticket.Messages[i]
+		if !admin && msg.AuthorRole == model.TicketAuthorAdmin {
+			msg.AuthorName = "Специалист поддержки"
+			msg.AuthorEmail = ""
+			msg.Body = stripSupportTelegramSenderPrefix(msg.Body)
+		}
+		for j := range msg.Attachments {
+			att := &msg.Attachments[j]
 			att.URL = prefix + ticket.ID + "/attachments/" + att.ID
 		}
 	}
