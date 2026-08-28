@@ -3,11 +3,14 @@ package repository
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/postilka/postilka/internal/model"
 )
+
+const supportTicketCols = `t.id, t.user_id, t.theme_id, t.subject, t.status, t.priority, t.ticket_number, t.created_at, t.updated_at, t.telegram_chat_id, t.telegram_topic_id`
 
 type SupportTicketRepository struct {
 	pool *pgxpool.Pool
@@ -143,7 +146,7 @@ func (r *SupportTicketRepository) CreateTicket(ctx context.Context, userID, them
 	const q = `
 		INSERT INTO support_tickets (user_id, theme_id, subject, status, priority)
 		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, user_id, theme_id, subject, status, priority, ticket_number, created_at, updated_at
+		RETURNING id, user_id, theme_id, subject, status, priority, ticket_number, created_at, updated_at, telegram_chat_id, telegram_topic_id
 	`
 	row := r.pool.QueryRow(ctx, q, userID, themeID, subject, model.TicketStatusAwaitingAdmin, string(priority))
 	return scanSupportTicket(row)
@@ -192,7 +195,7 @@ func (r *SupportTicketRepository) TouchTicket(ctx context.Context, ticketID stri
 
 func (r *SupportTicketRepository) ListByUser(ctx context.Context, userID string) ([]model.SupportTicket, error) {
 	const q = `
-		SELECT t.id, t.user_id, t.theme_id, t.subject, t.status, t.priority, t.ticket_number, t.created_at, t.updated_at,
+		SELECT ` + supportTicketCols + `,
 		       th.name, th.slug, th.description, th.icon
 		FROM support_tickets t
 		JOIN support_ticket_themes th ON th.id = t.theme_id
@@ -218,7 +221,7 @@ func (r *SupportTicketRepository) ListByUser(ctx context.Context, userID string)
 
 func (r *SupportTicketRepository) ListAll(ctx context.Context) ([]model.SupportTicket, error) {
 	const q = `
-		SELECT t.id, t.user_id, t.theme_id, t.subject, t.status, t.priority, t.ticket_number, t.created_at, t.updated_at,
+		SELECT ` + supportTicketCols + `,
 		       th.name, th.slug, th.description, th.icon, u.email, COALESCE(u.name, '')
 		FROM support_tickets t
 		JOIN support_ticket_themes th ON th.id = t.theme_id
@@ -244,7 +247,7 @@ func (r *SupportTicketRepository) ListAll(ctx context.Context) ([]model.SupportT
 
 func (r *SupportTicketRepository) GetByIDForUser(ctx context.Context, ticketID, userID string) (*model.SupportTicket, error) {
 	const q = `
-		SELECT t.id, t.user_id, t.theme_id, t.subject, t.status, t.priority, t.ticket_number, t.created_at, t.updated_at,
+		SELECT ` + supportTicketCols + `,
 		       th.name, th.slug, th.description, th.icon
 		FROM support_tickets t
 		JOIN support_ticket_themes th ON th.id = t.theme_id
@@ -260,7 +263,7 @@ func (r *SupportTicketRepository) GetByIDForUser(ctx context.Context, ticketID, 
 
 func (r *SupportTicketRepository) GetByID(ctx context.Context, ticketID string) (*model.SupportTicket, error) {
 	const q = `
-		SELECT t.id, t.user_id, t.theme_id, t.subject, t.status, t.priority, t.ticket_number, t.created_at, t.updated_at,
+		SELECT ` + supportTicketCols + `,
 		       th.name, th.slug, th.description, th.icon, u.email, COALESCE(u.name, '')
 		FROM support_tickets t
 		JOIN support_ticket_themes th ON th.id = t.theme_id
@@ -273,6 +276,59 @@ func (r *SupportTicketRepository) GetByID(ctx context.Context, ticketID string) 
 		return nil, ErrNotFound
 	}
 	return ticket, err
+}
+
+func (r *SupportTicketRepository) GetByTelegramTopic(ctx context.Context, chatID string, topicID int) (*model.SupportTicket, error) {
+	chatID = strings.TrimSpace(chatID)
+	if chatID == "" || topicID <= 0 {
+		return nil, ErrNotFound
+	}
+	const q = `
+		SELECT ` + supportTicketCols + `,
+		       th.name, th.slug, th.description, th.icon, u.email, COALESCE(u.name, '')
+		FROM support_tickets t
+		JOIN support_ticket_themes th ON th.id = t.theme_id
+		JOIN users u ON u.id = t.user_id
+		WHERE t.telegram_chat_id = $1 AND t.telegram_topic_id = $2
+		ORDER BY t.updated_at DESC
+		LIMIT 1
+	`
+	row := r.pool.QueryRow(ctx, q, chatID, topicID)
+	ticket, err := scanSupportTicketWithThemeUser(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	return ticket, err
+}
+
+func (r *SupportTicketRepository) SetTelegramTopic(ctx context.Context, ticketID, chatID string, topicID int) error {
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE support_tickets
+		SET telegram_chat_id = $2, telegram_topic_id = $3, updated_at = NOW()
+		WHERE id = $1
+	`, ticketID, strings.TrimSpace(chatID), topicID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (r *SupportTicketRepository) ClearTelegramTopic(ctx context.Context, ticketID string) error {
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE support_tickets
+		SET telegram_chat_id = NULL, telegram_topic_id = NULL, updated_at = NOW()
+		WHERE id = $1
+	`, ticketID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (r *SupportTicketRepository) ListMessages(ctx context.Context, ticketID string) ([]model.SupportTicketMessageView, error) {
@@ -389,21 +445,30 @@ type ticketScanner interface {
 func scanSupportTicket(row ticketScanner) (*model.SupportTicket, error) {
 	var t model.SupportTicket
 	var status, priority string
-	err := row.Scan(&t.ID, &t.UserID, &t.ThemeID, &t.Subject, &status, &priority, &t.TicketNumber, &t.CreatedAt, &t.UpdatedAt)
+	var chatID *string
+	var topicID *int
+	err := row.Scan(
+		&t.ID, &t.UserID, &t.ThemeID, &t.Subject, &status, &priority, &t.TicketNumber, &t.CreatedAt, &t.UpdatedAt,
+		&chatID, &topicID,
+	)
 	if err != nil {
 		return nil, err
 	}
 	t.Status = model.TicketStatus(status)
 	t.Priority = model.TicketPriority(priority)
+	applyTelegramTopic(&t, chatID, topicID)
 	return &t, nil
 }
 
 func scanSupportTicketWithTheme(row ticketScanner) (*model.SupportTicket, error) {
 	var t model.SupportTicket
 	var status, priority string
+	var chatID *string
+	var topicID *int
 	var themeName, themeSlug, themeDesc, themeIcon string
 	err := row.Scan(
 		&t.ID, &t.UserID, &t.ThemeID, &t.Subject, &status, &priority, &t.TicketNumber, &t.CreatedAt, &t.UpdatedAt,
+		&chatID, &topicID,
 		&themeName, &themeSlug, &themeDesc, &themeIcon,
 	)
 	if err != nil {
@@ -411,6 +476,7 @@ func scanSupportTicketWithTheme(row ticketScanner) (*model.SupportTicket, error)
 	}
 	t.Status = model.TicketStatus(status)
 	t.Priority = model.TicketPriority(priority)
+	applyTelegramTopic(&t, chatID, topicID)
 	t.Theme = &model.SupportTicketThemeSummary{Name: themeName, Slug: themeSlug, Description: themeDesc, Icon: themeIcon}
 	return &t, nil
 }
@@ -418,9 +484,12 @@ func scanSupportTicketWithTheme(row ticketScanner) (*model.SupportTicket, error)
 func scanSupportTicketWithThemeUser(row ticketScanner) (*model.SupportTicket, error) {
 	var t model.SupportTicket
 	var status, priority string
+	var chatID *string
+	var topicID *int
 	var themeName, themeSlug, themeDesc, themeIcon, userEmail, userName string
 	err := row.Scan(
 		&t.ID, &t.UserID, &t.ThemeID, &t.Subject, &status, &priority, &t.TicketNumber, &t.CreatedAt, &t.UpdatedAt,
+		&chatID, &topicID,
 		&themeName, &themeSlug, &themeDesc, &themeIcon, &userEmail, &userName,
 	)
 	if err != nil {
@@ -428,9 +497,22 @@ func scanSupportTicketWithThemeUser(row ticketScanner) (*model.SupportTicket, er
 	}
 	t.Status = model.TicketStatus(status)
 	t.Priority = model.TicketPriority(priority)
+	applyTelegramTopic(&t, chatID, topicID)
 	t.Theme = &model.SupportTicketThemeSummary{Name: themeName, Slug: themeSlug, Description: themeDesc, Icon: themeIcon}
 	t.User = &model.SupportTicketUserSummary{Email: userEmail, Name: userName}
 	return &t, nil
+}
+
+func applyTelegramTopic(t *model.SupportTicket, chatID *string, topicID *int) {
+	if t == nil {
+		return
+	}
+	if chatID != nil {
+		t.TelegramChatID = strings.TrimSpace(*chatID)
+	}
+	if topicID != nil {
+		t.TelegramTopicID = *topicID
+	}
 }
 
 func (r *SupportTicketRepository) InsertAttachment(ctx context.Context, att model.SupportTicketAttachment) (*model.SupportTicketAttachment, error) {

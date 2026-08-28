@@ -75,18 +75,20 @@ type SupportTicketAttachment struct {
 }
 
 type SupportTicket struct {
-	ID           string                     `json:"id"`
-	TicketNumber int                        `json:"ticket_number"`
-	UserID       string                     `json:"user_id"`
-	ThemeID      string                     `json:"theme_id"`
-	Subject      *string                    `json:"subject"`
-	Status       TicketStatus               `json:"status"`
-	Priority     TicketPriority             `json:"priority"`
-	Messages     []SupportTicketMessageView `json:"messages,omitempty"`
-	Theme        *SupportTicketThemeSummary `json:"theme,omitempty"`
-	User         *SupportTicketUserSummary  `json:"user,omitempty"`
-	CreatedAt    time.Time                  `json:"created_at"`
-	UpdatedAt    time.Time                  `json:"updated_at"`
+	ID              string                     `json:"id"`
+	TicketNumber    int                        `json:"ticket_number"`
+	UserID          string                     `json:"user_id"`
+	ThemeID         string                     `json:"theme_id"`
+	Subject         *string                    `json:"subject"`
+	Status          TicketStatus               `json:"status"`
+	Priority        TicketPriority             `json:"priority"`
+	TelegramChatID  string                     `json:"telegram_chat_id,omitempty"`
+	TelegramTopicID int                        `json:"telegram_topic_id,omitempty"`
+	Messages        []SupportTicketMessageView `json:"messages,omitempty"`
+	Theme           *SupportTicketThemeSummary `json:"theme,omitempty"`
+	User            *SupportTicketUserSummary  `json:"user,omitempty"`
+	CreatedAt       time.Time                  `json:"created_at"`
+	UpdatedAt       time.Time                  `json:"updated_at"`
 }
 
 type SupportTicketMessageView struct {

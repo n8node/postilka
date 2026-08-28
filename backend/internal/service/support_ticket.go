@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/postilka/postilka/internal/config"
@@ -22,16 +23,21 @@ var (
 )
 
 type SupportTicketService struct {
-	tickets    *repository.SupportTicketRepository
-	settings   *SupportSettingsService
-	users      *repository.UserRepository
-	notify     *NotificationService
-	email      *EmailService
-	maxClient  *oauthclient.MAXBotClient
-	telegram   *TelegramBotClient
-	store      *ObjectStorage
-	cfg        *config.Config
-	log        *slog.Logger
+	tickets     *repository.SupportTicketRepository
+	settings    *SupportSettingsService
+	users       *repository.UserRepository
+	notify      *NotificationService
+	email       *EmailService
+	maxClient   *oauthclient.MAXBotClient
+	telegram    *TelegramBotClient
+	store       *ObjectStorage
+	cfg         *config.Config
+	log         *slog.Logger
+	pollMu      sync.Mutex
+	pollOffset  int64
+	pollStarted bool
+	pollPrimed  bool
+	pollToken   string
 }
 
 func NewSupportTicketService(
@@ -252,6 +258,7 @@ func (s *SupportTicketService) AdminReply(ctx context.Context, ticketID, adminUs
 		return nil, err
 	}
 	s.notifyUserReply(ctx, full, body)
+	s.mirrorAdminReplyToTelegram(ctx, full, body)
 	return full, nil
 }
 
@@ -266,7 +273,12 @@ func (s *SupportTicketService) UpdateUserStatus(ctx context.Context, ticketID, u
 	if err := s.tickets.UpdateTicketStatus(ctx, ticket.ID, status); err != nil {
 		return nil, err
 	}
-	return s.GetUserTicket(ctx, ticketID, userID)
+	full, err := s.GetUserTicket(ctx, ticketID, userID)
+	if err != nil {
+		return nil, err
+	}
+	s.mirrorTicketStatusToTelegram(ctx, full, status)
+	return full, nil
 }
 
 func (s *SupportTicketService) UpdateStatus(ctx context.Context, ticketID string, status model.TicketStatus) (*model.SupportTicket, error) {
@@ -276,7 +288,12 @@ func (s *SupportTicketService) UpdateStatus(ctx context.Context, ticketID string
 	if err := s.tickets.UpdateTicketStatus(ctx, ticketID, status); err != nil {
 		return nil, err
 	}
-	return s.GetAdminTicket(ctx, ticketID)
+	full, err := s.GetAdminTicket(ctx, ticketID)
+	if err != nil {
+		return nil, err
+	}
+	s.mirrorTicketStatusToTelegram(ctx, full, status)
+	return full, nil
 }
 
 func (s *SupportTicketService) CreateTheme(ctx context.Context, req model.SupportTicketThemeCreateRequest) (*model.SupportTicketTheme, error) {
@@ -379,7 +396,7 @@ func (s *SupportTicketService) SendTestTelegram(ctx context.Context) (bool, stri
 	if !cfg.TelegramEnabled {
 		return false, "Включите Telegram-бот поддержки"
 	}
-	text := "✅ Тестовое сообщение Postilka Support\nБот поддержки подключён."
+	text := "✅ Тестовое сообщение Postilka Support\nБот поддержки подключён. Это сообщение уходит в общий чат группы, не в тему тикета."
 	if err := s.sendTelegram(ctx, cfg.TelegramBotToken, cfg.TelegramChatID, text); err != nil {
 		return false, mapSupportTelegramError(err)
 	}
@@ -445,7 +462,8 @@ func (s *SupportTicketService) notifyAdminsNewActivity(ctx context.Context, tick
 			tpl = cfg.TelegramNewTicketTemplate
 		}
 		text := applySupportTemplate(tpl, vars)
-		if err := s.sendTelegram(ctx, cfg.TelegramBotToken, cfg.TelegramChatID, text); err != nil {
+		text = appendSupportAttachmentNames(text, ticket)
+		if err := s.sendTelegramForTicket(ctx, cfg, ticket, text, isNew); err != nil {
 			s.log.Warn("support telegram notify failed", "err", err)
 		}
 	}
@@ -634,6 +652,7 @@ func supportTemplateVars(ticket *model.SupportTicket, preview string) map[string
 	}
 	return map[string]string{
 		"ticketShortId": supportTicketShortID(ticket.ID),
+		"ticketNumber":  fmt.Sprintf("%d", ticket.TicketNumber),
 		"themeName":     themeName,
 		"userEmail":     userEmail,
 		"userName":      userName,

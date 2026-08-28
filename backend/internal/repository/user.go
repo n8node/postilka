@@ -220,6 +220,21 @@ func (r *UserRepository) SetPlatformAdminByEmail(ctx context.Context, email stri
 	return u, err
 }
 
+func (r *UserRepository) FirstPlatformAdminID(ctx context.Context) (string, error) {
+	const q = `
+		SELECT id FROM users
+		WHERE is_platform_admin = true AND NOT is_blocked
+		ORDER BY created_at ASC
+		LIMIT 1
+	`
+	var id string
+	err := r.pool.QueryRow(ctx, q).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	return strings.TrimSpace(id), err
+}
+
 func (r *UserRepository) ListPlatformAdminEmails(ctx context.Context) ([]string, error) {
 	const q = `
 		SELECT email FROM users

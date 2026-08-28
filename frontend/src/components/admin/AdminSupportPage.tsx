@@ -403,7 +403,9 @@ export function AdminSupportPage() {
           <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="text-base font-semibold">Telegram-бот поддержки</h2>
             <p className="mt-1 text-sm text-slate-500">
-              Отдельный бот и чат — не путать с ботом системных уведомлений в разделе Telegram
+              Отдельный бот и супергруппа с темами (форум) — не путать с ботом системных уведомлений в разделе Telegram.
+              Бот должен быть администратором с правом «управление темами». На каждый тикет создаётся отдельная тема:
+              сообщения из кабинета дублируются туда, ответы в теме попадают в тикет.
             </p>
             <label className="mt-4 flex items-center gap-2 text-sm">
               <input
@@ -427,7 +429,7 @@ export function AdminSupportPage() {
                 onChange={(e) =>
                   setSettings((s) => ({ ...s, telegram_chat_id: e.target.value }))
                 }
-                placeholder="Chat ID (-100...)"
+                placeholder="Chat ID форума (-100...)"
                 className="h-10 rounded-lg border border-slate-200 px-3 text-sm"
               />
             </div>
@@ -457,6 +459,9 @@ export function AdminSupportPage() {
             >
               {testing === "telegram" ? "Отправка…" : "Тест Telegram"}
             </button>
+            <p className="mt-2 text-xs text-slate-400">
+              Тестовое сообщение уходит в общий чат группы, не в тему тикета.
+            </p>
           </div>
 
           <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">

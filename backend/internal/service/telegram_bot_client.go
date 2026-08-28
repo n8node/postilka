@@ -238,6 +238,126 @@ func (c *TelegramBotClient) SendMessage(ctx context.Context, token, chatID, text
 	return sanitizeTelegramError(err)
 }
 
+func (c *TelegramBotClient) SendThreadMessage(ctx context.Context, token, chatID, text string, threadID int) error {
+	text = strings.TrimSpace(text)
+	if strings.TrimSpace(token) == "" || strings.TrimSpace(chatID) == "" || text == "" {
+		return errors.New("telegram not configured")
+	}
+	for _, chunk := range splitTelegramText(text, 4096) {
+		payload := map[string]any{
+			"chat_id": telegramChatIDParam(chatID),
+			"text":    chunk,
+		}
+		if threadID > 0 {
+			payload["message_thread_id"] = threadID
+		}
+		if _, err := c.api(ctx, token, "sendMessage", payload); err != nil {
+			return sanitizeTelegramError(err)
+		}
+	}
+	return nil
+}
+
+type telegramForumTopic struct {
+	MessageThreadID int    `json:"message_thread_id"`
+	Name            string `json:"name"`
+}
+
+func (c *TelegramBotClient) CreateForumTopic(ctx context.Context, token, chatID, name string) (int, error) {
+	name = truncateRunes(strings.TrimSpace(name), 128)
+	if name == "" {
+		name = "Тикет"
+	}
+	raw, err := c.api(ctx, token, "createForumTopic", map[string]any{
+		"chat_id": telegramChatIDParam(chatID),
+		"name":    name,
+	})
+	if err != nil {
+		return 0, sanitizeTelegramError(err)
+	}
+	var topic telegramForumTopic
+	if err := json.Unmarshal(raw, &topic); err != nil {
+		return 0, errors.New("telegram api: invalid createForumTopic result")
+	}
+	if topic.MessageThreadID <= 0 {
+		return 0, errors.New("telegram api: invalid topic id")
+	}
+	return topic.MessageThreadID, nil
+}
+
+func (c *TelegramBotClient) DeleteWebhookDropPending(ctx context.Context, token string) error {
+	_, err := c.api(ctx, token, "deleteWebhook", map[string]any{
+		"drop_pending_updates": true,
+	})
+	return sanitizeTelegramError(err)
+}
+
+type supportBotUpdate struct {
+	UpdateID int64              `json:"update_id"`
+	Message  *supportBotMessage `json:"message"`
+}
+
+type supportBotMessage struct {
+	MessageID         int               `json:"message_id"`
+	Text              string            `json:"text"`
+	Caption           string            `json:"caption"`
+	Chat              supportBotChat    `json:"chat"`
+	From              *supportBotUser   `json:"from"`
+	MessageThreadID   int               `json:"message_thread_id"`
+	ForumTopicCreated json.RawMessage   `json:"forum_topic_created"`
+	Document          *supportBotFile   `json:"document"`
+	Photo             []json.RawMessage `json:"photo"`
+	Video             json.RawMessage   `json:"video"`
+	Voice             json.RawMessage   `json:"voice"`
+	Audio             json.RawMessage   `json:"audio"`
+	Sticker           json.RawMessage   `json:"sticker"`
+}
+
+type supportBotChat struct {
+	ID   int64  `json:"id"`
+	Type string `json:"type"`
+}
+
+type supportBotUser struct {
+	ID        int64  `json:"id"`
+	IsBot     bool   `json:"is_bot"`
+	Username  string `json:"username"`
+	FirstName string `json:"first_name"`
+	LastName  string `json:"last_name"`
+}
+
+type supportBotFile struct {
+	FileName string `json:"file_name"`
+}
+
+func (c *TelegramBotClient) GetSupportUpdates(ctx context.Context, token string, offset int64, timeoutSec int) ([]supportBotUpdate, error) {
+	raw, err := c.api(ctx, token, "getUpdates", map[string]any{
+		"offset":          offset,
+		"timeout":         timeoutSec,
+		"limit":           50,
+		"allowed_updates": []string{"message"},
+	})
+	if err != nil {
+		return nil, sanitizeTelegramError(err)
+	}
+	var updates []supportBotUpdate
+	if err := json.Unmarshal(raw, &updates); err != nil {
+		return nil, fmt.Errorf("telegram api: invalid getUpdates result")
+	}
+	return updates, nil
+}
+
+func (c *TelegramBotClient) PrimeSupportUpdateOffset(ctx context.Context, token string) (int64, error) {
+	updates, err := c.GetSupportUpdates(ctx, token, -1, 0)
+	if err != nil {
+		return 0, err
+	}
+	if len(updates) == 0 {
+		return 0, nil
+	}
+	return updates[len(updates)-1].UpdateID + 1, nil
+}
+
 type TelegramMessageInput struct {
 	Text                string
 	ParseMode           string
@@ -245,6 +365,7 @@ type TelegramMessageInput struct {
 	Buttons             [][]model.TelegramInlineButton
 	LinkPreviewEnabled  *bool
 	DisableNotification bool
+	MessageThreadID     int
 }
 
 const (
@@ -434,6 +555,9 @@ func (c *TelegramBotClient) SendFormattedMessage(
 	}
 	if input.DisableNotification {
 		payload["disable_notification"] = true
+	}
+	if input.MessageThreadID > 0 {
+		payload["message_thread_id"] = input.MessageThreadID
 	}
 	if markup := telegramReplyMarkup(input.Buttons); markup != nil {
 		payload["reply_markup"] = markup
