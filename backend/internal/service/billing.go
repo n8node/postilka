@@ -11,17 +11,18 @@ import (
 )
 
 type BillingService struct {
-	plans      *repository.PlanRepository
-	workspaces *repository.WorkspaceRepository
-	wallet     *repository.WalletRepository
-	checkouts  *repository.PlanCheckoutRepository
+	plans        *repository.PlanRepository
+	workspaces   *repository.WorkspaceRepository
+	wallet       *repository.WalletRepository
+	checkouts    *repository.PlanCheckoutRepository
 	pkgCheckouts *repository.TokenPackageCheckoutRepository
-	packages   *repository.TokenPackageRepository
-	payments   *PaymentSettingsService
-	quota      *QuotaService
-	subSvc     *SubscriptionService
-	wsSvc      *WorkspaceService
-	tokenBal   *TokenBalanceService
+	packages     *repository.TokenPackageRepository
+	payments     *PaymentSettingsService
+	quota        *QuotaService
+	subSvc       *SubscriptionService
+	wsSvc        *WorkspaceService
+	tokenBal     *TokenBalanceService
+	kie          *repository.KieSettingsRepository
 }
 
 func NewBillingService(
@@ -36,6 +37,7 @@ func NewBillingService(
 	subSvc *SubscriptionService,
 	wsSvc *WorkspaceService,
 	tokenBal *TokenBalanceService,
+	kie *repository.KieSettingsRepository,
 ) *BillingService {
 	return &BillingService{
 		plans:        plans,
@@ -49,6 +51,7 @@ func NewBillingService(
 		subSvc:       subSvc,
 		wsSvc:        wsSvc,
 		tokenBal:     tokenBal,
+		kie:          kie,
 	}
 }
 
@@ -128,10 +131,44 @@ func (s *BillingService) Overview(ctx context.Context, userID string, r *http.Re
 		Subscription:        sub,
 		Usage:               usage,
 		TokenBalance:        tokenBalance,
+		MediaBalance:        s.mediaBalance(ctx, userID, plan, usage, tokenBalance.PlanPeriodEnd),
 		WalletBalanceCents:  balance,
 		WalletTopupMinCents: cfg.WalletTopupMinCents,
 		WalletTopupMaxCents: cfg.WalletTopupMaxCents,
 	}, nil
+}
+
+func (s *BillingService) mediaBalance(
+	ctx context.Context,
+	userID string,
+	plan *model.Plan,
+	usage model.BillingUsage,
+	periodEnd string,
+) model.MediaBalanceView {
+	out := model.MediaBalanceView{
+		PlanPeriodEnd:    periodEnd,
+		KopecksPerCredit: 5000,
+	}
+	if s.kie != nil {
+		if settings, err := s.kie.Get(ctx); err == nil && settings.KopecksPerMediaCredit > 0 {
+			out.KopecksPerCredit = settings.KopecksPerMediaCredit
+		}
+	}
+	if purchased, _, err := s.wallet.GetPurchasedCredits(ctx, userID); err == nil {
+		out.PurchasedRemaining = purchased
+	}
+	if plan == nil || plan.AIMediaCreditsQuota == nil {
+		out.Unlimited = true
+		return out
+	}
+	allow := *plan.AIMediaCreditsQuota
+	rem := allow - usage.AIMediaCreditsUsed
+	if rem < 0 {
+		rem = 0
+	}
+	out.QuotaAllowance = &allow
+	out.QuotaRemaining = &rem
+	return out
 }
 
 func (s *BillingService) PreviewSubscribe(
@@ -257,5 +294,5 @@ func (s *BillingService) PaymentHistory(ctx context.Context, userID string) ([]m
 }
 
 func (s *BillingService) WalletLedger(ctx context.Context, userID string) ([]model.WalletLedgerEntry, error) {
-	return s.wallet.ListLedger(ctx, userID, 30)
+	return s.wallet.ListLedger(ctx, userID, 50)
 }

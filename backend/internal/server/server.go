@@ -141,7 +141,8 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	checkoutSvc := service.NewCheckoutService(planCheckoutRepo, tokenPackageCheckoutRepo, walletRepo, planRepo, tokenPackageRepo, wsRepo, userRepo, paymentSettingsSvc, subscriptionSvc, wsSvc, txEmailSvc, telegramSvc, cfg)
 	tokenBalanceSvc := service.NewTokenBalanceService(walletRepo, quotaSvc, wsRepo)
 	tokenPackageSvc := service.NewTokenPackageService(tokenPackageRepo)
-	billingSvc := service.NewBillingService(planRepo, wsRepo, walletRepo, planCheckoutRepo, tokenPackageCheckoutRepo, tokenPackageRepo, paymentSettingsSvc, quotaSvc, subscriptionSvc, wsSvc, tokenBalanceSvc)
+	kieSettingsRepo := repository.NewKieSettingsRepository(db.Pool)
+	billingSvc := service.NewBillingService(planRepo, wsRepo, walletRepo, planCheckoutRepo, tokenPackageCheckoutRepo, tokenPackageRepo, paymentSettingsSvc, quotaSvc, subscriptionSvc, wsSvc, tokenBalanceSvc, kieSettingsRepo)
 
 	health := handler.NewHealthHandler(cfg, db)
 	status := handler.NewStatusHandler(cfg)
@@ -180,7 +181,6 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	maxPlatformBotHandler := handler.NewMAXPlatformBotHandler(socialProviderSettingsSvc, secretCipher)
 	yandexGptConfigRepo := repository.NewYandexGptConfigRepository(db.Pool)
 	yandexGptConfigSvc := service.NewYandexGptConfigService(yandexGptConfigRepo, cfg, secretCipher)
-	kieSettingsRepo := repository.NewKieSettingsRepository(db.Pool)
 	kieConfigSvc := service.NewKieConfigService(kieSettingsRepo, cfg, secretCipher)
 	kieVideoSettingsRepo := repository.NewKieVideoSettingsRepository(db.Pool)
 	kieVideoExampleRepo := repository.NewKieVideoExampleRepository(db.Pool)

@@ -1,45 +1,41 @@
 "use client";
 
-import { Zap } from "lucide-react";
+import { Wallet } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { ApiError, fetchBillingOverview } from "@/lib/api";
+import { useBillingBalancesStore } from "@/lib/billing-balances-store";
+import { formatRubFromCents, formatTokenCount } from "@/lib/billing-format";
 import { cn } from "@/lib/utils";
 
-function formatTokenCount(value: number) {
-  return new Intl.NumberFormat("ru-RU").format(value);
-}
-
-type BalanceView = "loading" | "unlimited" | number;
-
 export function WalletBalanceBadge({ collapsed }: { collapsed: boolean }) {
-  const [balanceView, setBalanceView] = useState<BalanceView>("loading");
+  const balances = useBillingBalancesStore((s) => s.balances);
+  const setFromOverview = useBillingBalancesStore((s) => s.setFromOverview);
 
   useEffect(() => {
     fetchBillingOverview()
-      .then((data) => {
-        const balance = data.token_balance;
-        if (balance?.unlimited) {
-          setBalanceView("unlimited");
-          return;
-        }
-        setBalanceView(balance?.total_remaining ?? 0);
-      })
+      .then(setFromOverview)
       .catch((e) => {
         if (!(e instanceof ApiError)) {
           /* ignore */
         }
       });
-  }, []);
+  }, [setFromOverview]);
 
-  if (balanceView === "loading") return null;
+  if (!balances) return null;
 
-  const valueLabel =
-    balanceView === "unlimited" ? "∞" : formatTokenCount(balanceView);
-  const title =
-    balanceView === "unlimited"
-      ? "Текстовые кредиты без лимита"
-      : `Текстовые кредиты: ${valueLabel}`;
+  const textLabel = balances.textUnlimited
+    ? "∞"
+    : balances.textAllowance != null
+      ? `${formatTokenCount(balances.textRemaining)} / ${formatTokenCount(balances.textAllowance)}`
+      : formatTokenCount(balances.textRemaining);
+  const mediaLabel = balances.mediaUnlimited
+    ? "∞"
+    : balances.mediaQuotaAllowance != null
+      ? `${formatTokenCount(balances.mediaQuotaRemaining ?? 0)} / ${formatTokenCount(balances.mediaQuotaAllowance)}`
+      : formatTokenCount(balances.mediaQuotaRemaining ?? 0);
+  const walletLabel = formatRubFromCents(balances.walletCents);
+  const title = `Кошелёк ${walletLabel} · текст ${textLabel} · медиа ${mediaLabel}`;
 
   if (collapsed) {
     return (
@@ -47,9 +43,9 @@ export function WalletBalanceBadge({ collapsed }: { collapsed: boolean }) {
         href="/plans"
         className="mx-auto flex h-9 w-9 items-center justify-center rounded-md border border-border bg-zinc-50 text-muted hover:bg-zinc-100 hover:text-text"
         title={title}
-        aria-label="Текстовые кредиты"
+        aria-label="Кошелёк и кредиты"
       >
-        <Zap className="h-4 w-4" />
+        <Wallet className="h-4 w-4" />
       </Link>
     );
   }
@@ -62,8 +58,18 @@ export function WalletBalanceBadge({ collapsed }: { collapsed: boolean }) {
       )}
       title={title}
     >
-      <span className="text-muted">Текст. кредиты</span>
-      <span className="mt-0.5 block font-semibold text-text">{valueLabel}</span>
+      <span className="flex items-baseline justify-between gap-2">
+        <span className="text-muted">Кошелёк</span>
+        <span className="font-semibold tabular-nums text-text">{walletLabel}</span>
+      </span>
+      <span className="mt-1 flex items-baseline justify-between gap-2 text-[11px]">
+        <span className="text-muted">Текст</span>
+        <span className="tabular-nums font-medium text-text">{textLabel}</span>
+      </span>
+      <span className="mt-0.5 flex items-baseline justify-between gap-2 text-[11px]">
+        <span className="text-muted">Медиа</span>
+        <span className="tabular-nums font-medium text-text">{mediaLabel}</span>
+      </span>
     </Link>
   );
 }

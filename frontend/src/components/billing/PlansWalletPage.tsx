@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Check, CreditCard, Package, Zap } from "lucide-react";
+import { Check, Coins, CreditCard, ImageIcon, Package, Type, Wallet } from "lucide-react";
 import {
   ApiError,
   billingPackageCheckout,
@@ -12,6 +12,7 @@ import {
   fetchBillingOverview,
   fetchBillingPaymentHistory,
   fetchBillingPlans,
+  fetchBillingWalletLedger,
   fetchSubscribePreview,
   fetchTokenPackages,
   type BillingOverview,
@@ -20,21 +21,23 @@ import {
   type Plan,
   type SubscribePreview,
   type TokenPackage,
+  type WalletLedgerEntry,
 } from "@/lib/api";
 import { AIUsageHistoryList } from "@/components/billing/AIUsageHistoryList";
+import { WalletTopupModal } from "@/components/billing/WalletTopupModal";
 import { fetchGenerationUsageHistory, type AIUsageHistoryItem } from "@/lib/generation-api";
+import { useBillingBalancesStore } from "@/lib/billing-balances-store";
+import {
+  formatPeriodEnd,
+  formatRubFromCents,
+  formatRubPerCredit,
+  formatTokenCount,
+  walletLedgerLabel,
+} from "@/lib/billing-format";
 import { cn } from "@/lib/utils";
 
 function formatRub(cents: number) {
-  return new Intl.NumberFormat("ru-RU", {
-    style: "currency",
-    currency: "RUB",
-    maximumFractionDigits: 0,
-  }).format(cents / 100);
-}
-
-function formatTokenCount(value: number) {
-  return new Intl.NumberFormat("ru-RU").format(value);
+  return formatRubFromCents(cents);
 }
 
 function formatQuota(v: number | null | undefined) {
@@ -48,14 +51,6 @@ function formatPaymentDate(value?: string) {
     day: "numeric",
     month: "short",
     year: "numeric",
-  });
-}
-
-function formatPeriodEnd(value?: string) {
-  if (!value) return "в конце периода";
-  return new Date(value).toLocaleDateString("ru-RU", {
-    day: "numeric",
-    month: "long",
   });
 }
 
@@ -114,36 +109,42 @@ export function PlansWalletPage() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [packages, setPackages] = useState<TokenPackage[]>([]);
   const [history, setHistory] = useState<PaymentHistoryItem[]>([]);
+  const [ledger, setLedger] = useState<WalletLedgerEntry[]>([]);
   const [aiUsage, setAiUsage] = useState<AIUsageHistoryItem[]>([]);
+  const [topupOpen, setTopupOpen] = useState(false);
   const [period, setPeriod] = useState<BillingPeriod>("monthly");
   const [checkoutTarget, setCheckoutTarget] = useState<string | null>(null);
   const [previews, setPreviews] = useState<Record<string, SubscribePreview>>({});
   const [busy, setBusy] = useState<string | null>(null);
 
+  const setBalances = useBillingBalancesStore((s) => s.setFromOverview);
   const displayPlans = useMemo(() => sortPlansForDisplay(plans), [plans]);
 
   const reload = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [ov, pl, pkgs, hist, usage] = await Promise.all([
+      const [ov, pl, pkgs, hist, movements, usage] = await Promise.all([
         fetchBillingOverview(),
         fetchBillingPlans(),
         fetchTokenPackages(),
         fetchBillingPaymentHistory(),
+        fetchBillingWalletLedger(),
         fetchGenerationUsageHistory(50),
       ]);
       setOverview(ov);
+      setBalances(ov);
       setPlans(pl.plans.filter((p) => p.is_active).sort((a, b) => a.sort_order - b.sort_order));
       setPackages(pkgs.packages ?? []);
       setHistory(hist.items ?? []);
+      setLedger(movements.items ?? []);
       setAiUsage(usage.items ?? []);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Не удалось загрузить данные");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [setBalances]);
 
   useEffect(() => {
     void reload();
@@ -172,7 +173,9 @@ export function PlansWalletPage() {
 
   const currentPlanId = overview?.plan?.id;
   const paymentsEnabled = overview?.payments_enabled ?? false;
-  const balance = overview?.token_balance;
+  const textBalance = overview?.token_balance;
+  const mediaBalance = overview?.media_balance;
+  const lastWalletMove = ledger[0];
 
   const paymentNotice = useMemo(() => {
     if (searchParams.get("payment") === "success") {
@@ -256,34 +259,108 @@ export function PlansWalletPage() {
         </p>
       )}
 
-      {balance && (
-        <div className="mb-5 rounded-xl border border-teal-200 bg-teal-50/70 p-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p className="flex items-center gap-1.5 text-xs font-medium text-teal-800">
-                <Zap className="h-3.5 w-3.5 text-teal-600" />
-                Баланс текстовых кредитов
-              </p>
-              <p className="mt-1 text-2xl font-semibold text-text">
-                {balance.unlimited ? "∞" : formatTokenCount(balance.total_remaining)}
-              </p>
-              <p className="mt-1 text-xs text-muted">
-                {balance.unlimited
-                  ? "Текстовые кредиты без лимита"
-                  : `${formatTokenCount(balance.plan_tokens_remaining)} текстовых кредитов из тарифа`}
-                {!balance.unlimited && balance.purchased_tokens_remaining > 0 &&
-                  ` · ${formatTokenCount(balance.purchased_tokens_remaining)} докуплено`}
-              </p>
-            </div>
-            {!balance.unlimited && (
-              <p className="max-w-sm text-xs text-muted">
-                Текстовые кредиты тарифа обновятся {formatPeriodEnd(balance.plan_period_end)} и сгорят, если не
-                использованы. Докупленные не сгорают.
-              </p>
-            )}
-          </div>
+      <p className="mb-3 text-xs text-muted">
+        Сначала квота тарифа, потом докупленные медиа-кредиты, потом кошелёк в рублях.
+      </p>
+      <div className="mb-6 grid gap-3 sm:grid-cols-3">
+        <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4">
+          <p className="flex items-center gap-1.5 text-xs font-medium text-amber-900">
+            <Wallet className="h-3.5 w-3.5" />
+            Кошелёк
+          </p>
+          <p className="mt-1 text-2xl font-semibold tabular-nums text-text">
+            {formatRub(overview?.wallet_balance_cents ?? 0)}
+          </p>
+          <p className="mt-1 text-xs text-muted">
+            Не сгорают. Ими оплачивается AI, когда квота тарифа кончилась.
+          </p>
+          {lastWalletMove ? (
+            <p className="mt-2 text-xs text-muted">
+              {new Date(lastWalletMove.created_at).toLocaleDateString("ru-RU", {
+                day: "numeric",
+                month: "short",
+              })}
+              {" · "}
+              {lastWalletMove.amount_cents >= 0 ? "+" : "−"}
+              {formatRub(Math.abs(lastWalletMove.amount_cents))}
+              {" · "}
+              {walletLedgerLabel(lastWalletMove.entry_type)}
+            </p>
+          ) : null}
+          {paymentsEnabled ? (
+            <button
+              type="button"
+              onClick={() => setTopupOpen(true)}
+              className="mt-3 text-sm font-medium text-amber-900 hover:underline"
+            >
+              Пополнить
+            </button>
+          ) : null}
         </div>
-      )}
+
+        <div className="rounded-xl border border-teal-200 bg-teal-50/70 p-4">
+          <p className="flex items-center gap-1.5 text-xs font-medium text-teal-800">
+            <Type className="h-3.5 w-3.5" />
+            Текст тарифа
+          </p>
+          <p className="mt-1 text-2xl font-semibold tabular-nums text-text">
+            {textBalance?.unlimited
+              ? "∞"
+              : textBalance?.plan_tokens_allowance != null
+                ? `${formatTokenCount(textBalance.plan_tokens_remaining)} / ${formatTokenCount(textBalance.plan_tokens_allowance)}`
+                : formatTokenCount(textBalance?.plan_tokens_remaining ?? 0)}
+          </p>
+          <p className="mt-1 text-xs text-muted">
+            Yandex GPT: тексты в композере и агентах. Это не рубли.
+          </p>
+          {!textBalance?.unlimited ? (
+            <p className="mt-2 text-xs text-muted">
+              Обновятся {formatPeriodEnd(textBalance?.plan_period_end)}, неиспользованные сгорают.
+            </p>
+          ) : (
+            <p className="mt-2 text-xs text-muted">Без лимита по тарифу.</p>
+          )}
+        </div>
+
+        <div className="rounded-xl border border-violet-200 bg-violet-50/70 p-4">
+          <p className="flex items-center gap-1.5 text-xs font-medium text-violet-900">
+            <ImageIcon className="h-3.5 w-3.5" />
+            Медиа
+          </p>
+          <p className="mt-1 text-2xl font-semibold tabular-nums text-text">
+            {mediaBalance?.unlimited
+              ? "∞"
+              : mediaBalance?.quota_allowance != null
+                ? `${formatTokenCount(mediaBalance.quota_remaining ?? 0)} / ${formatTokenCount(mediaBalance.quota_allowance)}`
+                : formatTokenCount(mediaBalance?.quota_remaining ?? 0)}
+          </p>
+          <p className="mt-1 text-xs text-muted">
+            {mediaBalance?.unlimited
+              ? "Медиа-кредиты тарифа без лимита."
+              : "Картинки и видео из квоты тарифа."}
+          </p>
+          <p className="mt-2 text-xs text-muted">
+            Докуплено: {formatTokenCount(mediaBalance?.purchased_remaining ?? 0)}
+          </p>
+          {!mediaBalance?.unlimited ? (
+            <p className="mt-1 text-xs text-muted">
+              Дальше — с кошелька
+              {mediaBalance?.kopecks_per_credit
+                ? `, сейчас ${formatRubPerCredit(mediaBalance.kopecks_per_credit)} за кредит`
+                : ""}
+              .
+            </p>
+          ) : null}
+        </div>
+      </div>
+
+      <WalletTopupModal
+        open={topupOpen}
+        onClose={() => setTopupOpen(false)}
+        onBalanceChange={() => {
+          void reload();
+        }}
+      />
 
       <div className="mb-4 flex items-center gap-2">
         <span className="text-sm text-muted">Период оплаты:</span>
@@ -470,6 +547,54 @@ export function PlansWalletPage() {
                 </div>
               );
             })}
+          </div>
+        )}
+      </div>
+
+      <div className="mt-8 rounded-xl border border-border bg-surface shadow-sm">
+        <div className="flex items-center gap-2 border-b border-border px-4 py-3">
+          <Coins className="h-4 w-4 text-muted" />
+          <h3 className="text-sm font-semibold text-text">Движения кошелька</h3>
+        </div>
+        {ledger.length === 0 ? (
+          <p className="px-4 py-6 text-center text-sm text-muted">
+            Пока нет начислений и списаний с кошелька.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[520px] border-collapse text-left text-xs">
+              <thead>
+                <tr className="border-b border-border text-[11px] font-semibold uppercase tracking-wide text-muted">
+                  <th className="px-4 py-2.5">Операция</th>
+                  <th className="px-4 py-2.5">Дата</th>
+                  <th className="px-4 py-2.5 text-right">Сумма</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ledger.map((item) => (
+                  <tr key={item.id} className="border-b border-border/70 last:border-0">
+                    <td className="px-4 py-3">
+                      <p className="font-medium text-text">{walletLedgerLabel(item.entry_type)}</p>
+                      {item.description ? (
+                        <p className="mt-0.5 text-[11px] text-muted">{item.description}</p>
+                      ) : null}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-muted">
+                      {formatPaymentDate(item.created_at)}
+                    </td>
+                    <td
+                      className={cn(
+                        "px-4 py-3 text-right font-medium tabular-nums",
+                        item.amount_cents < 0 ? "text-amber-800" : "text-emerald-700",
+                      )}
+                    >
+                      {item.amount_cents > 0 ? "+" : ""}
+                      {formatRub(item.amount_cents)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>

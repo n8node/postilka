@@ -97,7 +97,7 @@ export function AIUsageHistoryList({ items }: AIUsageHistoryListProps) {
                   {walletRub ? (
                     <p className="text-xs text-amber-800">−{walletRub} с кошелька</p>
                   ) : item.quota_credits_used > 0 ? (
-                    <p className="text-xs text-muted">медиа-кредитов из тарифа</p>
+                    <p className="text-xs text-muted">с квоты тарифа</p>
                   ) : null}
                 </div>
               </div>

@@ -1618,6 +1618,7 @@ export type BillingOverview = {
   subscription?: WorkspaceSubscription;
   usage: BillingUsage;
   token_balance: TokenBalanceView;
+  media_balance: MediaBalanceView;
   wallet_balance_cents: number;
   wallet_topup_min_cents: number;
   wallet_topup_max_cents: number;
@@ -1630,6 +1631,26 @@ export type TokenBalanceView = {
   plan_tokens_allowance?: number | null;
   plan_period_end?: string;
   unlimited: boolean;
+};
+
+export type MediaBalanceView = {
+  quota_remaining?: number | null;
+  quota_allowance?: number | null;
+  purchased_remaining: number;
+  unlimited: boolean;
+  kopecks_per_credit: number;
+  plan_period_end?: string;
+};
+
+export type WalletLedgerEntry = {
+  id: string;
+  user_id: string;
+  amount_cents: number;
+  entry_type: string;
+  reference_type?: string | null;
+  reference_id?: string | null;
+  description: string;
+  created_at: string;
 };
 
 export type TokenPackage = {
@@ -1738,6 +1759,10 @@ export function billingSwitchFree(payload: { workspace_id?: string }) {
 
 export function fetchBillingPaymentHistory() {
   return apiFetch<{ items: PaymentHistoryItem[] }>("/billing/payments");
+}
+
+export function fetchBillingWalletLedger() {
+  return apiFetch<{ items: WalletLedgerEntry[] }>("/billing/wallet/ledger");
 }
 
 export function fetchSubscribePreview(params: {

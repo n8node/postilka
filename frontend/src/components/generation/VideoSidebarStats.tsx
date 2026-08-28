@@ -15,6 +15,8 @@ import {
   videoModeLabels,
 } from "@/lib/video-generation-data";
 import { Card } from "@/components/ui/Card";
+import { MediaSpendHint, mediaQuotaHeadline } from "@/components/billing/MediaSpendHint";
+import { useBillingBalancesStore } from "@/lib/billing-balances-store";
 
 type LastRunStats = {
   tokenCost: number;
@@ -35,11 +37,6 @@ type VideoSidebarStatsProps = {
 function clientElapsedMs(generationStartedAt: number | null): number {
   if (generationStartedAt === null) return 0;
   return Math.max(0, Date.now() - generationStartedAt);
-}
-
-function formatCreditsLabel(value: number | null): string {
-  if (value == null) return "∞ медиа-кредитов";
-  return `${value} медиа-кредитов осталось`;
 }
 
 function formatCostBreakdown(
@@ -72,6 +69,7 @@ export function VideoSidebarStats({
   generationStartedAt,
   lastRun,
 }: VideoSidebarStatsProps) {
+  const balances = useBillingBalancesStore((s) => s.balances);
   const breakdown =
     pricing !== null
       ? videoCostBreakdown(pricing, { mode, duration, ...costInput })
@@ -85,10 +83,10 @@ export function VideoSidebarStats({
         <Zap size={18} className="mt-0.5 shrink-0 text-accent" />
         <div className="min-w-0 flex-1">
           <p className="text-[13px] font-semibold leading-snug text-blue-900">
-            {formatCreditsLabel(creditsRemaining)}
+            {mediaQuotaHeadline(balances, creditsRemaining)}
           </p>
           <p className="mt-1 text-[11px] leading-relaxed text-accent">
-            Списание по тарифу после успешной генерации
+            <MediaSpendHint creditsRemaining={creditsRemaining} />
           </p>
         </div>
       </div>

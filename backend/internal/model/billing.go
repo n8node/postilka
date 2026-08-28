@@ -65,6 +65,15 @@ type CheckoutResult struct {
 	CheckoutURL string `json:"checkout_url"`
 }
 
+type MediaBalanceView struct {
+	QuotaRemaining      *int   `json:"quota_remaining,omitempty"`
+	QuotaAllowance      *int   `json:"quota_allowance,omitempty"`
+	PurchasedRemaining  int    `json:"purchased_remaining"`
+	Unlimited           bool   `json:"unlimited"`
+	KopecksPerCredit    int    `json:"kopecks_per_credit"`
+	PlanPeriodEnd       string `json:"plan_period_end,omitempty"`
+}
+
 type BillingOverview struct {
 	PaymentsEnabled     bool                   `json:"payments_enabled"`
 	ActiveProvider      string                 `json:"active_provider,omitempty"`
@@ -74,6 +83,7 @@ type BillingOverview struct {
 	Subscription        *WorkspaceSubscription `json:"subscription,omitempty"`
 	Usage               BillingUsage           `json:"usage"`
 	TokenBalance        TokenBalanceView       `json:"token_balance"`
+	MediaBalance        MediaBalanceView       `json:"media_balance"`
 	WalletBalanceCents  int64                  `json:"wallet_balance_cents"`
 	WalletTopupMinCents int                    `json:"wallet_topup_min_cents"`
 	WalletTopupMaxCents int                    `json:"wallet_topup_max_cents"`
