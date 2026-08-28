@@ -1533,6 +1533,11 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
     (telegramVideoNote || postKind === "short_video" || format === "short_video");
   const maxGetsRectangularVideo = telegramVideoCircleActive && maxChannels.length > 0;
   const isYouTubeVideoMode = postKind === "video" || postKind === "shorts";
+  const showTelegramSettings =
+    telegramChannels.length > 0 &&
+    postKind !== "story" &&
+    format !== "story" &&
+    !isYouTubeVideoMode;
 
   function resetNew() {
     if (dirty && !window.confirm("Несохранённые изменения будут потеряны. Продолжить?")) return;
@@ -3392,11 +3397,7 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
             </Card>
           )}
 
-          {(showExtrasCard ||
-            (telegramChannels.length > 0 &&
-              postKind !== "story" &&
-              format !== "story" &&
-              !isYouTubeVideoMode)) && (
+          {(showExtrasCard || showTelegramSettings) && (
           <div className="grid gap-4 lg:grid-cols-2">
             {showExtrasCard && (
             <Card title="Дополнения">
@@ -3480,7 +3481,7 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
             </Card>
             )}
 
-            {telegramChannels.length > 0 && postKind !== "story" && format !== "story" && !isYouTubeVideoMode && (
+            {showTelegramSettings && (
               <Card title="Настройки Telegram">
                 <div className="grid gap-2 sm:grid-cols-2">
                   <label className="flex items-center gap-2 text-sm">
