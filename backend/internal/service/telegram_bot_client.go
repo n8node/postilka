@@ -914,6 +914,59 @@ func (c *TelegramBotClient) SendVideoNote(
 	return telegramMessageID(raw)
 }
 
+func (c *TelegramBotClient) SendLocation(
+	ctx context.Context,
+	token, chatID string,
+	latitude, longitude float64,
+	disableNotification bool,
+) (string, error) {
+	payload := map[string]any{
+		"chat_id":   telegramChatIDParam(chatID),
+		"latitude":  latitude,
+		"longitude": longitude,
+	}
+	if disableNotification {
+		payload["disable_notification"] = true
+	}
+	raw, err := c.api(ctx, token, "sendLocation", payload)
+	if err != nil {
+		return "", sanitizeTelegramError(err)
+	}
+	return telegramMessageID(raw)
+}
+
+func (c *TelegramBotClient) SendVenue(
+	ctx context.Context,
+	token, chatID string,
+	latitude, longitude float64,
+	title, address string,
+	disableNotification bool,
+) (string, error) {
+	title = strings.TrimSpace(title)
+	address = strings.TrimSpace(address)
+	if utf8.RuneCountInString(title) > 128 {
+		title = string([]rune(title)[:128])
+	}
+	if utf8.RuneCountInString(address) > 64 {
+		address = string([]rune(address)[:64])
+	}
+	payload := map[string]any{
+		"chat_id":   telegramChatIDParam(chatID),
+		"latitude":  latitude,
+		"longitude": longitude,
+		"title":     title,
+		"address":   address,
+	}
+	if disableNotification {
+		payload["disable_notification"] = true
+	}
+	raw, err := c.api(ctx, token, "sendVenue", payload)
+	if err != nil {
+		return "", sanitizeTelegramError(err)
+	}
+	return telegramMessageID(raw)
+}
+
 func (c *TelegramBotClient) PinChatMessage(
 	ctx context.Context,
 	token, chatID, messageID string,
@@ -1371,11 +1424,12 @@ type telegramChatPhoto struct {
 }
 
 type telegramChat struct {
-	ID       int64              `json:"id"`
-	Type     string             `json:"type"`
-	Title    string             `json:"title"`
-	Username string             `json:"username"`
-	Photo    *telegramChatPhoto `json:"photo"`
+	ID           int64              `json:"id"`
+	Type         string             `json:"type"`
+	Title        string             `json:"title"`
+	Username     string             `json:"username"`
+	Photo        *telegramChatPhoto `json:"photo"`
+	LinkedChatID int64              `json:"linked_chat_id"`
 }
 
 type telegramFile struct {

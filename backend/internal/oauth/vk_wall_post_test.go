@@ -43,7 +43,7 @@ func TestPostWall_TextOnly(t *testing.T) {
 	t.Cleanup(srv.Close)
 	client := vkTestClientWithServer(t, srv)
 
-	postID, err := client.postWall(context.Background(), "token", -123, "hello", nil)
+	postID, err := client.postWall(context.Background(), "token", -123, "hello", nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,6 +141,70 @@ func TestPostWall_VideoWithDescription(t *testing.T) {
 	}
 	if postID != 9 {
 		t.Fatalf("post_id=%d", postID)
+	}
+}
+
+func TestPostWall_WithCoordinates(t *testing.T) {
+	lat, lng := 55.751244, 37.618423
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "/wall.post") {
+			http.NotFound(w, r)
+			return
+		}
+		body, _ := io.ReadAll(r.Body)
+		s := string(body)
+		if !strings.Contains(s, "lat=55.751244") {
+			t.Fatalf("missing lat: %s", s)
+		}
+		if !strings.Contains(s, "long=37.618423") {
+			t.Fatalf("missing long: %s", s)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"response":{"post_id":11}}`))
+	}))
+	t.Cleanup(srv.Close)
+	client := vkTestClientWithServer(t, srv)
+
+	postID, err := client.PostWall(context.Background(), "token", -123, VKWallPostInput{
+		Message:   "geo",
+		Latitude:  &lat,
+		Longitude: &lng,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if postID != 11 {
+		t.Fatalf("post_id=%d", postID)
+	}
+}
+
+func TestCreateComment(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "/wall.createComment") {
+			http.NotFound(w, r)
+			return
+		}
+		body, _ := io.ReadAll(r.Body)
+		s := string(body)
+		if !strings.Contains(s, "owner_id=-123") {
+			t.Fatalf("missing owner_id: %s", s)
+		}
+		if !strings.Contains(s, "post_id=42") {
+			t.Fatalf("missing post_id: %s", s)
+		}
+		if !strings.Contains(s, "from_group=1") {
+			t.Fatalf("missing from_group: %s", s)
+		}
+		if !strings.Contains(s, "message=first") {
+			t.Fatalf("missing message: %s", s)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"response":{"comment_id":7}}`))
+	}))
+	t.Cleanup(srv.Close)
+	client := vkTestClientWithServer(t, srv)
+	if err := client.CreateComment(context.Background(), "token", -123, 42, "first"); err != nil {
+		t.Fatal(err)
 	}
 }
 

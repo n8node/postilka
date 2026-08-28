@@ -2027,6 +2027,7 @@ export type ChannelMetadata = {
   business_user_chat_id?: string;
   can_manage_stories?: boolean;
   business_connection_enabled?: boolean;
+  linked_chat_id?: string;
 };
 
 export type Channel = {

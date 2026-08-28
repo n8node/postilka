@@ -8,6 +8,7 @@ import (
 	"io"
 	"log/slog"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -253,10 +254,16 @@ func telegramLinkPreview(settings model.PostSettings) *bool {
 
 func (s *PublicationService) telegramFinishPublish(
 	ctx context.Context,
-	token, chatID string,
+	token string,
+	channel *model.Channel,
+	format string,
 	settings model.PostSettings,
 	messageID string,
 ) (string, error) {
+	if channel == nil {
+		return messageID, nil
+	}
+	chatID := channel.ChatID
 	if settings.TelegramPin && strings.TrimSpace(messageID) != "" {
 		if err := s.telegram.PinChatMessage(ctx, token, chatID, messageID, settings.TelegramSilent); err != nil {
 			slog.Warn(
@@ -267,7 +274,123 @@ func (s *PublicationService) telegramFinishPublish(
 			)
 		}
 	}
+	switch strings.ToLower(strings.TrimSpace(format)) {
+	case "message", "rich_message", "article":
+		s.deliverTelegramPostExtras(ctx, token, channel, settings)
+	}
 	return messageID, nil
+}
+
+func (s *PublicationService) deliverTelegramPostExtras(
+	ctx context.Context,
+	token string,
+	channel *model.Channel,
+	settings model.PostSettings,
+) {
+	if s.telegram == nil || channel == nil {
+		return
+	}
+	silent := settings.TelegramSilent
+	if loc := settings.Location; loc != nil {
+		name := strings.TrimSpace(loc.Name)
+		var err error
+		if name != "" {
+			_, err = s.telegram.SendVenue(
+				ctx, token, channel.ChatID, loc.Latitude, loc.Longitude, name, name, silent,
+			)
+		} else {
+			_, err = s.telegram.SendLocation(
+				ctx, token, channel.ChatID, loc.Latitude, loc.Longitude, silent,
+			)
+		}
+		if err != nil {
+			slog.Warn(
+				"telegram publish: location failed after delivery",
+				"chat_id", channel.ChatID,
+				"error", err,
+			)
+		}
+	}
+	comment := strings.TrimSpace(settings.FirstComment)
+	if comment == "" {
+		return
+	}
+	linked := s.telegramLinkedDiscussionID(ctx, token, channel)
+	if linked == "" {
+		slog.Warn(
+			"telegram publish: first comment skipped, no linked discussion",
+			"chat_id", channel.ChatID,
+		)
+		return
+	}
+	if _, err := s.telegram.SendFormattedMessage(ctx, token, linked, TelegramMessageInput{
+		Text:                comment,
+		DisableNotification: silent,
+	}); err != nil {
+		slog.Warn(
+			"telegram publish: first comment failed after delivery",
+			"chat_id", channel.ChatID,
+			"linked_chat_id", linked,
+			"error", err,
+		)
+	}
+}
+
+func (s *PublicationService) telegramLinkedDiscussionID(
+	ctx context.Context,
+	token string,
+	channel *model.Channel,
+) string {
+	if channel == nil || channel.ChatType != "channel" {
+		return ""
+	}
+	if id := strings.TrimSpace(channel.Metadata.LinkedChatID); id != "" {
+		return id
+	}
+	if s.telegram == nil {
+		return ""
+	}
+	chat, err := s.telegram.GetChat(ctx, token, channel.ChatID)
+	if err != nil || chat.LinkedChatID == 0 {
+		return ""
+	}
+	return strconv.FormatInt(chat.LinkedChatID, 10)
+}
+
+func (s *PublicationService) publishVKWall(
+	ctx context.Context,
+	channel *model.Channel,
+	token string,
+	content model.PostContent,
+	settings model.PostSettings,
+) (string, error) {
+	ownerID, err := strconv.ParseInt(strings.TrimSpace(channel.ChatID), 10, 64)
+	if err != nil {
+		return "", fmt.Errorf("некорректный ID сообщества VK")
+	}
+	in := oauthclient.VKWallPostInput{Message: readableProviderText(content)}
+	if loc := settings.Location; loc != nil {
+		lat, lng := loc.Latitude, loc.Longitude
+		in.Latitude = &lat
+		in.Longitude = &lng
+	}
+	client := &oauthclient.VKCommunityClient{}
+	postID, err := client.PostWall(ctx, token, ownerID, in)
+	if err != nil {
+		return "", err
+	}
+	comment := strings.TrimSpace(settings.FirstComment)
+	if comment != "" {
+		if err := client.CreateComment(ctx, token, ownerID, postID, comment); err != nil {
+			slog.Warn(
+				"vk publish: first comment failed after delivery",
+				"owner_id", ownerID,
+				"post_id", postID,
+				"error", err,
+			)
+		}
+	}
+	return strconv.FormatInt(postID, 10), nil
 }
 
 func (s *PublicationService) telegramStoryMediaFile(
@@ -510,7 +633,7 @@ func (s *PublicationService) publishTarget(
 						msgID = textID
 					}
 				}
-				return s.telegramFinishPublish(ctx, token, channel.ChatID, settings, msgID)
+				return s.telegramFinishPublish(ctx, token, channel, format, settings, msgID)
 			}
 			msgID, _, err := s.telegram.SendMedia(ctx, token, channel.ChatID, media, &TelegramMediaSendOptions{
 				Caption: content.Text, ParseMode: parseMode, DisableNotification: silent,
@@ -518,7 +641,7 @@ func (s *PublicationService) publishTarget(
 			if err != nil {
 				return "", err
 			}
-			return s.telegramFinishPublish(ctx, token, channel.ChatID, settings, msgID)
+			return s.telegramFinishPublish(ctx, token, channel, format, settings, msgID)
 		case "message":
 			if len(post.Media) > 0 {
 				media, err := s.telegramMedia(ctx, post)
@@ -549,7 +672,7 @@ func (s *PublicationService) publishTarget(
 							msgID = textID
 						}
 					}
-					return s.telegramFinishPublish(ctx, token, channel.ChatID, settings, msgID)
+					return s.telegramFinishPublish(ctx, token, channel, format, settings, msgID)
 				}
 				if telegramMediaLayoutCombined(settings) {
 					albumWithButtons := len(media) > 1 && hasTelegramButtons(content.Buttons)
@@ -581,7 +704,7 @@ func (s *PublicationService) publishTarget(
 							msgID = textID
 						}
 					}
-					return s.telegramFinishPublish(ctx, token, channel.ChatID, settings, msgID)
+					return s.telegramFinishPublish(ctx, token, channel, format, settings, msgID)
 				}
 				sendTelegramMedia := func() ([]string, error) {
 					_, mediaMsgIDs, err := s.telegram.SendMedia(ctx, token, channel.ChatID, media, &TelegramMediaSendOptions{
@@ -603,7 +726,7 @@ func (s *PublicationService) publishTarget(
 					if _, err := sendTelegramMedia(); err != nil {
 						return "", err
 					}
-					return s.telegramFinishPublish(ctx, token, channel.ChatID, settings, msgID)
+					return s.telegramFinishPublish(ctx, token, channel, format, settings, msgID)
 				}
 				mediaMsgIDs, err := sendTelegramMedia()
 				if err != nil {
@@ -614,7 +737,7 @@ func (s *PublicationService) publishTarget(
 					s.telegram.DeleteMessages(ctx, token, channel.ChatID, mediaMsgIDs)
 					return "", err
 				}
-				return s.telegramFinishPublish(ctx, token, channel.ChatID, settings, msgID)
+				return s.telegramFinishPublish(ctx, token, channel, format, settings, msgID)
 			}
 			parseMode := strings.ToUpper(strings.TrimSpace(content.ParseMode))
 			msgID, err := s.telegram.SendFormattedMessage(ctx, token, channel.ChatID, TelegramMessageInput{
@@ -624,7 +747,7 @@ func (s *PublicationService) publishTarget(
 			if err != nil {
 				return "", err
 			}
-			return s.telegramFinishPublish(ctx, token, channel.ChatID, settings, msgID)
+			return s.telegramFinishPublish(ctx, token, channel, format, settings, msgID)
 		case "rich_message", "article":
 			if content.RichMessage == nil {
 				return "", fmt.Errorf("не задан rich_message")
@@ -637,7 +760,7 @@ func (s *PublicationService) publishTarget(
 			if err != nil {
 				return "", err
 			}
-			return s.telegramFinishPublish(ctx, token, channel.ChatID, settings, msgID)
+			return s.telegramFinishPublish(ctx, token, channel, format, settings, msgID)
 		default:
 			return "", fmt.Errorf("формат %s не поддерживается Telegram", format)
 		}
@@ -675,6 +798,13 @@ func (s *PublicationService) publishTarget(
 			return "", fmt.Errorf("%w: для Photochka укажите текст или медиа", ErrInvalidPost)
 		}
 		return s.publishPhotochka(ctx, post, target, channel, content, token)
+	}
+
+	if channel.Provider == model.ChannelProviderVK {
+		if format != "message" && format != "wall_post" {
+			return "", fmt.Errorf("VK поддерживает только пост на стену")
+		}
+		return s.publishVKWall(ctx, channel, token, content, settings)
 	}
 
 	if channel.Provider == model.ChannelProviderYouTube {

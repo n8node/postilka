@@ -1,5 +1,7 @@
 package model
 
+import "strings"
+
 type PublishCapabilities struct {
 	Text             bool     `json:"text"`
 	Photo            bool     `json:"photo"`
@@ -47,6 +49,8 @@ func (p ChannelProvider) PublishCapabilities() PublishCapabilities {
 		return PublishCapabilities{
 			Text: true, Photo: true, Video: true, Formats: []string{"wall_post"},
 			LinkPreview: true,
+			ComposerFirstComment: true,
+			ComposerLocation:     true,
 			MediaAlbum: true, MaxMedia: 10, MaxTextLength: 16384,
 		}
 	case ChannelProviderMAX:
@@ -117,5 +121,12 @@ func PublishCapabilitiesForChannel(ch Channel) PublishCapabilities {
 			MaxTextLength:    2048,
 		}
 	}
-	return ch.Provider.PublishCapabilities()
+	caps := ch.Provider.PublishCapabilities()
+	if ch.Provider == ChannelProviderTelegram {
+		caps.ComposerLocation = true
+		if ch.ChatType == "channel" && strings.TrimSpace(ch.Metadata.LinkedChatID) != "" {
+			caps.ComposerFirstComment = true
+		}
+	}
+	return caps
 }

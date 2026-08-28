@@ -94,6 +94,9 @@ func telegramChannelMetadata(chat telegramChat, member telegramChatMember) model
 	if chat.Username != "" {
 		meta.PublicURL = "https://t.me/" + chat.Username
 	}
+	if chat.Type == "channel" && chat.LinkedChatID != 0 {
+		meta.LinkedChatID = strconv.FormatInt(chat.LinkedChatID, 10)
+	}
 	return meta
 }
 

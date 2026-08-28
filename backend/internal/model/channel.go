@@ -74,6 +74,7 @@ type ChannelMetadata struct {
 	BusinessUserChatID          string `json:"business_user_chat_id,omitempty"`
 	CanManageStories            *bool  `json:"can_manage_stories,omitempty"`
 	BusinessConnectionEnabled   *bool  `json:"business_connection_enabled,omitempty"`
+	LinkedChatID                string `json:"linked_chat_id,omitempty"`
 }
 
 const TelegramChatTypeBusiness = "business"

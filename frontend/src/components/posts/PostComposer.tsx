@@ -1474,12 +1474,51 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
   const noMediaDelivery = selectedChannels.filter(
     (channel) => !channel.publish_capabilities?.composer_media,
   );
+  const extrasKind = postKind === "post";
+  const showFirstComment =
+    extrasKind &&
+    selectedChannels.some((channel) => channel.publish_capabilities?.composer_first_comment);
+  const showLocation =
+    extrasKind &&
+    selectedChannels.some((channel) => channel.publish_capabilities?.composer_location);
+  const showExtrasCard = showFirstComment || showLocation;
   const noCommentDelivery = selectedChannels.filter(
     (channel) => !channel.publish_capabilities?.composer_first_comment,
   );
   const noLocationDelivery = selectedChannels.filter(
     (channel) => !channel.publish_capabilities?.composer_location,
   );
+  const firstCommentHint = [
+    selectedChannels.some(
+      (channel) => channel.provider === "vk" && channel.publish_capabilities?.composer_first_comment,
+    )
+      ? "В VK уйдёт комментарием от имени сообщества."
+      : null,
+    selectedChannels.some(
+      (channel) =>
+        channel.provider === "telegram" && channel.publish_capabilities?.composer_first_comment,
+    )
+      ? "В Telegram отправится в привязанную группу обсуждения канала."
+      : null,
+  ]
+    .filter((part): part is string => Boolean(part))
+    .join(" ");
+  const locationHint = [
+    selectedChannels.some(
+      (channel) => channel.provider === "vk" && channel.publish_capabilities?.composer_location,
+    )
+      ? "В VK координаты прикрепятся к посту."
+      : null,
+    selectedChannels.some(
+      (channel) =>
+        channel.provider === "telegram" && channel.publish_capabilities?.composer_location,
+    )
+      ? "В Telegram геопозиция уйдёт отдельным сообщением."
+      : null,
+    "Поиск места по названию пока не подключён.",
+  ]
+    .filter((part): part is string => Boolean(part))
+    .join(" ");
   const canTelegramPin = telegramChannels.every((channel) => channel.publish_capabilities?.composer_pin);
   const canTelegramSilent = telegramChannels.every(
     (channel) => channel.publish_capabilities?.composer_silent,
@@ -1659,11 +1698,15 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
     );
   }
 
+  function extrasChannelLabel(channel: (typeof selectedChannels)[number]) {
+    return channel.name.trim() || PROVIDER_LABEL[channel.provider];
+  }
+
   function buildSettings(): PostSettings {
-    const hasCoordinates = latitude.trim() !== "" && longitude.trim() !== "";
+    const hasCoordinates = showLocation && latitude.trim() !== "" && longitude.trim() !== "";
     const storySettings = telegramStoryRef.current;
     return {
-      first_comment: firstComment.trim() || undefined,
+      first_comment: showFirstComment ? firstComment.trim() || undefined : undefined,
       location: hasCoordinates
         ? {
             latitude: Number(latitude),
@@ -2135,19 +2178,21 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
         return "MAX: медиа и кнопки вместе — не более 12 вложений в одном сообщении";
       }
     }
-    if ((latitude && !longitude) || (!latitude && longitude)) return "Укажите обе координаты";
-    if (locationName.trim() && (!latitude || !longitude)) {
-      return "Для геопозиции укажите широту и долготу: backend не ищет координаты по названию";
-    }
-    if (
-      latitude &&
-      (Number.isNaN(Number(latitude)) ||
-        Number(latitude) < -90 ||
-        Number(latitude) > 90 ||
-        Number(longitude) < -180 ||
-        Number(longitude) > 180)
-    ) {
-      return "Проверьте координаты геопозиции";
+    if (showLocation) {
+      if ((latitude && !longitude) || (!latitude && longitude)) return "Укажите обе координаты";
+      if (locationName.trim() && (!latitude || !longitude)) {
+        return "Для геопозиции укажите широту и долготу: backend не ищет координаты по названию";
+      }
+      if (
+        latitude &&
+        (Number.isNaN(Number(latitude)) ||
+          Number(latitude) < -90 ||
+          Number(latitude) > 90 ||
+          Number(longitude) < -180 ||
+          Number(longitude) > 180)
+      ) {
+        return "Проверьте координаты геопозиции";
+      }
     }
     if (action === "schedule" && (!scheduleAt || new Date(scheduleAt) <= new Date())) {
       return "Выберите дату и время в будущем";
@@ -3347,9 +3392,15 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
             </Card>
           )}
 
+          {(showExtrasCard ||
+            (telegramChannels.length > 0 &&
+              postKind !== "story" &&
+              format !== "story" &&
+              !isYouTubeVideoMode)) && (
           <div className="grid gap-4 lg:grid-cols-2">
-            {postKind !== "story" && format !== "story" && !isYouTubeVideoMode && (
+            {showExtrasCard && (
             <Card title="Дополнения">
+              {showFirstComment && (
               <label className="block">
                 <span className="mb-1 flex items-center gap-1 text-xs font-medium text-zinc-600">
                   <MessageCircle className="h-3.5 w-3.5" />
@@ -3366,14 +3417,19 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
                   className="w-full resize-y rounded-lg border border-border px-3 py-2 text-sm"
                   placeholder="Необязательно"
                 />
+                <p className="mt-1 text-[11px] text-muted">
+                  {firstCommentHint}
+                </p>
                 {firstComment.trim() && noCommentDelivery.length > 0 && (
                   <p className="mt-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800">
-                    Сохранится в черновике, но пока не доставляется в{" "}
-                    {noCommentDelivery.map((channel) => PROVIDER_LABEL[channel.provider]).join(", ")}.
+                    Сохранится в черновике, но не доставится в{" "}
+                    {noCommentDelivery.map(extrasChannelLabel).join(", ")}.
                   </p>
                 )}
               </label>
-              <div className="mt-3">
+              )}
+              {showLocation && (
+              <div className={showFirstComment ? "mt-3" : undefined}>
                 <span className="mb-1 flex items-center gap-1 text-xs font-medium text-zinc-600">
                   <MapPin className="h-3.5 w-3.5" />
                   Геопозиция
@@ -3410,18 +3466,17 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
                   />
                 </div>
                 <p className="mt-1 text-[11px] text-muted">
-                  API принимает координаты; поиск места по названию пока не подключён.
+                  {locationHint}
                 </p>
                 {(locationName.trim() || latitude || longitude) &&
                   noLocationDelivery.length > 0 && (
-                    <p className="mt-1 rounded-md border border-red-200 bg-red-50 px-2 py-1.5 text-[11px] font-medium text-red-700">
-                      Геопозиция сохранится в черновике, но не доставляется в{" "}
-                      {noLocationDelivery
-                        .map((channel) => PROVIDER_LABEL[channel.provider])
-                        .join(", ")}. Публикация и планирование заблокированы.
+                    <p className="mt-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800">
+                      Геопозиция сохранится в черновике, но не доставится в{" "}
+                      {noLocationDelivery.map(extrasChannelLabel).join(", ")}.
                     </p>
                   )}
               </div>
+              )}
             </Card>
             )}
 
@@ -3501,6 +3556,7 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
               </Card>
             )}
           </div>
+          )}
 
           {postId && currentStatus === "published" ? (
             <PostStatsPanel postId={postId} published />

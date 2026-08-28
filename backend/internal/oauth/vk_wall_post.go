@@ -29,9 +29,11 @@ type VKMediaSource struct {
 }
 
 type VKWallPostInput struct {
-	Message string
-	Photos  []VKMediaSource
-	Video   *VKMediaSource
+	Message   string
+	Photos    []VKMediaSource
+	Video     *VKMediaSource
+	Latitude  *float64
+	Longitude *float64
 }
 
 type vkUploadPhotoResponse struct {
@@ -88,7 +90,28 @@ func (c *VKCommunityClient) PostWall(
 	if message == "" && len(attachments) == 0 {
 		return 0, fmt.Errorf("vk wall.post: нужен текст или медиа")
 	}
-	return c.postWall(ctx, accessToken, ownerID, message, attachments)
+	return c.postWall(ctx, accessToken, ownerID, message, attachments, in.Latitude, in.Longitude)
+}
+
+func (c *VKCommunityClient) CreateComment(
+	ctx context.Context,
+	accessToken string,
+	ownerID, postID int64,
+	message string,
+) error {
+	message = strings.TrimSpace(message)
+	if message == "" {
+		return fmt.Errorf("vk wall.createComment: пустой комментарий")
+	}
+	values := url.Values{}
+	values.Set("access_token", accessToken)
+	values.Set("v", vkAPIVersion)
+	values.Set("owner_id", strconv.FormatInt(ownerID, 10))
+	values.Set("post_id", strconv.FormatInt(postID, 10))
+	values.Set("from_group", "1")
+	values.Set("message", message)
+	_, err := c.apiPOST(ctx, "wall.createComment", values)
+	return err
 }
 
 func (c *VKCommunityClient) postWall(
@@ -97,6 +120,7 @@ func (c *VKCommunityClient) postWall(
 	ownerID int64,
 	message string,
 	attachments []string,
+	latitude, longitude *float64,
 ) (int64, error) {
 	values := url.Values{}
 	values.Set("access_token", accessToken)
@@ -108,6 +132,10 @@ func (c *VKCommunityClient) postWall(
 	}
 	if len(attachments) > 0 {
 		values.Set("attachments", strings.Join(attachments, ","))
+	}
+	if latitude != nil && longitude != nil {
+		values.Set("lat", strconv.FormatFloat(*latitude, 'f', -1, 64))
+		values.Set("long", strconv.FormatFloat(*longitude, 'f', -1, 64))
 	}
 
 	body, err := c.apiPOST(ctx, "wall.post", values)
