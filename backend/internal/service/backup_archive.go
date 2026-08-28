@@ -148,8 +148,6 @@ func (s *BackupService) dumpPostgres(ctx context.Context, dest string) error {
 }
 
 func (s *BackupService) dumpMySQL(ctx context.Context, dest string) error {
-	host := getenv("WP_DB_HOST", "mysql")
-	user := firstNonEmpty(os.Getenv("WP_DB_ROOT_USER"), "root")
 	pass := os.Getenv("WP_DB_ROOT_PASSWORD")
 	if pass == "" {
 		pass = os.Getenv("MYSQL_ROOT_PASSWORD")
@@ -157,15 +155,24 @@ func (s *BackupService) dumpMySQL(ctx context.Context, dest string) error {
 	if pass == "" {
 		return fmt.Errorf("нет WP_DB_ROOT_PASSWORD для mysqldump")
 	}
-	cmd := exec.CommandContext(ctx, "mysqldump",
-		"-h", host,
+	id, err := dockerComposeServiceID(ctx, "mysql")
+	if err != nil || id == "" {
+		if err == nil {
+			err = fmt.Errorf("empty id")
+		}
+		return fmt.Errorf("контейнер mysql не найден: %w", err)
+	}
+	user := firstNonEmpty(os.Getenv("WP_DB_ROOT_USER"), "root")
+	// Run mysqldump inside mysql:8 — Alpine mariadb-client cannot load caching_sha2_password.
+	cmd := exec.CommandContext(ctx, "docker", "exec", "-e", "MYSQL_PWD="+pass, id,
+		"mysqldump",
 		"-u", user,
 		"--single-transaction",
 		"--routines",
 		"--triggers",
+		"--default-character-set=utf8mb4",
 		"--all-databases",
 	)
-	cmd.Env = append(os.Environ(), "MYSQL_PWD="+pass)
 	return gzipCommand(cmd, dest)
 }
 
@@ -387,13 +394,6 @@ func writeJSONFile(path string, v any) error {
 		return err
 	}
 	return os.WriteFile(path, data, 0o644)
-}
-
-func getenv(key, fallback string) string {
-	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
-		return v
-	}
-	return fallback
 }
 
 func firstNonEmpty(values ...string) string {
