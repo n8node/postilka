@@ -574,7 +574,7 @@ export function AdStudioPage() {
   };
 
   const explore = selected
-    ? items.filter((item) => item.id !== selected.id).slice(0, 12)
+    ? items.filter((item) => item.id !== selected.id)
     : items;
   const filters: { id: FilterId; label: string }[] = [
     { id: "all", label: "Все" },
