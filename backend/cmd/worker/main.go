@@ -131,7 +131,7 @@ func main() {
 	opsDigestSvc := service.NewOpsDigestService(
 		telegramSvc, telegramSettingsSvc, opsStateRepo, postRepo, db, mailSvc, smtpSettingsSvc,
 		storageSettingsSvc, kieConfigSvc, kieVideoConfigSvc, yandexGptConfigSvc, socialProviderSettingsSvc,
-		secretCipher, photochkaClient, logger,
+		telegramProviderSettingsSvc, secretCipher, photochkaClient, logger,
 	)
 	genRepo := repository.NewAIGenerationRepository(db.Pool)
 	genJobRepo := repository.NewAIGenerationJobRepository(db.Pool)

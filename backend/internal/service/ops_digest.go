@@ -46,6 +46,7 @@ type OpsDigestService struct {
 	kieVideo   *KieVideoConfigService
 	yandex     *YandexGptConfigService
 	social     *SocialProviderSettingsService
+	tgProvider *TelegramProviderSettingsService
 	cipher     *SecretCipher
 	maxClient  *oauthclient.MAXBotClient
 	photochka  *photochka.Client
@@ -66,6 +67,7 @@ func NewOpsDigestService(
 	kieVideo *KieVideoConfigService,
 	yandex *YandexGptConfigService,
 	social *SocialProviderSettingsService,
+	tgProvider *TelegramProviderSettingsService,
 	cipher *SecretCipher,
 	photochkaClient *photochka.Client,
 	logger *slog.Logger,
@@ -74,21 +76,22 @@ func NewOpsDigestService(
 		logger = slog.Default()
 	}
 	return &OpsDigestService{
-		telegram:  telegram,
-		settings:  settings,
-		opsState:  opsState,
-		posts:     posts,
-		db:        db,
-		mail:      mail,
-		smtp:      smtp,
-		storage:   storage,
-		kie:       kie,
-		kieVideo:  kieVideo,
-		yandex:    yandex,
-		social:    social,
-		cipher:    cipher,
-		maxClient: oauthclient.NewMAXBotClient(),
-		photochka: photochkaClient,
+		telegram:   telegram,
+		settings:   settings,
+		opsState:   opsState,
+		posts:      posts,
+		db:         db,
+		mail:       mail,
+		smtp:       smtp,
+		storage:    storage,
+		kie:        kie,
+		kieVideo:   kieVideo,
+		yandex:     yandex,
+		social:     social,
+		tgProvider: tgProvider,
+		cipher:     cipher,
+		maxClient:  oauthclient.NewMAXBotClient(),
+		photochka:  photochkaClient,
 		httpClient: &http.Client{
 			Timeout: opsDigestProbeTimeout,
 		},
@@ -187,6 +190,8 @@ func (s *OpsDigestService) collect(ctx context.Context) []model.OpsCheck {
 		{s.probeCalendar},
 		{s.probeDisk},
 		{s.probeSMTP},
+		{s.probeTelegramSocial},
+		{s.probeTelegramBusiness},
 		{s.probeVK},
 		{s.probeYouTube},
 		{s.probePhotochka},
@@ -416,6 +421,40 @@ func (s *OpsDigestService) probeSMTP(ctx context.Context) model.OpsCheck {
 		if errors.Is(err, ErrEmailDisabled) || errors.Is(err, ErrSMTPNotConfigured) {
 			return skipCheck(check, "не настроено")
 		}
+		return failCheck(check, errors.New("нет связи"))
+	}
+	return okCheck(check)
+}
+
+func (s *OpsDigestService) probeTelegramSocial(ctx context.Context) model.OpsCheck {
+	return s.probeTelegramChannelProvider(ctx, "telegram", "Telegram", func(cfg model.TelegramProviderSettings) bool {
+		return cfg.Enabled
+	})
+}
+
+func (s *OpsDigestService) probeTelegramBusiness(ctx context.Context) model.OpsCheck {
+	return s.probeTelegramChannelProvider(ctx, "telegram_business", "Telegram Business", func(cfg model.TelegramProviderSettings) bool {
+		return cfg.Enabled && cfg.BusinessStoriesEnabled
+	})
+}
+
+func (s *OpsDigestService) probeTelegramChannelProvider(
+	ctx context.Context,
+	key, label string,
+	enabled func(model.TelegramProviderSettings) bool,
+) model.OpsCheck {
+	check := socialCheck(key, label)
+	if s.tgProvider == nil {
+		return skipCheck(check, "недоступно")
+	}
+	cfg, err := s.tgProvider.GetEffective(ctx)
+	if err != nil {
+		return failCheck(check, err)
+	}
+	if !enabled(cfg) {
+		return skipCheck(check, "не настроено")
+	}
+	if err := s.pingURL(ctx, "https://api.telegram.org"); err != nil {
 		return failCheck(check, errors.New("нет связи"))
 	}
 	return okCheck(check)

@@ -13,6 +13,8 @@ func TestFormatOpsDigestMessage(t *testing.T) {
 	text := formatOpsDigestMessage(now, []model.OpsCheck{
 		{Key: "telegram_proxy", Label: "Телеграм прокси", Group: model.OpsGroupSystem, Status: model.OpsCheckOK},
 		{Key: "processes", Label: "Процессы", Group: model.OpsGroupSystem, Status: model.OpsCheckWarn, Detail: "нет сигнала"},
+		{Key: "telegram", Label: "Telegram", Group: model.OpsGroupSocial, Status: model.OpsCheckOK},
+		{Key: "telegram_business", Label: "Telegram Business", Group: model.OpsGroupSocial, Status: model.OpsCheckSkip, Detail: "не настроено"},
 		{Key: "vk", Label: "ВКонтакте", Group: model.OpsGroupSocial, Status: model.OpsCheckOK},
 		{Key: "youtube", Label: "YouTube", Group: model.OpsGroupSocial, Status: model.OpsCheckSkip, Detail: "не настроено"},
 	})
@@ -38,7 +40,13 @@ func TestFormatOpsDigestMessage(t *testing.T) {
 	if !strings.Contains(text, "Система: 1 ок, 1 предупреждение") {
 		t.Fatalf("expected system summary, got %q", text)
 	}
-	if !strings.Contains(text, "Соцсети: 1 ок, 1 не настроено") {
+	if !strings.Contains(text, "✅ Telegram") {
+		t.Fatalf("expected telegram ok line, got %q", text)
+	}
+	if !strings.Contains(text, "⏸ Telegram Business — не настроено") {
+		t.Fatalf("expected telegram business skip line, got %q", text)
+	}
+	if !strings.Contains(text, "Соцсети: 2 ок, 2 не настроено") {
 		t.Fatalf("expected social summary, got %q", text)
 	}
 }
