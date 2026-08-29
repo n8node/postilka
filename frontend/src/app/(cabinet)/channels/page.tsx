@@ -47,6 +47,7 @@ const providerLabel: Partial<Record<ChannelProvider, string>> = {
   dzen: "Дзен",
   youtube: "YouTube",
   photochka: "Photochka",
+  wordpress: "WordPress",
 };
 
 function formatProviderLabel(provider: ChannelProvider, chatType?: string): string {
@@ -66,6 +67,8 @@ const chatTypeLabel = (type: string) => {
       return "Чат";
     case "business":
       return "Telegram Business";
+    case "site":
+      return "Сайт";
     default:
       return type || "—";
   }
@@ -567,16 +570,27 @@ export default function ChannelsPage() {
                   {actionLoading ? "Проверка…" : "Обновить данные"}
                 </button>
                 {selected.chat_type !== "business" && (
-                  <button
-                    type="button"
-                    onClick={() => void handleTestMessage()}
-                    disabled={actionLoading}
-                    className="w-full rounded-md bg-accent px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
-                  >
-                    {actionLoading ? "Отправка…" : selected.provider === "rutube" && rutubeTestType === "video"
-                      ? "Отправить тестовое видео"
-                      : "Отправить тестовое сообщение"}
-                  </button>
+                  <>
+                    {selected.provider === "wordpress" ? (
+                      <p className="text-xs text-muted">
+                        Проверка создаст черновик на сайте, без публикации в ленту.
+                      </p>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => void handleTestMessage()}
+                      disabled={actionLoading}
+                      className="w-full rounded-md bg-accent px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+                    >
+                      {actionLoading
+                        ? "Отправка…"
+                        : selected.provider === "rutube" && rutubeTestType === "video"
+                          ? "Отправить тестовое видео"
+                          : selected.provider === "wordpress"
+                            ? "Создать тестовый черновик"
+                            : "Отправить тестовое сообщение"}
+                    </button>
+                  </>
                 )}
                 <button
                   type="button"

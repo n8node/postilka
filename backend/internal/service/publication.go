@@ -17,6 +17,7 @@ import (
 	oauthclient "github.com/postilka/postilka/internal/oauth"
 	"github.com/postilka/postilka/internal/photochka"
 	"github.com/postilka/postilka/internal/repository"
+	"github.com/postilka/postilka/internal/wordpress"
 )
 
 type PublicationService struct {
@@ -28,6 +29,7 @@ type PublicationService struct {
 	telegram    *TelegramBotClient
 	maxClient   *oauthclient.MAXBotClient
 	photochka   *photochka.Client
+	wordpress   *wordpress.Client
 	quota       *QuotaService
 	shortener   *LinkShortenerService
 	notify      *NotificationService
@@ -52,6 +54,7 @@ func NewPublicationService(
 		posts: posts, channels: channels, files: files, storage: storage,
 		channelTest: channelTest, telegram: telegram, maxClient: maxClient,
 		photochka: photochkaClient,
+		wordpress: wordpress.NewClient(),
 		quota: quota, shortener: shortener,
 	}
 }
@@ -798,6 +801,13 @@ func (s *PublicationService) publishTarget(
 			return "", fmt.Errorf("%w: для Photochka укажите текст или медиа", ErrInvalidPost)
 		}
 		return s.publishPhotochka(ctx, post, target, channel, content, token)
+	}
+
+	if channel.Provider == model.ChannelProviderWordPress {
+		if format != "article" && format != "message" {
+			return "", fmt.Errorf("WordPress поддерживает только статью")
+		}
+		return s.publishWordPress(ctx, post, target, channel, content, token)
 	}
 
 	if channel.Provider == model.ChannelProviderVK {

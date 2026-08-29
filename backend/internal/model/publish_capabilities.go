@@ -101,6 +101,17 @@ func (p ChannelProvider) PublishCapabilities() PublishCapabilities {
 			MaxMedia:      10,
 			MaxTextLength: 3000,
 		}
+	case ChannelProviderWordPress:
+		return PublishCapabilities{
+			Text:          true,
+			Photo:         true,
+			Formats:       []string{"article"},
+			RichText:      true,
+			ComposerMedia: true,
+			MediaAlbum:    true,
+			MaxMedia:      10,
+			MaxTextLength: 50000,
+		}
 	default:
 		return PublishCapabilities{}
 	}

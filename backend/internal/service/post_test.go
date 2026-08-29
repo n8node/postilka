@@ -367,3 +367,15 @@ func TestMaxOutgoingHasPayloadRejectsEmptyHTML(t *testing.T) {
 		t.Fatal("whitespace-only HTML must not count as MAX payload")
 	}
 }
+
+func TestValidatePostContentWordPressArticle(t *testing.T) {
+	err := ValidatePostContent(model.PostContent{
+		Format:    "article",
+		Title:     "Заголовок",
+		Text:      "Текст статьи",
+		ParseMode: "HTML",
+	}, model.PostSettings{})
+	if err != nil {
+		t.Fatal(err)
+	}
+}

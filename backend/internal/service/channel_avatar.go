@@ -269,7 +269,8 @@ func (s *ChannelService) FetchAvatar(
 		ch.Provider != model.ChannelProviderMAX &&
 		ch.Provider != model.ChannelProviderTelegram &&
 		ch.Provider != model.ChannelProviderYouTube &&
-		ch.Provider != model.ChannelProviderPhotochka {
+		ch.Provider != model.ChannelProviderPhotochka &&
+		ch.Provider != model.ChannelProviderWordPress {
 		return fetchRemoteAvatar(ctx, url)
 	}
 
@@ -342,6 +343,14 @@ func (s *ChannelService) FetchAvatar(
 		if s.photochka != nil {
 			if url := s.photochka.UserAvatarURL(ch.ChatID); url != "" {
 				return fetchRemoteAvatar(ctx, url)
+			}
+		}
+		return generateInitialsAvatarSVG(channelAvatarInitials(ch)), "image/svg+xml", nil
+
+	case model.ChannelProviderWordPress:
+		if url := strings.TrimSpace(ch.Metadata.AvatarURL); url != "" {
+			if body, ct, err := fetchRemoteAvatar(ctx, url); err == nil {
+				return body, ct, nil
 			}
 		}
 		return generateInitialsAvatarSVG(channelAvatarInitials(ch)), "image/svg+xml", nil

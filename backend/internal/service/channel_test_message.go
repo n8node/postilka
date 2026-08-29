@@ -14,6 +14,7 @@ import (
 	"github.com/postilka/postilka/internal/photochka"
 	"github.com/postilka/postilka/internal/repository"
 	tzpkg "github.com/postilka/postilka/internal/timezone"
+	"github.com/postilka/postilka/internal/wordpress"
 )
 
 type ChannelTestService struct {
@@ -26,6 +27,7 @@ type ChannelTestService struct {
 	cipher         *SecretCipher
 	maxClient      *oauthclient.MAXBotClient
 	photochka      *photochka.Client
+	wordpress      *wordpress.Client
 	notify         *NotificationService
 }
 
@@ -49,6 +51,7 @@ func NewChannelTestService(
 		cipher:         cipher,
 		maxClient:      oauthclient.NewMAXBotClient(),
 		photochka:      photochkaClient,
+		wordpress:      wordpress.NewClient(),
 	}
 }
 
@@ -114,6 +117,13 @@ func (s *ChannelTestService) SendTestMessage(
 		}
 		if text == "" {
 			text = "✅ Тестовая публикация от Postilka. Канал подключён корректно."
+		}
+	} else if ch.Provider == model.ChannelProviderWordPress {
+		if title == "" {
+			title = "Тестовая статья Postilka"
+		}
+		if text == "" {
+			text = "✅ Тестовая публикация от Postilka. Канал WordPress подключён корректно."
 		}
 	} else if text == "" && photoURL == "" && videoURL == "" {
 		text = model.DefaultChannelTestMessage
@@ -310,6 +320,33 @@ func (s *ChannelTestService) publish(
 		}
 		_ = me
 		return postResult.ID, nil
+
+	case model.ChannelProviderWordPress:
+		if s.wordpress == nil {
+			return "", fmt.Errorf("интеграция WordPress недоступна")
+		}
+		siteURL, username, err := wordpressPublishAuth(ch)
+		if err != nil {
+			return "", err
+		}
+		if title == "" {
+			title = "Тестовая статья Postilka"
+		}
+		if text == "" {
+			text = model.DefaultChannelTestMessage
+		}
+		created, err := s.wordpress.CreatePost(ctx, siteURL, username, token, wordpress.CreatePostInput{
+			Title:   title,
+			Content: wordpress.ArticleHTML(text),
+			Status:  "draft",
+		})
+		if err != nil {
+			if errors.Is(err, wordpress.ErrUnauthorized) {
+				return "", fmt.Errorf("доступ к WordPress недействителен — переподключите канал")
+			}
+			return "", err
+		}
+		return strconv.FormatInt(created.ID, 10), nil
 
 	default:
 		return "", fmt.Errorf("провайдер %s не поддерживает тестовую публикацию", ch.Provider)

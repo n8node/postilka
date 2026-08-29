@@ -136,6 +136,9 @@ func (s *MetricsCollectorService) collectTarget(ctx context.Context, target repo
 	case model.ChannelProviderDzen:
 		input.Measurability = model.MeasurabilityManual
 		input.ProviderNote = "Статистика публикаций Дзена доступна в Студии. Здесь учитываются только переходы по вашим ссылкам."
+	case model.ChannelProviderWordPress:
+		input.Measurability = model.MeasurabilityManual
+		input.ProviderNote = "У ядра WordPress нет просмотров записи через REST API. Здесь учитываются переходы по вашим ссылкам."
 	default:
 		input.Measurability = model.MeasurabilityPartial
 	}
@@ -379,6 +382,8 @@ func measurabilityForProvider(provider string) string {
 		return model.MeasurabilityAuto
 	case model.ChannelProviderDzen:
 		return model.MeasurabilityManual
+	case model.ChannelProviderWordPress:
+		return model.MeasurabilityManual
 	default:
 		return model.MeasurabilityPartial
 	}
@@ -390,6 +395,8 @@ func providerNoteFor(provider string) string {
 		return "Telegram Bot API не отдаёт просмотры постов — доступны подписчики и переходы по вашим ссылкам."
 	case model.ChannelProviderDzen:
 		return "Статистика публикаций Дзена доступна в Студии. Здесь учитываются только переходы по вашим ссылкам."
+	case model.ChannelProviderWordPress:
+		return "У ядра WordPress нет просмотров записи через REST API. Здесь учитываются переходы по вашим ссылкам."
 	default:
 		return ""
 	}

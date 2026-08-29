@@ -16,6 +16,7 @@ import (
 	oauthclient "github.com/postilka/postilka/internal/oauth"
 	"github.com/postilka/postilka/internal/photochka"
 	"github.com/postilka/postilka/internal/repository"
+	"github.com/postilka/postilka/internal/wordpress"
 )
 
 const channelOAuthSessionTTL = 30 * time.Minute
@@ -36,6 +37,7 @@ type ChannelConnectService struct {
 	cipher         *SecretCipher
 	maxClient      *oauthclient.MAXBotClient
 	photochka      *photochka.Client
+	wordpress      *wordpress.Client
 	cfg            *config.Config
 	notify         *NotificationService
 }
@@ -62,6 +64,7 @@ func NewChannelConnectService(
 		cipher:         cipher,
 		maxClient:      oauthclient.NewMAXBotClient(),
 		photochka:      photochka.NewClient(cfg.PhotochkaAPIBaseURL),
+		wordpress:      wordpress.NewClient(),
 		cfg:            cfg,
 	}
 }
@@ -75,6 +78,8 @@ func (s *ChannelConnectService) CombinedProviderInfo(ctx context.Context) model.
 	info.Providers = s.socialSettings.AllPublicInfo(ctx)
 	info.PhotochkaEnabled = true
 	info.PhotochkaConnectHelpText = "1. В Photochka откройте Настройки → API-ключи (тариф Business).\n2. Создайте ключ и скопируйте значение phk_live_…\n3. Вставьте ключ в Postilka и нажмите «Подключить»."
+	info.WordPressEnabled = true
+	info.WordPressConnectHelpText = "1. Откройте свой сайт WordPress → Пользователи → Профиль.\n2. В блоке «Пароли приложений» создайте пароль (например, Postilka).\n3. Скопируйте пароль — он показывается один раз.\n4. В Postilka укажите адрес сайта, имя пользователя WordPress и этот пароль.\n5. REST API должен быть включён; сайт лучше открывать по HTTPS."
 	return info
 }
 
@@ -1247,4 +1252,152 @@ func isPhotochkaProviderConstraint(err error) bool {
 	msg := strings.ToLower(err.Error())
 	return strings.Contains(msg, "channels_provider_check") ||
 		strings.Contains(msg, "photochka") && strings.Contains(msg, "check constraint")
+}
+
+func (s *ChannelConnectService) ConnectWordPress(
+	ctx context.Context,
+	userID string,
+	r *http.Request,
+	req model.WordPressConnectRequest,
+) (*model.ChannelConnectResult, error) {
+	ws, err := s.requireAdmin(ctx, userID, r)
+	if err != nil {
+		return nil, err
+	}
+	if s.cipher == nil {
+		return nil, ErrCryptoUnavailable
+	}
+	if s.wordpress == nil {
+		return nil, fmt.Errorf("интеграция WordPress недоступна")
+	}
+
+	siteURL, err := wordpress.NormalizeSiteURL(req.SiteURL)
+	if err != nil {
+		return nil, err
+	}
+	username := strings.TrimSpace(req.Username)
+	if username == "" {
+		return nil, fmt.Errorf("укажите имя пользователя WordPress")
+	}
+	appPassword := wordpress.NormalizeApplicationPassword(req.ApplicationPassword)
+	if appPassword == "" {
+		return nil, fmt.Errorf("укажите пароль приложения WordPress")
+	}
+
+	site, err := s.wordpress.SiteInfo(ctx, siteURL)
+	if err != nil {
+		if errors.Is(err, wordpress.ErrUnauthorized) {
+			return nil, ErrInvalidWordPressCredentials
+		}
+		return nil, fmt.Errorf("не удалось открыть WordPress REST API: %w", err)
+	}
+
+	me, err := s.wordpress.Me(ctx, siteURL, username, appPassword)
+	if err != nil {
+		if errors.Is(err, wordpress.ErrUnauthorized) {
+			return nil, ErrInvalidWordPressCredentials
+		}
+		return nil, fmt.Errorf("не удалось войти в WordPress: %w", err)
+	}
+	if !me.CanEditPosts() {
+		return nil, fmt.Errorf("у пользователя нет права создавать записи WordPress")
+	}
+
+	encrypted, err := s.cipher.Encrypt(appPassword)
+	if err != nil {
+		return nil, err
+	}
+
+	name := strings.TrimSpace(site.Name)
+	if name == "" {
+		name = strings.TrimSpace(me.Name)
+	}
+	if name == "" {
+		name = siteURL
+	}
+
+	canPost := true
+	meta := model.ChannelMetadata{
+		ProviderTitle: name,
+		PublicURL:     siteURL,
+		CanPost:       &canPost,
+	}
+	if icon := strings.TrimSpace(site.SiteIconURL); icon != "" {
+		meta = mergeChannelAvatar(meta, icon)
+	} else if avatar := me.AvatarURL(); avatar != "" {
+		meta = mergeChannelAvatar(meta, avatar)
+	}
+
+	chatID := wordpress.SiteChatID(siteURL)
+	now := time.Now()
+	existing, err := s.channels.GetByChat(ctx, ws.ID, string(model.ChannelProviderWordPress), chatID)
+	if err != nil && !errors.Is(err, repository.ErrNotFound) {
+		return nil, err
+	}
+	if existing != nil && existing.Provider != model.ChannelProviderWordPress {
+		existing = nil
+	}
+
+	var ch *model.Channel
+	if existing != nil {
+		ch, err = s.channels.SaveChannel(ctx, repository.ChannelSaveParams{
+			WorkspaceID:         ws.ID,
+			ChannelID:           existing.ID,
+			Provider:            model.ChannelProviderWordPress,
+			Name:                name,
+			ChatType:            "site",
+			BotUsername:         username,
+			BotTokenEncrypted:   encrypted,
+			Status:              model.ChannelStatusActive,
+			Metadata:            meta,
+			MetadataRefreshedAt: &now,
+		})
+	} else {
+		currentCount, err := s.channels.CountByWorkspace(ctx, ws.ID)
+		if err != nil {
+			return nil, err
+		}
+		if err := s.quota.CheckChannelQuota(ctx, ws.ID, currentCount); err != nil {
+			return nil, err
+		}
+		ch, err = s.channels.Create(ctx, repository.ChannelCreateParams{
+			WorkspaceID:         ws.ID,
+			Provider:            model.ChannelProviderWordPress,
+			Name:                name,
+			ChatID:              chatID,
+			ChatType:            "site",
+			BotUsername:         username,
+			BotTokenEncrypted:   encrypted,
+			Status:              model.ChannelStatusActive,
+			Metadata:            meta,
+			MetadataRefreshedAt: &now,
+		})
+	}
+	if err != nil {
+		if isWordPressProviderConstraint(err) {
+			return nil, fmt.Errorf("провайдер WordPress ещё не активирован на сервере — обновите backend и примените миграции")
+		}
+		return nil, err
+	}
+
+	item := model.ChannelListItem{
+		Channel:      *ch,
+		BotTokenSet:  true,
+		BotTokenHint: maskSecret(appPassword),
+	}
+	if s.notify != nil {
+		s.notify.MaybeUsageWarnings(ctx, ws.ID)
+	}
+	return &model.ChannelConnectResult{
+		Connected: []model.ChannelListItem{item},
+	}, nil
+}
+
+func isWordPressProviderConstraint(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "channels_provider_check") ||
+		strings.Contains(msg, "wordpress") && strings.Contains(msg, "check constraint")
 }

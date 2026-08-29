@@ -187,6 +187,29 @@ func (h *ChannelConnectHandler) ConnectPhotochka(w http.ResponseWriter, r *http.
 	writeJSON(w, http.StatusOK, result)
 }
 
+func (h *ChannelConnectHandler) ConnectWordPress(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
+		return
+	}
+	var req model.WordPressConnectRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Некорректное тело запроса")
+		return
+	}
+	result, err := h.connect.ConnectWordPress(r.Context(), userID, r, req)
+	if err != nil {
+		if errors.Is(err, service.ErrChannelAlreadyConnected) && result != nil {
+			writeJSON(w, http.StatusConflict, result)
+			return
+		}
+		writeChannelConnectError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
 func writeChannelConnectError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, service.ErrSocialProviderDisabled):
@@ -197,6 +220,8 @@ func writeChannelConnectError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusBadRequest, "Некорректный токен")
 	case errors.Is(err, service.ErrInvalidPhotochkaAPIKey):
 		writeError(w, http.StatusBadRequest, "Неверный API-ключ Photochka")
+	case errors.Is(err, service.ErrInvalidWordPressCredentials):
+		writeError(w, http.StatusBadRequest, "Неверный логин или пароль приложения WordPress")
 	case errors.Is(err, service.ErrWorkspaceNotFound):
 		writeError(w, http.StatusBadRequest, "Сначала создайте или выберите workspace")
 	case errors.Is(err, repository.ErrNotFound):

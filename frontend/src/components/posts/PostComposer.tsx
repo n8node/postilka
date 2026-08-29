@@ -109,6 +109,7 @@ const PROVIDER_LABEL: Record<ChannelProvider, string> = {
   dzen: "Дзен",
   youtube: "YouTube",
   photochka: "Photochka",
+  wordpress: "WordPress",
 };
 
 const PROVIDER_COLOR: Record<ChannelProvider, string> = {
@@ -120,6 +121,7 @@ const PROVIDER_COLOR: Record<ChannelProvider, string> = {
   dzen: "#111111",
   youtube: "#ef4444",
   photochka: "#7C3AED",
+  wordpress: "#21759B",
 };
 
 const STATUS_LABEL: Record<Post["status"], string> = {
@@ -240,6 +242,7 @@ function previewFormatForChannel(
 ): PostContent["format"] {
   if (channel.provider === "youtube") return format;
   if (format === "video" || format === "shorts") return "message";
+  if (channel.provider === "wordpress" && format === "article") return "message";
   return format;
 }
 
@@ -1245,6 +1248,7 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
   const [aiLength, setAiLength] = useState<"short" | "medium" | "long">("medium");
   const [aiResult, setAiResult] = useState<string | null>(null);
   const [articleTitle, setArticleTitle] = useState("");
+  const [wordpressTitle, setWordpressTitle] = useState("");
   const [videoTitle, setVideoTitle] = useState("");
   const [articleBlocks, setArticleBlocks] = useState<ArticleBlock[]>([
     { type: "paragraph", text: "" },
@@ -1482,6 +1486,9 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
     selectedChannels.find((channel) => channel.id === activeChannelId) ?? selectedChannels[0] ?? null;
   const telegramChannels = selectedChannels.filter((channel) => channel.provider === "telegram");
   const maxChannels = selectedChannels.filter((channel) => channel.provider === "max");
+  const wordpressChannels = selectedChannels.filter((channel) => channel.provider === "wordpress");
+  const wordpressOnly =
+    selectedChannels.length > 0 && selectedChannels.every((channel) => channel.provider === "wordpress");
   const currentOverride = activeChannel ? overrides[activeChannel.id] : undefined;
   const previewHTML = currentOverride?.detached ? currentOverride.html : html;
   const previewPlain = currentOverride?.detached ? currentOverride.plain : plain;
@@ -1655,9 +1662,13 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
     setHTML(post.content.text || "");
     setPlain(htmlToPlain(post.content.text || ""));
     setOverrides(targetOverrides);
-    setFormat(post.content.format || "message");
-    setPostKind(formatToPostKind(post.content.format || "message"));
+    const loadedFormat = post.content.format || "message";
+    setFormat(
+      loadedFormat === "article" && !post.content.rich_message ? "message" : loadedFormat,
+    );
+    setPostKind(formatToPostKind(loadedFormat));
     setArticleTitle(post.content.rich_message?.title ?? "");
+    setWordpressTitle(post.content.title ?? "");
     setVideoTitle(post.content.title ?? "");
     setArticleBlocks(
       post.content.rich_message?.blocks?.map((block) => ({ ...block })) ?? [
@@ -1841,10 +1852,15 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
           }
         : undefined;
     const content: PostContent = {
-      format,
-      title: format === "video" || format === "shorts" ? videoTitle.trim() || undefined : undefined,
+      format: wordpressOnly ? "article" : format,
+      title:
+        format === "video" || format === "shorts"
+          ? videoTitle.trim() || undefined
+          : wordpressChannels.length > 0
+            ? wordpressTitle.trim() || undefined
+            : undefined,
       text:
-        format === "message" || format === "story" || format === "short_video" || format === "video" || format === "shorts"
+        format === "message" || format === "story" || format === "short_video" || format === "video" || format === "shorts" || wordpressOnly
           ? normalizeTelegramHTMLString(html)
           : "",
       parse_mode: "HTML",
@@ -2098,8 +2114,13 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
     if (articleOnlyTelegram && action !== "draft") {
       return "Статья Telegram публикуется только в Telegram — снимите остальные каналы или переключитесь на «Сообщение»";
     }
+    if (wordpressChannels.length > 0 && postKind === "post" && !wordpressTitle.trim() && action !== "draft") {
+      return "Укажите заголовок статьи для WordPress";
+    }
     if (format === "message" && !plain.trim() && postKind === "post") {
-      return "Введите текст публикации";
+      if (!(wordpressChannels.length > 0 && (wordpressTitle.trim() || media.length > 0))) {
+        return "Введите текст публикации";
+      }
     }
     if ((format === "story" || format === "short_video") && !html.trim() && media.length === 0) {
       return "Добавьте медиа или подпись";
@@ -3021,6 +3042,26 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
                 Статья Telegram будет опубликована только в Telegram. Остальные выбранные каналы
                 получат ошибку при публикации — снимите их или переключитесь на «Сообщение».
               </p>
+            )}
+
+            {wordpressChannels.length > 0 && postKind === "post" && format !== "video" && format !== "shorts" && format !== "story" && format !== "short_video" && (
+              <label className="mb-3 block">
+                <span className="mb-1 block text-xs font-medium text-zinc-600">
+                  Заголовок WordPress <span className="text-red-500">*</span>
+                </span>
+                <input
+                  type="text"
+                  value={wordpressTitle}
+                  maxLength={200}
+                  disabled={composerLocked}
+                  onChange={(event) => {
+                    setWordpressTitle(event.target.value);
+                    markDirty();
+                  }}
+                  placeholder="Заголовок записи на сайте"
+                  className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm"
+                />
+              </label>
             )}
 
             {(format === "video" || format === "shorts") && (

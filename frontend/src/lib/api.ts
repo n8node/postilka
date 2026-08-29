@@ -2048,7 +2048,8 @@ export type ChannelProvider =
   | "rutube"
   | "dzen"
   | "youtube"
-  | "photochka";
+  | "photochka"
+  | "wordpress";
 
 export type ChannelMetadata = {
   provider_title?: string;
@@ -2176,6 +2177,8 @@ export type ChannelProviderInfo = {
   telegram_business_stories_enabled: boolean;
   photochka_enabled?: boolean;
   photochka_connect_help_text?: string;
+  wordpress_enabled?: boolean;
+  wordpress_connect_help_text?: string;
   business_connect_help_text?: string;
   connect_help_text: string;
   connect_help_url: string;
@@ -2387,6 +2390,20 @@ export function connectPhotochkaChannel(apiKey: string) {
     {
       method: "POST",
       body: JSON.stringify({ api_key: apiKey }),
+    },
+  );
+}
+
+export function connectWordPressChannel(payload: {
+  site_url: string;
+  username: string;
+  application_password: string;
+}) {
+  return apiFetch<{ connected: ChannelListItem[]; skipped?: string[] }>(
+    "/channels/wordpress/connect",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
     },
   );
 }

@@ -13,6 +13,7 @@ import (
 	oauthclient "github.com/postilka/postilka/internal/oauth"
 	"github.com/postilka/postilka/internal/photochka"
 	"github.com/postilka/postilka/internal/repository"
+	"github.com/postilka/postilka/internal/wordpress"
 )
 
 func channelPostModeLabel(ch model.Channel) string {
@@ -27,6 +28,9 @@ func channelPostModeLabel(ch model.Channel) string {
 	}
 	if ch.Provider == model.ChannelProviderPhotochka {
 		return "API-ключ"
+	}
+	if ch.Provider == model.ChannelProviderWordPress {
+		return "Пароль приложения"
 	}
 	if ch.Provider != model.ChannelProviderMAX {
 	if ch.Provider == model.ChannelProviderTelegram {
@@ -423,6 +427,62 @@ func (s *ChannelService) VerifyAndRefresh(
 			ch.Name = display
 		} else if username != "" {
 			ch.Name = "@" + username
+		}
+
+	case model.ChannelProviderWordPress:
+		token, err := resolveChannelPublishToken(ctx, &ch, s.channels, s.cipher, s.socialSettings)
+		if err != nil {
+			return nil, err
+		}
+		if s.wordpress == nil {
+			verifyErr = fmt.Errorf("интеграция WordPress недоступна")
+			break
+		}
+		siteURL := strings.TrimSpace(ch.Metadata.PublicURL)
+		username := strings.TrimSpace(ch.BotUsername)
+		if siteURL == "" || username == "" {
+			verifyErr = fmt.Errorf("канал WordPress нужно переподключить")
+			break
+		}
+		site, err := s.wordpress.SiteInfo(ctx, siteURL)
+		if err != nil {
+			if errors.Is(err, wordpress.ErrUnauthorized) {
+				verifyErr = fmt.Errorf("доступ к WordPress недействителен — переподключите канал")
+			} else {
+				verifyErr = err
+			}
+			break
+		}
+		me, err := s.wordpress.Me(ctx, siteURL, username, token)
+		if err != nil {
+			if errors.Is(err, wordpress.ErrUnauthorized) {
+				verifyErr = fmt.Errorf("доступ к WordPress недействителен — переподключите канал")
+			} else {
+				verifyErr = err
+			}
+			break
+		}
+		if !me.CanEditPosts() {
+			verifyErr = fmt.Errorf("у пользователя нет права создавать записи WordPress")
+			break
+		}
+		name := strings.TrimSpace(site.Name)
+		if name == "" {
+			name = strings.TrimSpace(me.Name)
+		}
+		if name != "" {
+			ch.Name = name
+		}
+		canPost := true
+		meta = model.ChannelMetadata{
+			ProviderTitle: name,
+			PublicURL:     siteURL,
+			CanPost:       &canPost,
+		}
+		if icon := strings.TrimSpace(site.SiteIconURL); icon != "" {
+			meta = mergeChannelAvatar(meta, icon)
+		} else if avatar := me.AvatarURL(); avatar != "" {
+			meta = mergeChannelAvatar(meta, avatar)
 		}
 
 	default:

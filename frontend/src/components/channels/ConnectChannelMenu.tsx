@@ -17,6 +17,7 @@ import { ConnectDzenDialog } from "./ConnectDzenDialog";
 import { ConnectYouTubeDialog } from "./ConnectYouTubeDialog";
 import { ConnectTelegramBusinessDialog } from "./ConnectTelegramBusinessDialog";
 import { ConnectPhotochkaDialog } from "./ConnectPhotochkaDialog";
+import { ConnectWordPressDialog } from "./ConnectWordPressDialog";
 
 const PROVIDER_LABELS: Partial<Record<ChannelProvider, string>> = {
   telegram: "Telegram",
@@ -26,6 +27,7 @@ const PROVIDER_LABELS: Partial<Record<ChannelProvider, string>> = {
   dzen: "Дзен",
   youtube: "YouTube",
   photochka: "Photochka",
+  wordpress: "WordPress",
 };
 
 type ConnectMenuItem = {
@@ -81,6 +83,9 @@ export function ConnectChannelMenu({ onConnected }: ConnectChannelMenuProps) {
   }
   if (providerInfo?.photochka_enabled !== false) {
     enabledProviders.push({ key: "photochka", label: "Photochka" });
+  }
+  if (providerInfo?.wordpress_enabled !== false) {
+    enabledProviders.push({ key: "wordpress", label: "WordPress" });
   }
 
   function pickProvider(key: ChannelProvider | "telegram_business") {
@@ -179,6 +184,12 @@ export function ConnectChannelMenu({ onConnected }: ConnectChannelMenuProps) {
 
       <ConnectPhotochkaDialog
         open={activeProvider === "photochka"}
+        onClose={() => setActiveProvider(null)}
+        onConnected={handleConnected}
+      />
+
+      <ConnectWordPressDialog
+        open={activeProvider === "wordpress"}
         onClose={() => setActiveProvider(null)}
         onConnected={handleConnected}
       />

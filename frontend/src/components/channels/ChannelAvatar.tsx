@@ -57,7 +57,7 @@ export function ChannelAvatar({
   const proxyUrl = channelId ? channelProxyAvatarURL(channelId, cacheKey) : null;
   const canProxy = Boolean(
     channelId &&
-      (provider === "telegram" || provider === "max" || provider === "youtube" || provider === "photochka") &&
+      (provider === "telegram" || provider === "max" || provider === "youtube" || provider === "photochka" || provider === "wordpress") &&
       proxyUrl,
   );
 

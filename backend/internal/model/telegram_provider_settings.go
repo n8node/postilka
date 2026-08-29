@@ -23,6 +23,8 @@ type ChannelProviderInfo struct {
 	TelegramBusinessStoriesEnabled  bool   `json:"telegram_business_stories_enabled"`
 	PhotochkaEnabled                bool   `json:"photochka_enabled"`
 	PhotochkaConnectHelpText        string `json:"photochka_connect_help_text,omitempty"`
+	WordPressEnabled                bool   `json:"wordpress_enabled"`
+	WordPressConnectHelpText        string `json:"wordpress_connect_help_text,omitempty"`
 	BusinessConnectHelpText         string `json:"business_connect_help_text,omitempty"`
 	ConnectHelpText                 string `json:"connect_help_text"`
 	ConnectHelpURL          string `json:"connect_help_url"`

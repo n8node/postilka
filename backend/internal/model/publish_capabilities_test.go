@@ -54,3 +54,13 @@ func TestPublishCapabilitiesForChannel_MAXHidesExtras(t *testing.T) {
 		t.Fatalf("max extras: comment=%v location=%v", caps.ComposerFirstComment, caps.ComposerLocation)
 	}
 }
+
+func TestPublishCapabilitiesForChannel_WordPressArticle(t *testing.T) {
+	caps := PublishCapabilitiesForChannel(Channel{Provider: ChannelProviderWordPress})
+	if !caps.Text || !caps.RichText || !caps.ComposerMedia {
+		t.Fatalf("wordpress caps: %+v", caps)
+	}
+	if len(caps.Formats) != 1 || caps.Formats[0] != "article" {
+		t.Fatalf("wordpress formats: %#v", caps.Formats)
+	}
+}

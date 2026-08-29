@@ -441,6 +441,20 @@ func validatePostTargets(ctx context.Context, channels *repository.ChannelReposi
 				return fmt.Errorf("%w: Photochka принимает не более %d вложений", ErrInvalidPost, maxMedia)
 			}
 		}
+		if channel.Provider == model.ChannelProviderWordPress {
+			if strings.TrimSpace(content.Title) == "" &&
+				strings.TrimSpace(readableProviderText(content)) == "" &&
+				len(post.Media) == 0 {
+				return fmt.Errorf("%w: для WordPress укажите заголовок, текст или изображение", ErrInvalidPost)
+			}
+			maxMedia := channel.Provider.PublishCapabilities().MaxMedia
+			if maxMedia <= 0 {
+				maxMedia = 10
+			}
+			if len(post.Media) > maxMedia {
+				return fmt.Errorf("%w: WordPress принимает не более %d вложений", ErrInvalidPost, maxMedia)
+			}
+		}
 	}
 	return nil
 }
@@ -621,6 +635,9 @@ func mergePostTarget(
 		if override.Buttons != nil {
 			content.Buttons = override.Buttons
 		}
+		if override.Title != "" {
+			content.Title = override.Title
+		}
 		if override.RichMessage != nil {
 			content.RichMessage = override.RichMessage
 		}
@@ -698,6 +715,17 @@ func validateContentForChannel(content model.PostContent, channel *model.Channel
 		}
 		if len(content.Buttons) > 0 {
 			return fmt.Errorf("%w: inline-кнопки не поддерживаются Photochka", ErrInvalidPost)
+		}
+	}
+	if channel.Provider == model.ChannelProviderWordPress {
+		if format != "article" && format != "message" {
+			return fmt.Errorf("%w: формат %s не поддерживается WordPress", ErrInvalidPost, format)
+		}
+		if textLength > 50000 {
+			return fmt.Errorf("%w: текст WordPress не должен превышать 50000 символов", ErrInvalidPost)
+		}
+		if len(content.Buttons) > 0 {
+			return fmt.Errorf("%w: inline-кнопки не поддерживаются WordPress", ErrInvalidPost)
 		}
 	}
 	return nil
@@ -854,14 +882,31 @@ func ValidatePostContent(content model.PostContent, settings model.PostSettings)
 			return err
 		}
 	case "rich_message", "article":
-		if content.RichMessage == nil {
-			return fmt.Errorf("%w: укажите структуру rich_message", ErrInvalidPost)
+		if content.RichMessage != nil {
+			if err := ValidateTelegramRichMessage(*content.RichMessage); err != nil {
+				return err
+			}
+			if err := validateTelegramButtons(content.Buttons); err != nil {
+				return err
+			}
+			break
 		}
-		if err := ValidateTelegramRichMessage(*content.RichMessage); err != nil {
-			return err
+		title := strings.TrimSpace(content.Title)
+		text := strings.TrimSpace(content.Text)
+		if title == "" && text == "" {
+			return fmt.Errorf("%w: укажите заголовок или текст статьи", ErrInvalidPost)
 		}
-		if err := validateTelegramButtons(content.Buttons); err != nil {
-			return err
+		if utf8.RuneCountInString(text) > 50000 {
+			return fmt.Errorf("%w: текст статьи не должен превышать 50000 символов", ErrInvalidPost)
+		}
+		parseMode := strings.ToUpper(strings.TrimSpace(content.ParseMode))
+		if parseMode == "HTML" && text != "" {
+			if err := validateTelegramHTML(content.Text); err != nil {
+				return err
+			}
+		}
+		if len(content.Buttons) > 0 {
+			return fmt.Errorf("%w: inline-кнопки в этом формате статьи не поддерживаются", ErrInvalidPost)
 		}
 	case "story", "short_video":
 		text := strings.TrimSpace(content.Text)

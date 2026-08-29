@@ -20,7 +20,8 @@ const (
 	ChannelProviderRutube   ChannelProvider = "rutube"
 	ChannelProviderDzen     ChannelProvider = "dzen"
 	ChannelProviderYouTube  ChannelProvider = "youtube"
-	ChannelProviderPhotochka ChannelProvider = "photochka"
+	ChannelProviderPhotochka  ChannelProvider = "photochka"
+	ChannelProviderWordPress  ChannelProvider = "wordpress"
 )
 
 func (p ChannelProvider) Label() string {
@@ -41,6 +42,8 @@ func (p ChannelProvider) Label() string {
 		return "YouTube"
 	case ChannelProviderPhotochka:
 		return "Photochka"
+	case ChannelProviderWordPress:
+		return "WordPress"
 	default:
 		return string(p)
 	}
@@ -169,6 +172,12 @@ type TelegramDiscoverRequest struct {
 
 type PhotochkaConnectRequest struct {
 	APIKey string `json:"api_key"`
+}
+
+type WordPressConnectRequest struct {
+	SiteURL             string `json:"site_url"`
+	Username            string `json:"username"`
+	ApplicationPassword string `json:"application_password"`
 }
 
 const DefaultChannelTestMessage = "✅ Тестовое сообщение от Postilka. Канал подключён корректно."

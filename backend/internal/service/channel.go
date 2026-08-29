@@ -12,13 +12,15 @@ import (
 	oauthclient "github.com/postilka/postilka/internal/oauth"
 	"github.com/postilka/postilka/internal/photochka"
 	"github.com/postilka/postilka/internal/repository"
+	"github.com/postilka/postilka/internal/wordpress"
 )
 
 var (
 	ErrTelegramProviderDisabled = errors.New("telegram channel provider disabled")
 	ErrInvalidBotToken          = errors.New("invalid bot token")
-	ErrInvalidPhotochkaAPIKey   = errors.New("invalid photochka api key")
-	ErrChannelAlreadyConnected  = errors.New("channel already connected")
+	ErrInvalidPhotochkaAPIKey     = errors.New("invalid photochka api key")
+	ErrInvalidWordPressCredentials = errors.New("invalid wordpress credentials")
+	ErrChannelAlreadyConnected    = errors.New("channel already connected")
 )
 
 type ChannelService struct {
@@ -28,6 +30,7 @@ type ChannelService struct {
 	botClient      *TelegramBotClient
 	maxClient      *oauthclient.MAXBotClient
 	photochka      *photochka.Client
+	wordpress      *wordpress.Client
 	wsSvc          *WorkspaceService
 	quota          *QuotaService
 	cipher         *SecretCipher
@@ -52,6 +55,7 @@ func NewChannelService(
 		botClient:      botClient,
 		maxClient:      oauthclient.NewMAXBotClient(),
 		photochka:      photochkaClient,
+		wordpress:      wordpress.NewClient(),
 		wsSvc:          wsSvc,
 		quota:          quota,
 		cipher:         cipher,
