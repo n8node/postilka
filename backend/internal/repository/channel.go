@@ -497,13 +497,38 @@ func (r *ChannelRepository) UpdateChannelMetadata(
 }
 
 func (r *ChannelRepository) Delete(ctx context.Context, workspaceID, channelID string) error {
-	const q = `DELETE FROM channels WHERE id = $1 AND workspace_id = $2`
-	ct, err := r.pool.Exec(ctx, q, channelID, workspaceID)
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	const detachQ = `
+		WITH removed AS (
+			DELETE FROM post_targets
+			WHERE workspace_id = $1 AND channel_id = $2
+			RETURNING post_id
+		)
+		UPDATE posts
+		SET status = 'canceled',
+		    due_at = NULL,
+		    last_error = NULL,
+		    updated_at = NOW()
+		WHERE workspace_id = $1
+		  AND id IN (SELECT post_id FROM removed)
+		  AND status IN ('draft', 'pending_approval', 'scheduled', 'publishing', 'failed')
+		  AND NOT EXISTS (SELECT 1 FROM post_targets pt WHERE pt.post_id = posts.id)
+	`
+	if _, err := tx.Exec(ctx, detachQ, workspaceID, channelID); err != nil {
+		return err
+	}
+
+	ct, err := tx.Exec(ctx, `DELETE FROM channels WHERE id = $1 AND workspace_id = $2`, channelID, workspaceID)
 	if err != nil {
 		return err
 	}
 	if ct.RowsAffected() == 0 {
 		return ErrNotFound
 	}
-	return nil
+	return tx.Commit(ctx)
 }

@@ -193,12 +193,13 @@ func (c *TelegramBotClient) doRequestWithClient(
 	}
 
 	cfg, err := c.providerSettings.GetEffective(ctx)
-	if err != nil || !cfg.ProxyEnabled || len(cfg.ProxyURLs) == 0 {
-		return makeRequest(ctx, client)
-	}
-
+	proxyEnabled := err == nil && cfg.ProxyEnabled && len(cfg.ProxyURLs) > 0
 	var proxies []string
-	proxies = buildProxyChain(c.localProxy, cfg.ProxyActiveURL, cfg.ProxyURLs)
+	if proxyEnabled {
+		proxies = telegramOutboundProxies(c.localProxy, true, cfg.ProxyActiveURL, cfg.ProxyURLs)
+	} else {
+		proxies = telegramOutboundProxies(c.localProxy, false, "", nil)
+	}
 	if len(proxies) == 0 {
 		return makeRequest(ctx, client)
 	}
@@ -231,6 +232,21 @@ func (c *TelegramBotClient) doRequestWithClient(
 		return nil, lastErr
 	}
 	return nil, errors.New("proxy request failed")
+}
+
+func (c *TelegramBotClient) ProbeAPI(ctx context.Context) error {
+	if c == nil {
+		return errors.New("telegram client unavailable")
+	}
+	resp, err := c.doRequest(ctx, http.MethodGet, "https://api.telegram.org", "", nil)
+	if err != nil {
+		return sanitizeTelegramError(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 500 {
+		return errors.New("нет связи")
+	}
+	return nil
 }
 
 func (c *TelegramBotClient) SendMessage(ctx context.Context, token, chatID, text string) error {

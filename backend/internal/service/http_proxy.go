@@ -129,6 +129,16 @@ func proxyOrder(activeURL string, urls []string) []string {
 	return out
 }
 
+// telegramOutboundProxies always includes the local Docker hop when set,
+// even if the admin proxy toggle is off. User-channel traffic must still
+// reach api.telegram.org from regions where Telegram is blocked.
+func telegramOutboundProxies(localHop string, proxyEnabled bool, activeURL string, urls []string) []string {
+	if proxyEnabled {
+		return buildProxyChain(localHop, activeURL, urls)
+	}
+	return buildProxyChain(localHop, "", nil)
+}
+
 // buildProxyChain prefers the local Docker hop (gost on host), then admin-configured upstreams.
 func buildProxyChain(localHop, activeURL string, urls []string) []string {
 	ordered := proxyOrder(activeURL, normalizeProxyURLs(urls))

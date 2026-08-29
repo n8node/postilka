@@ -47,6 +47,7 @@ type OpsDigestService struct {
 	yandex     *YandexGptConfigService
 	social     *SocialProviderSettingsService
 	tgProvider *TelegramProviderSettingsService
+	botClient  *TelegramBotClient
 	cipher     *SecretCipher
 	maxClient  *oauthclient.MAXBotClient
 	photochka  *photochka.Client
@@ -68,6 +69,7 @@ func NewOpsDigestService(
 	yandex *YandexGptConfigService,
 	social *SocialProviderSettingsService,
 	tgProvider *TelegramProviderSettingsService,
+	botClient *TelegramBotClient,
 	cipher *SecretCipher,
 	photochkaClient *photochka.Client,
 	logger *slog.Logger,
@@ -89,6 +91,7 @@ func NewOpsDigestService(
 		yandex:     yandex,
 		social:     social,
 		tgProvider: tgProvider,
+		botClient:  botClient,
 		cipher:     cipher,
 		maxClient:  oauthclient.NewMAXBotClient(),
 		photochka:  photochkaClient,
@@ -453,6 +456,21 @@ func (s *OpsDigestService) probeTelegramChannelProvider(
 	}
 	if !enabled(cfg) {
 		return skipCheck(check, "не настроено")
+	}
+	if s.botClient != nil {
+		if err := s.botClient.ProbeAPI(ctx); err != nil {
+			return failCheck(check, errors.New("нет связи"))
+		}
+		return okCheck(check)
+	}
+	if s.telegram != nil {
+		if err := s.telegram.ProbeBotAPI(ctx); err != nil {
+			if errors.Is(err, ErrTelegramNotConfigured) {
+				return skipCheck(check, "не настроено")
+			}
+			return failCheck(check, errors.New("нет связи"))
+		}
+		return okCheck(check)
 	}
 	if err := s.pingURL(ctx, "https://api.telegram.org"); err != nil {
 		return failCheck(check, errors.New("нет связи"))

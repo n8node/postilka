@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/postilka/postilka/internal/middleware"
 	"github.com/postilka/postilka/internal/model"
 	"github.com/postilka/postilka/internal/repository"
@@ -252,10 +254,24 @@ func writeChannelError(w http.ResponseWriter, err error) {
 	case errors.Is(err, service.ErrCryptoUnavailable):
 		writeError(w, http.StatusInternalServerError, "Шифрование недоступно")
 	default:
+		if isChannelConstraintError(err) {
+			writeError(w, http.StatusConflict, "Нельзя удалить канал: к нему привязаны публикации")
+			return
+		}
 		msg := err.Error()
 		if msg == "" {
 			msg = "Не удалось выполнить операцию с каналом"
 		}
 		writeError(w, http.StatusBadRequest, msg)
 	}
+}
+
+func isChannelConstraintError(err error) bool {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && (pgErr.Code == "23503" || pgErr.Code == "23505") {
+		return true
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "post_targets_channel_fk") ||
+		strings.Contains(msg, "violates foreign key")
 }

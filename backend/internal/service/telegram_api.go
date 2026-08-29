@@ -50,11 +50,13 @@ func (s *TelegramService) doTelegramRequest(
 
 	client := s.client
 	cfg, err := s.settings.GetEffective(ctx)
-	if err != nil || !cfg.ProxyEnabled || len(cfg.ProxyURLs) == 0 {
-		return makeRequest(client)
+	proxyEnabled := err == nil && cfg.ProxyEnabled && len(cfg.ProxyURLs) > 0
+	var proxies []string
+	if proxyEnabled {
+		proxies = telegramOutboundProxies(s.localProxy, true, cfg.ProxyActiveURL, cfg.ProxyURLs)
+	} else {
+		proxies = telegramOutboundProxies(s.localProxy, false, "", nil)
 	}
-
-	proxies := buildProxyChain(s.localProxy, cfg.ProxyActiveURL, cfg.ProxyURLs)
 	if len(proxies) == 0 {
 		return makeRequest(client)
 	}

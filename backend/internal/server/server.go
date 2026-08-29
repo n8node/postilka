@@ -190,7 +190,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	opsDigestSvc := service.NewOpsDigestService(
 		telegramSvc, telegramSettingsSvc, opsStateRepo, postRepo, db, mailSvc, smtpSettingsSvc,
 		storageSettingsSvc, kieConfigSvc, kieVideoConfigSvc, yandexGptConfigSvc, socialProviderSettingsSvc,
-		telegramProviderSettingsSvc, secretCipher, photochkaClient, logger,
+		telegramProviderSettingsSvc, telegramBotClient, secretCipher, photochkaClient, logger,
 	)
 	telegramHandler := handler.NewTelegramSettingsHandler(telegramSettingsSvc, telegramSvc, opsDigestSvc)
 	yandexGptConfigHandler := handler.NewYandexGptConfigHandler(yandexGptConfigSvc)

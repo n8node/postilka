@@ -37,6 +37,13 @@ func TestHTTPClientForProxyPercentInPassword(t *testing.T) {
 	}
 }
 
+func TestTelegramOutboundProxiesKeepsLocalHopWhenAdminProxyOff(t *testing.T) {
+	got := telegramOutboundProxies("http://127.0.0.1:8889", false, "http://unused:3128", []string{"http://unused:3128"})
+	if len(got) != 1 || got[0] != "http://127.0.0.1:8889" {
+		t.Fatalf("got %v", got)
+	}
+}
+
 func TestBuildProxyChainPrefersLocalHopThenAdminURLs(t *testing.T) {
 	got := buildProxyChain(
 		"http://host.docker.internal:8889",
