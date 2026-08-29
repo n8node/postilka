@@ -26,6 +26,13 @@ type Client struct {
 	httpClient *http.Client
 }
 
+func (c *Client) IntegrationBaseURL() string {
+	if c == nil {
+		return ""
+	}
+	return c.baseURL
+}
+
 func NewClient(baseURL string) *Client {
 	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
 	if baseURL == "" {

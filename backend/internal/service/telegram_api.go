@@ -152,6 +152,24 @@ func (s *TelegramService) telegramSendMessage(ctx context.Context, token, chatID
 	return sanitizeTelegramError(err)
 }
 
+func (s *TelegramService) telegramSendThreadHTML(ctx context.Context, token, chatID, text string, topicID int) error {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return nil
+	}
+	payload := map[string]any{
+		"chat_id":                  telegramChatIDParam(chatID),
+		"text":                     text,
+		"parse_mode":               "HTML",
+		"disable_web_page_preview": true,
+	}
+	if topicID > 0 {
+		payload["message_thread_id"] = topicID
+	}
+	_, err := s.telegramAPI(ctx, token, "sendMessage", payload)
+	return sanitizeTelegramError(err)
+}
+
 var telegramTokenInError = regexp.MustCompile(`bot\d+:[A-Za-z0-9_-]+`)
 
 func sanitizeTelegramError(err error) error {

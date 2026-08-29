@@ -26,6 +26,54 @@ func NewMailService(smtpSettings *SMTPSettingsService) *MailService {
 	return &MailService{smtpSettings: smtpSettings}
 }
 
+// Probe checks SMTP reachability without sending a message.
+func (m *MailService) Probe(ctx context.Context) error {
+	cfg, err := m.smtpSettings.GetEffective(ctx)
+	if err != nil {
+		return err
+	}
+	if !cfg.Enabled {
+		return ErrEmailDisabled
+	}
+	if strings.TrimSpace(cfg.Host) == "" || cfg.Port <= 0 {
+		return ErrSMTPNotConfigured
+	}
+
+	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
+	dialer := &net.Dialer{Timeout: 8 * time.Second}
+
+	var conn net.Conn
+	switch cfg.Encryption {
+	case model.SMTPEncryptionSSL:
+		tlsCfg := &tls.Config{ServerName: cfg.Host}
+		conn, err = tls.DialWithDialer(dialer, "tcp", addr, tlsCfg)
+	default:
+		conn, err = dialer.DialContext(ctx, "tcp", addr)
+	}
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	client, err := smtp.NewClient(conn, cfg.Host)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+
+	if cfg.Encryption == model.SMTPEncryptionTLS {
+		if err := client.StartTLS(&tls.Config{ServerName: cfg.Host}); err != nil {
+			return err
+		}
+	}
+	if cfg.Auth && strings.TrimSpace(cfg.Username) != "" {
+		if err := client.Auth(smtp.PlainAuth("", cfg.Username, cfg.Password, cfg.Host)); err != nil {
+			return err
+		}
+	}
+	return client.Quit()
+}
+
 func (m *MailService) Send(ctx context.Context, to, subject, bodyHTML string) error {
 	cfg, err := m.smtpSettings.GetEffective(ctx)
 	if err != nil {

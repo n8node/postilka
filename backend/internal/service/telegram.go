@@ -156,6 +156,23 @@ func (s *TelegramService) send(ctx context.Context, cfg model.TelegramSettings, 
 	return s.telegramSendMessage(ctx, token, chatID, text)
 }
 
+// SendDigestMessage posts an HTML ops digest into a forum topic, bypassing the notification queue.
+func (s *TelegramService) SendDigestMessage(ctx context.Context, chatID, text string, topicID int) error {
+	cfg, err := s.settings.GetEffective(ctx)
+	if err != nil {
+		return err
+	}
+	token := strings.TrimSpace(cfg.BotToken)
+	chatID = strings.TrimSpace(chatID)
+	if token == "" || chatID == "" {
+		return ErrTelegramNotConfigured
+	}
+	if strings.TrimSpace(text) == "" {
+		return errors.New("empty message")
+	}
+	return s.telegramSendThreadHTML(ctx, token, chatID, text, topicID)
+}
+
 func applyTelegramTemplate(tpl string, vars map[string]string) string {
 	out := tpl
 	for k, v := range vars {

@@ -636,6 +636,17 @@ func (r *PostRepository) ClaimDue(ctx context.Context, limit int) ([]string, err
 	return ids, rows.Err()
 }
 
+func (r *PostRepository) CountPublishBacklog(ctx context.Context) (int, error) {
+	var n int
+	err := r.pool.QueryRow(ctx, `
+		SELECT COUNT(*)::int
+		FROM posts
+		WHERE (status = 'scheduled' AND due_at IS NOT NULL AND due_at < NOW() - INTERVAL '2 minutes')
+		   OR (status = 'publishing' AND updated_at < NOW() - INTERVAL '10 minutes')
+	`).Scan(&n)
+	return n, err
+}
+
 func (r *PostRepository) ResetStaleTargets(ctx context.Context, postID string) error {
 	_, err := r.pool.Exec(ctx, `
 		UPDATE post_targets

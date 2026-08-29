@@ -52,6 +52,7 @@ func (s *TelegramSettingsService) GetEffective(ctx context.Context) (model.Teleg
 	if err != nil {
 		return model.TelegramSettings{}, err
 	}
+	model.NormalizeTelegramDigestSettings(&rec.Config)
 	return rec.Config, nil
 }
 
@@ -60,6 +61,7 @@ func (s *TelegramSettingsService) GetAdminView(ctx context.Context) (*model.Tele
 	if err != nil {
 		return nil, err
 	}
+	model.NormalizeTelegramDigestSettings(&rec.Config)
 	return buildTelegramAdminView(rec, s.currentRuntime()), nil
 }
 
@@ -83,6 +85,7 @@ func (s *TelegramSettingsService) Update(ctx context.Context, req model.Telegram
 	if !cfg.ProxyEnabled {
 		cfg.ProxyActiveURL = ""
 	}
+	model.NormalizeTelegramDigestSettings(&cfg)
 
 	if err := validateTelegramSettings(cfg); err != nil {
 		return nil, err
@@ -133,6 +136,15 @@ func validateTelegramSettings(cfg model.TelegramSettings) error {
 	if cfg.Enabled {
 		if strings.TrimSpace(cfg.ChatID) == "" {
 			return fmt.Errorf("%w: chat_id required when notifications enabled", ErrInvalidTelegramSettings)
+		}
+	}
+	model.NormalizeTelegramDigestSettings(&cfg)
+	if cfg.DigestEnabled {
+		if strings.TrimSpace(cfg.DigestChatID) == "" {
+			return fmt.Errorf("%w: укажите ID группы для сводки мониторинга", ErrInvalidTelegramSettings)
+		}
+		if cfg.DigestTopicID <= 0 {
+			return fmt.Errorf("%w: укажите ID темы для сводки мониторинга", ErrInvalidTelegramSettings)
 		}
 	}
 	return nil

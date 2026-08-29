@@ -1819,6 +1819,10 @@ export type TelegramSettings = {
   wallet_topup_template: string;
   notify_support: boolean;
   support_template: string;
+  digest_enabled: boolean;
+  digest_chat_id: string;
+  digest_topic_id: number;
+  digest_hour: number;
 };
 
 export type TelegramAdminView = {
@@ -1890,6 +1894,12 @@ export function restartAdminTelegramBot() {
 
 export function sendAdminTelegramTest() {
   return apiFetch<TelegramTestResult>("/admin/telegram/test", {
+    method: "POST",
+  });
+}
+
+export function sendAdminTelegramDigestTest() {
+  return apiFetch<TelegramTestResult>("/admin/telegram/digest/test", {
     method: "POST",
   });
 }

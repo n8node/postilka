@@ -1,6 +1,9 @@
 package model
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 type TelegramSettings struct {
 	Enabled               bool     `json:"enabled"`
@@ -20,6 +23,10 @@ type TelegramSettings struct {
 	WalletTopupTemplate   string   `json:"wallet_topup_template"`
 	NotifySupport         bool     `json:"notify_support"`
 	SupportTemplate       string   `json:"support_template"`
+	DigestEnabled         bool     `json:"digest_enabled"`
+	DigestChatID          string   `json:"digest_chat_id"`
+	DigestTopicID         int      `json:"digest_topic_id"`
+	DigestHour            int      `json:"digest_hour"`
 }
 
 type TelegramSettingsRecord struct {
@@ -80,5 +87,19 @@ func DefaultTelegramSettings() TelegramSettings {
 		WalletTopupTemplate:   "💳 Пополнение кошелька\nПользователь: {userEmail} ({userName})\nСумма пополнения: {amount} {currency}\nТекущий баланс: {balance} {currency}",
 		NotifySupport:         false,
 		SupportTemplate:       "🎫 Тикет поддержки\nПользователь: {userEmail}\nТема: {subject}",
+		DigestEnabled:         false,
+		DigestChatID:          "",
+		DigestTopicID:         0,
+		DigestHour:            9,
+	}
+}
+
+func NormalizeTelegramDigestSettings(cfg *TelegramSettings) {
+	if cfg == nil {
+		return
+	}
+	cfg.DigestChatID = strings.TrimSpace(cfg.DigestChatID)
+	if cfg.DigestHour < 0 || cfg.DigestHour > 23 {
+		cfg.DigestHour = 9
 	}
 }

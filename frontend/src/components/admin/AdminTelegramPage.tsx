@@ -9,6 +9,7 @@ import {
   fetchAdminTelegramStatus,
   restartAdminTelegramBot,
   retryAdminTelegramQueueItem,
+  sendAdminTelegramDigestTest,
   sendAdminTelegramTest,
   updateAdminTelegramSettings,
   type TelegramAdminView,
@@ -37,6 +38,10 @@ const DEFAULT_SETTINGS: TelegramSettings = {
   wallet_topup_template: "",
   notify_support: false,
   support_template: "",
+  digest_enabled: false,
+  digest_chat_id: "",
+  digest_topic_id: 0,
+  digest_hour: 9,
 };
 
 const DEFAULT_RUNTIME: TelegramRuntimeStatus = {
@@ -77,6 +82,9 @@ export function AdminTelegramPage({ embedded = false }: { embedded?: boolean }) 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [digestTesting, setDigestTesting] = useState(false);
+  const [digestTestMessage, setDigestTestMessage] = useState<string | null>(null);
+  const [digestTestOk, setDigestTestOk] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [testMessage, setTestMessage] = useState<string | null>(null);
@@ -104,6 +112,15 @@ export function AdminTelegramPage({ embedded = false }: { embedded?: boolean }) 
       proxy_active_url: proxyActive,
       proxy_auto_failover: data.settings.proxy_auto_failover ?? true,
       proxy_enabled: data.settings.proxy_enabled ?? false,
+      digest_enabled: data.settings.digest_enabled ?? false,
+      digest_chat_id: data.settings.digest_chat_id ?? "",
+      digest_topic_id: data.settings.digest_topic_id ?? 0,
+      digest_hour:
+        Number.isFinite(data.settings.digest_hour) &&
+        data.settings.digest_hour >= 0 &&
+        data.settings.digest_hour <= 23
+          ? data.settings.digest_hour
+          : 9,
     });
     setTokenSet(data.bot_token_set);
     setTokenHint(data.bot_token_hint || "");
@@ -223,6 +240,31 @@ export function AdminTelegramPage({ embedded = false }: { embedded?: boolean }) 
       setError(err instanceof ApiError ? err.message : "Не удалось отправить тест");
     } finally {
       setTesting(false);
+    }
+  }
+
+  async function handleDigestTest() {
+    setDigestTesting(true);
+    setError(null);
+    setDigestTestMessage(null);
+    setDigestTestOk(null);
+    try {
+      const saved = await updateAdminTelegramSettings({
+        settings,
+        ...(tokenInput.trim() ? { bot_token: tokenInput.trim() } : {}),
+      });
+      applyView(saved);
+      setTokenInput("");
+      const result = await sendAdminTelegramDigestTest();
+      setDigestTestOk(result.ok);
+      setDigestTestMessage(result.message);
+      if (!result.ok) {
+        setError(result.message);
+      }
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Не удалось отправить сводку");
+    } finally {
+      setDigestTesting(false);
     }
   }
 
@@ -447,6 +489,95 @@ export function AdminTelegramPage({ embedded = false }: { embedded?: boolean }) 
           />
           Автоматически пробовать следующий прокси при ошибке
         </label>
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
+        <h2 className="font-medium text-slate-900">Ежедневная сводка мониторинга</h2>
+        <p className="text-xs text-slate-500">
+          Один пост в сутки в закрытую тему группы: система отдельно, соцсети отдельно.
+          Без кредитов, балансов и секретов. Тема должна быть закрыта — писать смогут только
+          администраторы (бот и вы). ID темы есть в ссылке на сообщение:
+          t.me/c/ID_ЧАТА/<strong>ID_ТЕМЫ</strong>/ID_СООБЩЕНИЯ.
+        </p>
+
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={settings.digest_enabled}
+            onChange={(e) => patch({ digest_enabled: e.target.checked })}
+            className="rounded border-slate-300"
+          />
+          Отправлять ежедневную сводку
+        </label>
+
+        <div>
+          <label className="mb-1 block text-sm font-medium text-slate-700">ID группы со сводкой</label>
+          <p className="mb-2 text-xs text-slate-500">
+            Отдельный чат от уведомлений о регистрациях и оплатах. Обычно супергруппа с темами,
+            вид −100…
+          </p>
+          <input
+            type="text"
+            value={settings.digest_chat_id}
+            onChange={(e) => patch({ digest_chat_id: e.target.value })}
+            placeholder="-1003911499538"
+            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+          />
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">ID темы</label>
+            <input
+              type="number"
+              min={1}
+              value={settings.digest_topic_id || ""}
+              onChange={(e) =>
+                patch({ digest_topic_id: Number.parseInt(e.target.value, 10) || 0 })
+              }
+              placeholder="123"
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Час отправки (МСК)</label>
+            <input
+              type="number"
+              min={0}
+              max={23}
+              value={settings.digest_hour}
+              onChange={(e) => {
+                const hour = Number.parseInt(e.target.value, 10);
+                patch({
+                  digest_hour: Number.isFinite(hour)
+                    ? Math.min(23, Math.max(0, hour))
+                    : 9,
+                });
+              }}
+              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+            />
+          </div>
+        </div>
+
+        {digestTestMessage && (
+          <p
+            className={cn(
+              "text-sm",
+              digestTestOk ? "text-emerald-700" : "text-red-600",
+            )}
+          >
+            {digestTestMessage}
+          </p>
+        )}
+        <button
+          type="button"
+          onClick={() => void handleDigestTest()}
+          disabled={digestTesting}
+          className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm hover:bg-slate-50 disabled:opacity-50"
+        >
+          <Send className="h-4 w-4" />
+          {digestTesting ? "Отправка…" : "Отправить сводку сейчас"}
+        </button>
       </section>
 
       <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-6">

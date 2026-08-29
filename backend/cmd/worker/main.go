@@ -120,6 +120,19 @@ func main() {
 	aiBillingSvc := service.NewAIBillingService(quotaSvc, usageRepo, walletRepo, kieSettingsRepo)
 	yandexGptConfigRepo := repository.NewYandexGptConfigRepository(db.Pool)
 	yandexGptConfigSvc := service.NewYandexGptConfigService(yandexGptConfigRepo, cfg, secretCipher)
+	kieConfigSvc := service.NewKieConfigService(kieSettingsRepo, cfg, secretCipher)
+	kieVideoSettingsRepo := repository.NewKieVideoSettingsRepository(db.Pool)
+	kieVideoConfigSvc := service.NewKieVideoConfigService(kieVideoSettingsRepo, cfg, secretCipher)
+	telegramSettingsRepo := repository.NewTelegramSettingsRepository(db.Pool)
+	telegramQueueRepo := repository.NewTelegramNotificationQueueRepository(db.Pool)
+	telegramSettingsSvc := service.NewTelegramSettingsService(telegramSettingsRepo)
+	telegramSvc := service.NewTelegramService(telegramSettingsSvc, telegramQueueRepo, cfg.TelegramLocalProxy, logger)
+	opsStateRepo := repository.NewOpsStateRepository(db.Pool)
+	opsDigestSvc := service.NewOpsDigestService(
+		telegramSvc, telegramSettingsSvc, opsStateRepo, postRepo, db, mailSvc, smtpSettingsSvc,
+		storageSettingsSvc, kieConfigSvc, kieVideoConfigSvc, yandexGptConfigSvc, socialProviderSettingsSvc,
+		secretCipher, photochkaClient, logger,
+	)
 	genRepo := repository.NewAIGenerationRepository(db.Pool)
 	genJobRepo := repository.NewAIGenerationJobRepository(db.Pool)
 	genUploadRepo := repository.NewGenerationSourceUploadRepository(db.Pool)
@@ -146,6 +159,12 @@ func main() {
 			if err := db.Ping(ctx); err != nil {
 				logger.Warn("worker db ping failed", "error", err)
 				continue
+			}
+			if err := opsDigestSvc.TouchWorkerHeartbeat(ctx); err != nil {
+				logger.Warn("ops heartbeat failed", "error", err)
+			}
+			if err := opsDigestSvc.ProcessDue(ctx); err != nil {
+				logger.Warn("ops digest tick failed", "error", err)
 			}
 			if backupRunning.CompareAndSwap(false, true) {
 				go func() {

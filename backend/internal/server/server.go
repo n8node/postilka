@@ -174,7 +174,6 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	backupSvc := service.NewBackupService(backupRepo, objectStorage, cfg, logger)
 	backupHandler := handler.NewBackupHandler(backupSvc)
 	uploadFileSettingsHandler := handler.NewUploadFileSettingsHandler(uploadFileSettingsSvc)
-	telegramHandler := handler.NewTelegramSettingsHandler(telegramSettingsSvc, telegramSvc)
 	telegramProviderHandler := handler.NewTelegramProviderSettingsHandler(telegramProviderSettingsSvc)
 	youtubeProviderHandler := handler.NewYouTubeProviderSettingsHandler(youtubeProviderSettingsSvc)
 	socialProviderHandler := handler.NewSocialProviderSettingsHandler(socialProviderSettingsSvc)
@@ -187,6 +186,13 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	kieVideoConfigSvc := service.NewKieVideoConfigService(kieVideoSettingsRepo, cfg, secretCipher)
 	kieVideoExampleSvc := service.NewKieVideoExampleService(kieVideoConfigSvc, kieVideoExampleRepo, objectStorage)
 	kieVideoExampleSvc.StartWorker(context.Background())
+	opsStateRepo := repository.NewOpsStateRepository(db.Pool)
+	opsDigestSvc := service.NewOpsDigestService(
+		telegramSvc, telegramSettingsSvc, opsStateRepo, postRepo, db, mailSvc, smtpSettingsSvc,
+		storageSettingsSvc, kieConfigSvc, kieVideoConfigSvc, yandexGptConfigSvc, socialProviderSettingsSvc,
+		secretCipher, photochkaClient, logger,
+	)
+	telegramHandler := handler.NewTelegramSettingsHandler(telegramSettingsSvc, telegramSvc, opsDigestSvc)
 	yandexGptConfigHandler := handler.NewYandexGptConfigHandler(yandexGptConfigSvc)
 	kieConfigHandler := handler.NewKieConfigHandler(kieConfigSvc)
 	kieVideoConfigHandler := handler.NewKieVideoConfigHandler(kieVideoConfigSvc, kieVideoExampleSvc)
@@ -639,6 +645,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Get("/telegram/status", telegramHandler.GetStatus)
 				r.Post("/telegram/restart", telegramHandler.Restart)
 				r.Post("/telegram/test", telegramHandler.SendTest)
+				r.Post("/telegram/digest/test", telegramHandler.SendDigestTest)
 				r.Get("/telegram/queue", telegramHandler.ListQueue)
 				r.Post("/telegram/queue/{id}/retry", telegramHandler.RetryQueueItem)
 				r.Get("/invites", adminInviteHandler.List)

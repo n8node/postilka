@@ -107,6 +107,20 @@ func (s *TelegramService) RunHealthCheck(ctx context.Context) model.TelegramBotR
 	return s.checkHealth(ctx)
 }
 
+// ProbeBotAPI calls Telegram getMe using the stored token and proxy, ignoring notification toggle.
+func (s *TelegramService) ProbeBotAPI(ctx context.Context) error {
+	cfg, err := s.settings.GetEffective(ctx)
+	if err != nil {
+		return err
+	}
+	token := strings.TrimSpace(cfg.BotToken)
+	if token == "" {
+		return ErrTelegramNotConfigured
+	}
+	_, err = s.telegramGetMe(ctx, token)
+	return err
+}
+
 // SendDirectAdminMessage sends an ops message directly, bypassing the notification queue.
 func (s *TelegramService) SendDirectAdminMessage(ctx context.Context, text string) error {
 	cfg, err := s.settings.GetEffective(ctx)

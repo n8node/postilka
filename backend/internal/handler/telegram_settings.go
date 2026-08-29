@@ -17,10 +17,15 @@ import (
 type TelegramSettingsHandler struct {
 	settings *service.TelegramSettingsService
 	telegram *service.TelegramService
+	digest   *service.OpsDigestService
 }
 
-func NewTelegramSettingsHandler(settings *service.TelegramSettingsService, telegram *service.TelegramService) *TelegramSettingsHandler {
-	return &TelegramSettingsHandler{settings: settings, telegram: telegram}
+func NewTelegramSettingsHandler(
+	settings *service.TelegramSettingsService,
+	telegram *service.TelegramService,
+	digest *service.OpsDigestService,
+) *TelegramSettingsHandler {
+	return &TelegramSettingsHandler{settings: settings, telegram: telegram, digest: digest}
 }
 
 func (h *TelegramSettingsHandler) GetAdmin(w http.ResponseWriter, r *http.Request) {
@@ -71,6 +76,18 @@ func (h *TelegramSettingsHandler) SendTest(w http.ResponseWriter, r *http.Reques
 	st := h.telegram.GetRuntimeStatus()
 	result.Runtime = &st
 	writeJSON(w, http.StatusOK, result)
+}
+
+func (h *TelegramSettingsHandler) SendDigestTest(w http.ResponseWriter, r *http.Request) {
+	if h.digest == nil {
+		writeError(w, http.StatusServiceUnavailable, "Сводка мониторинга недоступна")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
+	defer cancel()
+
+	ok, msg := h.digest.SendNow(ctx)
+	writeJSON(w, http.StatusOK, model.TelegramTestResult{OK: ok, Message: msg})
 }
 
 func (h *TelegramSettingsHandler) ListQueue(w http.ResponseWriter, r *http.Request) {
