@@ -9,8 +9,9 @@ export default function RegisterPage() {
           Postilka
         </p>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight">Регистрация</h1>
-        <p className="mt-2 text-sm text-muted">
-          Создайте workspace и начните планировать публикации
+        <p className="mt-2 text-sm leading-relaxed text-muted">
+          Генерируйте красивый контент и публикуйте его в соцсети — не только
+          автопостинг
         </p>
       </div>
       <div className="rounded-xl border border-white/60 bg-surface/90 p-6 shadow-sm backdrop-blur-sm">

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { ArrowUpRight, KeyRound } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
   ApiError,
@@ -23,13 +24,6 @@ function privacyPolicyUrl() {
   const custom = process.env.NEXT_PUBLIC_PRIVACY_POLICY_URL;
   if (custom) return custom;
   return `${site}/privacy-policy`;
-}
-
-function publicInviteKeysUrl() {
-  const site =
-    process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ??
-    "https://postilka.ru";
-  return `${site}/app/invite-keys`;
 }
 
 export function RegisterForm() {
@@ -157,9 +151,30 @@ export function RegisterForm() {
           </div>
         )}
 
-        <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          Регистрация доступна только по инвайт-ключу. Введите ключ, чтобы
-          продолжить.
+        <div className="overflow-hidden rounded-xl border border-accent/25 bg-accent/10">
+          <div className="flex gap-3 px-4 py-3.5">
+            <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent text-white">
+              <KeyRound className="h-4 w-4" aria-hidden />
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-slate-900">
+                Нет инвайт-ключа?
+              </p>
+              <p className="mt-1 text-sm leading-relaxed text-slate-600">
+                Регистрация только по ключу. Откройте список активных, скопируйте
+                свободный и вставьте его ниже.
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/invite-keys"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-center gap-1.5 border-t border-accent/20 bg-white/70 px-4 py-2.5 text-sm font-semibold text-accent transition-colors hover:bg-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent"
+          >
+            Смотреть активные ключи
+            <ArrowUpRight className="h-4 w-4" aria-hidden />
+          </Link>
         </div>
 
         <div>
@@ -179,18 +194,6 @@ export function RegisterForm() {
             placeholder="Postilka_XXXXXXXXXXXX"
             className="w-full rounded-lg border border-slate-200 px-3 py-2 font-mono text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
           />
-          <p className="mt-2 text-xs text-muted">
-            Нет инвайт-ключа? Посмотрите активные ключи на{" "}
-            <Link
-              href="/invite-keys"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-accent hover:underline"
-            >
-              {publicInviteKeysUrl().replace(/^https?:\/\//, "")}
-            </Link>
-            .
-          </p>
         </div>
 
         <button
