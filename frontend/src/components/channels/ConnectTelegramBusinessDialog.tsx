@@ -11,6 +11,7 @@ import {
   type ChannelListItem,
   type ChannelProviderInfo,
 } from "@/lib/api";
+import { channelAvatarCacheKey } from "@/lib/channelPresentation";
 import { cn } from "@/lib/utils";
 
 const DEFAULT_HINT =
@@ -213,6 +214,7 @@ export function ConnectTelegramBusinessDialog({
                     channelId={item.id}
                     provider={item.provider}
                     chatType={item.chat_type}
+                    cacheKey={channelAvatarCacheKey(item)}
                     size="sm"
                   />
                   <div className="min-w-0">

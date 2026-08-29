@@ -61,7 +61,7 @@ import {
   type PublishCapabilities,
 } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { channelDisplayName } from "@/lib/channelPresentation";
+import { channelAvatarCacheKey, channelDisplayName } from "@/lib/channelPresentation";
 import { composePostText } from "@/lib/generation-api";
 import {
   getFileVideoDimensions,
@@ -2696,6 +2696,7 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
                           channelId={channel.id}
                           provider={channel.provider}
                           chatType={channel.chat_type}
+                          cacheKey={channelAvatarCacheKey(channel)}
                           size="sm"
                         />
                         <span className="min-w-0 flex-1">

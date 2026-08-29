@@ -33,9 +33,6 @@ export function isPublicChannelAvatarURL(url: string, provider?: ChannelProvider
   const normalized = url.trim();
   if (!normalized) return false;
   if (normalized.startsWith("data:")) return true;
-  if (provider === "telegram" && normalized.startsWith("https://t.me/i/userpic/")) {
-    return true;
-  }
   if (provider === "max") return false;
   if (provider === "telegram") return false;
   if (provider === "youtube") return false;
@@ -43,9 +40,19 @@ export function isPublicChannelAvatarURL(url: string, provider?: ChannelProvider
   return true;
 }
 
-export function channelProxyAvatarURL(channelId: string) {
+export function channelAvatarCacheKey(ch?: {
+  metadata_refreshed_at?: string;
+  updated_at?: string;
+}) {
+  return ch?.metadata_refreshed_at?.trim() || ch?.updated_at?.trim() || "";
+}
+
+export function channelProxyAvatarURL(channelId: string, cacheKey?: string) {
   const base = process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "") || "/app/api/v1";
-  return `${base}/channels/${channelId}/avatar`;
+  const url = `${base}/channels/${channelId}/avatar`;
+  const key = cacheKey?.trim();
+  if (!key) return url;
+  return `${url}?t=${encodeURIComponent(key)}`;
 }
 
 export function channelAvatarSrc(input: {
@@ -54,6 +61,7 @@ export function channelAvatarSrc(input: {
   avatarUrl?: string;
   provider?: ChannelProvider;
   chatType?: string;
+  cacheKey?: string;
 }) {
   const direct = input.avatarUrl?.trim() || input.metadata?.avatar_url?.trim();
   const isBusinessTelegram =
@@ -62,7 +70,7 @@ export function channelAvatarSrc(input: {
 
   if (isBusinessTelegram) {
     if (direct?.startsWith("data:")) return direct;
-    if (input.channelId) return channelProxyAvatarURL(input.channelId);
+    if (input.channelId) return channelProxyAvatarURL(input.channelId, input.cacheKey);
     return null;
   }
 
@@ -70,7 +78,7 @@ export function channelAvatarSrc(input: {
     return direct;
   }
   if (input.channelId && (input.provider === "telegram" || input.provider === "max" || input.provider === "youtube" || input.provider === "photochka")) {
-    return channelProxyAvatarURL(input.channelId);
+    return channelProxyAvatarURL(input.channelId, input.cacheKey);
   }
   if (direct) return direct;
   return null;

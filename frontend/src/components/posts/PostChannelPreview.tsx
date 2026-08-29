@@ -3,7 +3,7 @@
 import { BellOff, ExternalLink, Eye, Loader2, MapPin, Pin, Play } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { ChannelAvatar } from "@/components/channels/ChannelAvatar";
-import { channelDisplayName } from "@/lib/channelPresentation";
+import { channelAvatarCacheKey, channelDisplayName } from "@/lib/channelPresentation";
 import type { ChannelListItem, ChannelProvider } from "@/lib/api";
 import { getCachedFileMediaUrl } from "@/lib/file-media-cache";
 import { formatMediaDuration, isLandscapeVideo, isVideoMime } from "@/lib/file-media";
@@ -1046,6 +1046,7 @@ export function PostChannelPreview({
             channelId={channel.id}
             provider={channel.provider}
             chatType={channel.chat_type}
+            cacheKey={channelAvatarCacheKey(channel)}
             size="sm"
             className="mb-0.5 shrink-0"
           />
@@ -1071,6 +1072,7 @@ export function PostChannelPreview({
           channelId={channel.id}
           provider={channel.provider}
           chatType={channel.chat_type}
+          cacheKey={channelAvatarCacheKey(channel)}
           size="sm"
         />
         <div className="min-w-0">

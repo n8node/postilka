@@ -8,7 +8,7 @@ import {
   type ChannelListItem,
   type ChannelUpdateRequest,
 } from "@/lib/api";
-import { channelDisplayName } from "@/lib/channelPresentation";
+import { channelAvatarCacheKey, channelDisplayName } from "@/lib/channelPresentation";
 import { cn } from "@/lib/utils";
 import { ChannelAvatar } from "@/components/channels/ChannelAvatar";
 
@@ -85,6 +85,7 @@ export function EditChannelDialog({ channel, open, onClose, onSaved }: EditChann
               channelId={channel.id}
               provider={channel.provider}
               chatType={channel.chat_type}
+              cacheKey={channelAvatarCacheKey(channel)}
               size="md"
             />
             <div className="min-w-0">

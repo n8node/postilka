@@ -178,7 +178,7 @@ func (h *ChannelHandler) Avatar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", contentType)
-	w.Header().Set("Cache-Control", "private, max-age=3600")
+	w.Header().Set("Cache-Control", "private, no-cache")
 	_, _ = w.Write(body)
 }
 

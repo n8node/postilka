@@ -18,7 +18,7 @@ import {
   type ChannelListItem,
   type ChannelProvider,
 } from "@/lib/api";
-import { channelDisplayName } from "@/lib/channelPresentation";
+import { channelAvatarCacheKey, channelDisplayName } from "@/lib/channelPresentation";
 import {
   normalizeTimezone,
   publishAtPayload,
@@ -307,6 +307,7 @@ export default function ChannelsPage() {
                   channelId={selected.id}
                   provider={selected.provider}
                   chatType={selected.chat_type}
+                  cacheKey={channelAvatarCacheKey(selected)}
                   size="lg"
                 />
                 <div className="min-w-0">
@@ -631,6 +632,7 @@ export default function ChannelsPage() {
                             channelId={ch.id}
                             provider={ch.provider}
                             chatType={ch.chat_type}
+                            cacheKey={channelAvatarCacheKey(ch)}
                             size="sm"
                           />
                           <div className="min-w-0">

@@ -24,6 +24,7 @@ type ChannelAvatarProps = {
   provider?: ChannelProvider;
   chatType?: string;
   size?: keyof typeof sizeClass;
+  cacheKey?: string;
   className?: string;
 };
 
@@ -35,6 +36,7 @@ export function ChannelAvatar({
   provider,
   chatType,
   size = "md",
+  cacheKey,
   className,
 }: ChannelAvatarProps) {
   const [failed, setFailed] = useState(false);
@@ -52,7 +54,7 @@ export function ChannelAvatar({
     !isBusinessTelegram && directUrl && isPublicChannelAvatarURL(directUrl, provider)
       ? directUrl
       : null;
-  const proxyUrl = channelId ? channelProxyAvatarURL(channelId) : null;
+  const proxyUrl = channelId ? channelProxyAvatarURL(channelId, cacheKey) : null;
   const canProxy = Boolean(
     channelId &&
       (provider === "telegram" || provider === "max" || provider === "youtube" || provider === "photochka") &&
@@ -110,7 +112,7 @@ export function ChannelAvatar({
       if (prev) URL.revokeObjectURL(prev);
       return null;
     });
-  }, [channelId, directUrl, provider, name]);
+  }, [channelId, directUrl, provider, name, cacheKey]);
 
   if (!src || failed) {
     return (

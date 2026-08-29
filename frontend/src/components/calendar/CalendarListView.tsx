@@ -6,6 +6,7 @@ import type { ChannelListItem } from "@/lib/api";
 import { formatDateTime, postCalendarDate } from "@/lib/calendar-utils";
 import { postHasConflict } from "@/lib/calendar-conflicts";
 import { ChannelAvatar } from "@/components/channels/ChannelAvatar";
+import { channelAvatarCacheKey } from "@/lib/channelPresentation";
 import {
   postPreviewText,
   POST_STATUS_CLASS,
@@ -113,6 +114,7 @@ export function CalendarListView({
                         name={ch.name}
                         metadata={ch.metadata}
                         provider={ch.provider}
+                        cacheKey={channelAvatarCacheKey(ch)}
                         size="sm"
                         className="!h-6 !w-6 ring-2 ring-surface"
                       />

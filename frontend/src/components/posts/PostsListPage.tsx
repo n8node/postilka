@@ -31,7 +31,7 @@ import {
   type WorkspaceMember,
 } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
-import { channelDisplayName } from "@/lib/channelPresentation";
+import { channelAvatarCacheKey, channelDisplayName } from "@/lib/channelPresentation";
 import {
   approvePost,
   cancelPost,
@@ -179,6 +179,7 @@ function ChannelStack({
               channelId={channel.id}
               provider={channel.provider}
               chatType={channel.chat_type}
+              cacheKey={channelAvatarCacheKey(channel)}
               size="sm"
             />
           </span>

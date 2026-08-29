@@ -4,7 +4,7 @@ import { GripVertical, Repeat, AlertCircle } from "lucide-react";
 // Hidden until agents return: import { Bot } from "lucide-react";
 import { ChannelAvatar } from "@/components/channels/ChannelAvatar";
 import type { ChannelListItem } from "@/lib/api";
-import { channelDisplayName } from "@/lib/channelPresentation";
+import { channelAvatarCacheKey, channelDisplayName } from "@/lib/channelPresentation";
 import type { Post } from "@/lib/posts-api";
 import {
   canDragPost,
@@ -122,6 +122,7 @@ export function CalendarEventCard({
                 metadata={ch.metadata}
                 provider={ch.provider}
                 chatType={ch.chat_type}
+                cacheKey={channelAvatarCacheKey(ch)}
                 size="sm"
                 className="!h-4 !w-4 !text-[8px]"
               />

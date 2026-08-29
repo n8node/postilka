@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { ChannelAvatar } from "@/components/channels/ChannelAvatar";
 import type { ChannelListItem } from "@/lib/api";
-import { channelDisplayName } from "@/lib/channelPresentation";
+import { channelAvatarCacheKey, channelDisplayName } from "@/lib/channelPresentation";
 import type { Post } from "@/lib/posts-api";
 import { formatDateTime, postCalendarDate } from "@/lib/calendar-utils";
 import {
@@ -97,6 +97,7 @@ export function CalendarInspector({
                   name={ch.name}
                   metadata={ch.metadata}
                   provider={ch.provider}
+                  cacheKey={channelAvatarCacheKey(ch)}
                   size="sm"
                 />
                 <span className="text-xs">{channelDisplayName({ name: ch.name, metadata: ch.metadata })}</span>

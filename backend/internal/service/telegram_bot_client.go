@@ -1678,9 +1678,9 @@ func (c *TelegramBotClient) DiscoverAdminChats(ctx context.Context, token string
 				}
 			}
 		}
-		avatarURL := telegramPublicAvatarURL(chat)
+		avatarURL, _ := c.ChatPhotoDataURI(ctx, token, chatID)
 		if avatarURL == "" {
-			avatarURL, _ = c.ChatPhotoDataURI(ctx, token, chatID)
+			avatarURL = telegramPublicAvatarURL(chat)
 		}
 		result.Chats = append(result.Chats, model.TelegramDiscoveredChat{
 			ChatID:    chatID,

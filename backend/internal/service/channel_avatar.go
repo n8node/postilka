@@ -27,6 +27,29 @@ func mergeChannelAvatar(meta model.ChannelMetadata, avatarURL string) model.Chan
 	return meta
 }
 
+func liveTelegramAvatarURL(ctx context.Context, client *TelegramBotClient, token, chatID string, chat telegramChat) string {
+	if client != nil && strings.TrimSpace(token) != "" && strings.TrimSpace(chatID) != "" {
+		if uri, err := client.ChatPhotoDataURI(ctx, token, chatID); err == nil && strings.TrimSpace(uri) != "" {
+			return uri
+		}
+	}
+	return telegramPublicAvatarURL(chat)
+}
+
+func liveMAXAvatarURL(ctx context.Context, client *oauthclient.MAXBotClient, token string, chat *oauthclient.MAXChat) string {
+	fallback := oauthclient.MAXChatAvatarURL(chat)
+	if client == nil || chat == nil {
+		return fallback
+	}
+	body, contentType, err := client.FetchChatIcon(ctx, token, chat.ChatID)
+	if err == nil && len(body) > 0 {
+		if uri := avatarDataURI(body, contentType); uri != "" {
+			return uri
+		}
+	}
+	return fallback
+}
+
 func parseTelegramBusinessUserID(raw string) int64 {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -146,10 +169,6 @@ func (s *ChannelService) fetchTelegramBusinessAvatar(
 	token string,
 	ch *model.Channel,
 ) ([]byte, string, error) {
-	if body, ct, ok := avatarBytesFromMetadata(ch.Metadata.AvatarURL); ok {
-		return body, ct, nil
-	}
-
 	avatarCtx, cancel := context.WithTimeout(ctx, 25*time.Second)
 	defer cancel()
 
@@ -275,9 +294,6 @@ func (s *ChannelService) FetchAvatar(
 				return nil, "", err
 			}
 			return body, contentType, nil
-		}
-		if body, ct, ok := avatarBytesFromMetadata(ch.Metadata.AvatarURL); ok {
-			return body, ct, nil
 		}
 		body, contentType, err := s.botClient.FetchChatPhoto(ctx, token, ch.ChatID)
 		if err == nil && len(body) > 0 {

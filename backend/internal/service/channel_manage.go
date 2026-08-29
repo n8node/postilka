@@ -350,11 +350,7 @@ func (s *ChannelService) VerifyAndRefresh(
 			break
 		}
 		meta = telegramChannelMetadata(chat, member)
-		if publicURL := telegramPublicAvatarURL(chat); publicURL != "" {
-			meta = mergeChannelAvatar(meta, publicURL)
-		} else if uri, err := s.botClient.ChatPhotoDataURI(ctx, token, ch.ChatID); err == nil && uri != "" {
-			meta = mergeChannelAvatar(meta, uri)
-		}
+		meta = mergeChannelAvatar(meta, liveTelegramAvatarURL(ctx, s.botClient, token, ch.ChatID, chat))
 		if chat.Type != "" {
 			ch.ChatType = chat.Type
 		}
@@ -383,6 +379,9 @@ func (s *ChannelService) VerifyAndRefresh(
 			break
 		}
 		meta = maxChannelMetadata(maxChat, member)
+		if live := liveMAXAvatarURL(ctx, s.maxClient, token, maxChat); live != "" {
+			meta = mergeChannelAvatar(meta, live)
+		}
 		ch.ChatID = strconv.FormatInt(maxChat.ChatID, 10)
 		if maxChat.Type != "" {
 			ch.ChatType = maxChat.Type
