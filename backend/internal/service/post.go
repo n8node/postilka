@@ -44,6 +44,7 @@ type PostService struct {
 	workspaces  *WorkspaceService
 	publication *PublicationService
 	approvals   *repository.PostApprovalRepository
+	users       *repository.UserRepository
 	notify      *NotificationService
 }
 
@@ -53,10 +54,11 @@ func NewPostService(
 	workspaces *WorkspaceService,
 	publication *PublicationService,
 	approvals *repository.PostApprovalRepository,
+	users *repository.UserRepository,
 ) *PostService {
 	return &PostService{
 		posts: posts, channels: channels, workspaces: workspaces,
-		publication: publication, approvals: approvals,
+		publication: publication, approvals: approvals, users: users,
 	}
 }
 
@@ -80,6 +82,17 @@ func (s *PostService) requireEditor(
 		return nil, err
 	}
 	return ws, nil
+}
+
+func (s *PostService) requireVerifiedEmail(ctx context.Context, userID string) error {
+	if s.users == nil {
+		return ErrEmailNotVerified
+	}
+	user, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	return RequireVerifiedEmail(user)
 }
 
 func (s *PostService) List(
@@ -232,6 +245,9 @@ func (s *PostService) Schedule(
 	postID string,
 	dueAt time.Time,
 ) (*model.Post, error) {
+	if err := s.requireVerifiedEmail(ctx, userID); err != nil {
+		return nil, err
+	}
 	ws, err := s.requireEditor(ctx, userID, r)
 	if err != nil {
 		return nil, err
@@ -281,6 +297,9 @@ func (s *PostService) PublishNow(
 	r *http.Request,
 	postID string,
 ) (*model.Post, error) {
+	if err := s.requireVerifiedEmail(ctx, userID); err != nil {
+		return nil, err
+	}
 	ws, err := s.requireEditor(ctx, userID, r)
 	if err != nil {
 		return nil, err

@@ -97,6 +97,8 @@ func (h *TokenPackageHandler) DeleteAdmin(w http.ResponseWriter, r *http.Request
 
 func writeTokenPackageError(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, service.ErrEmailNotVerified):
+		writeEmailNotVerified(w)
 	case errors.Is(err, service.ErrTokenPackageNotFound):
 		writeError(w, http.StatusNotFound, "Пакет не найден")
 	case errors.Is(err, service.ErrCheckoutUnavailable):

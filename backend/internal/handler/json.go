@@ -18,3 +18,7 @@ func writeError(w http.ResponseWriter, status int, msg string) {
 func writeErrorWithCode(w http.ResponseWriter, status int, code, msg string) {
 	writeJSON(w, status, map[string]string{"error": msg, "code": code})
 }
+
+func writeEmailNotVerified(w http.ResponseWriter) {
+	writeErrorWithCode(w, http.StatusForbidden, "email_not_verified", "Подтвердите email, чтобы публиковать посты, пополнять счёт и оплачивать тариф")
+}

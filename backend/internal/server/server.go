@@ -122,7 +122,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	publicationSvc := service.NewPublicationService(
 		postRepo, channelRepo, fileStorageRepo, objectStorage, channelTestSvc, telegramBotClient, oauthclient.NewMAXBotClient(), photochkaClient, quotaSvc, linkShortener,
 	)
-	postSvc := service.NewPostService(postRepo, channelRepo, wsSvc, publicationSvc, postApprovalRepo)
+	postSvc := service.NewPostService(postRepo, channelRepo, wsSvc, publicationSvc, postApprovalRepo, userRepo)
 	telegramSvc := service.NewTelegramService(telegramSettingsSvc, telegramQueueRepo, cfg.TelegramLocalProxy, logger)
 	telegramSettingsSvc.BindRuntimeStatus(telegramSvc.GetRuntimeStatus)
 	telegramSvc.Start()

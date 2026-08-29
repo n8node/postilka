@@ -35,8 +35,9 @@ export function EmailVerificationBanner() {
     <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
       <div className="mx-auto flex max-w-5xl flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <p>
-          Email <span className="font-medium">{user.email}</span> не подтверждён.
-          Проверьте почту или запросите письмо повторно.
+          Подтвердите email <span className="font-medium">{user.email}</span>,
+          чтобы публиковать посты, пополнять счёт и оплачивать тариф. Проверьте
+          почту или запросите письмо повторно.
         </p>
         <button
           type="button"
@@ -44,7 +45,7 @@ export function EmailVerificationBanner() {
           disabled={loading}
           className="shrink-0 rounded-md bg-amber-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-950 disabled:opacity-60"
         >
-          {loading ? "Отправка…" : "Отправить снова"}
+          {loading ? "Отправка…" : "Отправить письмо повторно"}
         </button>
       </div>
       {message && <p className="mx-auto mt-2 max-w-5xl text-xs text-emerald-800">{message}</p>}

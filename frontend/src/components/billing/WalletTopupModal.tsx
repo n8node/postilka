@@ -5,10 +5,13 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   ApiError,
+  EMAIL_UNVERIFIED_RESTRICTED_MESSAGE,
   billingWalletTopup,
   fetchBillingOverview,
+  isEmailVerified,
   type BillingOverview,
 } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 
 function formatRub(cents: number) {
   return new Intl.NumberFormat("ru-RU", {
@@ -29,6 +32,8 @@ export function WalletTopupModal({
   onClose,
   onBalanceChange,
 }: WalletTopupModalProps) {
+  const { user } = useAuth();
+  const emailVerified = isEmailVerified(user);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,6 +70,10 @@ export function WalletTopupModal({
   if (!open) return null;
 
   async function handleTopup() {
+    if (!emailVerified) {
+      setError(EMAIL_UNVERIFIED_RESTRICTED_MESSAGE);
+      return;
+    }
     const rub = Number(amountRub.replace(",", "."));
     if (!Number.isFinite(rub) || rub <= 0) {
       setError("Укажите сумму пополнения в рублях");
@@ -150,11 +159,15 @@ export function WalletTopupModal({
               <p className="mt-4 text-sm text-red-600">{error}</p>
             )}
 
-            {!overview?.payments_enabled && (
+            {!emailVerified ? (
+              <p className="mt-4 text-sm text-amber-700">
+                {EMAIL_UNVERIFIED_RESTRICTED_MESSAGE}
+              </p>
+            ) : !overview?.payments_enabled ? (
               <p className="mt-4 text-sm text-amber-700">
                 Оплата временно недоступна — обратитесь в поддержку.
               </p>
-            )}
+            ) : null}
 
             <label className="mt-5 block text-sm">
               <span className="font-medium text-text">
@@ -178,7 +191,7 @@ export function WalletTopupModal({
             <div className="mt-6 flex flex-wrap gap-3">
               <button
                 type="button"
-                disabled={!overview?.payments_enabled || busy}
+                disabled={!overview?.payments_enabled || !emailVerified || busy}
                 onClick={() => void handleTopup()}
                 className="inline-flex items-center justify-center gap-2 rounded-md bg-accent px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
               >

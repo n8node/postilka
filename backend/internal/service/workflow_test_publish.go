@@ -23,6 +23,9 @@ func (s *PostService) PublishWorkflowNodeTest(
 	workspaceID, userID, nodeType string,
 	inputs map[string]interface{},
 ) (*model.Post, error) {
+	if err := s.requireVerifiedEmail(ctx, userID); err != nil {
+		return nil, err
+	}
 	if _, err := s.workspaces.RequireMembership(ctx, userID, workspaceID, model.RoleEditor); err != nil {
 		return nil, err
 	}

@@ -118,14 +118,7 @@ export function RegisterForm() {
           : undefined,
         isWorkspaceInviteRegistration ? workspaceInviteToken : undefined,
       );
-      const params = new URLSearchParams({ email });
-      if (nextPath) {
-        params.set("next", nextPath);
-      }
-      if (isWorkspaceInviteRegistration) {
-        params.set("workspace_invite", "1");
-      }
-      router.push(`/auth/check-email?${params.toString()}`);
+      router.push(nextPath || "/dashboard");
       router.refresh();
     } catch (err) {
       setError(

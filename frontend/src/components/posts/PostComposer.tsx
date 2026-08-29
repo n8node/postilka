@@ -50,14 +50,17 @@ import { RichTextEditor, normalizeTelegramHTMLString } from "@/components/posts/
 import { StoryAreaEditor } from "@/components/posts/StoryAreaEditor";
 import {
   ApiError,
+  EMAIL_UNVERIFIED_RESTRICTED_MESSAGE,
   fetchChannels,
   fetchMe,
   fetchWorkspaceMembers,
+  isEmailVerified,
   type ChannelListItem,
   type WorkspaceMember,
   type ChannelProvider,
   type PublishCapabilities,
 } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 import { channelDisplayName } from "@/lib/channelPresentation";
 import { composePostText } from "@/lib/generation-api";
 import {
@@ -1217,6 +1220,8 @@ function MaxButtonBuilder({
 }
 
 export function PostComposer({ initialPostId }: { initialPostId?: string } = {}) {
+  const { user } = useAuth();
+  const emailVerified = isEmailVerified(user);
   const router = useRouter();
   const [channels, setChannels] = useState<ChannelListItem[]>([]);
   const [recentFiles, setRecentFiles] = useState<WorkspaceFile[]>([]);
@@ -2261,6 +2266,10 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
   }
 
   async function handleApprovalDecision(action: "approve" | "reject", publishNow = true) {
+    if (action === "approve" && !emailVerified) {
+      setError(EMAIL_UNVERIFIED_RESTRICTED_MESSAGE);
+      return;
+    }
     if (!postId) return;
     if (action === "reject" && !decisionComment.trim()) {
       setError("Укажите, что нужно доработать");
@@ -2314,6 +2323,11 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
   }
 
   async function save(action: Timing) {
+    if ((action === "now" || action === "schedule") && !emailVerified) {
+      setError(EMAIL_UNVERIFIED_RESTRICTED_MESSAGE);
+      setSuccess(null);
+      return;
+    }
     const validation = validate(action);
     if (validation) {
       setError(validation);
@@ -3893,9 +3907,10 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
                     />
                     <button
                       type="button"
-                      disabled={busy}
+                      disabled={busy || !emailVerified}
                       onClick={() => void handleApprovalDecision("approve", true)}
                       className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-accent px-4 py-2.5 text-sm font-semibold text-white hover:bg-accent/90 disabled:opacity-50"
+                      title={!emailVerified ? EMAIL_UNVERIFIED_RESTRICTED_MESSAGE : undefined}
                     >
                       {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                       Одобрить и опубликовать
@@ -3903,9 +3918,10 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
                     {scheduleAt && (
                       <button
                         type="button"
-                        disabled={busy}
+                        disabled={busy || !emailVerified}
                         onClick={() => void handleApprovalDecision("approve", false)}
                         className="inline-flex w-full items-center justify-center gap-2 rounded-md border border-border bg-white px-4 py-2.5 text-sm font-semibold hover:bg-zinc-50 disabled:opacity-50"
+                        title={!emailVerified ? EMAIL_UNVERIFIED_RESTRICTED_MESSAGE : undefined}
                       >
                         {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CalendarClock className="h-4 w-4" />}
                         Одобрить и запланировать
@@ -3937,6 +3953,11 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
                 )
               ) : (
                 <>
+              {!emailVerified && (
+                <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+                  {EMAIL_UNVERIFIED_RESTRICTED_MESSAGE}
+                </p>
+              )}
               <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
                 Когда опубликовать
               </p>
@@ -4001,12 +4022,15 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
                 disabled={
                   busy ||
                   composerLocked ||
-                  (timing === "now" && publishLocked)
+                  (timing === "now" && publishLocked) ||
+                  ((timing === "now" || timing === "schedule") && !emailVerified)
                 }
                 onClick={() => void save(timing)}
                 className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-accent px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
                 title={
-                  timing === "now" && publishLocked
+                  (timing === "now" || timing === "schedule") && !emailVerified
+                    ? EMAIL_UNVERIFIED_RESTRICTED_MESSAGE
+                    : timing === "now" && publishLocked
                     ? currentStatus === "published"
                       ? "Публикация уже отправлена — создайте новую запись"
                       : "Публикация уже выполняется"

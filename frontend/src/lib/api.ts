@@ -298,11 +298,12 @@ export function login(email: string, password: string) {
   });
 }
 
-export type RegisterResponse = {
-  email_verification_required: boolean;
-  email: string;
-  message: string;
-};
+export const EMAIL_UNVERIFIED_RESTRICTED_MESSAGE =
+  "Подтвердите email, чтобы публиковать посты, пополнять счёт и оплачивать тариф";
+
+export function isEmailVerified(user: Pick<User, "email_verified_at"> | null | undefined) {
+  return Boolean(user?.email_verified_at);
+}
 
 export function register(
   email: string,
@@ -311,7 +312,7 @@ export function register(
   inviteCode?: string,
   workspaceInviteToken?: string,
 ) {
-  return apiFetch<RegisterResponse>("/auth/register", {
+  return apiFetch<MeResponse>("/auth/register", {
     method: "POST",
     body: JSON.stringify({
       email,

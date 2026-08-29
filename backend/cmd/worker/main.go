@@ -113,7 +113,7 @@ func main() {
 	logger.Info("worker started", "publish_concurrency", cfg.WorkerPublishConcurrency, "version", config.Version)
 
 	approvalRepo := repository.NewPostApprovalRepository(db.Pool)
-	postSvc := service.NewPostService(postRepo, channelRepo, wsSvc, publicationSvc, approvalRepo)
+	postSvc := service.NewPostService(postRepo, channelRepo, wsSvc, publicationSvc, approvalRepo, userRepo)
 	postSvc.SetNotifier(notificationSvc)
 
 	kieSettingsRepo := repository.NewKieSettingsRepository(db.Pool)

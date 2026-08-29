@@ -302,6 +302,8 @@ func (h *PostHandler) ListApprovalEvents(w http.ResponseWriter, r *http.Request)
 
 func writePostError(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, service.ErrEmailNotVerified):
+		writeEmailNotVerified(w)
 	case errors.Is(err, service.ErrForbidden), errors.Is(err, service.ErrNotWorkspaceMember):
 		writeError(w, http.StatusForbidden, "Недостаточно прав")
 	case errors.Is(err, service.ErrNoPrimaryWS):

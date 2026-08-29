@@ -147,14 +147,14 @@ func RegistrationConfirmationEmailBody(name, confirmURL string) EmailBody {
 	}
 
 	content := emailGreetingRow(displayName) +
-		emailParagraphRow("Спасибо за регистрацию в Postilka. Подтвердите email, чтобы завершить создание аккаунта.") +
+		emailParagraphRow("Спасибо за регистрацию в Postilka. Вы уже можете войти в кабинет. Подтвердите email, чтобы публиковать посты, пополнять счёт и оплачивать тариф.") +
 		emailLinkBoxRow(confirmURL) +
 		emailNoteRow("Ссылка действительна 24 часа. Если вы не регистрировались — просто проигнорируйте это письмо.")
 
 	return EmailBody{
-		Preheader:   "Подтвердите email, чтобы завершить регистрацию в Postilka",
+		Preheader:   "Подтвердите email, чтобы публиковать посты и оплачивать тариф в Postilka",
 		ContentHTML: content,
-		CTALabel:    "Подтвердить регистрацию",
+		CTALabel:    "Подтвердить email",
 		CTAURL:      confirmURL,
 	}
 }

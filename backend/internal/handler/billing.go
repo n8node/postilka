@@ -245,6 +245,8 @@ func (h *BillingHandler) SetAutoRenew(w http.ResponseWriter, r *http.Request) {
 
 func writeBillingCheckoutError(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, service.ErrEmailNotVerified):
+		writeEmailNotVerified(w)
 	case errors.Is(err, service.ErrCheckoutUnavailable):
 		writeError(w, http.StatusServiceUnavailable, "Оплата временно недоступна. Настройте Robokassa в админке.")
 	case errors.Is(err, service.ErrPlanNotFound):

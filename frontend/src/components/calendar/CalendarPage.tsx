@@ -18,7 +18,13 @@ import { CalendarTimelineView } from "@/components/calendar/CalendarTimelineView
 import { CalendarInspector } from "@/components/calendar/CalendarInspector";
 import { UndoToast } from "@/components/calendar/UndoToast";
 import { useAuth } from "@/context/AuthContext";
-import { ApiError, fetchChannels, type ChannelListItem } from "@/lib/api";
+import {
+  ApiError,
+  EMAIL_UNVERIFIED_RESTRICTED_MESSAGE,
+  fetchChannels,
+  isEmailVerified,
+  type ChannelListItem,
+} from "@/lib/api";
 import {
   type CalendarView,
   combineDateAndTime,
@@ -69,6 +75,7 @@ function postsVisibleForChannels(posts: Post[], hiddenChannels: Set<string>) {
 
 export function CalendarPage() {
   const { user } = useAuth();
+  const emailVerified = isEmailVerified(user);
   const workspaceTz = normalizeTimezone(user?.timezone || DEFAULT_TIMEZONE);
 
   const [view, setView] = useState<CalendarView>("month");
@@ -317,6 +324,10 @@ export function CalendarPage() {
   };
 
   const reschedulePost = async (post: Post, next: Date) => {
+    if (!emailVerified) {
+      setError(EMAIL_UNVERIFIED_RESTRICTED_MESSAGE);
+      return;
+    }
     const previousDueAt = post.due_at;
     const optimistic = { ...post, due_at: toRFC3339(next), status: "scheduled" as const };
     updatePostLocal(optimistic);
@@ -767,6 +778,9 @@ export function CalendarPage() {
                   const parsed = new Date(next.replace(" ", "T"));
                   if (Number.isNaN(parsed.getTime())) return;
                   void handleInspectorAction(async () => {
+                    if (!emailVerified) {
+                      throw new ApiError(403, EMAIL_UNVERIFIED_RESTRICTED_MESSAGE, "email_not_verified");
+                    }
                     const updated = await schedulePost(selected.id, parsed.toISOString());
                     updatePostLocal(updated);
                   });
@@ -779,6 +793,9 @@ export function CalendarPage() {
                 }
                 onPublish={() =>
                   handleInspectorAction(async () => {
+                    if (!emailVerified) {
+                      throw new ApiError(403, EMAIL_UNVERIFIED_RESTRICTED_MESSAGE, "email_not_verified");
+                    }
                     const updated = await publishPost(selected.id);
                     updatePostLocal(updated);
                     await load();

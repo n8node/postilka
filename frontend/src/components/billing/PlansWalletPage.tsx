@@ -15,6 +15,8 @@ import {
   fetchBillingWalletLedger,
   fetchSubscribePreview,
   fetchTokenPackages,
+  EMAIL_UNVERIFIED_RESTRICTED_MESSAGE,
+  isEmailVerified,
   type BillingOverview,
   type BillingPeriod,
   type PaymentHistoryItem,
@@ -35,6 +37,7 @@ import {
   walletLedgerLabel,
 } from "@/lib/billing-format";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/context/AuthContext";
 
 function formatRub(cents: number) {
   return formatRubFromCents(cents);
@@ -101,6 +104,8 @@ function sortPlansForDisplay(plans: Plan[]): Plan[] {
 }
 
 export function PlansWalletPage() {
+  const { user } = useAuth();
+  const emailVerified = isEmailVerified(user);
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -173,6 +178,7 @@ export function PlansWalletPage() {
 
   const currentPlanId = overview?.plan?.id;
   const paymentsEnabled = overview?.payments_enabled ?? false;
+  const canPay = paymentsEnabled && emailVerified;
   const textBalance = overview?.token_balance;
   const mediaBalance = overview?.media_balance;
   const lastWalletMove = ledger[0];
@@ -248,6 +254,11 @@ export function PlansWalletPage() {
           {paymentNotice}
         </p>
       )}
+      {!emailVerified && (
+        <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          {EMAIL_UNVERIFIED_RESTRICTED_MESSAGE}
+        </p>
+      )}
       {checkoutError && (
         <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           {checkoutError}
@@ -287,7 +298,7 @@ export function PlansWalletPage() {
               {walletLedgerLabel(lastWalletMove.entry_type)}
             </p>
           ) : null}
-          {paymentsEnabled ? (
+          {canPay ? (
             <button
               type="button"
               onClick={() => setTopupOpen(true)}
@@ -387,7 +398,7 @@ export function PlansWalletPage() {
           const isPopular = plan.is_popular;
           const preview = previews[plan.id];
           const paidPlan = !plan.is_free && (plan.price_monthly_cents ?? 0) > 0;
-          const canBuy = paymentsEnabled && !isCurrent && paidPlan;
+          const canBuy = canPay && !isCurrent && paidPlan;
           const checkoutKey = `plan:${plan.id}`;
           const isCheckingOut = checkoutTarget === checkoutKey;
           return (
@@ -513,7 +524,7 @@ export function PlansWalletPage() {
             {packages.map((pkg) => {
               const checkoutKey = `package:${pkg.id}`;
               const isCheckingOut = checkoutTarget === checkoutKey;
-              const canBuy = paymentsEnabled && pkg.price_cents > 0;
+              const canBuy = canPay && pkg.price_cents > 0;
               return (
                 <div
                   key={pkg.id}

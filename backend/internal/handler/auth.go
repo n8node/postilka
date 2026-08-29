@@ -67,11 +67,21 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSON(w, http.StatusCreated, map[string]any{
-		"email_verification_required": result.EmailVerificationRequired,
-		"email":                       result.Email,
-		"message":                     result.Message,
-	})
+	h.mw.SetTokenCookie(w, result.Token, h.cfg.IsProduction())
+
+	active, list, err := h.workspaces.ResolveActive(r.Context(), result.User.ID, r)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Внутренняя ошибка")
+		return
+	}
+	if active == nil {
+		active = result.Workspace
+		list = result.Workspaces
+	}
+	if active != nil {
+		service.SetActiveWorkspaceCookie(w, active.ID, h.cfg.IsProduction())
+	}
+	h.writeMe(w, http.StatusCreated, result.User, active, list)
 }
 
 type resendVerificationRequest struct {
@@ -249,7 +259,7 @@ func (h *AuthHandler) writeAuthError(w http.ResponseWriter, err error) {
 	case errors.Is(err, service.ErrEmailVerificationInvalid):
 		writeError(w, http.StatusBadRequest, "Ссылка недействительна или истекла")
 	case errors.Is(err, service.ErrEmailNotVerified):
-		writeErrorWithCode(w, http.StatusForbidden, "email_not_verified", "Подтвердите email — проверьте почту или запросите письмо повторно")
+		writeEmailNotVerified(w)
 	case errors.Is(err, service.ErrPasswordResetInvalid):
 		writeError(w, http.StatusBadRequest, "Ссылка для восстановления пароля недействительна или истекла")
 	default:

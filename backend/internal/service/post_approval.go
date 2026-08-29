@@ -33,6 +33,9 @@ func (s *PostService) SubmitForApproval(
 	postID string,
 	req model.PostApprovalSubmitRequest,
 ) (*model.Post, error) {
+	if err := s.requireVerifiedEmail(ctx, userID); err != nil {
+		return nil, err
+	}
 	ws, err := s.requireEditor(ctx, userID, r)
 	if err != nil {
 		return nil, err
@@ -84,6 +87,9 @@ func (s *PostService) ApprovePost(
 	postID string,
 	req model.PostApprovalDecisionRequest,
 ) (*model.Post, error) {
+	if err := s.requireVerifiedEmail(ctx, userID); err != nil {
+		return nil, err
+	}
 	ws, err := s.requireEditor(ctx, userID, r)
 	if err != nil {
 		return nil, err

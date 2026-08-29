@@ -22,12 +22,15 @@ import { EmptyState } from "@/components/layout/EmptyState";
 import { ChannelAvatar } from "@/components/channels/ChannelAvatar";
 import {
   ApiError,
+  EMAIL_UNVERIFIED_RESTRICTED_MESSAGE,
   fetchChannels,
   fetchMe,
   fetchWorkspaceMembers,
+  isEmailVerified,
   type ChannelListItem,
   type WorkspaceMember,
 } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 import { channelDisplayName } from "@/lib/channelPresentation";
 import {
   approvePost,
@@ -190,6 +193,8 @@ function ChannelStack({
 }
 
 export function PostsListPage() {
+  const { user } = useAuth();
+  const emailVerified = isEmailVerified(user);
   const router = useRouter();
   const searchParams = useSearchParams();
   const statusFromUrl = parseStatus(searchParams.get("status"));
@@ -350,6 +355,10 @@ export function PostsListPage() {
   }
 
   async function handleRetry(post: Post) {
+    if (!emailVerified) {
+      setError(EMAIL_UNVERIFIED_RESTRICTED_MESSAGE);
+      return;
+    }
     if (!canRetryPost(post.status)) return;
     setActionId(post.id);
     setError(null);
@@ -364,6 +373,10 @@ export function PostsListPage() {
   }
 
   async function handleApprove(post: Post, publishNow: boolean) {
+    if (!emailVerified) {
+      setReviewError(EMAIL_UNVERIFIED_RESTRICTED_MESSAGE);
+      return;
+    }
     setReviewBusy(true);
     setReviewError(null);
     try {
@@ -609,7 +622,7 @@ export function PostsListPage() {
                           {canRetryPost(post.status) && (
                             <ActionButton
                               label="Повторить публикацию"
-                              disabled={busy}
+                              disabled={busy || !emailVerified}
                               onClick={() => void handleRetry(post)}
                             >
                               <RefreshCw className="h-3.5 w-3.5" />
@@ -723,9 +736,10 @@ export function PostsListPage() {
                   <div className="flex flex-col gap-2">
                     <button
                       type="button"
-                      disabled={reviewBusy}
+                      disabled={reviewBusy || !emailVerified}
                       onClick={() => void handleApprove(reviewPost, true)}
                       className="inline-flex items-center justify-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent/90 disabled:opacity-50"
+                      title={!emailVerified ? EMAIL_UNVERIFIED_RESTRICTED_MESSAGE : undefined}
                     >
                       {reviewBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                       Одобрить и опубликовать сейчас
@@ -733,9 +747,10 @@ export function PostsListPage() {
                     {reviewPost.due_at && (
                       <button
                         type="button"
-                        disabled={reviewBusy}
+                        disabled={reviewBusy || !emailVerified}
                         onClick={() => void handleApprove(reviewPost, false)}
                         className="inline-flex items-center justify-center gap-2 rounded-md border border-border px-3 py-2 text-sm font-semibold hover:bg-zinc-50 disabled:opacity-50"
+                        title={!emailVerified ? EMAIL_UNVERIFIED_RESTRICTED_MESSAGE : undefined}
                       >
                         Одобрить и запланировать
                       </button>

@@ -8,8 +8,6 @@ type PageProps = {
 export default async function CheckEmailPage({ searchParams }: PageProps) {
   const params = await searchParams;
   const email = params.email?.trim() ?? "";
-  const nextPath = params.next?.trim() ?? "";
-  const isWorkspaceInvite = params.workspace_invite === "1";
 
   return (
     <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-16">
@@ -21,7 +19,7 @@ export default async function CheckEmailPage({ searchParams }: PageProps) {
           Проверьте почту
         </h1>
         <p className="mt-2 text-sm text-muted">
-          Мы отправили письмо со ссылкой для подтверждения регистрации
+          Мы отправили письмо со ссылкой для подтверждения email
           {email ? (
             <>
               {" "}
@@ -39,19 +37,14 @@ export default async function CheckEmailPage({ searchParams }: PageProps) {
           <p>
             Откройте письмо и нажмите кнопку{" "}
             <span className="font-medium text-foreground">
-              «Подтвердить регистрацию»
+              «Подтвердить email»
             </span>{" "}
             или перейдите по текстовой ссылке в письме.
           </p>
           <p>
-            После подтверждения вы сможете войти в Postilka и пользоваться
-            сервисом.
+            В кабинет можно войти сразу. Пока email не подтверждён, нельзя
+            публиковать посты, пополнять счёт и оплачивать тариф.
           </p>
-          {isWorkspaceInvite && (
-            <p>
-              Затем мы вернём вас к принятию приглашения в воркфлоу.
-            </p>
-          )}
         </div>
 
         <CheckEmailResend email={email} />
@@ -59,8 +52,8 @@ export default async function CheckEmailPage({ searchParams }: PageProps) {
         <div className="mt-4">
           <Link
             href={
-              nextPath
-                ? `/auth/login?email=${encodeURIComponent(email)}&next=${encodeURIComponent(nextPath)}`
+              email
+                ? `/auth/login?email=${encodeURIComponent(email)}`
                 : "/auth/login"
             }
             className="block text-center text-sm text-accent hover:underline"

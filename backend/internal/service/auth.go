@@ -71,13 +71,14 @@ type AuthResult struct {
 	Workspaces []model.Workspace
 }
 
-type RegisterResult struct {
-	Email                     string
-	EmailVerificationRequired bool
-	Message                   string
+func RequireVerifiedEmail(user *model.User) error {
+	if user == nil || user.EmailVerifiedAt == nil {
+		return ErrEmailNotVerified
+	}
+	return nil
 }
 
-func (s *AuthService) Register(ctx context.Context, email, password, name, inviteCode, workspaceInviteToken string) (*RegisterResult, error) {
+func (s *AuthService) Register(ctx context.Context, email, password, name, inviteCode, workspaceInviteToken string) (*AuthResult, error) {
 	email = normalizeEmail(email)
 	if err := validateCredentials(email, password); err != nil {
 		return nil, err
@@ -158,7 +159,7 @@ func (s *AuthService) Register(ctx context.Context, email, password, name, invit
 			planID = free.ID
 		}
 	}
-	_, err = s.workspaces.CreateWithOwnerTx(ctx, tx, wsName, slug, user.ID, planID)
+	ws, err := s.workspaces.CreateWithOwnerTx(ctx, tx, wsName, slug, user.ID, planID)
 	if err != nil {
 		return nil, err
 	}
@@ -175,11 +176,15 @@ func (s *AuthService) Register(ctx context.Context, email, password, name, invit
 		s.telegram.NotifyRegistration(ctx, user, meta)
 	}
 
-	return &RegisterResult{
-		Email:                     user.Email,
-		EmailVerificationRequired: true,
-		Message:                   "Мы отправили письмо со ссылкой для подтверждения регистрации",
-	}, nil
+	_ = s.users.TouchActive(ctx, user.ID)
+
+	token, err := s.auth.IssueToken(user.ID, tokenTTL)
+	if err != nil {
+		return nil, err
+	}
+
+	list := []model.Workspace{*ws}
+	return &AuthResult{Token: token, User: user, Workspace: ws, Workspaces: list}, nil
 }
 
 func (s *AuthService) registerWithoutInviteCheck(ctx context.Context, email, password, name string) (*AuthResult, error) {
@@ -248,9 +253,6 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (*AuthR
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)); err != nil {
 		return nil, ErrInvalidCredentials
-	}
-	if user.EmailVerifiedAt == nil {
-		return nil, ErrEmailNotVerified
 	}
 
 	_ = s.users.TouchActive(ctx, user.ID)

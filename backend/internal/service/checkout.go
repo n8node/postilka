@@ -96,6 +96,9 @@ func (s *CheckoutService) CreateSubscribe(
 	if user.IsBlocked {
 		return nil, ErrUserBlocked
 	}
+	if err := RequireVerifiedEmail(user); err != nil {
+		return nil, err
+	}
 
 	plan, err := s.plans.GetByID(ctx, planID)
 	if err != nil {
@@ -165,6 +168,9 @@ func (s *CheckoutService) CreateWalletTopup(ctx context.Context, userID string, 
 	if user.IsBlocked {
 		return nil, ErrUserBlocked
 	}
+	if err := RequireVerifiedEmail(user); err != nil {
+		return nil, err
+	}
 
 	topup, err := s.wallet.CreateTopup(ctx, userID, string(provider), amountCents)
 	if err != nil {
@@ -200,6 +206,9 @@ func (s *CheckoutService) CreatePackageCheckout(ctx context.Context, userID, pac
 	}
 	if user.IsBlocked {
 		return nil, ErrUserBlocked
+	}
+	if err := RequireVerifiedEmail(user); err != nil {
+		return nil, err
 	}
 
 	cfg, err := s.payments.GetEffective(ctx)

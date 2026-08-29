@@ -420,6 +420,8 @@ func (h *WorkflowHandler) AdminStats(w http.ResponseWriter, r *http.Request) {
 
 func writeWorkflowError(w http.ResponseWriter, err error) {
 	switch {
+	case errors.Is(err, service.ErrEmailNotVerified):
+		writeEmailNotVerified(w)
 	case errors.Is(err, service.ErrWorkflowNotFound), errors.Is(err, repository.ErrNotFound):
 		writeError(w, http.StatusNotFound, "Процесс или шаблон не найден")
 	case errors.Is(err, service.ErrWorkflowCyclicGraph):
