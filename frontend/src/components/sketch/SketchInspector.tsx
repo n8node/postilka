@@ -191,15 +191,16 @@ export function SketchInspector({
           </div>
           <div>
             <label className="mb-1 block text-[10px] text-zinc-500">Цвет</label>
-            <div className="flex flex-wrap gap-1">
+            <div className="grid grid-cols-7 gap-1">
               {SKETCH_COLORS.map((c) => (
                 <button
                   key={c}
                   type="button"
+                  aria-label={`Цвет ${c}`}
                   onClick={() => onColorChange(c)}
                   className={cn(
                     "h-5 w-5 rounded-full border-2 transition",
-                    color === c ? "border-indigo-500 scale-110" : "border-transparent",
+                    color === c ? "border-indigo-500 scale-110" : "border-zinc-200 dark:border-zinc-600",
                   )}
                   style={{ backgroundColor: c }}
                 />

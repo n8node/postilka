@@ -77,6 +77,8 @@ export function SketchPage() {
   const [selectedSaveId, setSelectedSaveId] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [hasCanvasContent, setHasCanvasContent] = useState(false);
+  const [sketchDirty, setSketchDirty] = useState(false);
+  const skipDirtyRef = useRef(false);
 
   const creditsRemaining = useMediaCreditsRemaining();
   const setCreditsRemaining = useGenerationCreditsStore((s) => s.setCreditsRemaining);
@@ -131,8 +133,14 @@ export function SketchPage() {
   }, [selectedStyleId, selectedStyle]);
 
   const refreshUndo = useCallback(() => {
+    const has = canvasRef.current?.hasContent() ?? false;
     setCanUndo(canvasRef.current?.canUndo() ?? false);
-    setHasCanvasContent(canvasRef.current?.hasContent() ?? false);
+    setHasCanvasContent(has);
+    if (skipDirtyRef.current) {
+      skipDirtyRef.current = false;
+      return;
+    }
+    setSketchDirty(has);
   }, []);
 
   const reloadSavedSketches = useCallback(() => {
@@ -154,6 +162,16 @@ export function SketchPage() {
     void canvasRef.current.loadFromDataUrl(dataUrl).then(refreshUndo);
   }, [canvasSize.width, canvasSize.height, refreshUndo]);
 
+  const persistCurrentSketch = useCallback(async (): Promise<SavedSketch | null> => {
+    if (!workspaceId || !canvasRef.current?.hasContent()) return null;
+    const dataUrl = await canvasRef.current.exportDataUrl();
+    const saved = saveSketch(workspaceId, aspectRatio, dataUrl);
+    setSelectedSaveId(saved.id);
+    setSketchDirty(false);
+    reloadSavedSketches();
+    return saved;
+  }, [workspaceId, aspectRatio, reloadSavedSketches]);
+
   const handleGenerate = async () => {
     setGenerateError(null);
     if (!selectedStyleId) {
@@ -168,6 +186,14 @@ export function SketchPage() {
     if (!hasMediaCredits(creditsRemaining)) {
       setGenerateError("Недостаточно кредитов. Пополните квоту или кошелёк.");
       return;
+    }
+
+    if (workspaceId && (sketchDirty || !selectedSaveId)) {
+      try {
+        await persistCurrentSketch();
+      } catch {
+        /* generation must continue even if local save fails */
+      }
     }
 
     const submittedPrompt = prompt.trim();
@@ -267,10 +293,7 @@ export function SketchPage() {
       return;
     }
     try {
-      const dataUrl = await canvasRef.current.exportDataUrl();
-      const saved = saveSketch(workspaceId, aspectRatio, dataUrl);
-      setSelectedSaveId(saved.id);
-      reloadSavedSketches();
+      await persistCurrentSketch();
     } catch {
       setSaveError("Не удалось сохранить набросок");
     }
@@ -284,7 +307,9 @@ export function SketchPage() {
   };
 
   const handleLoadSavedSketch = (item: SavedSketch) => {
+    skipDirtyRef.current = true;
     setSelectedSaveId(item.id);
+    setSketchDirty(false);
     setSaveError(null);
     setPrompt("");
     if (item.aspectRatio !== aspectRatio) {
@@ -310,7 +335,9 @@ export function SketchPage() {
   };
 
   const handleClearCanvas = () => {
+    skipDirtyRef.current = true;
     canvasRef.current?.clear();
+    setSketchDirty(false);
     setPrompt("");
   };
 

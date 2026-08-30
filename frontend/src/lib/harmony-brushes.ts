@@ -37,6 +37,12 @@ export const SKETCH_COLORS = [
   "#3b82f6",
   "#8b5cf6",
   "#ec4899",
+  "#ffffff",
+  "#78716c",
+  "#a16207",
+  "#0d9488",
+  "#0369a1",
+  "#be123c",
 ];
 
 type RGB = [number, number, number];
