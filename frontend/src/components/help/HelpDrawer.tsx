@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { CircleHelp, Search, X } from "lucide-react";
@@ -52,13 +53,23 @@ function HelpDrawer({ onClose }: { onClose: () => void }) {
   const [catalog, setCatalog] = useState<HelpArticleSummary[]>([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKey);
+    };
   }, [onClose]);
 
   useEffect(() => {
@@ -105,16 +116,16 @@ function HelpDrawer({ onClose }: { onClose: () => void }) {
     }
   };
 
-  return (
-    <div className="fixed inset-0 z-[80] flex justify-end">
+  const panel = (
+    <div className="fixed inset-0 z-[200] flex justify-end" role="dialog" aria-modal="true">
       <button
         type="button"
-        className="absolute inset-0 bg-zinc-950/45"
+        className="absolute inset-0 bg-zinc-950/50"
         aria-label="Закрыть справку"
         onClick={onClose}
       />
-      <aside className="relative flex h-full w-full flex-col bg-white shadow-2xl dark:bg-zinc-900 md:w-[40vw] md:min-w-[22rem] md:max-w-[44rem]">
-        <header className="flex items-start justify-between gap-3 border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
+      <aside className="relative z-10 flex h-dvh w-full shrink-0 flex-col overflow-hidden border-l border-zinc-200 bg-white shadow-2xl isolate dark:border-zinc-800 dark:bg-zinc-900 md:w-[40vw] md:min-w-[22rem] md:max-w-[44rem]">
+        <header className="flex shrink-0 items-start justify-between gap-3 border-b border-zinc-200 bg-white px-5 py-4 dark:border-zinc-800 dark:bg-zinc-900">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
               Справка
@@ -136,9 +147,9 @@ function HelpDrawer({ onClose }: { onClose: () => void }) {
           </button>
         </header>
 
-        <div className="border-b border-zinc-200 px-5 py-3 dark:border-zinc-800">
+        <div className="shrink-0 border-b border-zinc-200 bg-white px-5 py-3 dark:border-zinc-800 dark:bg-zinc-900">
           <label className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-800/60">
-            <Search className="h-4 w-4 text-zinc-400" />
+            <Search className="h-4 w-4 shrink-0 text-zinc-400" />
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -148,13 +159,13 @@ function HelpDrawer({ onClose }: { onClose: () => void }) {
           </label>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+        <div className="min-h-0 flex-1 overflow-y-auto bg-white px-5 py-4 dark:bg-zinc-900">
           {loading ? (
             <p className="text-sm text-zinc-500">Загрузка…</p>
           ) : article && article.body_html.trim() ? (
             <HelpArticleBody html={article.body_html} />
           ) : (
-            <div className="rounded-2xl border border-dashed border-zinc-200 px-4 py-6 text-sm text-zinc-600 dark:border-zinc-700">
+            <div className="rounded-2xl border border-dashed border-zinc-200 px-4 py-8 text-sm text-zinc-600 dark:border-zinc-700">
               <p>Для этого раздела справки пока нет.</p>
               <Link
                 href="/support"
@@ -196,7 +207,7 @@ function HelpDrawer({ onClose }: { onClose: () => void }) {
           ) : null}
         </div>
 
-        <footer className="border-t border-zinc-200 px-5 py-3 text-sm dark:border-zinc-800">
+        <footer className="shrink-0 border-t border-zinc-200 bg-white px-5 py-3 text-sm dark:border-zinc-800 dark:bg-zinc-900">
           <Link
             href="/support"
             onClick={onClose}
@@ -208,4 +219,7 @@ function HelpDrawer({ onClose }: { onClose: () => void }) {
       </aside>
     </div>
   );
+
+  if (!mounted) return null;
+  return createPortal(panel, document.body);
 }
