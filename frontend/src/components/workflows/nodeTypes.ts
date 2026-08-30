@@ -1,3 +1,24 @@
+export type NodeViewMode = "compact" | "expanded";
+
+export const NODE_VIEW_STORAGE_KEY = "postilka.workflow.nodeView";
+
+export const NODE_CARD_LAYOUT = {
+  compact: {
+    width: 220,
+    height: 72,
+    colGap: 280,
+    rowGap: 140,
+  },
+  expanded: {
+    width: 288,
+    height: 200,
+    triggerWidth: 144,
+    triggerHeight: 144,
+    colGap: 360,
+    rowGap: 220,
+  },
+} as const;
+
 export type NodeCategory =
   | "trigger"
   | "ai"
@@ -463,7 +484,7 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
   merge: {
     type: "merge",
     title: "Merge",
-    description: "Как в n8n: две ветки (Input 1 + Input 2) → один результат",
+    description: "Две ветки (Input 1 + Input 2) собираются в один результат",
     category: "logic",
     icon: "git-merge",
     color: {

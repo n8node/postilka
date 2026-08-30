@@ -21,6 +21,7 @@ import {
   AlignLeft,
   Trash2,
   Copy,
+  Settings,
   Play,
   Loader2,
   AlertCircle,
@@ -46,11 +47,13 @@ import {
   NODE_DEFINITIONS,
   PORT_TYPE_COLORS,
   isPortCompatible,
+  type NodeViewMode,
 } from "./nodeTypes";
 
 interface WorkflowNodeCardProps {
   node: WorkflowNode;
   isSelected: boolean;
+  variant?: NodeViewMode;
   scale: number;
   runStatus?: "pending" | "running" | "completed" | "failed";
   connectingFrom?: {
@@ -68,6 +71,7 @@ interface WorkflowNodeCardProps {
   onUpdateNodeData?: (nodeId: string, newData: Record<string, any>) => void;
   onOpenMediaPicker?: (nodeId: string, field: string) => void;
   onSelect: () => void;
+  onOpenSettings: () => void;
   onDelete: () => void;
   onDuplicate: () => void;
   onTestNode: () => void;
@@ -129,18 +133,21 @@ function formatTriggerScheduleDate(dateStr: string): string {
 export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
   node,
   isSelected,
+  variant = "expanded",
   runStatus,
   connectingFrom,
   onRegisterPort,
   onUpdateNodeData,
   onOpenMediaPicker,
   onSelect,
+  onOpenSettings,
   onDelete,
   onDuplicate,
   onTestNode,
   onStartConnect,
   onEndConnect,
 }) => {
+  const isCompact = variant === "compact";
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -217,7 +224,9 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
         onSelect();
       }}
       className={`group relative select-none rounded-2xl border bg-white/95 dark:bg-zinc-900/95 text-zinc-900 dark:text-zinc-100 shadow-xl backdrop-blur-xl transition-all ${
-        isTrigger
+        isCompact
+          ? "w-[220px]"
+          : isTrigger
           ? "w-36 h-36 flex flex-col justify-between"
           : isVisualNode
           ? "w-72 sm:w-80"
@@ -286,7 +295,9 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
                 e.stopPropagation();
                 onEndConnect(node.id, inp.id, false, inp.type);
               }}
-              className={`group/handle flex h-7 w-7 cursor-crosshair items-center justify-center rounded-full border-2 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 shadow-md transition-all duration-150 ${
+              className={`group/handle flex cursor-crosshair items-center justify-center rounded-full border-2 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 shadow-md transition-all duration-150 ${
+                isCompact ? "h-4 w-4" : "h-7 w-7"
+              } ${
                 isCompatible
                   ? "scale-125 border-emerald-500 bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-200 ring-4 ring-emerald-500/40 animate-pulse z-30"
                   : isSourceOfDrag
@@ -294,25 +305,28 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
                   : "border-zinc-300 dark:border-zinc-600 hover:scale-125 hover:border-indigo-500"
               }`}
             >
-              {inp.type === "string" && (
+              {!isCompact && inp.type === "string" && (
                 <span className="font-bold text-[11px] leading-none text-sky-600 dark:text-sky-400">
                   T
                 </span>
               )}
-              {inp.type === "image" && (
+              {!isCompact && inp.type === "image" && (
                 <ImageIcon className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
               )}
-              {inp.type === "video" && (
+              {!isCompact && inp.type === "video" && (
                 <Video className="h-3.5 w-3.5 text-pink-600 dark:text-pink-400" />
               )}
-              {inp.type === "number" && (
+              {!isCompact && inp.type === "number" && (
                 <Hash className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
               )}
-              {inp.type === "boolean" && (
+              {!isCompact && inp.type === "boolean" && (
                 <GitBranch className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
               )}
-              {inp.type === "any" && (
+              {!isCompact && inp.type === "any" && (
                 <Sparkles className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
+              )}
+              {isCompact && (
+                <span className={`h-1.5 w-1.5 rounded-full ${color.dot}`} />
               )}
 
               {/* Tooltip on hover */}
@@ -370,7 +384,9 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
                 e.stopPropagation();
                 onEndConnect(node.id, out.id, true, out.type);
               }}
-              className={`group/handle flex h-7 w-7 cursor-crosshair items-center justify-center rounded-full border-2 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 shadow-md transition-all duration-150 ${
+              className={`group/handle flex cursor-crosshair items-center justify-center rounded-full border-2 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 shadow-md transition-all duration-150 ${
+                isCompact ? "h-4 w-4" : "h-7 w-7"
+              } ${
                 isCompatible
                   ? "scale-125 border-emerald-500 bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-200 ring-4 ring-emerald-500/40 animate-pulse z-30"
                   : isSourceOfDrag
@@ -378,25 +394,28 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
                   : "border-zinc-300 dark:border-zinc-600 hover:scale-125 hover:border-indigo-500"
               }`}
             >
-              {out.type === "string" && (
+              {!isCompact && out.type === "string" && (
                 <span className="font-bold text-[11px] leading-none text-sky-600 dark:text-sky-400">
                   T
                 </span>
               )}
-              {out.type === "image" && (
+              {!isCompact && out.type === "image" && (
                 <ImageIcon className="h-3.5 w-3.5 text-purple-600 dark:text-purple-400" />
               )}
-              {out.type === "video" && (
+              {!isCompact && out.type === "video" && (
                 <Video className="h-3.5 w-3.5 text-pink-600 dark:text-pink-400" />
               )}
-              {out.type === "number" && (
+              {!isCompact && out.type === "number" && (
                 <Hash className="h-3.5 w-3.5 text-amber-600 dark:text-amber-400" />
               )}
-              {out.type === "boolean" && (
+              {!isCompact && out.type === "boolean" && (
                 <GitBranch className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
               )}
-              {out.type === "any" && (
+              {!isCompact && out.type === "any" && (
                 <Sparkles className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
+              )}
+              {isCompact && (
+                <span className={`h-1.5 w-1.5 rounded-full ${color.dot}`} />
               )}
 
               {/* Tooltip on hover */}
@@ -409,7 +428,7 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
       })}
 
       {/* Node Header */}
-      {isTrigger ? (
+      {!isCompact && isTrigger ? (
         <div className="flex items-center justify-between px-2.5 py-1.5 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-850/60 rounded-t-2xl">
           <div className="flex items-center gap-1.5 overflow-hidden">
             <div
@@ -439,7 +458,19 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
               </span>
             )}
             <button
+              title="Настройки узла"
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenSettings();
+              }}
+              className="rounded p-0.5 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-indigo-600 transition"
+            >
+              <Settings className="h-2.5 w-2.5" />
+            </button>
+            <button
               title="Протестировать запуск"
+              onMouseDown={(e) => e.stopPropagation()}
               onClick={(e) => {
                 e.stopPropagation();
                 onTestNode();
@@ -451,16 +482,27 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
           </div>
         </div>
       ) : (
-        <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-850/60 rounded-t-2xl">
+        <div className={`flex items-center justify-between px-3.5 py-2.5 bg-zinc-50/70 dark:bg-zinc-850/60 ${
+          isCompact
+            ? "rounded-2xl"
+            : "border-b border-zinc-100 dark:border-zinc-800 rounded-t-2xl"
+        }`}>
           <div className="flex items-center gap-2 overflow-hidden">
             <div
               className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md ${def.color.badge} text-[10px] shadow-sm`}
             >
               <Icon className="h-3 w-3" />
             </div>
-            <span className="truncate text-xs font-semibold text-zinc-800 dark:text-zinc-200">
-              {title}
-            </span>
+            <div className="min-w-0">
+              <span className="block truncate text-xs font-semibold text-zinc-800 dark:text-zinc-200">
+                {title}
+              </span>
+              {isCompact && (
+                <span className="block truncate text-[10px] text-zinc-500">
+                  {def.title}
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Status / Quick Action Badge */}
@@ -482,7 +524,19 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
             )}
 
             <button
+              title="Настройки узла"
+              onMouseDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenSettings();
+              }}
+              className="rounded p-1 text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-indigo-600 transition"
+            >
+              <Settings className="h-3 w-3" />
+            </button>
+            <button
               title="Протестировать этот узел"
+              onMouseDown={(e) => e.stopPropagation()}
               onClick={(e) => {
                 e.stopPropagation();
                 onTestNode();
@@ -496,7 +550,7 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
       )}
 
       {/* Node Body */}
-      {isTrigger ? (
+      {!isCompact && isTrigger ? (
         <div className="flex-1 flex flex-col items-center justify-center p-2 text-center select-none">
           {node.data.triggerType === "schedule" ? (
             <div className="flex flex-col items-center justify-center gap-1">
@@ -568,7 +622,7 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
             </div>
           )}
         </div>
-      ) : (
+      ) : !isCompact ? (
         <div className="p-3 min-h-[92px]">
         {/* 1. IMAGE / MEDIA FROM DISK OR PC */}
         {node.type === "files_media" && (
@@ -1033,7 +1087,7 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
           <div className="space-y-2">
             <div className="rounded-xl border border-teal-100 dark:border-teal-900/40 bg-teal-50/60 dark:bg-teal-950/20 p-3 text-[11px] leading-relaxed text-zinc-800 dark:text-zinc-200">
               <p className="font-medium text-teal-800 dark:text-teal-300 mb-1.5">
-                Как Merge в n8n
+                Собирает две входящие ветки
               </p>
               <p>
                 Ждёт <span className="font-semibold">Input 1</span> и{" "}
@@ -1151,10 +1205,23 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
           </div>
         )}
       </div>
-      )}
+      ) : null}
 
       {/* Node Hover Actions Bar */}
-      <div className="absolute -top-3.5 right-2 hidden group-hover:flex items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-0.5 shadow-md z-30">
+      <div className={`absolute -top-3.5 right-2 items-center gap-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 p-0.5 shadow-md z-30 ${
+        isSelected ? "flex" : "hidden group-hover:flex"
+      }`}>
+        <button
+          title="Настройки узла"
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenSettings();
+          }}
+          className="rounded p-1 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-700 hover:text-indigo-600 dark:hover:text-indigo-400 transition"
+        >
+          <Settings className="h-3 w-3" />
+        </button>
         <button
           title="Дублировать узел"
           onClick={(e) => {

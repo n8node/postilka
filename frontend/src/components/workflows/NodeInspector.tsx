@@ -65,21 +65,24 @@ interface NodeInspectorProps {
   node: WorkflowNode | null;
   allNodes: WorkflowNode[];
   workflowId?: string;
-  onClose: () => void;
+  layout?: "sidebar" | "form";
+  onClose?: () => void;
   onUpdateNodeData: (nodeId: string, newData: Record<string, any>) => void;
   onOpenMediaPicker?: (nodeId: string, field: string) => void;
-  onTestNode: (node: WorkflowNode) => Promise<{ outputs: Record<string, any> }>;
+  onTestNode?: (node: WorkflowNode) => Promise<{ outputs: Record<string, any> }>;
 }
 
 export const NodeInspector: React.FC<NodeInspectorProps> = ({
   node,
   allNodes,
   workflowId,
+  layout = "sidebar",
   onClose,
   onUpdateNodeData,
   onOpenMediaPicker,
   onTestNode,
 }) => {
+  const isFormLayout = layout === "form";
   const inspectorFileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -230,6 +233,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
   };
 
   const handleTest = async () => {
+    if (!onTestNode) return;
     setTesting(true);
     setTestResult(null);
     try {
@@ -329,13 +333,9 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
     );
   };
 
-  return (
-    <aside
-      onWheel={(e) => e.stopPropagation()}
-      data-panel="inspector"
-      className="absolute right-3 top-3 bottom-3 z-30 flex w-96 sm:w-[440px] max-h-[calc(100%-1.5rem)] flex-col rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-900/95 shadow-2xl backdrop-blur-md"
-    >
-      {/* Header */}
+  const formBody = (
+    <>
+      {!isFormLayout && (
       <div className="flex shrink-0 items-center justify-between border-b border-zinc-100 dark:border-zinc-800 px-4 py-3">
         <div className="flex items-center gap-2">
           <div
@@ -359,9 +359,15 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
           <X className="h-4 w-4" />
         </button>
       </div>
+      )}
 
-      {/* Form Content */}
-      <div className="flex-1 min-h-0 space-y-4 overflow-y-auto p-4 text-xs">
+      <div
+        className={
+          isFormLayout
+            ? "space-y-4 text-xs"
+            : "flex-1 min-h-0 space-y-4 overflow-y-auto p-4 text-xs"
+        }
+      >
         {/* Title Field */}
         <div>
           <label className="mb-1 block font-medium text-zinc-700 dark:text-zinc-300">
@@ -2338,7 +2344,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
           <div className="space-y-3">
             <div className="rounded-xl border border-teal-100 dark:border-teal-900/40 bg-teal-50/60 dark:bg-teal-950/20 p-3 text-[11px] leading-relaxed text-zinc-700 dark:text-zinc-300 space-y-2">
               <p className="font-medium text-teal-800 dark:text-teal-300">
-                Работает как Merge в n8n
+                Объединяет две входящие ветки
               </p>
               <ul className="list-disc pl-4 space-y-1 text-[10px]">
                 <li>
@@ -2381,8 +2387,8 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
             </div>
             <p className="text-[10px] text-zinc-500">
               В режиме Combine поля с одинаковыми именами сливаются; если ключ
-              уже заполнен, берётся первое непустое значение. Это аналог n8n
-              Combine → By Position для одного item на каждый вход.
+              уже заполнен, берётся первое непустое значение. Одинаковые ключи
+              сливаются по позиции: один объект на каждый вход.
             </p>
           </div>
         )}
@@ -2673,7 +2679,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
         )}
 
         {/* Test Node Execution Output */}
-        {testResult && (
+        {!isFormLayout && testResult && (
           <div
             className={`rounded-xl border p-3 text-xs ${
               testResult.error
@@ -2710,7 +2716,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
         )}
       </div>
 
-      {/* Footer / Test Button */}
+      {!isFormLayout && (
       <div className="shrink-0 border-t border-zinc-100 dark:border-zinc-800 p-3">
         {node.type === "trigger" && data.triggerType === "webhook" ? (
           <p className="text-center text-[10px] text-zinc-500 leading-relaxed">
@@ -2732,6 +2738,25 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
           </button>
         )}
       </div>
+      )}
+    </>
+  );
+
+  if (isFormLayout) {
+    return (
+      <div onWheel={(e) => e.stopPropagation()} data-panel="inspector">
+        {formBody}
+      </div>
+    );
+  }
+
+  return (
+    <aside
+      onWheel={(e) => e.stopPropagation()}
+      data-panel="inspector"
+      className="absolute right-3 top-3 bottom-3 z-30 flex w-96 sm:w-[440px] max-h-[calc(100%-1.5rem)] flex-col rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-900/95 shadow-2xl backdrop-blur-md"
+    >
+      {formBody}
     </aside>
   );
 };

@@ -7,6 +7,8 @@ import {
   Plus,
   History,
   LayoutGrid,
+  Rows2,
+  PanelTop,
   ZoomIn,
   ZoomOut,
   Maximize2,
@@ -34,12 +36,15 @@ import { getCachedFileMediaUrl } from "@/lib/file-media-cache";
 import type { WorkspaceFile } from "@/lib/files-api";
 import { WorkflowNodeCard } from "./WorkflowNodeCard";
 import { NodePalette } from "./NodePalette";
-import { NodeInspector } from "./NodeInspector";
+import { NodeEditorModal } from "./NodeEditorModal";
 import {
   NODE_DEFINITIONS,
+  NODE_CARD_LAYOUT,
+  NODE_VIEW_STORAGE_KEY,
   PORT_TYPE_COLORS,
   isPortCompatible,
   calculateWorkflowCost,
+  type NodeViewMode,
 } from "./nodeTypes";
 
 interface WorkflowCanvasProps {
@@ -65,6 +70,16 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   const [isActive, setIsActive] = useState(workflow.is_active);
 
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [inspectedNodeId, setInspectedNodeId] = useState<string | null>(null);
+  const [nodeView, setNodeView] = useState<NodeViewMode>(() => {
+    if (typeof window === "undefined") return "compact";
+    return window.localStorage.getItem(NODE_VIEW_STORAGE_KEY) === "expanded"
+      ? "expanded"
+      : "compact";
+  });
+  const [nodeOutputCache, setNodeOutputCache] = useState<
+    Record<string, Record<string, any>>
+  >({});
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null);
   const [hoveredDeleteEdgeId, setHoveredDeleteEdgeId] = useState<string | null>(null);
@@ -149,16 +164,25 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
 
     // Mathematical fallback based on port index if DOM element not yet mounted
     const isTrigger = node.type === "trigger";
-    const nodeWidth = isTrigger ? 144 : 288;
+    const compact = nodeView === "compact";
+    const nodeWidth = compact
+      ? NODE_CARD_LAYOUT.compact.width
+      : isTrigger
+      ? NODE_CARD_LAYOUT.expanded.triggerWidth
+      : NODE_CARD_LAYOUT.expanded.width;
     const portIndex = ports?.findIndex((p) => p.id === actualPortId) ?? 0;
     const safeIdx = portIndex >= 0 ? portIndex : 0;
-    const nodeYOffset = isTrigger ? 72 : 130 + safeIdx * 28;
+    const nodeYOffset = compact
+      ? NODE_CARD_LAYOUT.compact.height / 2
+      : isTrigger
+      ? NODE_CARD_LAYOUT.expanded.triggerHeight / 2
+      : 130 + safeIdx * 28;
     return {
       x: isOutput ? node.position.x + nodeWidth + 8 : node.position.x - 8,
       y: node.position.y + nodeYOffset,
     };
     },
-    [pan.x, pan.y, zoom]
+    [pan.x, pan.y, zoom, nodeView]
   );
 
   // Sync state if initial prop changes
@@ -403,7 +427,8 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
       prev.filter((e) => e.source !== nodeId && e.target !== nodeId)
     );
     if (selectedNodeId === nodeId) setSelectedNodeId(null);
-  }, [selectedNodeId]);
+    if (inspectedNodeId === nodeId) setInspectedNodeId(null);
+  }, [selectedNodeId, inspectedNodeId]);
 
   // Delete edge (connection)
   const handleDeleteEdge = useCallback((edgeId: string) => {
@@ -421,6 +446,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         activeEl instanceof HTMLSelectElement ||
         activeEl?.getAttribute("contenteditable") === "true";
       if (isInput) return;
+      if (inspectedNodeId) return;
 
       if (e.key === "Delete" || e.key === "Backspace") {
         if (selectedEdgeId) {
@@ -435,7 +461,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedEdgeId, selectedNodeId, handleDeleteEdge, handleDeleteNode]);
+  }, [selectedEdgeId, selectedNodeId, inspectedNodeId, handleDeleteEdge, handleDeleteNode]);
 
   // Update node data from inspector
   const handleUpdateNodeData = (nodeId: string, newData: Record<string, any>) => {
@@ -490,11 +516,15 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
       prev.map((n) => {
         const lvl = levels[n.id] || 0;
         const indexInLvl = (levelBuckets[lvl] || []).indexOf(n.id);
+        const layout =
+          nodeView === "compact"
+            ? NODE_CARD_LAYOUT.compact
+            : NODE_CARD_LAYOUT.expanded;
         return {
           ...n,
           position: {
-            x: 80 + lvl * 360,
-            y: 100 + (indexInLvl >= 0 ? indexInLvl : 0) * 220,
+            x: 80 + lvl * layout.colGap,
+            y: 100 + (indexInLvl >= 0 ? indexInLvl : 0) * layout.rowGap,
           },
         };
       })
@@ -523,8 +553,34 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
     }
   };
 
-  // Selected node object
-  const selectedNode = nodes.find((n) => n.id === selectedNodeId) || null;
+  const inspectedNode = nodes.find((n) => n.id === inspectedNodeId) || null;
+
+  const handleNodeViewChange = (mode: NodeViewMode) => {
+    setNodeView(mode);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(NODE_VIEW_STORAGE_KEY, mode);
+    }
+    setPortVersion((v) => v + 1);
+  };
+
+  const handleOpenSettings = (nodeId: string) => {
+    setSelectedNodeId(nodeId);
+    setInspectedNodeId(nodeId);
+    setSelectedEdgeId(null);
+  };
+
+  const handleCardTestNode = async (node: WorkflowNode) => {
+    setSelectedNodeId(node.id);
+    try {
+      const res = await onTestNode(node);
+      setNodeOutputCache((prev) => ({ ...prev, [node.id]: res.outputs }));
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Ошибка при выполнении узла";
+      setWarningToast(message);
+      setTimeout(() => setWarningToast(null), 3500);
+    }
+  };
 
   return (
     <div className="relative flex h-[calc(100vh-3.5rem)] w-full flex-col overflow-hidden bg-zinc-50 dark:bg-zinc-950">
@@ -590,6 +646,33 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
           >
             <LayoutGrid className="h-4 w-4" />
           </button>
+
+          <div className="flex items-center rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-0.5">
+            <button
+              type="button"
+              onClick={() => handleNodeViewChange("compact")}
+              title="Компактные узлы"
+              className={`rounded-lg p-1.5 transition ${
+                nodeView === "compact"
+                  ? "bg-indigo-600 text-white shadow-sm"
+                  : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+              }`}
+            >
+              <Rows2 className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => handleNodeViewChange("expanded")}
+              title="Развёрнутые узлы"
+              className={`rounded-lg p-1.5 transition ${
+                nodeView === "expanded"
+                  ? "bg-indigo-600 text-white shadow-sm"
+                  : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+              }`}
+            >
+              <PanelTop className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         {/* Right: Economics, History, Test Run & Save */}
@@ -928,6 +1011,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
               <WorkflowNodeCard
                 node={node}
                 isSelected={selectedNodeId === node.id}
+                variant={nodeView}
                 scale={zoom}
                 connectingFrom={connectingFrom}
                 onRegisterPort={handleRegisterPort}
@@ -939,10 +1023,11 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                   setSelectedNodeId(node.id);
                   setSelectedEdgeId(null);
                 }}
+                onOpenSettings={() => handleOpenSettings(node.id)}
                 onDelete={() => handleDeleteNode(node.id)}
                 onDuplicate={() => handleDuplicateNode(node.id)}
                 onTestNode={() => {
-                  setSelectedNodeId(node.id);
+                  void handleCardTestNode(node);
                 }}
                 onStartConnect={handleStartConnect}
                 onEndConnect={handleEndConnect}
@@ -958,18 +1043,23 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
           onAddNode={handleAddNode}
         />
 
-        {/* Floating Node Properties Inspector */}
-        {selectedNode && (
-          <NodeInspector
-            node={selectedNode}
+        {inspectedNode && (
+          <NodeEditorModal
+            node={inspectedNode}
             allNodes={nodes}
+            edges={edges}
             workflowId={workflow.id}
-            onClose={() => setSelectedNodeId(null)}
+            lastRunSteps={workflow.last_run?.steps}
+            outputCache={nodeOutputCache}
+            onClose={() => setInspectedNodeId(null)}
             onUpdateNodeData={handleUpdateNodeData}
             onOpenMediaPicker={(nodeId, field) =>
               setMediaPickerTarget({ nodeId, field, mediaKind: "image" })
             }
             onTestNode={onTestNode}
+            onTestSuccess={(nodeId, outputs) =>
+              setNodeOutputCache((prev) => ({ ...prev, [nodeId]: outputs }))
+            }
           />
         )}
 
