@@ -89,7 +89,7 @@ interface WorkflowNodeCardProps {
   ) => void;
   onUpdateNodeData?: (nodeId: string, newData: Record<string, any>) => void;
   onOpenMediaPicker?: (nodeId: string, field: string) => void;
-  onSelect: () => void;
+  onSelect: (e: React.MouseEvent) => void;
   onOpenSettings: () => void;
   onDelete: () => void;
   onDuplicate: () => void;
@@ -243,7 +243,7 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
     <div
       onClick={(e) => {
         e.stopPropagation();
-        onSelect();
+        onSelect(e);
       }}
       style={!isTrigger || isCompact ? { minHeight: minHeightPx } : undefined}
       className={`group relative select-none rounded-2xl border bg-white/95 dark:bg-zinc-900/95 text-zinc-900 dark:text-zinc-100 shadow-xl backdrop-blur-xl transition-all ${

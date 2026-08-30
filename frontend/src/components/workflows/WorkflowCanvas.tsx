@@ -60,6 +60,17 @@ import {
   buildEdgePath,
   type EdgeStyle,
 } from "./edgePaths";
+import {
+  clientToGraph,
+  cloneGraphSelection,
+  getNodeBounds,
+  lineIntersectsRect,
+  normalizeRect,
+  pasteGraphSelection,
+  rectsIntersect,
+  toggleId,
+  unionIds,
+} from "./canvasSelection";
 
 interface WorkflowCanvasProps {
   workflow: Workflow;
@@ -83,7 +94,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   const [name, setName] = useState(workflow.name);
   const [isActive, setIsActive] = useState(workflow.is_active);
 
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [selectedNodeIds, setSelectedNodeIds] = useState<string[]>([]);
   const [inspectedNodeId, setInspectedNodeId] = useState<string | null>(null);
   const [nodeView, setNodeView] = useState<NodeViewMode>(() => {
     if (typeof window === "undefined") return "compact";
@@ -100,7 +111,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   const [nodeOutputCache, setNodeOutputCache] = useState<
     Record<string, Record<string, any>>
   >({});
-  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
+  const [selectedEdgeIds, setSelectedEdgeIds] = useState<string[]>([]);
   const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null);
   const [hoveredDeleteEdgeId, setHoveredDeleteEdgeId] = useState<string | null>(null);
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
@@ -115,11 +126,38 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
 
   // Dragging node state
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const dragStartRef = useRef<{
+    origin: { x: number; y: number };
+    positions: Record<string, { x: number; y: number }>;
+  } | null>(null);
+  const dragMovedRef = useRef(false);
+  const clipboardRef = useRef<{
+    nodes: WorkflowNode[];
+    edges: WorkflowEdge[];
+  } | null>(null);
+  const nodesRef = useRef(nodes);
+  const edgesRef = useRef(edges);
+  const selectedNodeIdsRef = useRef(selectedNodeIds);
+  const selectedEdgeIdsRef = useRef(selectedEdgeIds);
+  nodesRef.current = nodes;
+  edgesRef.current = edges;
+  selectedNodeIdsRef.current = selectedNodeIds;
+  selectedEdgeIdsRef.current = selectedEdgeIds;
 
   // Panning canvas state
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+  const [marquee, setMarquee] = useState<{
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+    additive: boolean;
+  } | null>(null);
+  const marqueeRef = useRef(marquee);
+  marqueeRef.current = marquee;
+  const panZoomRef = useRef({ pan, zoom });
+  panZoomRef.current = { pan, zoom };
 
   // Connection wire in progress
   const [connectingFrom, setConnectingFrom] = useState<{
@@ -219,18 +257,88 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
     setPortVersion((v) => v + 1);
   }, [workflow]);
 
-  // Handle Canvas Pan (Mouse Drag)
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (e.target === canvasRef.current || (e.target as HTMLElement).tagName === "svg") {
-      setIsPanning(true);
-      setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
-      setSelectedNodeId(null);
-      setSelectedEdgeId(null);
+  const clearSelection = useCallback(() => {
+    setSelectedNodeIds([]);
+    setSelectedEdgeIds([]);
+  }, []);
+
+  const applyMarqueeSelection = useCallback(() => {
+    const box = marqueeRef.current;
+    if (!box) return;
+    const rect = normalizeRect(box.x1, box.y1, box.x2, box.y2);
+    if (rect.w < 4 && rect.h < 4) {
+      setMarquee(null);
+      return;
     }
+    const hitNodes = nodesRef.current
+      .filter((node) => rectsIntersect(rect, getNodeBounds(node, nodeView)))
+      .map((node) => node.id);
+    const hitEdges = edgesRef.current
+      .filter((edge) => {
+        const sourceNode = nodesRef.current.find((n) => n.id === edge.source);
+        const targetNode = nodesRef.current.find((n) => n.id === edge.target);
+        if (!sourceNode || !targetNode) return false;
+        const sourceDef = NODE_DEFINITIONS[sourceNode.type];
+        const targetDef = NODE_DEFINITIONS[targetNode.type];
+        const p1 = getPortAnchor(
+          sourceNode,
+          edge.sourceHandle || sourceDef?.outputs[0]?.id,
+          true
+        );
+        const p2 = getPortAnchor(
+          targetNode,
+          edge.targetHandle || targetDef?.inputs[0]?.id,
+          false
+        );
+        return lineIntersectsRect(p1, p2, rect);
+      })
+      .map((edge) => edge.id);
+    setSelectedNodeIds((prev) =>
+      box.additive ? unionIds(prev, hitNodes) : hitNodes
+    );
+    setSelectedEdgeIds((prev) =>
+      box.additive ? unionIds(prev, hitEdges) : hitEdges
+    );
+    setMarquee(null);
+  }, [getPortAnchor, nodeView]);
+
+  // Handle Canvas Pan (Mouse Drag) or Shift+drag marquee
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (e.target !== canvasRef.current && (e.target as HTMLElement).tagName !== "svg") {
+      return;
+    }
+    if (connectingFrom) return;
+    const canvasRect = canvasRef.current?.getBoundingClientRect();
+    if (!canvasRect) return;
+
+    if (e.shiftKey) {
+      const point = clientToGraph(e.clientX, e.clientY, canvasRect, pan, zoom);
+      setMarquee({
+        x1: point.x,
+        y1: point.y,
+        x2: point.x,
+        y2: point.y,
+        additive: true,
+      });
+      return;
+    }
+
+    setIsPanning(true);
+    setPanStart({ x: e.clientX - pan.x, y: e.clientY - pan.y });
+    clearSelection();
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
     setMousePos({ x: e.clientX, y: e.clientY });
+    const canvasRect = canvasRef.current?.getBoundingClientRect();
+
+    if (marquee && canvasRect) {
+      const point = clientToGraph(e.clientX, e.clientY, canvasRect, pan, zoom);
+      setMarquee((prev) =>
+        prev ? { ...prev, x2: point.x, y2: point.y } : prev
+      );
+      return;
+    }
 
     if (isPanning) {
       setPan({
@@ -240,28 +348,78 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
       return;
     }
 
-    if (draggingNodeId) {
-      const canvasRect = canvasRef.current?.getBoundingClientRect();
-      if (!canvasRect) return;
-
-      const newX = (e.clientX - canvasRect.left - pan.x) / zoom - dragOffset.x;
-      const newY = (e.clientY - canvasRect.top - pan.y) / zoom - dragOffset.y;
-
+    if (draggingNodeId && canvasRect && dragStartRef.current) {
+      const point = clientToGraph(e.clientX, e.clientY, canvasRect, pan, zoom);
+      const dx = point.x - dragStartRef.current.origin.x;
+      const dy = point.y - dragStartRef.current.origin.y;
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) dragMovedRef.current = true;
+      const starts = dragStartRef.current.positions;
       setNodes((prev) =>
-        prev.map((n) =>
-          n.id === draggingNodeId
-            ? { ...n, position: { x: Math.round(newX), y: Math.round(newY) } }
-            : n
-        )
+        prev.map((n) => {
+          const start = starts[n.id];
+          if (!start) return n;
+          return {
+            ...n,
+            position: { x: Math.round(start.x + dx), y: Math.round(start.y + dy) },
+          };
+        })
       );
     }
   };
 
-  const handleMouseUp = () => {
+  const handleMouseUp = useCallback(() => {
+    if (marqueeRef.current) applyMarqueeSelection();
     setIsPanning(false);
     setDraggingNodeId(null);
+    dragStartRef.current = null;
     setConnectingFrom(null);
-  };
+  }, [applyMarqueeSelection]);
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      const canvasRect = canvasRef.current?.getBoundingClientRect();
+      if (!canvasRect) return;
+      const { pan: nextPan, zoom: nextZoom } = panZoomRef.current;
+      const point = clientToGraph(
+        e.clientX,
+        e.clientY,
+        canvasRect,
+        nextPan,
+        nextZoom
+      );
+      if (marqueeRef.current) {
+        setMarquee((prev) =>
+          prev ? { ...prev, x2: point.x, y2: point.y } : prev
+        );
+        return;
+      }
+      const start = dragStartRef.current;
+      if (!start) return;
+      const dx = point.x - start.origin.x;
+      const dy = point.y - start.origin.y;
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) dragMovedRef.current = true;
+      setNodes((prev) =>
+        prev.map((n) => {
+          const origin = start.positions[n.id];
+          if (!origin) return n;
+          return {
+            ...n,
+            position: {
+              x: Math.round(origin.x + dx),
+              y: Math.round(origin.y + dy),
+            },
+          };
+        })
+      );
+    };
+    const onUp = () => handleMouseUp();
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [handleMouseUp]);
 
   // Zoom with wheel
   const handleWheel = (e: React.WheelEvent) => {
@@ -289,22 +447,33 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
 
   // Node Drag Start
   const handleNodeDragStart = (nodeId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
     const node = nodes.find((n) => n.id === nodeId);
     if (!node) return;
+    if (e.shiftKey || e.ctrlKey || e.metaKey) return;
 
     const canvasRect = canvasRef.current?.getBoundingClientRect();
     if (!canvasRect) return;
 
-    const mouseCanvasX = (e.clientX - canvasRect.left - pan.x) / zoom;
-    const mouseCanvasY = (e.clientY - canvasRect.top - pan.y) / zoom;
+    const point = clientToGraph(e.clientX, e.clientY, canvasRect, pan, zoom);
+    const movingIds = selectedNodeIds.includes(nodeId)
+      ? selectedNodeIds
+      : [nodeId];
+    if (!selectedNodeIds.includes(nodeId)) {
+      setSelectedNodeIds([nodeId]);
+      setSelectedEdgeIds([]);
+    }
 
+    dragMovedRef.current = false;
+    dragStartRef.current = {
+      origin: point,
+      positions: Object.fromEntries(
+        nodes
+          .filter((item) => movingIds.includes(item.id))
+          .map((item) => [item.id, { ...item.position }])
+      ),
+    };
     setDraggingNodeId(nodeId);
-    setDragOffset({
-      x: mouseCanvasX - node.position.x,
-      y: mouseCanvasY - node.position.y,
-    });
-    setSelectedNodeId(nodeId);
-    setSelectedEdgeId(null);
   };
 
   // Start connecting wire
@@ -426,42 +595,91 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
     };
 
     setNodes((prev) => [...prev, newNode]);
-    setSelectedNodeId(newId);
+    setSelectedNodeIds([newId]);
+    setSelectedEdgeIds([]);
   };
 
   // Duplicate node
   const handleDuplicateNode = (nodeId: string) => {
-    const node = nodes.find((n) => n.id === nodeId);
-    if (!node) return;
-
-    const newId = `${node.type}_${Date.now().toString().slice(-4)}`;
-    const newNode: WorkflowNode = {
-      ...node,
-      id: newId,
-      position: { x: node.position.x + 40, y: node.position.y + 40 },
-      data: { ...node.data, title: `${node.data.title || node.type} (Копия)` },
-    };
-    setNodes((prev) => [...prev, newNode]);
-    setSelectedNodeId(newId);
+    const clip = cloneGraphSelection(nodes, edges, [nodeId]);
+    if (!clip) return;
+    const pasted = pasteGraphSelection(clip, nodes);
+    const first = pasted.nodes[0];
+    if (first?.data.title && typeof first.data.title === "string") {
+      first.data = {
+        ...first.data,
+        title: `${first.data.title} (Копия)`,
+      };
+    }
+    setNodes((prev) => [...prev, ...pasted.nodes]);
+    setEdges((prev) => [...prev, ...pasted.edges]);
+    setSelectedNodeIds(pasted.nodes.map((item) => item.id));
+    setSelectedEdgeIds(pasted.edges.map((item) => item.id));
   };
+
+  const handleDeleteNodes = useCallback((nodeIds: string[]) => {
+    const remove = new Set(nodeIds);
+    setNodes((prev) => prev.filter((n) => !remove.has(n.id)));
+    setEdges((prev) =>
+      prev.filter((e) => !remove.has(e.source) && !remove.has(e.target))
+    );
+    setSelectedNodeIds((prev) => prev.filter((id) => !remove.has(id)));
+    if (inspectedNodeId && remove.has(inspectedNodeId)) {
+      setInspectedNodeId(null);
+    }
+  }, [inspectedNodeId]);
 
   // Delete node
   const handleDeleteNode = useCallback((nodeId: string) => {
-    setNodes((prev) => prev.filter((n) => n.id !== nodeId));
-    setEdges((prev) =>
-      prev.filter((e) => e.source !== nodeId && e.target !== nodeId)
-    );
-    if (selectedNodeId === nodeId) setSelectedNodeId(null);
-    if (inspectedNodeId === nodeId) setInspectedNodeId(null);
-  }, [selectedNodeId, inspectedNodeId]);
+    handleDeleteNodes([nodeId]);
+  }, [handleDeleteNodes]);
 
   // Delete edge (connection)
   const handleDeleteEdge = useCallback((edgeId: string) => {
     setEdges((prev) => prev.filter((e) => e.id !== edgeId));
-    if (selectedEdgeId === edgeId) setSelectedEdgeId(null);
-  }, [selectedEdgeId]);
+    setSelectedEdgeIds((prev) => prev.filter((id) => id !== edgeId));
+  }, []);
 
-  // Keyboard shortcut listener (Delete / Backspace)
+  const handleDeleteSelection = useCallback(() => {
+    const nodeIds = selectedNodeIdsRef.current;
+    const edgeIds = new Set(selectedEdgeIdsRef.current);
+    if (nodeIds.length === 0 && edgeIds.size === 0) return;
+    const removeNodes = new Set(nodeIds);
+    setNodes((prev) => prev.filter((n) => !removeNodes.has(n.id)));
+    setEdges((prev) =>
+      prev.filter(
+        (e) =>
+          !removeNodes.has(e.source) &&
+          !removeNodes.has(e.target) &&
+          !edgeIds.has(e.id)
+      )
+    );
+    if (inspectedNodeId && removeNodes.has(inspectedNodeId)) {
+      setInspectedNodeId(null);
+    }
+    clearSelection();
+  }, [clearSelection, inspectedNodeId]);
+
+  const handleCopySelection = useCallback(() => {
+    const clip = cloneGraphSelection(
+      nodesRef.current,
+      edgesRef.current,
+      selectedNodeIdsRef.current
+    );
+    if (clip) clipboardRef.current = clip;
+  }, []);
+
+  const handlePasteSelection = useCallback(() => {
+    const clip = clipboardRef.current;
+    if (!clip) return;
+    const pasted = pasteGraphSelection(clip, nodesRef.current);
+    setNodes((prev) => [...prev, ...pasted.nodes]);
+    setEdges((prev) => [...prev, ...pasted.edges]);
+    setSelectedNodeIds(pasted.nodes.map((item) => item.id));
+    setSelectedEdgeIds(pasted.edges.map((item) => item.id));
+  }, []);
+
+  // Keyboard shortcut listener
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       const activeEl = document.activeElement;
@@ -471,22 +689,62 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         activeEl instanceof HTMLSelectElement ||
         activeEl?.getAttribute("contenteditable") === "true";
       if (isInput) return;
+
+      if (e.key === "Escape") {
+        e.preventDefault();
+        if (inspectedNodeId) {
+          setInspectedNodeId(null);
+          return;
+        }
+        setMarquee(null);
+        clearSelection();
+        return;
+      }
+
       if (inspectedNodeId) return;
 
+      const mod = e.ctrlKey || e.metaKey;
+      const key = e.key.toLowerCase();
+
+      if (mod && key === "a") {
+        e.preventDefault();
+        setSelectedNodeIds(nodesRef.current.map((n) => n.id));
+        setSelectedEdgeIds(edgesRef.current.map((edge) => edge.id));
+        return;
+      }
+      if (mod && key === "c") {
+        if (selectedNodeIdsRef.current.length === 0) return;
+        e.preventDefault();
+        handleCopySelection();
+        return;
+      }
+      if (mod && key === "v") {
+        if (!clipboardRef.current) return;
+        e.preventDefault();
+        handlePasteSelection();
+        return;
+      }
+
       if (e.key === "Delete" || e.key === "Backspace") {
-        if (selectedEdgeId) {
+        if (
+          selectedNodeIdsRef.current.length > 0 ||
+          selectedEdgeIdsRef.current.length > 0
+        ) {
           e.preventDefault();
-          handleDeleteEdge(selectedEdgeId);
-        } else if (selectedNodeId) {
-          e.preventDefault();
-          handleDeleteNode(selectedNodeId);
+          handleDeleteSelection();
         }
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedEdgeId, selectedNodeId, inspectedNodeId, handleDeleteEdge, handleDeleteNode]);
+  }, [
+    inspectedNodeId,
+    clearSelection,
+    handleCopySelection,
+    handlePasteSelection,
+    handleDeleteSelection,
+  ]);
 
   // Update node data from inspector
   const handleUpdateNodeData = (nodeId: string, newData: Record<string, any>) => {
@@ -596,13 +854,13 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   };
 
   const handleOpenSettings = (nodeId: string) => {
-    setSelectedNodeId(nodeId);
+    setSelectedNodeIds([nodeId]);
     setInspectedNodeId(nodeId);
-    setSelectedEdgeId(null);
+    setSelectedEdgeIds([]);
   };
 
   const handleCardTestNode = async (node: WorkflowNode) => {
-    setSelectedNodeId(node.id);
+    setSelectedNodeIds([node.id]);
     try {
       const res = await onTestNode(node);
       setNodeOutputCache((prev) => ({ ...prev, [node.id]: res.outputs }));
@@ -795,7 +1053,11 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onWheel={handleWheel}
-        className="relative flex-1 cursor-grab active:cursor-grabbing select-none overflow-hidden"
+        className={`relative flex-1 select-none overflow-hidden ${
+          marquee
+            ? "cursor-crosshair"
+            : "cursor-grab active:cursor-grabbing"
+        }`}
         style={{
           backgroundImage:
             "radial-gradient(circle, rgba(160, 160, 160, 0.2) 1px, transparent 1px)",
@@ -838,7 +1100,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
               const p1 = getPortAnchor(sourceNode, sourceHandleId, true);
               const p2 = getPortAnchor(targetNode, targetHandleId, false);
               const { d: pathD, mid } = buildEdgePath(edgeStyle, p1, p2);
-              const isEdgeSelected = selectedEdgeId === edge.id;
+              const isEdgeSelected = selectedEdgeIds.includes(edge.id);
               const isEdgeHovered = hoveredEdgeId === edge.id;
               const showDeleteBtn =
                 isEdgeSelected ||
@@ -881,13 +1143,15 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                     className="cursor-pointer"
                     onMouseDown={(e) => {
                       e.stopPropagation();
-                      setSelectedEdgeId(edge.id);
-                      setSelectedNodeId(null);
+                      if (e.shiftKey || e.ctrlKey || e.metaKey) {
+                        setSelectedEdgeIds((prev) => toggleId(prev, edge.id));
+                        return;
+                      }
+                      setSelectedEdgeIds([edge.id]);
+                      setSelectedNodeIds([]);
                     }}
                     onClick={(e) => {
                       e.stopPropagation();
-                      setSelectedEdgeId(edge.id);
-                      setSelectedNodeId(null);
                     }}
                   />
                   {/* Base wire — no geometry transition while dragging */}
@@ -902,13 +1166,15 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                     className={`${edgeMotionClass} cursor-pointer`}
                     onMouseDown={(e) => {
                       e.stopPropagation();
-                      setSelectedEdgeId(edge.id);
-                      setSelectedNodeId(null);
+                      if (e.shiftKey || e.ctrlKey || e.metaKey) {
+                        setSelectedEdgeIds((prev) => toggleId(prev, edge.id));
+                        return;
+                      }
+                      setSelectedEdgeIds([edge.id]);
+                      setSelectedNodeIds([]);
                     }}
                     onClick={(e) => {
                       e.stopPropagation();
-                      setSelectedEdgeId(edge.id);
-                      setSelectedNodeId(null);
                     }}
                   />
                   {/* Subtle flowing highlight (data stream) */}
@@ -1052,6 +1318,18 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
             })()}
           </svg>
 
+          {marquee && (
+            <div
+              className="pointer-events-none absolute z-20 border border-indigo-500 bg-indigo-500/10"
+              style={{
+                left: Math.min(marquee.x1, marquee.x2),
+                top: Math.min(marquee.y1, marquee.y2),
+                width: Math.abs(marquee.x2 - marquee.x1),
+                height: Math.abs(marquee.y2 - marquee.y1),
+              }}
+            />
+          )}
+
           {/* Node Cards Layer */}
           {nodes.map((node) => (
             <div
@@ -1065,7 +1343,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
             >
               <WorkflowNodeCard
                 node={node}
-                isSelected={selectedNodeId === node.id}
+                isSelected={selectedNodeIds.includes(node.id)}
                 variant={nodeView}
                 scale={zoom}
                 connectingFrom={connectingFrom}
@@ -1078,9 +1356,14 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                     mediaKind: mediaKindForField(field),
                   })
                 }
-                onSelect={() => {
-                  setSelectedNodeId(node.id);
-                  setSelectedEdgeId(null);
+                onSelect={(event) => {
+                  if (dragMovedRef.current) return;
+                  if (event.shiftKey || event.ctrlKey || event.metaKey) {
+                    setSelectedNodeIds((prev) => toggleId(prev, node.id));
+                    return;
+                  }
+                  setSelectedNodeIds([node.id]);
+                  setSelectedEdgeIds([]);
                 }}
                 onOpenSettings={() => handleOpenSettings(node.id)}
                 onDelete={() => handleDeleteNode(node.id)}
