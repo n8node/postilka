@@ -61,6 +61,8 @@ import { getCachedFileMediaUrl } from "@/lib/file-media-cache";
 import {
   NODE_DEFINITIONS,
   socialFieldNeeds,
+  validateAIImageNode,
+  validateAIVideoNode,
   validateFormatterTemplate,
   validatePlainText,
   validatePromptRequired,
@@ -68,10 +70,15 @@ import {
 } from "./nodeTypes";
 import {
   FieldNeedLabel,
-  ImageDropField,
   SocialMediaFields,
   SocialRequirementsBanner,
 } from "./SocialMediaFields";
+import {
+  applyGenerationSlotValue,
+  isGenerationSlotField,
+  WorkflowAIImageFields,
+  WorkflowAIVideoFields,
+} from "./WorkflowGenerationFields";
 import { useVariableDrag } from "./VariableDragContext";
 import {
   applyVariableDrop,
@@ -318,6 +325,24 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
 
   const insertVariable = (fieldKey: string, variableStr: string) => {
     const accept = inferFieldAccept(fieldKey);
+    if (isGenerationSlotField(fieldKey)) {
+      const currentVal = String(
+        fieldKey.includes(".")
+          ? (Array.isArray(data[fieldKey.split(".")[0]])
+              ? data[fieldKey.split(".")[0]][Number(fieldKey.split(".")[1])]
+              : "") || ""
+          : data[fieldKey] || ""
+      );
+      handleFieldChange(
+        applyGenerationSlotValue(
+          data,
+          fieldKey,
+          applyVariableDrop(currentVal, variableStr, dropModeForAccept(accept))
+        )
+      );
+      setShowVariablePickerFor(null);
+      return;
+    }
     const currentVal = (data[fieldKey] as string) || "";
     handleFieldChange(
       fieldKey,
@@ -331,6 +356,23 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
     if (!canAcceptVariable(accept, sourceType)) {
       setDropError(rejectDropMessage(accept, sourceType));
       return false;
+    }
+    if (isGenerationSlotField(fieldKey)) {
+      const currentVal = String(
+        fieldKey.includes(".")
+          ? (Array.isArray(data[fieldKey.split(".")[0]])
+              ? data[fieldKey.split(".")[0]][Number(fieldKey.split(".")[1])]
+              : "") || ""
+          : data[fieldKey] || ""
+      );
+      handleFieldChange(
+        applyGenerationSlotValue(
+          data,
+          fieldKey,
+          applyVariableDrop(currentVal, expression, dropModeForAccept(accept))
+        )
+      );
+      return true;
     }
     if (fieldKey.startsWith("fieldValue:")) {
       const idx = Number(fieldKey.slice("fieldValue:".length));
@@ -395,6 +437,8 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
   const socialNeeds = socialFieldNeeds(node.type, data);
   const socialError = validateSocialContent(node.type, data);
   const promptError = validatePromptRequired(node.type, data);
+  const aiImageError = node.type === "ai_image" ? validateAIImageNode(data) : null;
+  const aiVideoError = node.type === "ai_video" ? validateAIVideoNode(data) : null;
   const plainTextError = validatePlainText(node.type, data);
   const formatterError = validateFormatterTemplate(node.type, data);
 
@@ -981,156 +1025,28 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
           </div>
         )}
 
-        {/* 3. AI IMAGE */}
         {node.type === "ai_image" && (
-          <div className="space-y-3">
-            <SocialRequirementsBanner error={promptError} hint="Промпт обязателен. Референс необязателен." />
-            <div>
-              <div className="mb-1 flex items-center justify-between">
-                <label className="font-medium text-zinc-700 dark:text-zinc-300">
-                  <FieldNeedLabel label="Промпт для изображения" need="required" />
-                </label>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setShowVariablePickerFor(
-                      showVariablePickerFor === "prompt" ? null : "prompt"
-                    )
-                  }
-                  className="flex items-center gap-1 rounded bg-indigo-50 dark:bg-indigo-950/40 px-1.5 py-0.5 text-[10px] font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100"
-                >
-                  <Variable className="h-3 w-3" />
-                  Переменная
-                </button>
-              </div>
-              <textarea
-                rows={3}
-                value={data.prompt || ""}
-                onChange={(e) => handleFieldChange("prompt", e.target.value)}
-                {...varDropAttrs("prompt")}
-                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 p-2.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none"
-                placeholder="Digital art, futuristic composition, 4k..."
-              />
-            </div>
-
-            <ImageDropField
-              field="referenceImage"
-              label="Референс"
-              need="optional"
-              value={data.referenceImage || ""}
-              fileName={data.fileName}
-              accentClass="bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100"
-              placeholder="{{ files_media_1.image_url }}"
-              nodeId={node.id}
-              showVariablePickerFor={showVariablePickerFor}
-              setShowVariablePickerFor={setShowVariablePickerFor}
-              onFieldChange={(key, value) => handleFieldChange(key, value)}
-              onOpenMediaPicker={onOpenMediaPicker}
-            />
-
-            <div>
-              <label className="mb-1 block font-medium text-zinc-700 dark:text-zinc-300">
-                Соотношение сторон
-              </label>
-              <div className="grid grid-cols-3 gap-1.5">
-                {["1:1", "16:9", "9:16"].map((ratio) => (
-                  <button
-                    key={ratio}
-                    type="button"
-                    onClick={() => handleFieldChange("aspectRatio", ratio)}
-                    className={`rounded-xl border py-1.5 text-center text-xs font-medium transition ${
-                      (data.aspectRatio || "1:1") === ratio
-                        ? "border-indigo-600 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400"
-                        : "border-zinc-200 dark:border-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                    }`}
-                  >
-                    {ratio}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
+          <WorkflowAIImageFields
+            data={data}
+            nodeId={node.id}
+            error={aiImageError}
+            showVariablePickerFor={showVariablePickerFor}
+            setShowVariablePickerFor={setShowVariablePickerFor}
+            onPatch={(updates) => handleFieldChange(updates)}
+            onOpenMediaPicker={onOpenMediaPicker}
+          />
         )}
 
-        {/* 4. AI VIDEO */}
         {node.type === "ai_video" && (
-          <div className="space-y-3">
-            <SocialRequirementsBanner error={promptError} hint="Промпт обязателен. Первый кадр необязателен." />
-            <div>
-              <div className="mb-1 flex items-center justify-between">
-                <label className="font-medium text-zinc-700 dark:text-zinc-300">
-                  <FieldNeedLabel label="Промпт / Сценарий видео" need="required" />
-                </label>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setShowVariablePickerFor(
-                      showVariablePickerFor === "prompt" ? null : "prompt"
-                    )
-                  }
-                  className="flex items-center gap-1 rounded bg-indigo-50 dark:bg-indigo-950/40 px-1.5 py-0.5 text-[10px] font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100"
-                >
-                  <Variable className="h-3 w-3" />
-                  Переменная
-                </button>
-              </div>
-              <textarea
-                rows={3}
-                value={data.prompt || ""}
-                onChange={(e) => handleFieldChange("prompt", e.target.value)}
-                {...varDropAttrs("prompt")}
-                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 p-2.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none"
-                placeholder="Cinematic camera move, neon reflections..."
-              />
-            </div>
-
-            <ImageDropField
-              field="firstFrame"
-              label="Первый кадр"
-              need="optional"
-              value={data.firstFrame || ""}
-              fileName={data.fileName}
-              accentClass="bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100"
-              placeholder="{{ files_media_1.image_url }}"
-              nodeId={node.id}
-              showVariablePickerFor={showVariablePickerFor}
-              setShowVariablePickerFor={setShowVariablePickerFor}
-              onFieldChange={(key, value) => handleFieldChange(key, value)}
-              onOpenMediaPicker={onOpenMediaPicker}
-            />
-
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="mb-1 block font-medium text-zinc-700 dark:text-zinc-300">
-                  Формат
-                </label>
-                <select
-                  value={data.aspectRatio || "9:16"}
-                  onChange={(e) => handleFieldChange("aspectRatio", e.target.value)}
-                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-2.5 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none"
-                >
-                  <option value="9:16">9:16 (Shorts/Reels)</option>
-                  <option value="16:9">16:9 (Горизонтальное)</option>
-                  <option value="1:1">1:1 (Квадрат)</option>
-                </select>
-              </div>
-              <div>
-                <label className="mb-1 block font-medium text-zinc-700 dark:text-zinc-300">
-                  Длительность
-                </label>
-                <select
-                  value={data.durationSeconds || 5}
-                  onChange={(e) =>
-                    handleFieldChange("durationSeconds", parseInt(e.target.value, 10))
-                  }
-                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-2.5 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none"
-                >
-                  <option value={5}>5 секунд</option>
-                  <option value={10}>10 секунд</option>
-                </select>
-              </div>
-            </div>
-          </div>
+          <WorkflowAIVideoFields
+            data={data}
+            nodeId={node.id}
+            error={aiVideoError}
+            showVariablePickerFor={showVariablePickerFor}
+            setShowVariablePickerFor={setShowVariablePickerFor}
+            onPatch={(updates) => handleFieldChange(updates)}
+            onOpenMediaPicker={onOpenMediaPicker}
+          />
         )}
 
         {/* 5. TELEGRAM NODE */}

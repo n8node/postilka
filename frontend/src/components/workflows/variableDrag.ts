@@ -30,7 +30,9 @@ const FIELD_ACCEPT: Record<string, string> = {
   imageUrl: "image",
   imageFileId: "any",
   referenceImage: "image",
+  sourceImage: "image",
   firstFrame: "image",
+  lastFrame: "image",
   videoUrl: "video",
   videoFileId: "any",
   leftValue: "any",
@@ -46,6 +48,7 @@ export function inferFieldAccept(field: string): string {
   const known = FIELD_ACCEPT[field];
   if (known) return known;
   const lower = field.toLowerCase();
+  if (lower.includes("audio")) return "any";
   if (lower.includes("video")) return "video";
   if (
     lower.includes("image") ||
@@ -128,8 +131,9 @@ export function parseVarPayload(dataTransfer: DataTransfer | null): WorkflowVarP
 
 export function inferPortTypeFromId(portId: string): string {
   const id = portId.toLowerCase();
+  if (id.includes("audio")) return "any";
   if (id.includes("video")) return "video";
-  if (id.includes("image") || id.includes("photo")) return "image";
+  if (id.includes("image") || id.includes("photo") || id.includes("frame")) return "image";
   if (id.includes("token") || id.includes("count") || id.includes("duration")) return "number";
   if (id === "file_url" || id === "file_id" || id === "fileid") return "any";
   return "string";

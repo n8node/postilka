@@ -36,6 +36,11 @@ import type {
 import { WorkspaceMediaPickerModal } from "@/components/generation/WorkspaceMediaPickerModal";
 import { getCachedFileMediaUrl } from "@/lib/file-media-cache";
 import type { WorkspaceFile } from "@/lib/files-api";
+import {
+  applyGenerationSlotValue,
+  isGenerationSlotField,
+  mediaKindForField,
+} from "./WorkflowGenerationFields";
 import { WorkflowNodeCard } from "./WorkflowNodeCard";
 import { NodePalette } from "./NodePalette";
 import { NodeEditorModal } from "./NodeEditorModal";
@@ -130,7 +135,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
   const [mediaPickerTarget, setMediaPickerTarget] = useState<{
     nodeId: string;
     field: string;
-    mediaKind?: "image" | "video";
+    mediaKind?: "image" | "video" | "audio";
   } | null>(null);
 
   // Workflow economic cost calculation
@@ -1068,7 +1073,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                   setMediaPickerTarget({
                     nodeId,
                     field,
-                    mediaKind: field === "videoUrl" ? "video" : "image",
+                    mediaKind: mediaKindForField(field),
                   })
                 }
                 onSelect={() => {
@@ -1109,7 +1114,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
               setMediaPickerTarget({
                 nodeId,
                 field,
-                mediaKind: field === "videoUrl" ? "video" : "image",
+                mediaKind: mediaKindForField(field),
               })
             }
             onTestNode={onTestNode}
@@ -1135,24 +1140,30 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                   nodes.find((n) => n.id === mediaPickerTarget.nodeId)?.data ||
                   {};
                 const field = mediaPickerTarget.field;
-                const patch: Record<string, unknown> = {
-                  ...current,
-                  [field]: url,
-                  fileName: file.name,
-                };
-                if (field === "imageUrl") {
-                  patch.imageUrl = url;
-                  patch.imageFileId = file.id;
-                } else if (field === "videoUrl") {
-                  patch.videoUrl = url;
-                  patch.videoFileId = file.id;
-                } else if (field === "referenceImage" || field === "firstFrame") {
-                  patch[field] = url;
+                let patch: Record<string, unknown>;
+                if (isGenerationSlotField(field)) {
+                  patch = {
+                    ...applyGenerationSlotValue(current, field, url, file.id),
+                    fileName: file.name,
+                  };
                 } else {
-                  patch.fileId = file.id;
-                  patch.mediaKind = isVid ? "video" : "image";
-                  if (isVid) patch.videoUrl = url;
-                  else patch.imageUrl = url;
+                  patch = {
+                    ...current,
+                    [field]: url,
+                    fileName: file.name,
+                  };
+                  if (field === "imageUrl") {
+                    patch.imageUrl = url;
+                    patch.imageFileId = file.id;
+                  } else if (field === "videoUrl") {
+                    patch.videoUrl = url;
+                    patch.videoFileId = file.id;
+                  } else {
+                    patch.fileId = file.id;
+                    patch.mediaKind = isVid ? "video" : "image";
+                    if (isVid) patch.videoUrl = url;
+                    else patch.imageUrl = url;
+                  }
                 }
                 handleUpdateNodeData(mediaPickerTarget.nodeId, patch);
               } catch (err) {

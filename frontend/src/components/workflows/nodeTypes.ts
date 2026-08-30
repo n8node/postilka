@@ -241,6 +241,60 @@ export function validatePromptRequired(
   return null;
 }
 
+function filledSlotCount(urls: unknown, ids: unknown): number {
+  const u = Array.isArray(urls) ? urls : [];
+  const d = Array.isArray(ids) ? ids : [];
+  const n = Math.max(u.length, d.length);
+  let count = 0;
+  for (let i = 0; i < n; i++) {
+    if (isFilledSocialValue(u[i]) || isFilledSocialValue(d[i])) count += 1;
+  }
+  return count;
+}
+
+export function validateAIImageNode(data: Record<string, any> = {}): string | null {
+  const promptErr = validatePromptRequired("ai_image", data);
+  if (promptErr) return promptErr;
+  const mode = String(data.mode || "text-to-image");
+  if (mode === "image-to-image") {
+    if (
+      !isFilledSocialValue(data.sourceImage) &&
+      !isFilledSocialValue(data.sourceImageFileId) &&
+      !isFilledSocialValue(data.referenceImage)
+    ) {
+      return "Для режима «Фото → фото» нужно исходное фото";
+    }
+  }
+  if (mode === "combine" && filledSlotCount(data.combineImages, data.combineImageFileIds) < 2) {
+    return "Для комбинации нужно минимум 2 фото";
+  }
+  return null;
+}
+
+export function validateAIVideoNode(data: Record<string, any> = {}): string | null {
+  const promptErr = validatePromptRequired("ai_video", data);
+  if (promptErr) return promptErr;
+  const mode = String(data.mode || "text-to-video");
+  if (mode === "image-to-video") {
+    const hasFrame =
+      isFilledSocialValue(data.firstFrame) ||
+      isFilledSocialValue(data.firstFrameFileId) ||
+      isFilledSocialValue(data.lastFrame) ||
+      isFilledSocialValue(data.lastFrameFileId);
+    if (!hasFrame) {
+      return "Для режима «Фото → видео» нужен первый или последний кадр";
+    }
+  }
+  if (mode === "reference-to-video") {
+    const images = filledSlotCount(data.referenceImages, data.referenceImageFileIds);
+    const videos = filledSlotCount(data.referenceVideos, data.referenceVideoFileIds);
+    if (images === 0 && videos === 0 && !isFilledSocialValue(data.firstFrame)) {
+      return "Для режима «Референс → видео» нужно фото или видео";
+    }
+  }
+  return null;
+}
+
 export function validatePlainText(
   nodeType: string,
   data: Record<string, any> = {}
@@ -370,18 +424,20 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
     inputs: [
       NODE_FLOW_INPUT,
       { id: "prompt", label: "Промпт / Описание", type: "string" },
-      { id: "referenceImage", label: "Референс (Image)", type: "image" },
+      { id: "sourceImage", label: "Исходное фото", type: "image" },
     ],
     outputs: [
       { id: "image_url", label: "Изображение", type: "image" },
     ],
     defaultData: {
       title: "AI Изображение",
-      prompt: "Modern aesthetic digital portrait, cinematic lighting, 4k",
-      referenceImage: "",
+      mode: "text-to-image",
+      prompt: "Золотой час над городом, мягкий свет, кинематографичная атмосфера, высокая детализация",
+      sourceImage: "",
+      sourceImageFileId: "",
+      combineImages: ["", "", "", "", "", ""],
+      combineImageFileIds: ["", "", "", "", "", ""],
       aspectRatio: "1:1",
-      model: "AI Studio Pro",
-      resolution: "2k",
     },
   },
   ai_video: {
@@ -400,15 +456,26 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       NODE_FLOW_INPUT,
       { id: "prompt", label: "Сценарий / Промпт", type: "string" },
       { id: "firstFrame", label: "Первый кадр", type: "image" },
+      { id: "lastFrame", label: "Последний кадр", type: "image" },
     ],
     outputs: [
       { id: "video_url", label: "Видео (MP4)", type: "video" },
     ],
     defaultData: {
       title: "AI Видеоролик",
-      prompt: "Cinematic drone shot flying through modern futuristic skyscraper city",
+      mode: "text-to-video",
+      prompt: "Кинематографичная сцена, плавное движение камеры, мягкий свет",
       firstFrame: "",
-      aspectRatio: "9:16",
+      lastFrame: "",
+      firstFrameFileId: "",
+      lastFrameFileId: "",
+      referenceImages: ["", "", "", "", "", "", "", "", ""],
+      referenceImageFileIds: ["", "", "", "", "", "", "", "", ""],
+      referenceVideos: ["", "", ""],
+      referenceVideoFileIds: ["", "", ""],
+      referenceAudios: ["", "", ""],
+      referenceAudioFileIds: ["", "", ""],
+      aspectRatio: "16:9",
       durationSeconds: 5,
     },
   },

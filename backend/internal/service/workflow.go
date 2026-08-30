@@ -778,27 +778,42 @@ func (s *WorkflowService) executeNode(
 		return outputs, 50, 0, 0, nil
 
 	case "ai_image":
+		if err := validateWorkflowAIImage(inputs); err != nil {
+			return nil, 0, 0, 0, err
+		}
 		prompt := getString(inputs, "prompt", "")
+		mode := getString(inputs, "mode", "text-to-image")
 		aspectRatio := getString(inputs, "aspectRatio", "1:1")
-		if prompt == "" {
-			return nil, 0, 0, 0, errors.New("промпт для генерации изображения обязателен")
+		sourceImage := getString(inputs, "sourceImage", "")
+		if sourceImage == "" {
+			sourceImage = getString(inputs, "referenceImage", "")
 		}
 		outputs["image_url"] = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1200"
 		outputs["prompt"] = prompt
+		outputs["mode"] = mode
 		outputs["aspect_ratio"] = aspectRatio
+		outputs["source_image"] = sourceImage
+		outputs["combine_images"] = getStringSlice(inputs, "combineImages")
 		return outputs, 0, 1, 0, nil
 
 	case "ai_video":
-		prompt := getString(inputs, "prompt", "")
-		aspectRatio := getString(inputs, "aspectRatio", "9:16")
-		duration := getInt(inputs, "durationSeconds", 5)
-		if prompt == "" {
-			return nil, 0, 0, 0, errors.New("промпт для генерации видео обязателен")
+		if err := validateWorkflowAIVideo(inputs); err != nil {
+			return nil, 0, 0, 0, err
 		}
+		prompt := getString(inputs, "prompt", "")
+		mode := getString(inputs, "mode", "text-to-video")
+		aspectRatio := getString(inputs, "aspectRatio", "16:9")
+		duration := clampWorkflowVideoDuration(getInt(inputs, "durationSeconds", 5))
 		outputs["video_url"] = "https://assets.mixkit.co/videos/preview/mixkit-digital-animation-of-screens-996-large.mp4"
 		outputs["prompt"] = prompt
+		outputs["mode"] = mode
 		outputs["aspect_ratio"] = aspectRatio
 		outputs["duration"] = duration
+		outputs["first_frame"] = getString(inputs, "firstFrame", "")
+		outputs["last_frame"] = getString(inputs, "lastFrame", "")
+		outputs["reference_images"] = getStringSlice(inputs, "referenceImages")
+		outputs["reference_videos"] = getStringSlice(inputs, "referenceVideos")
+		outputs["reference_audios"] = getStringSlice(inputs, "referenceAudios")
 		return outputs, 0, 2, 0, nil
 
 	case "files_media":

@@ -798,7 +798,11 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
               {/* Badges Overlay (Top Right) */}
               <div className="absolute top-2 right-2 flex items-center gap-1">
                 <span className="rounded bg-black/60 border border-white/20 px-1.5 py-0.5 text-[9px] font-bold text-white backdrop-blur-sm">
-                  {(node.data.resolution as string) || "2k"}
+                  {(node.data.mode as string) === "image-to-image"
+                    ? "Фото → фото"
+                    : (node.data.mode as string) === "combine"
+                      ? "Комбинация"
+                      : "Текст → фото"}
                 </span>
                 <span className="rounded bg-black/60 border border-white/20 px-1.5 py-0.5 text-[9px] font-bold text-white backdrop-blur-sm">
                   {(node.data.aspectRatio as string) || "1:1"}
@@ -811,13 +815,6 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
               <p className="line-clamp-2 text-[11px] text-zinc-700 dark:text-zinc-300 font-sans italic">
                 {(node.data.prompt as string) || "Опишите желаемое изображение..."}
               </p>
-              <div className="mt-1.5 flex items-center justify-between text-[10px] text-zinc-500">
-                <span className="flex items-center gap-1 font-medium text-purple-600 dark:text-purple-400">
-                  <Sparkles className="h-3 w-3" />
-                  {(node.data.model as string) || "AI Studio Pro"}
-                </span>
-                <span>Нейросеть</span>
-              </div>
             </div>
           </div>
         )}
@@ -847,7 +844,7 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
                   {(node.data.durationSeconds as number) || 5}s
                 </span>
                 <span className="rounded bg-black/60 border border-white/20 px-1.5 py-0.5 text-[9px] font-bold text-white backdrop-blur-sm">
-                  {(node.data.aspectRatio as string) || "9:16"}
+                  {(node.data.aspectRatio as string) || "16:9"}
                 </span>
               </div>
             </div>
@@ -855,6 +852,13 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
             <div className="px-1 pt-1">
               <p className="line-clamp-2 text-[11px] text-zinc-700 dark:text-zinc-300 font-sans italic">
                 {(node.data.prompt as string) || "Сценарий видеоролика..."}
+              </p>
+              <p className="mt-1 text-[10px] font-medium text-pink-600 dark:text-pink-400">
+                {(node.data.mode as string) === "image-to-video"
+                  ? "Фото → видео"
+                  : (node.data.mode as string) === "reference-to-video"
+                    ? "Референс → видео"
+                    : "Текст → видео"}
               </p>
             </div>
           </div>
