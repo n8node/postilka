@@ -46,6 +46,7 @@ import {
   PORT_TYPE_COLORS,
   isPortCompatible,
   calculateWorkflowCost,
+  nodeMinHeightPx,
   type NodeViewMode,
 } from "./nodeTypes";
 import {
@@ -185,11 +186,15 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
       : NODE_CARD_LAYOUT.expanded.width;
     const portIndex = ports?.findIndex((p) => p.id === actualPortId) ?? 0;
     const safeIdx = portIndex >= 0 ? portIndex : 0;
-    const nodeYOffset = compact
-      ? NODE_CARD_LAYOUT.compact.height / 2
+    const totalPorts = Math.max(ports?.length ?? 1, 1);
+    const topPercent =
+      totalPorts === 1 ? 50 : ((safeIdx + 1) / (totalPorts + 1)) * 100;
+    const nodeHeight = compact
+      ? nodeMinHeightPx("compact", totalPorts)
       : isTrigger
-      ? NODE_CARD_LAYOUT.expanded.triggerHeight / 2
-      : 130 + safeIdx * 28;
+      ? NODE_CARD_LAYOUT.expanded.triggerHeight
+      : nodeMinHeightPx("expanded", totalPorts);
+    const nodeYOffset = (topPercent / 100) * nodeHeight;
     return {
       x: isOutput ? node.position.x + nodeWidth + 8 : node.position.x - 8,
       y: node.position.y + nodeYOffset,

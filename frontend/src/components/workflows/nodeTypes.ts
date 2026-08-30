@@ -5,9 +5,9 @@ export const NODE_VIEW_STORAGE_KEY = "postilka.workflow.nodeView";
 export const NODE_CARD_LAYOUT = {
   compact: {
     width: 220,
-    height: 72,
+    height: 128,
     colGap: 280,
-    rowGap: 140,
+    rowGap: 180,
   },
   expanded: {
     width: 288,
@@ -18,6 +18,16 @@ export const NODE_CARD_LAYOUT = {
     rowGap: 220,
   },
 } as const;
+
+/** Keep stacked ports from overlapping on compact/social nodes. */
+export function nodeMinHeightPx(view: NodeViewMode, portCount: number): number {
+  const base = NODE_CARD_LAYOUT[view].height;
+  const portSize = view === "compact" ? 16 : 28;
+  const gap = view === "compact" ? 10 : 12;
+  const pad = view === "compact" ? 20 : 32;
+  if (portCount <= 1) return base;
+  return Math.max(base, pad * 2 + portCount * portSize + (portCount - 1) * gap);
+}
 
 export type NodeCategory =
   | "trigger"

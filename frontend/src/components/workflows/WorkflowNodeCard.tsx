@@ -48,6 +48,7 @@ import {
   NODE_DEFINITIONS,
   PORT_TYPE_COLORS,
   isPortCompatible,
+  nodeMinHeightPx,
   type NodeViewMode,
 } from "./nodeTypes";
 
@@ -190,6 +191,8 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
 
   const Icon = ICON_MAP[def.icon] || Sparkles;
   const title = (node.data.title as string) || def.title;
+  const portCount = Math.max(def.inputs.length, def.outputs.length, 1);
+  const minHeightPx = nodeMinHeightPx(isCompact ? "compact" : "expanded", portCount);
 
   // Handle local file upload
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -242,9 +245,10 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
         e.stopPropagation();
         onSelect();
       }}
+      style={!isTrigger || isCompact ? { minHeight: minHeightPx } : undefined}
       className={`group relative select-none rounded-2xl border bg-white/95 dark:bg-zinc-900/95 text-zinc-900 dark:text-zinc-100 shadow-xl backdrop-blur-xl transition-all ${
         isCompact
-          ? "w-[220px]"
+          ? "flex w-[220px] flex-col justify-center"
           : isTrigger
           ? "w-36 h-36 flex flex-col justify-between"
           : isVisualNode
@@ -642,7 +646,7 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
           )}
         </div>
       ) : !isCompact ? (
-        <div className="p-3 min-h-[92px]">
+        <div className="p-3 min-h-[136px]">
         {/* 1. IMAGE / MEDIA FROM DISK OR PC */}
         {node.type === "files_media" && (
           <div className="space-y-2">
