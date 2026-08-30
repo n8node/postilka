@@ -394,7 +394,7 @@ export const NodeEditorModal: React.FC<NodeEditorModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-40 flex flex-col bg-zinc-50 dark:bg-zinc-950"
+      className="absolute inset-0 z-40 flex flex-col bg-zinc-50 dark:bg-zinc-950"
       data-panel="node-editor"
     >
       <header className="flex h-12 shrink-0 items-center justify-between border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4">
