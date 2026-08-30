@@ -345,6 +345,34 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       format: "brief",
     },
   },
+  social_photochka: {
+    type: "social_photochka",
+    title: "Photochka",
+    description: "Публикация поста с текстом и медиа в Photochka",
+    category: "social",
+    icon: "camera",
+    color: {
+      bg: "bg-violet-700/10 dark:bg-violet-700/20",
+      border: "border-violet-700/40",
+      badge: "bg-violet-700 text-white",
+      text: "text-violet-700 dark:text-violet-300",
+    },
+    inputs: [
+      NODE_FLOW_INPUT,
+      { id: "text", label: "Текст поста", type: "string" },
+      { id: "mediaUrl", label: "Медиафайл (опционально)", type: "any" },
+    ],
+    outputs: [
+      { id: "status", label: "Статус", type: "string" },
+      { id: "channel_name", label: "Канал Photochka", type: "string" },
+    ],
+    defaultData: {
+      title: "Photochka Пост",
+      channelId: "",
+      channelName: "",
+      text: "{{ ai_text_1.text }}",
+    },
+  },
   files_media: {
     type: "files_media",
     title: "Image / Media",
@@ -750,7 +778,8 @@ export function calculateWorkflowCost(
       n.type === "social_vk" ||
       n.type === "social_youtube" ||
       n.type === "social_max" ||
-      n.type === "social_dzen"
+      n.type === "social_dzen" ||
+      n.type === "social_photochka"
     ) {
       socialCount++;
       items.push({

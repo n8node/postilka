@@ -1066,6 +1066,41 @@ func (s *WorkflowService) executeNode(
 		}
 		return outputs, 0, 0, 0, nil
 
+	case "social_photochka":
+		text := getString(inputs, "text", "")
+		mediaURL := getString(inputs, "mediaUrl", "")
+		fileID := getString(inputs, "fileId", "")
+		channelID := getString(inputs, "channelId", "")
+		if text == "" && mediaURL == "" && fileID == "" {
+			return nil, 0, 0, 0, errors.New("для Photochka укажите текст или медиафайл")
+		}
+
+		channels, _ := s.channelRepo.ListByWorkspace(ctx, workspaceID)
+		var photochkaChannel *model.Channel
+		for _, ch := range channels {
+			if channelID != "" && ch.ID == channelID {
+				photochkaChannel = &ch
+				break
+			}
+			if channelID == "" && ch.Provider == model.ChannelProviderPhotochka {
+				photochkaChannel = &ch
+				break
+			}
+		}
+
+		outputs["status"] = "success"
+		outputs["provider"] = "photochka"
+		outputs["text"] = text
+		outputs["media_url"] = mediaURL
+		outputs["file_id"] = fileID
+		if photochkaChannel != nil {
+			outputs["channel_id"] = photochkaChannel.ID
+			outputs["channel_name"] = photochkaChannel.Name
+		} else {
+			outputs["channel_name"] = "Photochka (Канал)"
+		}
+		return outputs, 0, 0, 0, nil
+
 	case "social_ok":
 		text := getString(inputs, "text", "")
 		outputs["status"] = "success"
@@ -1471,6 +1506,8 @@ func (s *WorkflowService) getNodeTitle(node model.WorkflowNode) string {
 		return "Rutube Видео"
 	case "social_dzen":
 		return "Дзен Пост"
+	case "social_photochka":
+		return "Photochka Пост"
 	case "switch", "logic_switch":
 		return "Разветвление (Switch)"
 	case "logic_condition":

@@ -2006,6 +2006,42 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
           </div>
         )}
 
+        {node.type === "social_photochka" && (
+          <div className="space-y-3">
+            {renderChannelSelector("photochka", "Photochka")}
+
+            <div>
+              <div className="mb-1 flex items-center justify-between">
+                <label className="font-medium text-zinc-700 dark:text-zinc-300">
+                  Текст поста
+                </label>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setShowVariablePickerFor(
+                      showVariablePickerFor === "text" ? null : "text"
+                    )
+                  }
+                  className="flex items-center gap-1 rounded bg-violet-50 dark:bg-violet-950/40 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 dark:text-violet-300 hover:bg-violet-100"
+                >
+                  <Variable className="h-3 w-3" />
+                  Переменная
+                </button>
+              </div>
+              <textarea
+                rows={4}
+                value={data.text || ""}
+                onChange={(e) => handleFieldChange("text", e.target.value)}
+                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 p-2.5 text-xs font-mono"
+                placeholder="{{ ai_text_1.text }}"
+              />
+              <p className="mt-1 text-[10px] text-zinc-500">
+                До 3000 символов. Медиа можно подать на вход узла с предыдущего шага.
+              </p>
+            </div>
+          </div>
+        )}
+
         {node.type === "draft_approval" && (() => {
           const activeChannels = channels.filter((c) => c.status !== "disabled");
           const approverIds = Array.isArray(data.approverUserIds)

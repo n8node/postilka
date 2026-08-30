@@ -11,7 +11,7 @@ import (
 
 func isWorkflowSocialNode(nodeType string) bool {
 	switch nodeType {
-	case "social_telegram", "social_max", "social_vk", "social_youtube", "social_dzen":
+	case "social_telegram", "social_max", "social_vk", "social_youtube", "social_dzen", "social_photochka":
 		return true
 	default:
 		return false
@@ -78,6 +78,8 @@ func buildWorkflowTestPostRequest(nodeType string, inputs map[string]interface{}
 		return buildYouTubeWorkflowTestPost(inputs, targets, media)
 	case "social_dzen":
 		return buildDzenWorkflowTestPost(inputs, targets, media)
+	case "social_photochka":
+		return buildPhotochkaWorkflowTestPost(inputs, targets, media)
 	default:
 		return model.PostSaveRequest{}, fmt.Errorf("%w: тестовая публикация для типа %s не поддерживается", ErrInvalidPost, nodeType)
 	}
@@ -279,6 +281,26 @@ func buildDzenWorkflowTestPost(
 	return model.PostSaveRequest{
 		Content: model.PostContent{
 			Format:    format,
+			Text:      text,
+			ParseMode: "HTML",
+		},
+		Targets: targets,
+		Media:   media,
+	}, nil
+}
+
+func buildPhotochkaWorkflowTestPost(
+	inputs map[string]interface{},
+	targets []model.PostTargetInput,
+	media []model.PostMediaInput,
+) (model.PostSaveRequest, error) {
+	text := strings.TrimSpace(getString(inputs, "text", ""))
+	if text == "" && len(media) == 0 {
+		return model.PostSaveRequest{}, fmt.Errorf("%w: укажите текст или медиафайл", ErrInvalidPost)
+	}
+	return model.PostSaveRequest{
+		Content: model.PostContent{
+			Format:    "message",
 			Text:      text,
 			ParseMode: "HTML",
 		},

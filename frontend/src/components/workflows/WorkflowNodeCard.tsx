@@ -17,6 +17,7 @@ import {
   GitFork,
   Split,
   MessageSquare,
+  Camera,
   Type,
   AlignLeft,
   Trash2,
@@ -106,6 +107,7 @@ const ICON_MAP: Record<string, React.ElementType> = {
   "git-fork": GitFork,
   split: Split,
   "message-square": MessageSquare,
+  camera: Camera,
   type: Type,
   "align-left": AlignLeft,
   "git-merge": GitMerge,
@@ -1026,6 +1028,30 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
                 {node.data.channelName || "Канал не выбран"}
               </span>
               <span className="capitalize">{node.data.format || "brief"}</span>
+            </div>
+          </div>
+        )}
+
+        {node.type === "social_photochka" && (
+          <div className="space-y-2">
+            <div className="rounded-xl border border-violet-100 dark:border-violet-900/40 bg-violet-50/60 dark:bg-violet-950/20 p-3 text-xs">
+              <div className="line-clamp-2 text-[11px] text-zinc-800 dark:text-zinc-200 font-mono">
+                {(node.data.text as string) || "{{ AI.text }}"}
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-1 pt-0.5">
+              {node.data.channelName ? (
+                <span className="rounded bg-violet-100 dark:bg-violet-950/60 border border-violet-200 dark:border-violet-800/40 px-1.5 py-0.5 text-[9px] text-violet-800 dark:text-violet-300 font-medium truncate max-w-[140px]">
+                  {node.data.channelName}
+                </span>
+              ) : (
+                <span className="rounded bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800/40 px-1.5 py-0.5 text-[9px] text-amber-700 dark:text-amber-400 font-medium">
+                  Канал не выбран
+                </span>
+              )}
+              <span className="rounded bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 text-[9px] text-zinc-600 dark:text-zinc-400">
+                Photochka
+              </span>
             </div>
           </div>
         )}
