@@ -1032,9 +1032,31 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
 
         {/* 8. APPROVAL */}
         {node.type === "draft_approval" && (
-          <div className="rounded-xl border border-amber-100 dark:border-amber-900/40 bg-amber-50/60 dark:bg-amber-950/20 p-2.5 text-xs flex items-center gap-1.5 text-amber-700 dark:text-amber-400 text-[11px]">
-            <CheckCircle2 className="h-4 w-4 shrink-0" />
-            <span>Пауза / Ожидание проверки</span>
+          <div className="space-y-2">
+            <div className="rounded-xl border border-amber-100 dark:border-amber-900/40 bg-amber-50/60 dark:bg-amber-950/20 p-2.5 text-xs flex items-center gap-1.5 text-amber-700 dark:text-amber-400 text-[11px]">
+              <CheckCircle2 className="h-4 w-4 shrink-0" />
+              <span>Отправит публикацию на согласование и поставит процесс на паузу</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-1">
+              {node.data.channelName ? (
+                <span className="rounded bg-amber-100 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800/40 px-1.5 py-0.5 text-[9px] text-amber-800 dark:text-amber-300 font-medium truncate max-w-[140px]">
+                  {node.data.channelName}
+                </span>
+              ) : (
+                <span className="rounded bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 text-[9px] text-zinc-600 dark:text-zinc-400">
+                  Канал из следующего шага или не выбран
+                </span>
+              )}
+              {Array.isArray(node.data.approverUserIds) && node.data.approverUserIds.length > 0 ? (
+                <span className="rounded bg-amber-100 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800/40 px-1.5 py-0.5 text-[9px] text-amber-800 dark:text-amber-300 font-medium">
+                  {node.data.approverUserIds.length} согласующих
+                </span>
+              ) : (
+                <span className="rounded bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800/40 px-1.5 py-0.5 text-[9px] text-amber-700 dark:text-amber-400 font-medium">
+                  Согласующие не выбраны
+                </span>
+              )}
+            </div>
           </div>
         )}
 

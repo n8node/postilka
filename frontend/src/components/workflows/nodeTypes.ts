@@ -373,8 +373,8 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
   },
   draft_approval: {
     type: "draft_approval",
-    title: "Утверждение человеком",
-    description: "Создает черновик в календаре и ждет проверки",
+    title: "Согласование",
+    description: "Отправляет публикацию на согласование и ставит процесс на паузу",
     category: "control",
     icon: "check-circle-2",
     color: {
@@ -385,16 +385,20 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
     },
     inputs: [
       NODE_FLOW_INPUT,
-      { id: "text", label: "Контент черновика", type: "string" },
+      { id: "text", label: "Текст публикации", type: "string" },
     ],
     outputs: [
-      { id: "post_id", label: "ID черновика", type: "string" },
+      { id: "post_id", label: "ID публикации", type: "string" },
       { id: "status", label: "Статус", type: "string" },
     ],
     defaultData: {
-      title: "Модерация черновика",
+      title: "Согласование",
       text: "{{ ai_text_1.text }}",
-      notifyOwner: true,
+      channelId: "",
+      channelName: "",
+      approverUserIds: [],
+      dueAt: "",
+      fileId: "",
     },
   },
   logic_condition: {

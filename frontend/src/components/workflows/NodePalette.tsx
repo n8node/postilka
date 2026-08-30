@@ -41,7 +41,7 @@ const CATEGORY_NAMES: Record<NodeCategory, string> = {
   social: "Социальные сети (Постинг)",
   media: "Медиатека и файлы",
   logic: "Логика и форматирование",
-  control: "Контроль и аппрув",
+  control: "Контроль и согласование",
 };
 
 const ICON_MAP: Record<string, React.ElementType> = {

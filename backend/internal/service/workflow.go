@@ -11,7 +11,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/postilka/postilka/internal/ai"
 	"github.com/postilka/postilka/internal/config"
 	"github.com/postilka/postilka/internal/model"
@@ -556,8 +555,18 @@ func (s *WorkflowService) executeWorkflowGraph(ctx context.Context, runID string
 			continue
 		}
 
-		// Execute specific node logic
-		outputs, tokens, credits, kopecks, execErr := s.executeNode(ctx, workspaceID, userID, node, createdStep.Inputs, executionOutputs)
+		var (
+			outputs  map[string]interface{}
+			tokens   int
+			credits  int
+			kopecks  int
+			execErr  error
+		)
+		if isApprovalWorkflowNode(node.Type) {
+			outputs, execErr = s.executeApprovalNode(ctx, workspaceID, userID, run, &graph, node, createdStep.Inputs, executionOutputs)
+		} else {
+			outputs, tokens, credits, kopecks, execErr = s.executeNode(ctx, workspaceID, userID, node, createdStep.Inputs, executionOutputs)
+		}
 		finished := time.Now()
 		createdStep.FinishedAt = &finished
 		createdStep.DurationMS = int(finished.Sub(stepNow).Milliseconds())
@@ -676,7 +685,7 @@ func (s *WorkflowService) executeWorkflowGraph(ctx context.Context, runID string
 			createdStep.Outputs = outputs
 		}
 
-		if node.Type == "draft_approval" || node.Type == "human_review" {
+		if isApprovalWorkflowNode(node.Type) {
 			isAwaitingApproval = true
 		}
 
@@ -686,10 +695,12 @@ func (s *WorkflowService) executeWorkflowGraph(ctx context.Context, runID string
 
 		// Store node outputs for subsequent steps
 		executionOutputs[node.ID] = outputs
+
+		if isApprovalWorkflowNode(node.Type) {
+			break
+		}
 	}
 
-	finishedNow := time.Now()
-	run.FinishedAt = &finishedNow
 	run.TokensUsed = totalTokens
 	run.CreditsUsed = totalCredits
 	run.KopecksSpent = totalKopecks
@@ -702,12 +713,17 @@ func (s *WorkflowService) executeWorkflowGraph(ctx context.Context, runID string
 
 	if isAwaitingApproval {
 		run.Status = model.WorkflowRunStatusAwaitingApproval
+		run.FinishedAt = nil
 	} else {
+		finishedNow := time.Now()
+		run.FinishedAt = &finishedNow
 		run.Status = model.WorkflowRunStatusCompleted
 	}
 
 	_ = s.repo.UpdateRun(ctx, run)
-	s.notifyRunFinished(ctx, run, workflowName)
+	if !isAwaitingApproval {
+		s.notifyRunFinished(ctx, run, workflowName)
+	}
 }
 
 // Single node executor
@@ -1058,11 +1074,11 @@ func (s *WorkflowService) executeNode(
 		return outputs, 0, 0, 0, nil
 
 	case "draft_approval", "human_review":
-		content := getString(inputs, "text", "Черновик из автоматизированного процесса")
-		outputs["status"] = "awaiting_approval"
-		outputs["content"] = content
-		outputs["post_id"] = uuid.New().String()
-		return outputs, 0, 0, 0, nil
+		approvalOut, approvalErr := s.executeApprovalNode(ctx, workspaceID, userID, nil, nil, node, inputs, outputsAccumulator)
+		if approvalErr != nil {
+			return nil, 0, 0, 0, approvalErr
+		}
+		return approvalOut, 0, 0, 0, nil
 
 	case "switch", "logic_switch":
 		// Pass-through all input data to output
@@ -1469,8 +1485,8 @@ func (s *WorkflowService) getNodeTitle(node model.WorkflowNode) string {
 		return "HTTP запрос"
 	case "loop_items":
 		return "Цикл по списку"
-	case "draft_approval":
-		return "Модерация черновика"
+	case "draft_approval", "human_review":
+		return "Согласование"
 	default:
 		return node.Type
 	}

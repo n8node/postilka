@@ -249,6 +249,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 		workflowRepo, channelRepo, postSvc, generationSvc, aiBillingSvc, yandexGptConfigSvc, wsSvc, fileStorageSvc, planRepo, quotaSvc, notificationSvc, logger,
 	)
 	workflowSvc.SetWorkflowConfig(cfg)
+	postSvc.SetWorkflowApprovalResolver(workflowSvc)
 	workflowHandler := handler.NewWorkflowHandler(workflowSvc, wsSvc)
 
 	publicationSvc.SetNotifier(notificationSvc)

@@ -44,8 +44,9 @@ type PostService struct {
 	workspaces  *WorkspaceService
 	publication *PublicationService
 	approvals   *repository.PostApprovalRepository
-	users       *repository.UserRepository
-	notify      *NotificationService
+	users        *repository.UserRepository
+	notify       *NotificationService
+	workflowRuns WorkflowApprovalRunResolver
 }
 
 func NewPostService(

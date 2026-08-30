@@ -50,7 +50,12 @@ import {
   fetchWorkflowWebhookTestStatus,
   type WorkflowWebhookTestStatus,
 } from "@/lib/workflows-api";
-import { fetchChannels, type ChannelListItem } from "@/lib/api";
+import {
+  fetchChannels,
+  fetchWorkspaceMembers,
+  type ChannelListItem,
+  type WorkspaceMember,
+} from "@/lib/api";
 import { uploadFile } from "@/lib/files-api";
 import { getCachedFileMediaUrl } from "@/lib/file-media-cache";
 import { NODE_DEFINITIONS } from "./nodeTypes";
@@ -104,6 +109,8 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
 
   const [channels, setChannels] = useState<ChannelListItem[]>([]);
   const [loadingChannels, setLoadingChannels] = useState(false);
+  const [workspaceMembers, setWorkspaceMembers] = useState<WorkspaceMember[]>([]);
+  const [loadingMembers, setLoadingMembers] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -117,6 +124,17 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
       .catch(() => {})
       .finally(() => {
         if (mounted) setLoadingChannels(false);
+      });
+    setLoadingMembers(true);
+    fetchWorkspaceMembers()
+      .then((res) => {
+        if (mounted && res?.members) {
+          setWorkspaceMembers(res.members);
+        }
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (mounted) setLoadingMembers(false);
       });
     return () => {
       mounted = false;
@@ -1987,6 +2005,164 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
             </div>
           </div>
         )}
+
+        {node.type === "draft_approval" && (() => {
+          const activeChannels = channels.filter((c) => c.status !== "disabled");
+          const approverIds = Array.isArray(data.approverUserIds)
+            ? (data.approverUserIds as string[])
+            : [];
+          const approverMembers = workspaceMembers.filter(
+            (member) =>
+              member.status !== "suspended" &&
+              (member.role === "owner" ||
+                member.role === "admin" ||
+                member.role === "editor")
+          );
+          const toggleApprover = (userId: string) => {
+            const next = approverIds.includes(userId)
+              ? approverIds.filter((id) => id !== userId)
+              : [...approverIds, userId];
+            handleFieldChange("approverUserIds", next);
+          };
+
+          return (
+            <div className="space-y-3">
+              <div className="rounded-xl border border-amber-200 dark:border-amber-900/50 bg-amber-50/70 dark:bg-amber-950/20 p-3 text-[11px] leading-relaxed text-zinc-700 dark:text-zinc-300">
+                Процесс создаст публикацию со статусом «На согласовании» и остановится.
+                После решения в разделе постов публикация уйдёт в выбранный канал, а прогон завершится.
+              </div>
+
+              <div>
+                <div className="mb-1 flex items-center justify-between">
+                  <label className="font-medium text-zinc-700 dark:text-zinc-300">
+                    Текст публикации
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setShowVariablePickerFor(
+                        showVariablePickerFor === "text" ? null : "text"
+                      )
+                    }
+                    className="flex items-center gap-1 rounded bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400 hover:bg-amber-100"
+                  >
+                    <Variable className="h-3 w-3" />
+                    Переменная
+                  </button>
+                </div>
+                <textarea
+                  rows={4}
+                  value={data.text || ""}
+                  onChange={(e) => handleFieldChange("text", e.target.value)}
+                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 p-2.5 text-xs font-mono"
+                  placeholder="{{ ai_text_1.text }}"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="font-semibold text-zinc-800 dark:text-zinc-200 text-xs">
+                  Канал публикации
+                </label>
+                {loadingChannels ? (
+                  <div className="flex items-center gap-2 text-[11px] text-zinc-500">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Загрузка каналов...
+                  </div>
+                ) : activeChannels.length === 0 ? (
+                  <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                    Нет подключённых каналов. Можно взять канал со следующего шага публикации.
+                  </p>
+                ) : (
+                  <select
+                    value={data.channelId || ""}
+                    onChange={(e) => {
+                      const ch = activeChannels.find((c) => c.id === e.target.value);
+                      handleFieldChange({
+                        channelId: e.target.value,
+                        channelName: ch ? ch.name : "",
+                      });
+                    }}
+                    className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-2 text-xs font-medium focus:border-indigo-500 focus:outline-none"
+                  >
+                    <option value="">
+                      Взять канал со следующего шага
+                    </option>
+                    {activeChannels.map((ch) => (
+                      <option key={ch.id} value={ch.id}>
+                        {ch.name} ({ch.provider})
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              <div>
+                <label className="mb-1.5 block font-semibold text-zinc-800 dark:text-zinc-200 text-xs">
+                  Кто согласовывает
+                </label>
+                {loadingMembers ? (
+                  <div className="flex items-center gap-2 text-[11px] text-zinc-500">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    Загрузка команды...
+                  </div>
+                ) : approverMembers.length === 0 ? (
+                  <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                    В команде нет редакторов или администраторов. Добавьте участников в настройках команды.
+                  </p>
+                ) : (
+                  <div className="space-y-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 p-2">
+                    {approverMembers.map((member) => {
+                      const checked = approverIds.includes(member.user_id);
+                      return (
+                        <label
+                          key={member.user_id}
+                          className="flex items-center gap-2 rounded-lg px-1.5 py-1 text-xs hover:bg-zinc-50 dark:hover:bg-zinc-800/70"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => toggleApprover(member.user_id)}
+                            className="rounded text-amber-600 focus:ring-amber-500"
+                          />
+                          <span className="min-w-0 truncate text-zinc-800 dark:text-zinc-200">
+                            {member.name?.trim() || member.email}
+                          </span>
+                          <span className="ml-auto shrink-0 text-[10px] text-zinc-400">
+                            {member.role === "owner"
+                              ? "Владелец"
+                              : member.role === "admin"
+                              ? "Администратор"
+                              : "Редактор"}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+                {approverIds.length === 0 && !loadingMembers && (
+                  <p className="mt-1 text-[10px] text-amber-700 dark:text-amber-400">
+                    Без согласующих шаг не отправит публикацию.
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="mb-1 block font-medium text-zinc-700 dark:text-zinc-300">
+                  Желаемое время публикации
+                </label>
+                <input
+                  type="datetime-local"
+                  value={data.dueAt || ""}
+                  onChange={(e) => handleFieldChange("dueAt", e.target.value)}
+                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs"
+                />
+                <p className="mt-1 text-[10px] text-zinc-500">
+                  Необязательно. Согласующий сможет опубликовать сразу или оставить это время.
+                </p>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* 8. SWITCH NODE */}
         {node.type === "switch" && (() => {

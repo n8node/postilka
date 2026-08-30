@@ -195,6 +195,9 @@ type PostSettings struct {
 	UTM                     *PostUTMSettings        `json:"utm,omitempty"`
 	ApprovalRequired        bool                    `json:"approval_required,omitempty"`
 	ApproverUserIDs         []string                `json:"approver_user_ids,omitempty"`
+	WorkflowID              string                  `json:"workflow_id,omitempty"`
+	WorkflowRunID           string                  `json:"workflow_run_id,omitempty"`
+	WorkflowNodeID          string                  `json:"workflow_node_id,omitempty"`
 	Recurrence              *PostRecurrenceSettings `json:"recurrence,omitempty"`
 	TelegramMediaLayout     string                   `json:"telegram_media_layout,omitempty"`
 	TelegramCaptionPosition string                   `json:"telegram_caption_position,omitempty"`

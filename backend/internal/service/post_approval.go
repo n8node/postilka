@@ -131,7 +131,11 @@ func (s *PostService) ApprovePost(
 		if s.notify != nil {
 			s.notify.NotifyApprovalDecision(ctx, notifyPost, userID, true, true, req.Comment)
 		}
-		return s.publishAndGet(ctx, ws.ID, postID)
+		published, err := s.publishAndGet(ctx, ws.ID, postID)
+		if err == nil {
+			s.resolveWorkflowApprovalRun(ctx, published, true)
+		}
+		return published, err
 	}
 	scheduled, err := s.posts.SetScheduled(ctx, ws.ID, postID, *dueAt)
 	if err != nil {
@@ -140,6 +144,7 @@ func (s *PostService) ApprovePost(
 	if s.notify != nil {
 		s.notify.NotifyApprovalDecision(ctx, *scheduled, userID, true, false, req.Comment)
 	}
+	s.resolveWorkflowApprovalRun(ctx, scheduled, true)
 	return scheduled, nil
 }
 
@@ -177,6 +182,7 @@ func (s *PostService) RejectPost(
 	if s.notify != nil {
 		s.notify.NotifyApprovalDecision(ctx, *updated, userID, false, false, req.Comment)
 	}
+	s.resolveWorkflowApprovalRun(ctx, updated, false)
 	tmp := []model.Post{*updated}
 	s.stampApprovalMeta(ctx, tmp)
 	return &tmp[0], nil
