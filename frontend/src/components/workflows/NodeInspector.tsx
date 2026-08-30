@@ -2846,7 +2846,10 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                     return (
                       <div key={un.id} className="space-y-1 py-1">
                         <span className="text-[10px] font-bold text-zinc-600 dark:text-zinc-400">
-                          {un.data.title || un.id} ({un.type}):
+                          {un.data.title || uDef?.title || un.type}
+                          <span className="ml-1 font-mono font-normal text-zinc-400">
+                            {un.id}
+                          </span>
                         </span>
                         <div className="flex flex-wrap gap-1">
                           {outputs.map((out) => (
@@ -2861,7 +2864,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                               }
                               className="rounded bg-white dark:bg-zinc-800 border border-indigo-200 dark:border-indigo-800 px-2 py-0.5 text-[11px] text-indigo-700 dark:text-indigo-300 font-mono shadow-sm hover:bg-indigo-600 hover:text-white transition"
                             >
-                              .{out.id}
+                              {`{{ ${un.id}.${out.id} }}`}
                             </button>
                           ))}
                         </div>

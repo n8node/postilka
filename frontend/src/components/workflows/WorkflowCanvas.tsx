@@ -1319,6 +1319,9 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                         <span className="font-semibold text-zinc-900 dark:text-zinc-100 block truncate">
                           {item.nodeTitle}
                         </span>
+                        <p className="truncate font-mono text-[10px] text-zinc-400">
+                          {item.id}
+                        </p>
                         <p className="text-[10px] text-zinc-500">
                           {item.category}: {item.unit}
                         </p>

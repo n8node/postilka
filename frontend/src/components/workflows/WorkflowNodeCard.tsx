@@ -459,9 +459,14 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
             >
               <PlayCircle className="h-2.5 w-2.5" />
             </div>
-            <span className="truncate text-[11px] font-semibold text-zinc-800 dark:text-zinc-200">
-              {title}
-            </span>
+            <div className="min-w-0">
+              <span className="block truncate text-[11px] font-semibold text-zinc-800 dark:text-zinc-200">
+                {title}
+              </span>
+              <span className="block truncate font-mono text-[9px] font-normal text-zinc-400" title={node.id}>
+                {node.id}
+              </span>
+            </div>
           </div>
 
           <div className="flex items-center gap-0.5">
@@ -520,11 +525,12 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
               <span className="block truncate text-xs font-semibold text-zinc-800 dark:text-zinc-200">
                 {title}
               </span>
-              {isCompact && (
-                <span className="block truncate text-[10px] text-zinc-500">
-                  {def.title}
-                </span>
-              )}
+              <span
+                className="block truncate font-mono text-[10px] font-normal text-zinc-400"
+                title={node.id}
+              >
+                {node.id}
+              </span>
             </div>
           </div>
 

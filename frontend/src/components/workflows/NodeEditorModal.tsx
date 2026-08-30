@@ -237,6 +237,7 @@ const SchemaTree: React.FC<{
         return (
           field.id.toLowerCase().includes(q) ||
           field.label.toLowerCase().includes(q) ||
+          group.id.toLowerCase().includes(q) ||
           group.title.toLowerCase().includes(q)
         );
       }),
@@ -258,15 +259,20 @@ const SchemaTree: React.FC<{
               onClick={() =>
                 setOpenIds((prev) => ({ ...prev, [group.id]: !isOpen }))
               }
-              className="flex w-full items-center gap-1.5 rounded-lg px-1.5 py-1 text-left text-[11px] font-semibold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+              className="flex w-full items-start gap-1.5 rounded-lg px-1.5 py-1 text-left text-[11px] font-semibold text-zinc-800 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800"
             >
               {isOpen ? (
-                <ChevronDown className="h-3.5 w-3.5 text-zinc-400" />
+                <ChevronDown className="h-3.5 w-3.5 shrink-0 text-zinc-400 mt-0.5" />
               ) : (
-                <ChevronRight className="h-3.5 w-3.5 text-zinc-400" />
+                <ChevronRight className="h-3.5 w-3.5 shrink-0 text-zinc-400 mt-0.5" />
               )}
-              <span className="truncate">{group.title}</span>
-              <span className="ml-auto text-[10px] font-normal text-zinc-400">
+              <span className="min-w-0 flex-1">
+                <span className="block truncate">{group.title}</span>
+                <span className="block truncate font-mono text-[10px] font-normal text-zinc-400">
+                  {group.id}
+                </span>
+              </span>
+              <span className="ml-auto shrink-0 text-[10px] font-normal text-zinc-400">
                 {group.fields.length}
               </span>
             </button>
@@ -323,10 +329,13 @@ const SchemaTree: React.FC<{
                         )}
                       </div>
                       <div className="font-mono text-[10px] text-zinc-500 truncate">
-                        {field.value !== undefined
-                          ? formatPreview(field.value)
-                          : field.id}
+                        {buildVarExpression(group.id, field.id)}
                       </div>
+                      {field.value !== undefined ? (
+                        <div className="truncate text-[10px] text-zinc-400">
+                          {formatPreview(field.value)}
+                        </div>
+                      ) : null}
                     </div>
                   );
                 })}
@@ -696,7 +705,8 @@ export const NodeEditorModal: React.FC<NodeEditorModalProps> = ({
                   {title}
                 </h2>
                 <p className="truncate text-[10px] text-zinc-500">
-                  {def?.title || node.type}
+                  <span className="font-mono">{node.id}</span>
+                  {def?.title && def.title !== title ? ` · ${def.title}` : ""}
                 </p>
               </div>
             </div>
