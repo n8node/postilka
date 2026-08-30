@@ -14,7 +14,6 @@ import {
   type GenerationModeId,
 } from "@/lib/generation-data";
 import {
-  REFERENCE_AUDIO_MAX,
   REFERENCE_IMAGE_MAX,
   REFERENCE_VIDEO_MAX,
   VIDEO_DURATION_MAX,
@@ -38,7 +37,6 @@ const SLOT_ARRAYS: Record<string, { ids: string; durations?: string; len: number
     durations: "referenceVideoDurations",
     len: REFERENCE_VIDEO_MAX,
   },
-  referenceAudios: { ids: "referenceAudioFileIds", len: REFERENCE_AUDIO_MAX },
 };
 
 const SCALAR_FILE: Record<string, string> = {
@@ -407,7 +405,6 @@ export function WorkflowAIVideoFields({
   const duration = Number(data.durationSeconds || 5);
   const referenceImages = readSlotArray(data, "referenceImages", REFERENCE_IMAGE_MAX);
   const referenceVideos = readSlotArray(data, "referenceVideos", REFERENCE_VIDEO_MAX);
-  const referenceAudios = readSlotArray(data, "referenceAudios", REFERENCE_AUDIO_MAX);
   const accent =
     "bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100";
 
@@ -509,7 +506,8 @@ export function WorkflowAIVideoFields({
       {mode === "reference-to-video" && (
         <div className="space-y-2">
           <p className="text-[10px] text-zinc-500">
-            Нужен хотя бы один референс: фото или видео. Аудио необязательно.
+            Нужен хотя бы один референс: фото или видео. Видео — не больше{" "}
+            {REFERENCE_VIDEO_MAX} шт. (лимит KIE).
           </p>
           {referenceImages.map((value, idx) => (
             <MediaSlotField
@@ -540,24 +538,6 @@ export function WorkflowAIVideoFields({
               nodeId={nodeId}
               accentClass={accent}
               placeholder="{{ ai_video_1.video_url }}"
-              showVariablePickerFor={showVariablePickerFor}
-              setShowVariablePickerFor={setShowVariablePickerFor}
-              onPatch={onPatch}
-              data={data}
-              onOpenMediaPicker={onOpenMediaPicker}
-            />
-          ))}
-          {referenceAudios.map((value, idx) => (
-            <MediaSlotField
-              key={`aud-${idx}`}
-              field={`referenceAudios.${idx}`}
-              label={`Референс аудио ${idx + 1}`}
-              need="optional"
-              value={value}
-              accept="audio"
-              nodeId={nodeId}
-              accentClass={accent}
-              placeholder="Файл или переменная"
               showVariablePickerFor={showVariablePickerFor}
               setShowVariablePickerFor={setShowVariablePickerFor}
               onPatch={onPatch}

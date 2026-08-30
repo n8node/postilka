@@ -498,8 +498,6 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       referenceVideos: ["", "", ""],
       referenceVideoFileIds: ["", "", ""],
       referenceVideoDurations: [0, 0, 0],
-      referenceAudios: ["", "", ""],
-      referenceAudioFileIds: ["", "", ""],
       aspectRatio: "16:9",
       durationSeconds: 5,
     },

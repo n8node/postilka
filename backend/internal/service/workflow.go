@@ -813,7 +813,6 @@ func (s *WorkflowService) executeNode(
 		outputs["last_frame"] = getString(inputs, "lastFrame", "")
 		outputs["reference_images"] = getStringSlice(inputs, "referenceImages")
 		outputs["reference_videos"] = getStringSlice(inputs, "referenceVideos")
-		outputs["reference_audios"] = getStringSlice(inputs, "referenceAudios")
 		return outputs, 0, 2, 0, nil
 
 	case "files_media":
