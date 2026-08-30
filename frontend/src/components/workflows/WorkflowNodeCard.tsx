@@ -1049,6 +1049,16 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
                   Канал не выбран
                 </span>
               )}
+              {node.data.imageUrl ? (
+                <span className="rounded bg-violet-100 dark:bg-violet-950/60 border border-violet-200 dark:border-violet-800/40 px-1.5 py-0.5 text-[9px] text-violet-800 dark:text-violet-300 font-medium">
+                  Фото
+                </span>
+              ) : null}
+              {node.data.videoUrl ? (
+                <span className="rounded bg-violet-100 dark:bg-violet-950/60 border border-violet-200 dark:border-violet-800/40 px-1.5 py-0.5 text-[9px] text-violet-800 dark:text-violet-300 font-medium">
+                  Видео
+                </span>
+              ) : null}
               <span className="rounded bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 text-[9px] text-zinc-600 dark:text-zinc-400">
                 Photochka
               </span>

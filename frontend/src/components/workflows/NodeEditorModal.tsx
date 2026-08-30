@@ -14,8 +14,23 @@ import {
   X,
 } from "lucide-react";
 import type { WorkflowEdge, WorkflowNode, WorkflowRunStep } from "@/lib/workflows-api";
-import { NODE_DEFINITIONS } from "./nodeTypes";
+import { NODE_DEFINITIONS, PORT_TYPE_COLORS } from "./nodeTypes";
 import { NodeInspector } from "./NodeInspector";
+import { VariableDragProvider, useVariableDrag } from "./VariableDragContext";
+import {
+  VAR_DRAG_MIME,
+  applyVariableDrop,
+  buildVarExpression,
+  canAcceptVariable,
+  dropModeForAccept,
+  encodeVarPayload,
+  inferFieldAccept,
+  inferPortTypeFromId,
+  parseVarPayload,
+  rejectDropMessage,
+  varDropAttrs,
+  type WorkflowVarPayload,
+} from "./variableDrag";
 
 type DataView = "schema" | "table" | "json";
 type CenterTab = "parameters" | "settings";
@@ -135,14 +150,34 @@ const JsonBlock: React.FC<{ data: unknown; emptyLabel: string }> = ({
   );
 };
 
-const TableBlock: React.FC<{ data: unknown; emptyLabel: string }> = ({
-  data,
-  emptyLabel,
-}) => {
+const TableBlock: React.FC<{
+  data: unknown;
+  emptyLabel: string;
+  draggableRows?: boolean;
+}> = ({ data, emptyLabel, draggableRows }) => {
+  const { setPayload } = useVariableDrag();
   const rows = flattenEntries(data);
   if (rows.length === 0) {
     return <p className="text-xs text-zinc-500">{emptyLabel}</p>;
   }
+
+  const startRowDrag = (path: string, e: React.DragEvent) => {
+    const [nodeId, ...rest] = path.split(".");
+    const portId = rest.join(".") || path;
+    if (!nodeId || !draggableRows) return;
+    const payload: WorkflowVarPayload = {
+      nodeId,
+      portId,
+      type: inferPortTypeFromId(portId),
+      label: portId,
+      expression: buildVarExpression(nodeId, portId),
+    };
+    e.dataTransfer.setData(VAR_DRAG_MIME, encodeVarPayload(payload));
+    e.dataTransfer.setData("text/plain", payload.expression);
+    e.dataTransfer.effectAllowed = "copy";
+    setPayload(payload);
+  };
+
   return (
     <div className="overflow-auto rounded-xl border border-zinc-200 dark:border-zinc-800">
       <table className="w-full text-left text-[11px]">
@@ -156,7 +191,15 @@ const TableBlock: React.FC<{ data: unknown; emptyLabel: string }> = ({
           {rows.map((row) => (
             <tr
               key={row.path}
-              className="border-t border-zinc-100 dark:border-zinc-800"
+              draggable={!!draggableRows}
+              onDragStart={(e) => startRowDrag(row.path, e)}
+              onDragEnd={() => setPayload(null)}
+              className={`border-t border-zinc-100 dark:border-zinc-800 ${
+                draggableRows
+                  ? "cursor-grab active:cursor-grabbing hover:bg-indigo-50/70 dark:hover:bg-indigo-950/30"
+                  : ""
+              }`}
+              title={draggableRows ? "Перетащите в поле параметров" : undefined}
             >
               <td className="px-2.5 py-1.5 font-mono text-zinc-600 dark:text-zinc-400 align-top whitespace-nowrap">
                 {row.path}
@@ -176,11 +219,13 @@ const SchemaTree: React.FC<{
   groups: Array<{
     id: string;
     title: string;
-    fields: Array<{ id: string; label: string; value?: unknown }>;
+    fields: Array<{ id: string; label: string; type?: string; value?: unknown }>;
   }>;
   query: string;
   emptyLabel: string;
-}> = ({ groups, query, emptyLabel }) => {
+  draggableFields?: boolean;
+}> = ({ groups, query, emptyLabel, draggableFields }) => {
+  const { setPayload, focusedField } = useVariableDrag();
   const [openIds, setOpenIds] = useState<Record<string, boolean>>({});
   const q = query.trim().toLowerCase();
 
@@ -227,26 +272,192 @@ const SchemaTree: React.FC<{
             </button>
             {isOpen && (
               <div className="ml-4 space-y-0.5 border-l border-zinc-200 dark:border-zinc-800 pl-2">
-                {group.fields.map((field) => (
-                  <div
-                    key={`${group.id}-${field.id}`}
-                    className="rounded-md px-1.5 py-1"
-                  >
-                    <div className="text-[11px] font-medium text-zinc-800 dark:text-zinc-200">
-                      {field.label}
+                {group.fields.map((field) => {
+                  const portType = field.type || inferPortTypeFromId(field.id);
+                  const typeMeta = PORT_TYPE_COLORS[portType];
+                  const payload: WorkflowVarPayload = {
+                    nodeId: group.id,
+                    portId: field.id,
+                    type: portType,
+                    label: field.label,
+                    expression: buildVarExpression(group.id, field.id),
+                  };
+                  return (
+                    <div
+                      key={`${group.id}-${field.id}`}
+                      draggable={!!draggableFields}
+                      onDragStart={(e) => {
+                        if (!draggableFields) return;
+                        e.dataTransfer.setData(
+                          VAR_DRAG_MIME,
+                          encodeVarPayload(payload)
+                        );
+                        e.dataTransfer.setData("text/plain", payload.expression);
+                        e.dataTransfer.effectAllowed = "copy";
+                        setPayload(payload);
+                      }}
+                      onDragEnd={() => setPayload(null)}
+                      className={`rounded-md px-1.5 py-1 ${
+                        draggableFields
+                          ? "cursor-grab active:cursor-grabbing hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
+                          : ""
+                      }`}
+                      title={
+                        draggableFields
+                          ? focusedField
+                            ? `Перетащите в поле или отпустите над параметром`
+                            : "Перетащите в поле параметров"
+                          : undefined
+                      }
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <div className="min-w-0 flex-1 text-[11px] font-medium text-zinc-800 dark:text-zinc-200 truncate">
+                          {field.label}
+                        </div>
+                        {typeMeta && (
+                          <span
+                            className={`shrink-0 rounded px-1 py-px text-[9px] font-semibold ${typeMeta.badge}`}
+                          >
+                            {typeMeta.label}
+                          </span>
+                        )}
+                      </div>
+                      <div className="font-mono text-[10px] text-zinc-500 truncate">
+                        {field.value !== undefined
+                          ? formatPreview(field.value)
+                          : field.id}
+                      </div>
                     </div>
-                    <div className="font-mono text-[10px] text-zinc-500 truncate">
-                      {field.value !== undefined
-                        ? formatPreview(field.value)
-                        : field.id}
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
         );
       })}
+    </div>
+  );
+};
+
+const SettingsPane: React.FC<{
+  node: WorkflowNode;
+  copied: boolean;
+  onCopyId: () => void;
+  onUpdateNodeData: (nodeId: string, newData: Record<string, any>) => void;
+}> = ({ node, copied, onCopyId, onUpdateNodeData }) => {
+  const { payload, dropError, setDropError, setFocusedField } = useVariableDrag();
+
+  const applyDrop = (field: string, expression: string, sourceType: string) => {
+    const accept = inferFieldAccept(field);
+    if (!canAcceptVariable(accept, sourceType)) {
+      setDropError(rejectDropMessage(accept, sourceType));
+      return;
+    }
+    const current = String(node.data[field] || "");
+    onUpdateNodeData(node.id, {
+      ...node.data,
+      [field]: applyVariableDrop(current, expression, dropModeForAccept(accept)),
+    });
+  };
+
+  const onDragOver = (e: React.DragEvent) => {
+    const fieldEl = (e.target as HTMLElement).closest("[data-var-field]");
+    if (!fieldEl) return;
+    const next = payload || parseVarPayload(e.dataTransfer);
+    if (!next) return;
+    const accept =
+      (fieldEl as HTMLElement).dataset.varAccept ||
+      inferFieldAccept((fieldEl as HTMLElement).dataset.varField || "");
+    e.preventDefault();
+    e.dataTransfer.dropEffect = canAcceptVariable(accept, next.type)
+      ? "copy"
+      : "none";
+  };
+
+  const onDrop = (e: React.DragEvent) => {
+    const fieldEl = (e.target as HTMLElement).closest(
+      "[data-var-field]"
+    ) as HTMLElement | null;
+    if (!fieldEl?.dataset.varField) return;
+    const next = payload || parseVarPayload(e.dataTransfer);
+    if (!next) return;
+    e.preventDefault();
+    applyDrop(fieldEl.dataset.varField, next.expression, next.type);
+  };
+
+  return (
+    <div
+      className="space-y-4 text-xs"
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      onFocusCapture={(e) => {
+        const fieldEl = (e.target as HTMLElement).closest("[data-var-field]") as
+          | HTMLElement
+          | null;
+        if (fieldEl?.dataset.varField) setFocusedField(fieldEl.dataset.varField);
+      }}
+    >
+      {dropError && (
+        <div className="rounded-xl border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 px-3 py-2 text-[11px] font-medium text-red-700 dark:text-red-300">
+          {dropError}
+        </div>
+      )}
+      <div>
+        <label className="mb-1 block font-medium text-zinc-700 dark:text-zinc-300">
+          Название узла
+        </label>
+        <input
+          type="text"
+          value={(node.data.title as string) || ""}
+          onChange={(e) =>
+            onUpdateNodeData(node.id, {
+              ...node.data,
+              title: e.target.value,
+            })
+          }
+          {...varDropAttrs("title")}
+          className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none"
+        />
+      </div>
+      <div>
+        <label className="mb-1 block font-medium text-zinc-700 dark:text-zinc-300">
+          Идентификатор
+        </label>
+        <div className="flex items-center gap-2">
+          <code className="flex-1 truncate rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 font-mono text-[11px] text-zinc-700 dark:text-zinc-300">
+            {node.id}
+          </code>
+          <button
+            type="button"
+            onClick={onCopyId}
+            className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-1.5 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            title="Скопировать ID"
+          >
+            <Copy className="h-3.5 w-3.5" />
+          </button>
+        </div>
+        {copied && (
+          <p className="mt-1 text-[10px] text-emerald-600">Скопировано</p>
+        )}
+      </div>
+      <div>
+        <label className="mb-1 block font-medium text-zinc-700 dark:text-zinc-300">
+          Заметка
+        </label>
+        <textarea
+          rows={4}
+          value={(node.data.notes as string) || ""}
+          onChange={(e) =>
+            onUpdateNodeData(node.id, {
+              ...node.data,
+              notes: e.target.value,
+            })
+          }
+          {...varDropAttrs("notes")}
+          placeholder="Коротко, зачем этот шаг в процессе"
+          className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none"
+        />
+      </div>
     </div>
   );
 };
@@ -304,6 +515,7 @@ export const NodeEditorModal: React.FC<NodeEditorModalProps> = ({
         const fields = (srcDef?.outputs || []).map((port) => ({
           id: port.id,
           label: port.label,
+          type: port.type,
           value: payload ? payload[port.id] : undefined,
         }));
         return {
@@ -316,6 +528,7 @@ export const NodeEditorModal: React.FC<NodeEditorModalProps> = ({
               ? Object.keys(payload).map((key) => ({
                   id: key,
                   label: key,
+                  type: inferPortTypeFromId(key),
                   value: payload[key],
                 }))
               : [],
@@ -393,6 +606,7 @@ export const NodeEditorModal: React.FC<NodeEditorModalProps> = ({
     node.type === "trigger" && node.data.triggerType === "webhook";
 
   return (
+    <VariableDragProvider>
     <div
       className="absolute inset-0 z-40 flex flex-col bg-zinc-50 dark:bg-zinc-950"
       data-panel="node-editor"
@@ -433,7 +647,13 @@ export const NodeEditorModal: React.FC<NodeEditorModalProps> = ({
               className="w-full bg-transparent text-xs text-zinc-800 dark:text-zinc-200 outline-none placeholder:text-zinc-400"
             />
           </div>
-          <div className="min-h-0 flex-1 overflow-auto p-3">
+          <div className="min-h-0 flex-1 overflow-auto p-3 space-y-2">
+            {incoming.length > 0 && (
+              <p className="text-[10px] text-zinc-500 leading-relaxed">
+                Перетащите поле в параметр узла. Тип должен совпадать: текст не
+                примет фото или видео.
+              </p>
+            )}
             {incoming.length === 0 ? (
               <p className="text-xs text-zinc-500 leading-relaxed">
                 К этому узлу ещё не подключены предыдущие шаги. Данные появятся
@@ -448,12 +668,14 @@ export const NodeEditorModal: React.FC<NodeEditorModalProps> = ({
               <TableBlock
                 data={inputPayload}
                 emptyLabel="Нет табличных данных. Сначала выполните предыдущие узлы."
+                draggableRows
               />
             ) : (
               <SchemaTree
                 groups={inputGroups}
                 query={inputQuery}
                 emptyLabel="Нет схемы входа — подключите предыдущий узел."
+                draggableFields
               />
             )}
           </div>
@@ -535,62 +757,12 @@ export const NodeEditorModal: React.FC<NodeEditorModalProps> = ({
                 onOpenMediaPicker={onOpenMediaPicker}
               />
             ) : (
-              <div className="space-y-4 text-xs">
-                <div>
-                  <label className="mb-1 block font-medium text-zinc-700 dark:text-zinc-300">
-                    Название узла
-                  </label>
-                  <input
-                    type="text"
-                    value={(node.data.title as string) || ""}
-                    onChange={(e) =>
-                      onUpdateNodeData(node.id, {
-                        ...node.data,
-                        title: e.target.value,
-                      })
-                    }
-                    className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block font-medium text-zinc-700 dark:text-zinc-300">
-                    Идентификатор
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <code className="flex-1 truncate rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 font-mono text-[11px] text-zinc-700 dark:text-zinc-300">
-                      {node.id}
-                    </code>
-                    <button
-                      type="button"
-                      onClick={handleCopyId}
-                      className="rounded-lg border border-zinc-200 dark:border-zinc-800 p-1.5 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                      title="Скопировать ID"
-                    >
-                      <Copy className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                  {copied && (
-                    <p className="mt-1 text-[10px] text-emerald-600">Скопировано</p>
-                  )}
-                </div>
-                <div>
-                  <label className="mb-1 block font-medium text-zinc-700 dark:text-zinc-300">
-                    Заметка
-                  </label>
-                  <textarea
-                    rows={4}
-                    value={(node.data.notes as string) || ""}
-                    onChange={(e) =>
-                      onUpdateNodeData(node.id, {
-                        ...node.data,
-                        notes: e.target.value,
-                      })
-                    }
-                    placeholder="Коротко, зачем этот шаг в процессе"
-                    className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none"
-                  />
-                </div>
-              </div>
+              <SettingsPane
+                node={node}
+                copied={copied}
+                onCopyId={handleCopyId}
+                onUpdateNodeData={onUpdateNodeData}
+              />
             )}
           </div>
         </section>
@@ -648,5 +820,6 @@ export const NodeEditorModal: React.FC<NodeEditorModalProps> = ({
         </section>
       </div>
     </div>
+    </VariableDragProvider>
   );
 };

@@ -804,8 +804,19 @@ func (s *WorkflowService) executeNode(
 	case "files_media":
 		fileURL := getString(inputs, "fileUrl", "")
 		fileID := getString(inputs, "fileId", "")
+		imageURL := getString(inputs, "imageUrl", "")
+		videoURL := getString(inputs, "videoUrl", "")
+		mediaKind := getString(inputs, "mediaKind", "")
+		if imageURL == "" && mediaKind != "video" && fileURL != "" {
+			imageURL = fileURL
+		}
+		if videoURL == "" && mediaKind == "video" && fileURL != "" {
+			videoURL = fileURL
+		}
 		outputs["file_url"] = fileURL
 		outputs["file_id"] = fileID
+		outputs["image_url"] = imageURL
+		outputs["video_url"] = videoURL
 		return outputs, 0, 0, 0, nil
 
 	case "social_telegram":
@@ -1068,11 +1079,26 @@ func (s *WorkflowService) executeNode(
 
 	case "social_photochka":
 		text := getString(inputs, "text", "")
+		imageURL := getString(inputs, "imageUrl", "")
+		videoURL := getString(inputs, "videoUrl", "")
 		mediaURL := getString(inputs, "mediaUrl", "")
+		if mediaURL == "" {
+			if imageURL != "" {
+				mediaURL = imageURL
+			} else if videoURL != "" {
+				mediaURL = videoURL
+			}
+		}
 		fileID := getString(inputs, "fileId", "")
+		if fileID == "" {
+			fileID = getString(inputs, "imageFileId", "")
+		}
+		if fileID == "" {
+			fileID = getString(inputs, "videoFileId", "")
+		}
 		channelID := getString(inputs, "channelId", "")
-		if text == "" && mediaURL == "" && fileID == "" {
-			return nil, 0, 0, 0, errors.New("для Photochka укажите текст или медиафайл")
+		if text == "" && mediaURL == "" && fileID == "" && imageURL == "" && videoURL == "" {
+			return nil, 0, 0, 0, errors.New("для Photochka укажите текст, фото или видео")
 		}
 
 		channels, _ := s.channelRepo.ListByWorkspace(ctx, workspaceID)
@@ -1092,6 +1118,8 @@ func (s *WorkflowService) executeNode(
 		outputs["provider"] = "photochka"
 		outputs["text"] = text
 		outputs["media_url"] = mediaURL
+		outputs["image_url"] = imageURL
+		outputs["video_url"] = videoURL
 		outputs["file_id"] = fileID
 		if photochkaChannel != nil {
 			outputs["channel_id"] = photochkaChannel.ID

@@ -1060,7 +1060,11 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                 onRegisterPort={handleRegisterPort}
                 onUpdateNodeData={handleUpdateNodeData}
                 onOpenMediaPicker={(nodeId, field) =>
-                  setMediaPickerTarget({ nodeId, field, mediaKind: "image" })
+                  setMediaPickerTarget({
+                    nodeId,
+                    field,
+                    mediaKind: field === "videoUrl" ? "video" : "image",
+                  })
                 }
                 onSelect={() => {
                   setSelectedNodeId(node.id);
@@ -1097,7 +1101,11 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
             onClose={() => setInspectedNodeId(null)}
             onUpdateNodeData={handleUpdateNodeData}
             onOpenMediaPicker={(nodeId, field) =>
-              setMediaPickerTarget({ nodeId, field, mediaKind: "image" })
+              setMediaPickerTarget({
+                nodeId,
+                field,
+                mediaKind: field === "videoUrl" ? "video" : "image",
+              })
             }
             onTestNode={onTestNode}
             onTestSuccess={(nodeId, outputs) =>
@@ -1118,14 +1126,28 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                 const isVid =
                   file.mime_type.startsWith("video/") ||
                   file.name.endsWith(".mp4");
-                handleUpdateNodeData(mediaPickerTarget.nodeId, {
-                  [mediaPickerTarget.field]: url,
-                  imageUrl: !isVid ? url : undefined,
-                  videoUrl: isVid ? url : undefined,
-                  fileId: file.id,
+                const current =
+                  nodes.find((n) => n.id === mediaPickerTarget.nodeId)?.data ||
+                  {};
+                const field = mediaPickerTarget.field;
+                const patch: Record<string, unknown> = {
+                  ...current,
+                  [field]: url,
                   fileName: file.name,
-                  mediaKind: isVid ? "video" : "image",
-                });
+                };
+                if (field === "imageUrl") {
+                  patch.imageUrl = url;
+                  patch.imageFileId = file.id;
+                } else if (field === "videoUrl") {
+                  patch.videoUrl = url;
+                  patch.videoFileId = file.id;
+                } else {
+                  patch.fileId = file.id;
+                  patch.mediaKind = isVid ? "video" : "image";
+                  if (isVid) patch.videoUrl = url;
+                  else patch.imageUrl = url;
+                }
+                handleUpdateNodeData(mediaPickerTarget.nodeId, patch);
               } catch (err) {
                 console.error("Failed to fetch file media URL", err);
               } finally {

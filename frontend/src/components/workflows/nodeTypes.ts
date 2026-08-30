@@ -360,7 +360,8 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
     inputs: [
       NODE_FLOW_INPUT,
       { id: "text", label: "Текст поста", type: "string" },
-      { id: "mediaUrl", label: "Медиафайл (опционально)", type: "any" },
+      { id: "imageUrl", label: "Фото", type: "image" },
+      { id: "videoUrl", label: "Видео", type: "video" },
     ],
     outputs: [
       { id: "status", label: "Статус", type: "string" },
@@ -371,6 +372,10 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       channelId: "",
       channelName: "",
       text: "{{ ai_text_1.text }}",
+      imageUrl: "",
+      videoUrl: "",
+      imageFileId: "",
+      videoFileId: "",
     },
   },
   files_media: {
@@ -390,6 +395,7 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       { id: "image_url", label: "Изображение", type: "image" },
       { id: "video_url", label: "Видео", type: "video" },
       { id: "file_url", label: "Файл", type: "any" },
+      { id: "file_id", label: "ID файла", type: "any" },
     ],
     defaultData: {
       title: "Image",

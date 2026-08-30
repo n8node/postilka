@@ -59,6 +59,16 @@ import {
 import { uploadFile } from "@/lib/files-api";
 import { getCachedFileMediaUrl } from "@/lib/file-media-cache";
 import { NODE_DEFINITIONS } from "./nodeTypes";
+import { useVariableDrag } from "./VariableDragContext";
+import {
+  applyVariableDrop,
+  canAcceptVariable,
+  dropModeForAccept,
+  inferFieldAccept,
+  parseVarPayload,
+  rejectDropMessage,
+  varDropAttrs,
+} from "./variableDrag";
 import { WorkflowMediaPreview, ButtonStylePicker } from "./WorkflowMediaPreview";
 import { StoryAreaEditor } from "@/components/posts/StoryAreaEditor";
 import {
@@ -89,6 +99,9 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
 }) => {
   const isFormLayout = layout === "form";
   const inspectorFileInputRef = useRef<HTMLInputElement>(null);
+  const formRootRef = useRef<HTMLDivElement>(null);
+  const { payload: dragPayload, dropError, setFocusedField, setDropError } =
+    useVariableDrag();
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [testing, setTesting] = useState(false);
@@ -140,6 +153,29 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
       mounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    const root = formRootRef.current;
+    if (!root) return;
+    const els = root.querySelectorAll<HTMLElement>("[data-var-field]");
+    els.forEach((el) => {
+      el.classList.remove(
+        "ring-2",
+        "ring-emerald-400",
+        "ring-red-400",
+        "ring-offset-1",
+        "dark:ring-offset-zinc-900"
+      );
+      if (!dragPayload) return;
+      const accept =
+        el.dataset.varAccept || inferFieldAccept(el.dataset.varField || "");
+      if (canAcceptVariable(accept, dragPayload.type)) {
+        el.classList.add("ring-2", "ring-emerald-400", "ring-offset-1", "dark:ring-offset-zinc-900");
+      } else {
+        el.classList.add("ring-2", "ring-red-400", "ring-offset-1", "dark:ring-offset-zinc-900");
+      }
+    });
+  }, [dragPayload]);
 
   const stopWebhookPolling = useCallback(() => {
     if (webhookPollRef.current) {
@@ -268,9 +304,79 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
   const upstreamNodes = allNodes.filter((n) => n.id !== node.id);
 
   const insertVariable = (fieldKey: string, variableStr: string) => {
+    const accept = inferFieldAccept(fieldKey);
     const currentVal = (data[fieldKey] as string) || "";
-    handleFieldChange(fieldKey, currentVal + " " + variableStr);
+    handleFieldChange(
+      fieldKey,
+      applyVariableDrop(currentVal, variableStr, dropModeForAccept(accept))
+    );
     setShowVariablePickerFor(null);
+  };
+
+  const applyDropToField = (fieldKey: string, expression: string, sourceType: string) => {
+    const accept = inferFieldAccept(fieldKey);
+    if (!canAcceptVariable(accept, sourceType)) {
+      setDropError(rejectDropMessage(accept, sourceType));
+      return false;
+    }
+    if (fieldKey.startsWith("fieldValue:")) {
+      const idx = Number(fieldKey.slice("fieldValue:".length));
+      const next = [...(Array.isArray(data.fields) ? data.fields : [])];
+      if (!next[idx]) return false;
+      next[idx] = {
+        ...next[idx],
+        value: applyVariableDrop(
+          String(next[idx].value || ""),
+          expression,
+          dropModeForAccept(accept)
+        ),
+      };
+      handleFieldChange("fields", next);
+      return true;
+    }
+    const currentVal = (data[fieldKey] as string) || "";
+    handleFieldChange(
+      fieldKey,
+      applyVariableDrop(currentVal, expression, dropModeForAccept(accept))
+    );
+    return true;
+  };
+
+  const handleVarDragOver = (e: React.DragEvent) => {
+    const fieldEl = (e.target as HTMLElement).closest("[data-var-field]") as
+      | HTMLElement
+      | null;
+    if (!fieldEl) return;
+    const payload = dragPayload || parseVarPayload(e.dataTransfer);
+    if (!payload) return;
+    const accept = fieldEl.dataset.varAccept || inferFieldAccept(fieldEl.dataset.varField || "");
+    if (canAcceptVariable(accept, payload.type)) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+    } else {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "none";
+    }
+  };
+
+  const handleVarDrop = (e: React.DragEvent) => {
+    const fieldEl = (e.target as HTMLElement).closest("[data-var-field]") as
+      | HTMLElement
+      | null;
+    if (!fieldEl?.dataset.varField) return;
+    const payload = dragPayload || parseVarPayload(e.dataTransfer);
+    if (!payload) return;
+    e.preventDefault();
+    applyDropToField(fieldEl.dataset.varField, payload.expression, payload.type);
+  };
+
+  const handleVarFocus = (e: React.FocusEvent) => {
+    const fieldEl = (e.target as HTMLElement).closest("[data-var-field]") as
+      | HTMLElement
+      | null;
+    if (fieldEl?.dataset.varField) {
+      setFocusedField(fieldEl.dataset.varField);
+    }
   };
 
   const renderChannelSelector = (provider: string, providerTitle: string) => {
@@ -380,12 +486,21 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
       )}
 
       <div
+        ref={formRootRef}
+        onDragOver={handleVarDragOver}
+        onDrop={handleVarDrop}
+        onFocusCapture={handleVarFocus}
         className={
           isFormLayout
             ? "space-y-4 text-xs"
             : "flex-1 min-h-0 space-y-4 overflow-y-auto p-4 text-xs"
         }
       >
+        {dropError && (
+          <div className="rounded-xl border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 px-3 py-2 text-[11px] font-medium text-red-700 dark:text-red-300">
+            {dropError}
+          </div>
+        )}
         {/* Title Field */}
         <div>
           <label className="mb-1 block font-medium text-zinc-700 dark:text-zinc-300">
@@ -395,6 +510,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
             type="text"
             value={data.title || ""}
             onChange={(e) => handleFieldChange("title", e.target.value)}
+            {...varDropAttrs("title")}
             className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none"
             placeholder={def?.title || "Название..."}
           />
@@ -696,6 +812,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                     type="url"
                     value={data.rssFeedUrl || ""}
                     onChange={(e) => handleFieldChange("rssFeedUrl", e.target.value)}
+                    {...varDropAttrs("rssFeedUrl")}
                     className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-800 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none"
                     placeholder="https://example.com/feed.xml"
                   />
@@ -763,6 +880,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                 rows={4}
                 value={data.prompt || ""}
                 onChange={(e) => handleFieldChange("prompt", e.target.value)}
+                {...varDropAttrs("prompt")}
                 className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 p-2.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none"
                 placeholder="Опишите тему, требования к посту, хештеги и CTA..."
               />
@@ -776,6 +894,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                 type="text"
                 value={data.role || "Опытный SMM-копирайтер"}
                 onChange={(e) => handleFieldChange("role", e.target.value)}
+                {...varDropAttrs("role")}
                 className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none"
                 placeholder="SMM-копирайтер"
               />
@@ -808,6 +927,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                 rows={8}
                 value={data.text || ""}
                 onChange={(e) => handleFieldChange("text", e.target.value)}
+                {...varDropAttrs("text")}
                 className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 p-2.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none whitespace-pre-wrap"
                 placeholder="Напишите текст публикации вручную. Можно использовать переменные: {{ ai_text_1.text }}"
               />
@@ -844,6 +964,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                 rows={3}
                 value={data.prompt || ""}
                 onChange={(e) => handleFieldChange("prompt", e.target.value)}
+                {...varDropAttrs("prompt")}
                 className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 p-2.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none"
                 placeholder="Digital art, futuristic composition, 4k..."
               />
@@ -898,6 +1019,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                 rows={3}
                 value={data.prompt || ""}
                 onChange={(e) => handleFieldChange("prompt", e.target.value)}
+                {...varDropAttrs("prompt")}
                 className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 p-2.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none"
                 placeholder="Cinematic camera move, neon reflections..."
               />
@@ -991,6 +1113,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                       rows={4}
                       value={data.text || ""}
                       onChange={(e) => handleFieldChange("text", e.target.value)}
+                {...varDropAttrs("text")}
                       className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 p-2.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none font-mono"
                       placeholder="{{ ai_text_1.text }}"
                     />
@@ -1028,6 +1151,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                       type="text"
                       value={data.mediaUrl || ""}
                       onChange={(e) => handleFieldChange("mediaUrl", e.target.value)}
+                      {...varDropAttrs("mediaUrl")}
                       placeholder="{{ files_media_1.image_url }} или https://..."
                       className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none font-mono"
                     />
@@ -1376,6 +1500,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                       type="text"
                       value={data.mediaUrl || ""}
                       onChange={(e) => handleFieldChange("mediaUrl", e.target.value)}
+                      {...varDropAttrs("mediaUrl")}
                       placeholder="{{ ai_image_1.image_url }}"
                       className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 font-mono"
                     />
@@ -1392,6 +1517,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                       type="text"
                       value={data.text || ""}
                       onChange={(e) => handleFieldChange("text", e.target.value)}
+                {...varDropAttrs("text")}
                       placeholder="Подпись к истории..."
                       className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100"
                     />
@@ -1440,6 +1566,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                       type="text"
                       value={data.mediaUrl || ""}
                       onChange={(e) => handleFieldChange("mediaUrl", e.target.value)}
+                      {...varDropAttrs("mediaUrl")}
                       placeholder="{{ files_media_1.video_url }}"
                       className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs font-mono"
                     />
@@ -1470,6 +1597,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                       rows={3}
                       value={data.text || ""}
                       onChange={(e) => handleFieldChange("text", e.target.value)}
+                {...varDropAttrs("text")}
                       placeholder="Подпись отправится следом за кружочком..."
                       className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 p-2.5 text-xs text-zinc-900 dark:text-zinc-100 font-mono"
                     />
@@ -1521,6 +1649,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                 rows={5}
                 value={data.text || ""}
                 onChange={(e) => handleFieldChange("text", e.target.value)}
+                {...varDropAttrs("text")}
                 className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 p-2.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none font-mono"
                 placeholder="{{ ai_text_1.text }}"
               />
@@ -1558,6 +1687,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                   type="text"
                   value={data.mediaUrl || ""}
                   onChange={(e) => handleFieldChange("mediaUrl", e.target.value)}
+                      {...varDropAttrs("mediaUrl")}
                   placeholder="{{ files_media_1.image_url }} или https://..."
                   className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 font-mono"
                 />
@@ -1708,6 +1838,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                 rows={4}
                 value={data.text || ""}
                 onChange={(e) => handleFieldChange("text", e.target.value)}
+                {...varDropAttrs("text")}
                 className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 p-2.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none font-mono"
                 placeholder="{{ ai_text_1.text }}"
               />
@@ -1745,6 +1876,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                 type="text"
                 value={data.mediaUrl || ""}
                 onChange={(e) => handleFieldChange("mediaUrl", e.target.value)}
+                      {...varDropAttrs("mediaUrl")}
                 placeholder="{{ files_media_1.image_url }} или https://..."
                 className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs font-mono"
               />
@@ -1808,6 +1940,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                 type="text"
                 value={data.firstComment || ""}
                 onChange={(e) => handleFieldChange("firstComment", e.target.value)}
+                {...varDropAttrs("firstComment")}
                 className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none"
                 placeholder="Ссылка на источник или дополнительный материал..."
               />
@@ -1866,6 +1999,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                 type="text"
                 value={data.videoUrl || ""}
                 onChange={(e) => handleFieldChange("videoUrl", e.target.value)}
+                {...varDropAttrs("videoUrl", "video")}
                 placeholder="{{ ai_video_1.video_url }} или https://..."
                 className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs font-mono"
               />
@@ -1894,6 +2028,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                 type="text"
                 value={data.titleText || ""}
                 onChange={(e) => handleFieldChange("titleText", e.target.value)}
+                {...varDropAttrs("titleText")}
                 className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none font-medium"
                 placeholder="Заголовок ролика #shorts"
               />
@@ -1921,6 +2056,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                 rows={3}
                 value={data.description || ""}
                 onChange={(e) => handleFieldChange("description", e.target.value)}
+                {...varDropAttrs("description")}
                 className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 p-2.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none font-mono"
                 placeholder="{{ ai_text_1.text }}"
               />
@@ -1949,6 +2085,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                   type="text"
                   value={data.tags || ""}
                   onChange={(e) => handleFieldChange("tags", e.target.value)}
+                  {...varDropAttrs("tags")}
                   className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-2.5 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none"
                   placeholder="shorts, ai, marketing"
                 />
@@ -1999,6 +2136,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                 rows={4}
                 value={data.text || ""}
                 onChange={(e) => handleFieldChange("text", e.target.value)}
+                {...varDropAttrs("text")}
                 className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 p-2.5 text-xs font-mono"
                 placeholder="{{ ai_text_1.text }}"
               />
@@ -2032,12 +2170,97 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                 rows={4}
                 value={data.text || ""}
                 onChange={(e) => handleFieldChange("text", e.target.value)}
+                {...varDropAttrs("text")}
                 className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 p-2.5 text-xs font-mono"
                 placeholder="{{ ai_text_1.text }}"
               />
               <p className="mt-1 text-[10px] text-zinc-500">
-                До 3000 символов. Медиа можно подать на вход узла с предыдущего шага.
+                До 3000 символов. Фото и видео перетащите в поля ниже или выберите из медиатеки.
               </p>
+            </div>
+
+            <div>
+              <div className="mb-1 flex items-center justify-between">
+                <label className="font-medium text-zinc-700 dark:text-zinc-300">
+                  Фото
+                </label>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => onOpenMediaPicker?.(node.id, "imageUrl")}
+                    className="flex items-center gap-1 rounded bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200"
+                  >
+                    <Folder className="h-2.5 w-2.5" />
+                    Медиатека
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setShowVariablePickerFor(
+                        showVariablePickerFor === "imageUrl" ? null : "imageUrl"
+                      )
+                    }
+                    className="flex items-center gap-1 rounded bg-violet-50 dark:bg-violet-950/40 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 dark:text-violet-300 hover:bg-violet-100"
+                  >
+                    <Variable className="h-3 w-3" />
+                    Переменная
+                  </button>
+                </div>
+              </div>
+              <input
+                type="text"
+                value={data.imageUrl || ""}
+                onChange={(e) => handleFieldChange("imageUrl", e.target.value)}
+                {...varDropAttrs("imageUrl", "image")}
+                placeholder="{{ files_media_1.image_url }} или https://..."
+                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs font-mono"
+              />
+              <WorkflowMediaPreview
+                url={data.imageUrl}
+                fileName={data.fileName}
+              />
+            </div>
+
+            <div>
+              <div className="mb-1 flex items-center justify-between">
+                <label className="font-medium text-zinc-700 dark:text-zinc-300">
+                  Видео
+                </label>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => onOpenMediaPicker?.(node.id, "videoUrl")}
+                    className="flex items-center gap-1 rounded bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200"
+                  >
+                    <Folder className="h-2.5 w-2.5" />
+                    Медиатека
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setShowVariablePickerFor(
+                        showVariablePickerFor === "videoUrl" ? null : "videoUrl"
+                      )
+                    }
+                    className="flex items-center gap-1 rounded bg-violet-50 dark:bg-violet-950/40 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 dark:text-violet-300 hover:bg-violet-100"
+                  >
+                    <Variable className="h-3 w-3" />
+                    Переменная
+                  </button>
+                </div>
+              </div>
+              <input
+                type="text"
+                value={data.videoUrl || ""}
+                onChange={(e) => handleFieldChange("videoUrl", e.target.value)}
+                {...varDropAttrs("videoUrl", "video")}
+                placeholder="{{ files_media_1.video_url }} или https://..."
+                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs font-mono"
+              />
+              <WorkflowMediaPreview
+                url={data.videoUrl}
+                fileName={data.fileName}
+              />
             </div>
           </div>
         )}
@@ -2090,6 +2313,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                   rows={4}
                   value={data.text || ""}
                   onChange={(e) => handleFieldChange("text", e.target.value)}
+                {...varDropAttrs("text")}
                   className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 p-2.5 text-xs font-mono"
                   placeholder="{{ ai_text_1.text }}"
                 />
@@ -2275,6 +2499,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                     type="text"
                     value={data.rule0_value1 || ""}
                     onChange={(e) => handleFieldChange("rule0_value1", e.target.value)}
+                    {...varDropAttrs("rule0_value1")}
                     placeholder="{{ ai_text_1.text }}"
                     className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-2.5 py-1.5 text-xs font-mono"
                   />
@@ -2320,6 +2545,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                       type="text"
                       value={data.rule0_value2 || ""}
                       onChange={(e) => handleFieldChange("rule0_value2", e.target.value)}
+                      {...varDropAttrs("rule0_value2")}
                       placeholder="Значение для проверки..."
                       className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-2.5 py-1.5 text-xs font-mono"
                     />
@@ -2367,6 +2593,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                     type="text"
                     value={data.rule1_value1 || ""}
                     onChange={(e) => handleFieldChange("rule1_value1", e.target.value)}
+                    {...varDropAttrs("rule1_value1")}
                     placeholder="{{ ai_text_1.text }}"
                     className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-2.5 py-1.5 text-xs font-mono"
                   />
@@ -2412,6 +2639,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                       type="text"
                       value={data.rule1_value2 || ""}
                       onChange={(e) => handleFieldChange("rule1_value2", e.target.value)}
+                      {...varDropAttrs("rule1_value2")}
                       placeholder="Значение..."
                       className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-2.5 py-1.5 text-xs font-mono"
                     />
@@ -2465,6 +2693,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                 type="text"
                 value={data.leftValue || ""}
                 onChange={(e) => handleFieldChange("leftValue", e.target.value)}
+                {...varDropAttrs("leftValue")}
                 placeholder="{{ ai_text_1.text }}"
                 className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs font-mono"
               />
@@ -2509,6 +2738,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                   type="text"
                   value={data.rightValue || ""}
                   onChange={(e) => handleFieldChange("rightValue", e.target.value)}
+                  {...varDropAttrs("rightValue")}
                   placeholder="Значение..."
                   className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs font-mono"
                 />
@@ -2542,6 +2772,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                 rows={6}
                 value={data.template || ""}
                 onChange={(e) => handleFieldChange("template", e.target.value)}
+                {...varDropAttrs("template")}
                 className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 p-2.5 text-xs font-mono"
                 placeholder="{{ ai_text_1.text }}\n\n🔥 https://postilka.ru/go/promo"
               />
@@ -2629,6 +2860,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                       next[idx] = { ...next[idx], value: e.target.value };
                       handleFieldChange("fields", next);
                     }}
+                    {...varDropAttrs(`fieldValue:${idx}`)}
                     placeholder="{{ trigger_1.body.name }}"
                     className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-2 py-1 text-xs font-mono"
                   />
@@ -2718,6 +2950,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                   type="url"
                   value={data.url || ""}
                   onChange={(e) => handleFieldChange("url", e.target.value)}
+                  {...varDropAttrs("url")}
                   className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-2 py-1.5 text-xs font-mono"
                   placeholder="https://api.example.com/data"
                 />
@@ -2729,6 +2962,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                 rows={4}
                 value={data.body || ""}
                 onChange={(e) => handleFieldChange("body", e.target.value)}
+                {...varDropAttrs("body")}
                 className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 p-2 text-xs font-mono"
                 placeholder='{"key": "value"}'
               />
@@ -2830,6 +3064,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                   handleFieldChange("fileUrl", e.target.value);
                   handleFieldChange("imageUrl", e.target.value);
                 }}
+                {...varDropAttrs("fileUrl")}
                 className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none font-mono"
                 placeholder="https://..."
               />
@@ -2858,33 +3093,50 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                   Нет других узлов на холсте
                 </div>
               ) : (
-                upstreamNodes.map((un) => {
-                  const uDef = NODE_DEFINITIONS[un.type];
-                  return (
-                    <div key={un.id} className="space-y-1 py-1">
-                      <span className="text-[10px] font-bold text-zinc-600 dark:text-zinc-400">
-                        {un.data.title || un.id} ({un.type}):
-                      </span>
-                      <div className="flex flex-wrap gap-1">
-                        {uDef?.outputs.map((out) => (
-                          <button
-                            key={out.id}
-                            type="button"
-                            onClick={() =>
-                              insertVariable(
-                                showVariablePickerFor!,
-                                `{{ ${un.id}.${out.id} }}`
-                              )
-                            }
-                            className="rounded bg-white dark:bg-zinc-800 border border-indigo-200 dark:border-indigo-800 px-2 py-0.5 text-[11px] text-indigo-700 dark:text-indigo-300 font-mono shadow-sm hover:bg-indigo-600 hover:text-white transition"
-                          >
-                            .{out.id}
-                          </button>
-                        ))}
+                (() => {
+                  const accept = inferFieldAccept(showVariablePickerFor || "");
+                  let compatibleCount = 0;
+                  const blocks = upstreamNodes.map((un) => {
+                    const uDef = NODE_DEFINITIONS[un.type];
+                    const outputs = (uDef?.outputs || []).filter((out) =>
+                      canAcceptVariable(accept, out.type)
+                    );
+                    compatibleCount += outputs.length;
+                    if (outputs.length === 0) return null;
+                    return (
+                      <div key={un.id} className="space-y-1 py-1">
+                        <span className="text-[10px] font-bold text-zinc-600 dark:text-zinc-400">
+                          {un.data.title || un.id} ({un.type}):
+                        </span>
+                        <div className="flex flex-wrap gap-1">
+                          {outputs.map((out) => (
+                            <button
+                              key={out.id}
+                              type="button"
+                              onClick={() =>
+                                insertVariable(
+                                  showVariablePickerFor!,
+                                  `{{ ${un.id}.${out.id} }}`
+                                )
+                              }
+                              className="rounded bg-white dark:bg-zinc-800 border border-indigo-200 dark:border-indigo-800 px-2 py-0.5 text-[11px] text-indigo-700 dark:text-indigo-300 font-mono shadow-sm hover:bg-indigo-600 hover:text-white transition"
+                            >
+                              .{out.id}
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })
+                    );
+                  });
+                  if (compatibleCount === 0) {
+                    return (
+                      <div className="text-[11px] text-zinc-500">
+                        Нет переменных подходящего типа для этого поля
+                      </div>
+                    );
+                  }
+                  return blocks;
+                })()
               )}
             </div>
           </div>

@@ -86,11 +86,20 @@ func buildWorkflowTestPostRequest(nodeType string, inputs map[string]interface{}
 }
 
 func workflowTestMediaInputs(inputs map[string]interface{}) []model.PostMediaInput {
-	fileID := strings.TrimSpace(getString(inputs, "fileId", ""))
-	if fileID == "" {
-		return nil
+	seen := map[string]bool{}
+	out := make([]model.PostMediaInput, 0, 3)
+	add := func(id string) {
+		id = strings.TrimSpace(id)
+		if id == "" || seen[id] {
+			return
+		}
+		seen[id] = true
+		out = append(out, model.PostMediaInput{FileID: id})
 	}
-	return []model.PostMediaInput{{FileID: fileID}}
+	add(getString(inputs, "imageFileId", ""))
+	add(getString(inputs, "videoFileId", ""))
+	add(getString(inputs, "fileId", ""))
+	return out
 }
 
 func buildTelegramWorkflowTestPost(
@@ -295,8 +304,11 @@ func buildPhotochkaWorkflowTestPost(
 	media []model.PostMediaInput,
 ) (model.PostSaveRequest, error) {
 	text := strings.TrimSpace(getString(inputs, "text", ""))
-	if text == "" && len(media) == 0 {
-		return model.PostSaveRequest{}, fmt.Errorf("%w: укажите текст или медиафайл", ErrInvalidPost)
+	hasMediaURL := strings.TrimSpace(getString(inputs, "imageUrl", "")) != "" ||
+		strings.TrimSpace(getString(inputs, "videoUrl", "")) != "" ||
+		strings.TrimSpace(getString(inputs, "mediaUrl", "")) != ""
+	if text == "" && len(media) == 0 && !hasMediaURL {
+		return model.PostSaveRequest{}, fmt.Errorf("%w: укажите текст, фото или видео", ErrInvalidPost)
 	}
 	return model.PostSaveRequest{
 		Content: model.PostContent{
