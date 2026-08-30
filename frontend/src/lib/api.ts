@@ -943,6 +943,99 @@ export function deleteAdminPublicPage(id: string) {
   });
 }
 
+export type HelpArticle = {
+  id: string;
+  title: string;
+  route_key: string;
+  body_html: string;
+  excerpt: string;
+  is_published: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type HelpArticleSummary = {
+  id: string;
+  title: string;
+  route_key: string;
+  excerpt: string;
+  is_published: boolean;
+  sort_order: number;
+  updated_at: string;
+};
+
+export type HelpArticleInput = {
+  title: string;
+  route_key: string;
+  body_html: string;
+  excerpt?: string;
+  is_published: boolean;
+  sort_order: number;
+};
+
+export function fetchHelpCatalog() {
+  return apiFetch<{ articles: HelpArticleSummary[] }>("/help/articles");
+}
+
+export function fetchHelpArticleByRoute(route: string) {
+  return apiFetch<{ article: HelpArticle | null }>(
+    `/help/article?route=${encodeURIComponent(route)}`,
+  );
+}
+
+export function fetchHelpArticle(id: string) {
+  return apiFetch<HelpArticle>(`/help/articles/${id}`);
+}
+
+export function fetchAdminHelpArticles() {
+  return apiFetch<{ articles: HelpArticle[] }>("/admin/help-articles");
+}
+
+export function createAdminHelpArticle(body: HelpArticleInput) {
+  return apiFetch<HelpArticle>("/admin/help-articles", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function updateAdminHelpArticle(id: string, body: HelpArticleInput) {
+  return apiFetch<HelpArticle>(`/admin/help-articles/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
+}
+
+export function deleteAdminHelpArticle(id: string) {
+  return apiFetch<{ status: string }>(`/admin/help-articles/${id}`, {
+    method: "DELETE",
+  });
+}
+
+export async function uploadAdminHelpImage(file: File) {
+  const form = new FormData();
+  form.append("file", file);
+  let res: Response;
+  try {
+    res = await fetch(`${clientBase()}/admin/help-articles/images`, {
+      method: "POST",
+      credentials: "include",
+      body: form,
+    });
+  } catch {
+    throw new ApiError(0, "Сервер не ответил — соединение прервано.");
+  }
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg =
+      typeof data === "object" && data && "error" in data
+        ? String((data as { error: string }).error)
+        : `HTTP ${res.status}`;
+    throw new ApiError(res.status, msg);
+  }
+  return data as { id: string; url: string };
+}
+
 export function assignAdminUserPlan(userId: string, planId: string) {
   return apiFetch<{ plan: Plan }>(`/admin/users/${userId}/plan`, {
     method: "PUT",

@@ -26,6 +26,7 @@ import { WorkspaceSwitcher } from "@/components/layout/WorkspaceSwitcher";
 import { EmailVerificationBanner } from "@/components/layout/EmailVerificationBanner";
 import { NotificationsBell } from "@/components/layout/NotificationsBell";
 import { SupportWidget } from "@/components/support/SupportWidget";
+import { HelpLauncher } from "@/components/help/HelpDrawer";
 import { WalletBalanceBadge } from "@/components/billing/WalletBalanceBadge";
 import { GenerationNavBlock } from "@/components/layout/GenerationNavBlock";
 import { GenerationCompleteToast } from "@/components/generation/GenerationCompleteToast";
@@ -241,6 +242,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-40 flex h-14 items-center justify-end gap-2 border-b border-border bg-surface/95 px-4 backdrop-blur-md sm:px-6">
+          <Suspense fallback={null}>
+            <HelpLauncher />
+          </Suspense>
           <SupportWidget />
           <NotificationsBell />
         </header>

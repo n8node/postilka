@@ -224,6 +224,9 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 		fileStorageRepo, folderStorageRepo, wsRepo, planRepo, wsSvc, objectStorage, uploadSessions, uploadFileSettingsSvc,
 	)
 	fileStorageHandler := handler.NewFileStorageHandler(fileStorageSvc)
+	helpArticleRepo := repository.NewHelpArticleRepository(db.Pool)
+	helpArticleSvc := service.NewHelpArticleService(helpArticleRepo, objectStorage)
+	helpArticleHandler := handler.NewHelpArticleHandler(helpArticleSvc)
 
 	genRepo := repository.NewAIGenerationRepository(db.Pool)
 	genJobRepo := repository.NewAIGenerationJobRepository(db.Pool)
@@ -559,6 +562,14 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Get("/workflows/{id}/runs/{runId}", workflowHandler.GetRun)
 		})
 
+		r.Group(func(r chi.Router) {
+			r.Use(authMW.Required)
+			r.Get("/help/articles", helpArticleHandler.ListPublished)
+			r.Get("/help/article", helpArticleHandler.GetByRoute)
+			r.Get("/help/articles/{id}", helpArticleHandler.GetPublished)
+			r.Get("/help/images/{id}", helpArticleHandler.ServeImage)
+		})
+
 		r.Route("/admin", func(r chi.Router) {
 			r.Group(func(r chi.Router) {
 				r.Use(authMW.Required, middleware.RequirePlatformAdmin(userRepo))
@@ -585,6 +596,13 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Get("/public-pages/{pageID}", publicPageHandler.GetAdmin)
 				r.Put("/public-pages/{pageID}", publicPageHandler.UpdateAdmin)
 				r.Delete("/public-pages/{pageID}", publicPageHandler.DeleteAdmin)
+
+				r.Get("/help-articles", helpArticleHandler.ListAdmin)
+				r.Post("/help-articles", helpArticleHandler.CreateAdmin)
+				r.Post("/help-articles/images", helpArticleHandler.UploadImage)
+				r.Get("/help-articles/{id}", helpArticleHandler.GetAdmin)
+				r.Put("/help-articles/{id}", helpArticleHandler.UpdateAdmin)
+				r.Delete("/help-articles/{id}", helpArticleHandler.DeleteAdmin)
 
 				r.Get("/auth-settings", adminInviteHandler.AuthSettingsGet)
 				r.Put("/auth-settings", adminInviteHandler.AuthSettingsPut)
