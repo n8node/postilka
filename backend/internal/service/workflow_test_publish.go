@@ -131,14 +131,14 @@ func buildTelegramWorkflowTestPost(
 		format = rawFormat
 	}
 
-	content := readSocialContent(inputs)
-	if format == "message" && text == "" && len(media) == 0 && !content.hasMedia() {
+	social := readSocialContent(inputs)
+	if format == "message" && text == "" && len(media) == 0 && !social.hasMedia() {
 		return model.PostSaveRequest{}, fmt.Errorf("%w: укажите текст, фото или видео", ErrInvalidPost)
 	}
-	if format == "story" && len(media) == 0 && !content.hasMedia() {
+	if format == "story" && len(media) == 0 && !social.hasMedia() {
 		return model.PostSaveRequest{}, fmt.Errorf("%w: для истории нужно фото или видео", ErrInvalidPost)
 	}
-	if format == "short_video" && len(media) == 0 && !content.hasVideo() && !content.hasMedia() {
+	if format == "short_video" && len(media) == 0 && !social.hasVideo() && !social.hasMedia() {
 		return model.PostSaveRequest{}, fmt.Errorf("%w: для кружочка нужно видео", ErrInvalidPost)
 	}
 
