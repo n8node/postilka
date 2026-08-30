@@ -13,6 +13,7 @@ import {
   updateAdminGenerationNavItem,
   updateAdminGenerationNavSettings,
   uploadAdminGenerationNavIcon,
+  type GenerationNavIconKind,
   type GenerationNavItem,
   type GenerationNavSettings,
 } from "@/lib/api";
@@ -21,13 +22,23 @@ import { GENERATION_NAV_LUCIDE_ICONS } from "@/lib/generation-nav-icons";
 import { mediaUrl } from "@/lib/media-display";
 import { cn } from "@/lib/utils";
 
-const emptyItem = {
+type GenerationNavForm = {
+  title: string;
+  subtitle: string;
+  href: string;
+  visible: boolean;
+  featured: boolean;
+  icon_kind: GenerationNavIconKind;
+  icon_name: string;
+};
+
+const emptyItem: GenerationNavForm = {
   title: "",
   subtitle: "",
   href: "/ai",
   visible: true,
   featured: false,
-  icon_kind: "lucide" as const,
+  icon_kind: "lucide",
   icon_name: "Sparkles",
 };
 
