@@ -31,6 +31,11 @@ type TelegramService struct {
 	stopCh            chan struct{}
 	triggerCh         chan struct{}
 	queueTriggerCh    chan struct{}
+
+	pendingHealthMu  sync.Mutex
+	pendingHealth    []healthAckMessage
+	healthAckOffset  int64
+	healthAckPrimed  bool
 }
 
 func NewTelegramService(
@@ -74,6 +79,7 @@ func (s *TelegramService) Start() {
 	s.logger.Info("telegram bot supervisor starting")
 	go s.supervisorLoop()
 	go s.queueLoop()
+	go s.healthAckLoop()
 	s.triggerQueueDelivery()
 }
 
@@ -131,6 +137,28 @@ func (s *TelegramService) SendDirectAdminMessage(ctx context.Context, text strin
 		return ErrTelegramDisabled
 	}
 	return s.send(ctx, cfg, text)
+}
+
+// SendDirectAdminHealthMessage sends a self-test / proxy status that the admin can dismiss.
+func (s *TelegramService) SendDirectAdminHealthMessage(ctx context.Context, text string) error {
+	cfg, err := s.settings.GetEffective(ctx)
+	if err != nil {
+		return err
+	}
+	if !cfg.Enabled {
+		return ErrTelegramDisabled
+	}
+	token := strings.TrimSpace(cfg.BotToken)
+	chatID := strings.TrimSpace(cfg.ChatID)
+	if token == "" || chatID == "" {
+		return ErrTelegramNotConfigured
+	}
+	messageID, err := s.telegramSendMessageWithAckButton(ctx, token, chatID, text)
+	if err != nil {
+		return err
+	}
+	s.trackHealthMessage(chatID, messageID)
+	return nil
 }
 
 func (s *TelegramService) GetRuntimeStatus() model.TelegramBotRuntimeStatus {

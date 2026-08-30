@@ -154,6 +154,91 @@ func (s *TelegramService) telegramSendMessage(ctx context.Context, token, chatID
 	return sanitizeTelegramError(err)
 }
 
+func (s *TelegramService) telegramSendMessageWithAckButton(ctx context.Context, token, chatID, text string) (string, error) {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return "", nil
+	}
+	payload := map[string]any{
+		"chat_id": strings.TrimSpace(chatID),
+		"text":    text,
+		"reply_markup": telegramInlineKeyboardMarkup{
+			InlineKeyboard: [][]telegramInlineKeyboardButton{{
+				{Text: "Просмотрено", CallbackData: telegramHealthAckCallback},
+			}},
+		},
+	}
+	raw, err := s.telegramAPI(ctx, token, "sendMessage", payload)
+	if err != nil {
+		return "", sanitizeTelegramError(err)
+	}
+	return telegramMessageID(raw)
+}
+
+func (s *TelegramService) telegramDeleteMessage(ctx context.Context, token, chatID, messageID string) error {
+	messageID = strings.TrimSpace(messageID)
+	if messageID == "" {
+		return nil
+	}
+	_, err := s.telegramAPI(ctx, token, "deleteMessage", map[string]any{
+		"chat_id":    strings.TrimSpace(chatID),
+		"message_id": messageID,
+	})
+	return sanitizeTelegramError(err)
+}
+
+func (s *TelegramService) telegramAnswerCallback(ctx context.Context, token, callbackID, text string) error {
+	callbackID = strings.TrimSpace(callbackID)
+	if callbackID == "" {
+		return nil
+	}
+	payload := map[string]any{"callback_query_id": callbackID}
+	if strings.TrimSpace(text) != "" {
+		payload["text"] = text
+	}
+	_, err := s.telegramAPI(ctx, token, "answerCallbackQuery", payload)
+	return sanitizeTelegramError(err)
+}
+
+type adminBotChat struct {
+	ID int64 `json:"id"`
+}
+
+type adminBotMessage struct {
+	MessageID int64        `json:"message_id"`
+	Chat      adminBotChat `json:"chat"`
+	From      *telegramUser `json:"from"`
+}
+
+type adminBotCallback struct {
+	ID      string           `json:"id"`
+	Data    string           `json:"data"`
+	Message *adminBotMessage `json:"message"`
+}
+
+type adminBotUpdate struct {
+	UpdateID      int64             `json:"update_id"`
+	Message       *adminBotMessage  `json:"message"`
+	CallbackQuery *adminBotCallback `json:"callback_query"`
+}
+
+func (s *TelegramService) telegramGetAdminUpdates(ctx context.Context, token string, offset int64, timeoutSec int) ([]adminBotUpdate, error) {
+	raw, err := s.telegramAPI(ctx, token, "getUpdates", map[string]any{
+		"offset":          offset,
+		"timeout":         timeoutSec,
+		"limit":           50,
+		"allowed_updates": []string{"callback_query", "message"},
+	})
+	if err != nil {
+		return nil, sanitizeTelegramError(err)
+	}
+	var updates []adminBotUpdate
+	if err := json.Unmarshal(raw, &updates); err != nil {
+		return nil, errors.New("telegram api: invalid getUpdates result")
+	}
+	return updates, nil
+}
+
 func (s *TelegramService) telegramSendThreadHTML(ctx context.Context, token, chatID, text string, topicID int) error {
 	text = strings.TrimSpace(text)
 	if text == "" {

@@ -120,7 +120,7 @@ func (m *TelegramHealthMonitor) runCheck() {
 	st := m.telegram.RunHealthCheck(ctx)
 	diagnostic := formatTelegramSelfTestMessage(st, cfg, m.telegram.localProxy, m.adminURL())
 
-	if err := m.telegram.SendDirectAdminMessage(ctx, diagnostic); err != nil {
+	if err := m.telegram.SendDirectAdminHealthMessage(ctx, diagnostic); err != nil {
 		m.logger.Warn("telegram self-test message failed", "err", err, "status", st.Status)
 	} else {
 		m.logger.Info("telegram self-test message sent", "status", st.Status)
