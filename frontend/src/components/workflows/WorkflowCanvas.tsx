@@ -9,6 +9,8 @@ import {
   LayoutGrid,
   Rows2,
   PanelTop,
+  CornerDownRight,
+  Spline,
   ZoomIn,
   ZoomOut,
   Maximize2,
@@ -46,6 +48,11 @@ import {
   calculateWorkflowCost,
   type NodeViewMode,
 } from "./nodeTypes";
+import {
+  EDGE_STYLE_STORAGE_KEY,
+  buildEdgePath,
+  type EdgeStyle,
+} from "./edgePaths";
 
 interface WorkflowCanvasProps {
   workflow: Workflow;
@@ -76,6 +83,12 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
     return window.localStorage.getItem(NODE_VIEW_STORAGE_KEY) === "expanded"
       ? "expanded"
       : "compact";
+  });
+  const [edgeStyle, setEdgeStyle] = useState<EdgeStyle>(() => {
+    if (typeof window === "undefined") return "orthogonal";
+    return window.localStorage.getItem(EDGE_STYLE_STORAGE_KEY) === "smooth"
+      ? "smooth"
+      : "orthogonal";
   });
   const [nodeOutputCache, setNodeOutputCache] = useState<
     Record<string, Record<string, any>>
@@ -563,6 +576,13 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
     setPortVersion((v) => v + 1);
   };
 
+  const handleEdgeStyleChange = (style: EdgeStyle) => {
+    setEdgeStyle(style);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(EDGE_STYLE_STORAGE_KEY, style);
+    }
+  };
+
   const handleOpenSettings = (nodeId: string) => {
     setSelectedNodeId(nodeId);
     setInspectedNodeId(nodeId);
@@ -673,6 +693,33 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
               <PanelTop className="h-4 w-4" />
             </button>
           </div>
+
+          <div className="flex items-center rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-0.5">
+            <button
+              type="button"
+              onClick={() => handleEdgeStyleChange("orthogonal")}
+              title="Связи под прямым углом"
+              className={`rounded-lg p-1.5 transition ${
+                edgeStyle === "orthogonal"
+                  ? "bg-indigo-600 text-white shadow-sm"
+                  : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+              }`}
+            >
+              <CornerDownRight className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => handleEdgeStyleChange("smooth")}
+              title="Гибкие связи"
+              className={`rounded-lg p-1.5 transition ${
+                edgeStyle === "smooth"
+                  ? "bg-indigo-600 text-white shadow-sm"
+                  : "text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+              }`}
+            >
+              <Spline className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         {/* Right: Economics, History, Test Run & Save */}
@@ -778,24 +825,15 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
 
               const p1 = getPortAnchor(sourceNode, sourceHandleId, true);
               const p2 = getPortAnchor(targetNode, targetHandleId, false);
-
-              const dx = Math.max(Math.abs(p2.x - p1.x) * 0.5, 40);
-              const pathD = `M ${p1.x} ${p1.y} C ${p1.x + dx} ${p1.y}, ${
-                p2.x - dx
-              } ${p2.y}, ${p2.x} ${p2.y}`;
+              const { d: pathD, mid } = buildEdgePath(edgeStyle, p1, p2);
               const isEdgeSelected = selectedEdgeId === edge.id;
               const isEdgeHovered = hoveredEdgeId === edge.id;
               const showDeleteBtn =
                 isEdgeSelected ||
                 isEdgeHovered ||
                 hoveredDeleteEdgeId === edge.id;
-
-              const c1x = p1.x + dx;
-              const c1y = p1.y;
-              const c2x = p2.x - dx;
-              const c2y = p2.y;
-              const midX = 0.125 * p1.x + 0.375 * c1x + 0.375 * c2x + 0.125 * p2.x;
-              const midY = 0.125 * p1.y + 0.375 * c1y + 0.375 * c2y + 0.125 * p2.y;
+              const midX = mid.x;
+              const midY = mid.y;
 
               const activeStroke = isEdgeSelected
                 ? "#6366f1"
@@ -826,6 +864,8 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                     fill="none"
                     stroke="transparent"
                     strokeWidth="36"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
                     className="cursor-pointer"
                     onMouseDown={(e) => {
                       e.stopPropagation();
@@ -845,6 +885,8 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                     stroke={activeStroke}
                     strokeWidth={activeStrokeWidth}
                     strokeOpacity={isEdgeSelected || isEdgeHovered ? "1" : "0.88"}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
                     className={`${edgeMotionClass} cursor-pointer`}
                     onMouseDown={(e) => {
                       e.stopPropagation();
@@ -866,6 +908,8 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                     strokeOpacity={
                       isEdgeSelected || isEdgeHovered ? "0.5" : "0.32"
                     }
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
                     className="workflow-edge-flow"
                     style={{ animationDelay: `${flowDelay}s` }}
                   />
@@ -975,10 +1019,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                 y2 = connectingFrom.startY;
               }
 
-              const dx = Math.max(Math.abs(x2 - x1) * 0.5, 30);
-              const pathD = `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${
-                x2 - dx
-              } ${y2}, ${x2} ${y2}`;
+              const { d: pathD } = buildEdgePath(edgeStyle, { x: x1, y: y1 }, { x: x2, y: y2 });
 
               return (
                 <g>
@@ -987,6 +1028,8 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                     fill="none"
                     stroke={color.stroke}
                     strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
                     strokeDasharray="6 4"
                     className="animate-pulse"
                   />
