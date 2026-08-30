@@ -46,7 +46,7 @@ func (s *ProviderLogoService) ListViews(ctx context.Context) ([]model.ProviderLo
 	for _, item := range items {
 		out = append(out, model.ProviderLogoView{
 			Provider:  item.Provider,
-			LogoURL:   model.ProviderLogoAPIPath(item.Provider),
+			LogoURL:   model.ProviderLogoAPIPathVersioned(item.Provider, item.UpdatedAt),
 			UpdatedAt: item.UpdatedAt,
 		})
 	}
@@ -74,7 +74,7 @@ func (s *ProviderLogoService) apiURLMap(ctx context.Context) map[model.ProviderL
 		return out
 	}
 	for _, item := range items {
-		out[item.Provider] = model.ProviderLogoAPIPath(item.Provider)
+		out[item.Provider] = model.ProviderLogoAPIPathVersioned(item.Provider, item.UpdatedAt)
 	}
 	return out
 }
@@ -131,7 +131,7 @@ func (s *ProviderLogoService) Upload(
 	}
 	return &model.ProviderLogoView{
 		Provider:  rec.Provider,
-		LogoURL:   model.ProviderLogoAPIPath(rec.Provider),
+		LogoURL:   model.ProviderLogoAPIPathVersioned(rec.Provider, rec.UpdatedAt),
 		UpdatedAt: rec.UpdatedAt,
 	}, nil
 }

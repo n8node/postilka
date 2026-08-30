@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ApiError,
   deleteAdminProviderLogo,
@@ -17,6 +17,12 @@ type ProviderLogoFieldProps = {
   onChanged: (logo: ProviderLogoView | null) => void;
 };
 
+function versionedLogoSrc(url: string, extra?: string) {
+  const base = mediaUrl(url);
+  if (!extra) return base;
+  return `${base}${base.includes("?") ? "&" : "?"}r=${encodeURIComponent(extra)}`;
+}
+
 export function ProviderLogoField({
   provider,
   label,
@@ -26,10 +32,19 @@ export function ProviderLogoField({
   const inputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [localPreview, setLocalPreview] = useState<string | null>(null);
+  const [bust, setBust] = useState(0);
 
-  const src = logo?.logo_url
-    ? `${mediaUrl(logo.logo_url)}?v=${encodeURIComponent(logo.updated_at)}`
+  useEffect(() => {
+    return () => {
+      if (localPreview) URL.revokeObjectURL(localPreview);
+    };
+  }, [localPreview]);
+
+  const remoteSrc = logo?.logo_url
+    ? versionedLogoSrc(logo.logo_url, bust ? String(bust) : logo.updated_at)
     : null;
+  const src = localPreview || remoteSrc;
 
   async function handleFile(file: File | null) {
     if (!file) return;
@@ -38,10 +53,20 @@ export function ProviderLogoField({
       setError("Нужен файл PNG");
       return;
     }
+    const preview = URL.createObjectURL(file);
+    setLocalPreview((prev) => {
+      if (prev) URL.revokeObjectURL(prev);
+      return preview;
+    });
     setBusy(true);
     try {
       const next = await uploadAdminProviderLogo(provider, file);
       onChanged(next);
+      setBust(Date.now());
+      setLocalPreview((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Не удалось загрузить логотип");
     } finally {
@@ -55,6 +80,11 @@ export function ProviderLogoField({
     setBusy(true);
     try {
       await deleteAdminProviderLogo(provider);
+      setLocalPreview((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return null;
+      });
+      setBust(Date.now());
       onChanged(null);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Не удалось удалить логотип");
@@ -73,7 +103,7 @@ export function ProviderLogoField({
         <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-white ring-1 ring-slate-200">
           {src ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={src} alt="" className="h-full w-full object-cover" />
+            <img key={src} src={src} alt="" className="h-full w-full object-cover" />
           ) : (
             <span className="text-[10px] text-slate-400">нет</span>
           )}

@@ -1,6 +1,9 @@
 package model
 
-import "time"
+import (
+	"strconv"
+	"time"
+)
 
 type ProviderLogoKey string
 
@@ -40,6 +43,14 @@ func ParseProviderLogoKey(raw string) (ProviderLogoKey, bool) {
 
 func ProviderLogoAPIPath(key ProviderLogoKey) string {
 	return "/channels/provider-logos/" + string(key)
+}
+
+func ProviderLogoAPIPathVersioned(key ProviderLogoKey, updatedAt time.Time) string {
+	path := ProviderLogoAPIPath(key)
+	if updatedAt.IsZero() {
+		return path
+	}
+	return path + "?v=" + strconv.FormatInt(updatedAt.UnixMilli(), 10)
 }
 
 type ProviderLogoRecord struct {
