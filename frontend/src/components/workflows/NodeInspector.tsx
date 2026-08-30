@@ -58,7 +58,12 @@ import {
 } from "@/lib/api";
 import { uploadFile } from "@/lib/files-api";
 import { getCachedFileMediaUrl } from "@/lib/file-media-cache";
-import { NODE_DEFINITIONS } from "./nodeTypes";
+import { NODE_DEFINITIONS, socialFieldNeeds, validateSocialContent } from "./nodeTypes";
+import {
+  FieldNeedLabel,
+  SocialMediaFields,
+  SocialRequirementsBanner,
+} from "./SocialMediaFields";
 import { useVariableDrag } from "./VariableDragContext";
 import {
   applyVariableDrop,
@@ -378,6 +383,30 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
       setFocusedField(fieldEl.dataset.varField);
     }
   };
+
+  const socialNeeds = socialFieldNeeds(node.type, data);
+  const socialError = validateSocialContent(node.type, data);
+
+  const renderSocialMedia = (
+    accentClass: string,
+    labels?: { image?: string; video?: string }
+  ) => (
+    <SocialMediaFields
+      data={data}
+      nodeId={node.id}
+      showImage={socialNeeds.image !== "hidden"}
+      showVideo={socialNeeds.video !== "hidden"}
+      imageNeed={socialNeeds.image}
+      videoNeed={socialNeeds.video}
+      imageLabel={labels?.image || "Фото"}
+      videoLabel={labels?.video || "Видео"}
+      accentClass={accentClass}
+      showVariablePickerFor={showVariablePickerFor}
+      setShowVariablePickerFor={setShowVariablePickerFor}
+      onFieldChange={(key, value) => handleFieldChange(key, value)}
+      onOpenMediaPicker={onOpenMediaPicker}
+    />
+  );
 
   const renderChannelSelector = (provider: string, providerTitle: string) => {
     const providerChannels = channels.filter(
@@ -1089,12 +1118,14 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                 </select>
               </div>
 
+              <SocialRequirementsBanner error={socialError} hint={socialNeeds.hint} />
+
               {currentFormat === "message" && (
                 <>
                   <div>
                     <div className="mb-1 flex items-center justify-between">
                       <label className="font-medium text-zinc-700 dark:text-zinc-300">
-                        Текст публикации
+                        <FieldNeedLabel label="Текст публикации" need={socialNeeds.text} />
                       </label>
                       <button
                         type="button"
@@ -1119,47 +1150,9 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                     />
                   </div>
 
-                  <div>
-                    <div className="mb-1 flex items-center justify-between">
-                      <label className="font-medium text-zinc-700 dark:text-zinc-300">
-                        Медиафайл (URL фото или видео)
-                      </label>
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => onOpenMediaPicker?.(node.id, "mediaUrl")}
-                          className="flex items-center gap-1 rounded bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200"
-                        >
-                          <Folder className="h-2.5 w-2.5" />
-                          Медиатека
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setShowVariablePickerFor(
-                              showVariablePickerFor === "mediaUrl" ? null : "mediaUrl"
-                            )
-                          }
-                          className="flex items-center gap-1 rounded bg-sky-50 dark:bg-sky-950/40 px-1.5 py-0.5 text-[10px] font-medium text-sky-600 dark:text-sky-400 hover:bg-sky-100"
-                        >
-                          <Variable className="h-3 w-3" />
-                          Переменная
-                        </button>
-                      </div>
-                    </div>
-                    <input
-                      type="text"
-                      value={data.mediaUrl || ""}
-                      onChange={(e) => handleFieldChange("mediaUrl", e.target.value)}
-                      {...varDropAttrs("mediaUrl")}
-                      placeholder="{{ files_media_1.image_url }} или https://..."
-                      className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none font-mono"
-                    />
-                    <WorkflowMediaPreview
-                      url={data.mediaUrl}
-                      fileName={data.fileName}
-                    />
-                  </div>
+                  {renderSocialMedia(
+                    "bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 hover:bg-sky-100"
+                  )}
 
                   {/* Media delivery: together vs separate */}
                   <div className="space-y-2">
@@ -1468,50 +1461,15 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
 
               {currentFormat === "story" && (
                 <div className="space-y-3">
-                  <div>
-                    <div className="mb-1 flex items-center justify-between">
-                      <label className="font-medium text-zinc-700 dark:text-zinc-300">
-                        Медиафайл для Истории (фото/видео)
-                      </label>
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => onOpenMediaPicker?.(node.id, "mediaUrl")}
-                          className="flex items-center gap-1 rounded bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200"
-                        >
-                          <Folder className="h-2.5 w-2.5" />
-                          Медиатека
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setShowVariablePickerFor(
-                              showVariablePickerFor === "mediaUrl" ? null : "mediaUrl"
-                            )
-                          }
-                          className="flex items-center gap-1 rounded bg-purple-50 dark:bg-purple-950/40 px-1.5 py-0.5 text-[10px] font-medium text-purple-600 dark:text-purple-400 hover:bg-purple-100"
-                        >
-                          <Variable className="h-3 w-3" />
-                          Переменная
-                        </button>
-                      </div>
-                    </div>
-                    <input
-                      type="text"
-                      value={data.mediaUrl || ""}
-                      onChange={(e) => handleFieldChange("mediaUrl", e.target.value)}
-                      {...varDropAttrs("mediaUrl")}
-                      placeholder="{{ ai_image_1.image_url }}"
-                      className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 font-mono"
-                    />
-                    <WorkflowMediaPreview
-                      url={data.mediaUrl}
-                      fileName={data.fileName}
-                    />
-                  </div>
+                  {renderSocialMedia(
+                    "bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 hover:bg-purple-100"
+                  )}
                   <div>
                     <label className="mb-1 block font-medium text-zinc-700 dark:text-zinc-300">
-                      Подпись к истории (до 200 символов)
+                      <FieldNeedLabel
+                        label="Подпись к истории (до 200 символов)"
+                        need={socialNeeds.text}
+                      />
                     </label>
                     <input
                       type="text"
@@ -1526,7 +1484,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                     settings={normalizeStorySettings(
                       (data.telegramStory as TelegramStorySettings) || undefined
                     )}
-                    mediaPreviewUrl={data.mediaUrl || null}
+                    mediaPreviewUrl={data.imageUrl || data.videoUrl || data.mediaUrl || null}
                     onChange={(next) => handleFieldChange("telegramStory", next)}
                   />
                 </div>
@@ -1534,51 +1492,16 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
 
               {currentFormat === "video_note" && (
                 <div className="space-y-3">
+                  {renderSocialMedia(
+                    "bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 hover:bg-sky-100"
+                  )}
                   <div>
                     <div className="mb-1 flex items-center justify-between">
                       <label className="font-medium text-zinc-700 dark:text-zinc-300">
-                        Видеофайл для кружочка (MP4 1:1)
-                      </label>
-                      <div className="flex items-center gap-1">
-                        <button
-                          type="button"
-                          onClick={() => onOpenMediaPicker?.(node.id, "mediaUrl")}
-                          className="flex items-center gap-1 rounded bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200"
-                        >
-                          <Folder className="h-2.5 w-2.5" />
-                          Медиатека
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setShowVariablePickerFor(
-                              showVariablePickerFor === "mediaUrl" ? null : "mediaUrl"
-                            )
-                          }
-                          className="flex items-center gap-1 rounded bg-sky-50 dark:bg-sky-950/40 px-1.5 py-0.5 text-[10px] font-medium text-sky-600 dark:text-sky-400 hover:bg-sky-100"
-                        >
-                          <Variable className="h-3 w-3" />
-                          Переменная
-                        </button>
-                      </div>
-                    </div>
-                    <input
-                      type="text"
-                      value={data.mediaUrl || ""}
-                      onChange={(e) => handleFieldChange("mediaUrl", e.target.value)}
-                      {...varDropAttrs("mediaUrl")}
-                      placeholder="{{ files_media_1.video_url }}"
-                      className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs font-mono"
-                    />
-                    <WorkflowMediaPreview
-                      url={data.mediaUrl}
-                      fileName={data.fileName}
-                    />
-                  </div>
-                  <div>
-                    <div className="mb-1 flex items-center justify-between">
-                      <label className="font-medium text-zinc-700 dark:text-zinc-300">
-                        Текст отдельным сообщением
+                        <FieldNeedLabel
+                          label="Текст отдельным сообщением"
+                          need={socialNeeds.text}
+                        />
                       </label>
                       <button
                         type="button"
@@ -1626,11 +1549,12 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
         {node.type === "social_max" && (
           <div className="space-y-3">
             {renderChannelSelector("max", "MAX")}
+            <SocialRequirementsBanner error={socialError} hint={socialNeeds.hint} />
 
             <div>
               <div className="mb-1 flex items-center justify-between">
                 <label className="font-medium text-zinc-700 dark:text-zinc-300">
-                  Текст сообщения
+                  <FieldNeedLabel label="Текст сообщения" need={socialNeeds.text} />
                 </label>
                 <button
                   type="button"
@@ -1655,44 +1579,9 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
               />
             </div>
 
-              <div>
-                <div className="mb-1 flex items-center justify-between">
-                  <label className="font-medium text-zinc-700 dark:text-zinc-300">
-                    Медиафайл (URL)
-                  </label>
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => onOpenMediaPicker?.(node.id, "mediaUrl")}
-                      className="flex items-center gap-1 rounded bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200"
-                    >
-                      <Folder className="h-2.5 w-2.5" />
-                      Медиатека
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setShowVariablePickerFor(
-                          showVariablePickerFor === "mediaUrl" ? null : "mediaUrl"
-                        )
-                      }
-                      className="flex items-center gap-1 rounded bg-violet-50 dark:bg-violet-950/40 px-1.5 py-0.5 text-[10px] font-medium text-violet-600 dark:text-violet-400 hover:bg-violet-100"
-                    >
-                      <Variable className="h-3 w-3" />
-                      Переменная
-                    </button>
-                  </div>
-                </div>
-                <input
-                  type="text"
-                  value={data.mediaUrl || ""}
-                  onChange={(e) => handleFieldChange("mediaUrl", e.target.value)}
-                      {...varDropAttrs("mediaUrl")}
-                  placeholder="{{ files_media_1.image_url }} или https://..."
-                  className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs text-zinc-900 dark:text-zinc-100 font-mono"
-                />
-                <WorkflowMediaPreview url={data.mediaUrl} fileName={data.fileName} />
-              </div>
+              {renderSocialMedia(
+                "bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-400 hover:bg-violet-100"
+              )}
 
               {/* MAX Options */}
               <div className="space-y-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 p-2.5">
@@ -1800,6 +1689,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
         {node.type === "social_vk" && (
           <div className="space-y-3">
             {renderChannelSelector("vk", "ВКонтакте")}
+            <SocialRequirementsBanner error={socialError} hint={socialNeeds.hint} />
 
             <div>
               <label className="mb-1 block font-medium text-zinc-700 dark:text-zinc-300">
@@ -1819,7 +1709,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
             <div>
               <div className="mb-1 flex items-center justify-between">
                 <label className="font-medium text-zinc-700 dark:text-zinc-300">
-                  Текст записи ВКонтакте
+                  <FieldNeedLabel label="Текст записи ВКонтакте" need={socialNeeds.text} />
                 </label>
                 <button
                   type="button"
@@ -1844,43 +1734,9 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
               />
             </div>
 
-            <div>
-              <div className="mb-1 flex items-center justify-between">
-                <label className="font-medium text-zinc-700 dark:text-zinc-300">
-                  Медиафайл (URL фото или видео)
-                </label>
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => onOpenMediaPicker?.(node.id, "mediaUrl")}
-                    className="flex items-center gap-1 rounded bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200"
-                  >
-                    <Folder className="h-2.5 w-2.5" />
-                    Медиатека
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setShowVariablePickerFor(
-                        showVariablePickerFor === "mediaUrl" ? null : "mediaUrl"
-                      )
-                    }
-                    className="flex items-center gap-1 rounded bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.5 text-[10px] font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-100"
-                  >
-                    <Variable className="h-3 w-3" />
-                    Переменная
-                  </button>
-                </div>
-              </div>
-              <input
-                type="text"
-                value={data.mediaUrl || ""}
-                onChange={(e) => handleFieldChange("mediaUrl", e.target.value)}
-                      {...varDropAttrs("mediaUrl")}
-                placeholder="{{ files_media_1.image_url }} или https://..."
-                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs font-mono"
-              />
-            </div>
+            {renderSocialMedia(
+              "bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 hover:bg-blue-100"
+            )}
 
             <div className="space-y-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/30 p-2.5">
               <label className="flex items-center gap-2 cursor-pointer">
@@ -1952,6 +1808,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
         {node.type === "social_youtube" && (
           <div className="space-y-3">
             {renderChannelSelector("youtube", "YouTube")}
+            <SocialRequirementsBanner error={socialError} hint={socialNeeds.hint} />
 
             <div>
               <label className="mb-1 block font-medium text-zinc-700 dark:text-zinc-300">
@@ -1967,49 +1824,18 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
               </select>
             </div>
 
-            <div>
-              <div className="mb-1 flex items-center justify-between">
-                <label className="font-medium text-zinc-700 dark:text-zinc-300">
-                  Видеофайл (URL MP4)
-                </label>
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => onOpenMediaPicker?.(node.id, "videoUrl")}
-                    className="flex items-center gap-1 rounded bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200"
-                  >
-                    <Folder className="h-2.5 w-2.5" />
-                    Медиатека
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setShowVariablePickerFor(
-                        showVariablePickerFor === "videoUrl" ? null : "videoUrl"
-                      )
-                    }
-                    className="flex items-center gap-1 rounded bg-red-50 dark:bg-red-950/40 px-1.5 py-0.5 text-[10px] font-medium text-red-600 dark:text-red-400 hover:bg-red-100"
-                  >
-                    <Variable className="h-3 w-3" />
-                    Переменная
-                  </button>
-                </div>
-              </div>
-              <input
-                type="text"
-                value={data.videoUrl || ""}
-                onChange={(e) => handleFieldChange("videoUrl", e.target.value)}
-                {...varDropAttrs("videoUrl", "video")}
-                placeholder="{{ ai_video_1.video_url }} или https://..."
-                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs font-mono"
-              />
-              <WorkflowMediaPreview url={data.videoUrl} fileName={data.fileName} />
-            </div>
+            {renderSocialMedia(
+              "bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 hover:bg-red-100",
+              { image: "Обложка / фото", video: "Видео" }
+            )}
 
             <div>
               <div className="mb-1 flex items-center justify-between">
                 <label className="font-medium text-zinc-700 dark:text-zinc-300">
-                  Заголовок видео (Title)
+                  <FieldNeedLabel
+                    label="Заголовок видео"
+                    need={socialNeeds.titleText || "required"}
+                  />
                 </label>
                 <button
                   type="button"
@@ -2037,13 +1863,13 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
             <div>
               <div className="mb-1 flex items-center justify-between">
                 <label className="font-medium text-zinc-700 dark:text-zinc-300">
-                  Описание (Description)
+                  <FieldNeedLabel label="Текст / описание" need={socialNeeds.text} />
                 </label>
                 <button
                   type="button"
                   onClick={() =>
                     setShowVariablePickerFor(
-                      showVariablePickerFor === "description" ? null : "description"
+                      showVariablePickerFor === "text" ? null : "text"
                     )
                   }
                   className="flex items-center gap-1 rounded bg-red-50 dark:bg-red-950/40 px-1.5 py-0.5 text-[10px] font-medium text-red-600 dark:text-red-400 hover:bg-red-100"
@@ -2054,9 +1880,14 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
               </div>
               <textarea
                 rows={3}
-                value={data.description || ""}
-                onChange={(e) => handleFieldChange("description", e.target.value)}
-                {...varDropAttrs("description")}
+                value={data.text || data.description || ""}
+                onChange={(e) =>
+                  handleFieldChange({
+                    text: e.target.value,
+                    description: e.target.value,
+                  })
+                }
+                {...varDropAttrs("text")}
                 className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 p-2.5 text-xs text-zinc-900 dark:text-zinc-100 focus:border-indigo-500 focus:outline-none font-mono"
                 placeholder="{{ ai_text_1.text }}"
               />
@@ -2098,6 +1929,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
         {node.type === "social_dzen" && (
           <div className="space-y-3">
             {renderChannelSelector("dzen", "Дзен")}
+            <SocialRequirementsBanner error={socialError} hint={socialNeeds.hint} />
 
             <div>
               <label className="mb-1 block font-medium text-zinc-700 dark:text-zinc-300">
@@ -2117,7 +1949,10 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
             <div>
               <div className="mb-1 flex items-center justify-between">
                 <label className="font-medium text-zinc-700 dark:text-zinc-300">
-                  {data.format === "article" ? "Текст статьи" : "Текст поста"}
+                  <FieldNeedLabel
+                    label={data.format === "article" ? "Текст статьи" : "Текст поста"}
+                    need={socialNeeds.text}
+                  />
                 </label>
                 <button
                   type="button"
@@ -2141,17 +1976,22 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                 placeholder="{{ ai_text_1.text }}"
               />
             </div>
+
+            {renderSocialMedia(
+              "bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 hover:bg-orange-100"
+            )}
           </div>
         )}
 
         {node.type === "social_photochka" && (
           <div className="space-y-3">
             {renderChannelSelector("photochka", "Photochka")}
+            <SocialRequirementsBanner error={socialError} hint={socialNeeds.hint} />
 
             <div>
               <div className="mb-1 flex items-center justify-between">
                 <label className="font-medium text-zinc-700 dark:text-zinc-300">
-                  Текст поста
+                  <FieldNeedLabel label="Текст поста" need={socialNeeds.text} />
                 </label>
                 <button
                   type="button"
@@ -2179,89 +2019,9 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
               </p>
             </div>
 
-            <div>
-              <div className="mb-1 flex items-center justify-between">
-                <label className="font-medium text-zinc-700 dark:text-zinc-300">
-                  Фото
-                </label>
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => onOpenMediaPicker?.(node.id, "imageUrl")}
-                    className="flex items-center gap-1 rounded bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200"
-                  >
-                    <Folder className="h-2.5 w-2.5" />
-                    Медиатека
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setShowVariablePickerFor(
-                        showVariablePickerFor === "imageUrl" ? null : "imageUrl"
-                      )
-                    }
-                    className="flex items-center gap-1 rounded bg-violet-50 dark:bg-violet-950/40 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 dark:text-violet-300 hover:bg-violet-100"
-                  >
-                    <Variable className="h-3 w-3" />
-                    Переменная
-                  </button>
-                </div>
-              </div>
-              <input
-                type="text"
-                value={data.imageUrl || ""}
-                onChange={(e) => handleFieldChange("imageUrl", e.target.value)}
-                {...varDropAttrs("imageUrl", "image")}
-                placeholder="{{ files_media_1.image_url }} или https://..."
-                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs font-mono"
-              />
-              <WorkflowMediaPreview
-                url={data.imageUrl}
-                fileName={data.fileName}
-              />
-            </div>
-
-            <div>
-              <div className="mb-1 flex items-center justify-between">
-                <label className="font-medium text-zinc-700 dark:text-zinc-300">
-                  Видео
-                </label>
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => onOpenMediaPicker?.(node.id, "videoUrl")}
-                    className="flex items-center gap-1 rounded bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200"
-                  >
-                    <Folder className="h-2.5 w-2.5" />
-                    Медиатека
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setShowVariablePickerFor(
-                        showVariablePickerFor === "videoUrl" ? null : "videoUrl"
-                      )
-                    }
-                    className="flex items-center gap-1 rounded bg-violet-50 dark:bg-violet-950/40 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 dark:text-violet-300 hover:bg-violet-100"
-                  >
-                    <Variable className="h-3 w-3" />
-                    Переменная
-                  </button>
-                </div>
-              </div>
-              <input
-                type="text"
-                value={data.videoUrl || ""}
-                onChange={(e) => handleFieldChange("videoUrl", e.target.value)}
-                {...varDropAttrs("videoUrl", "video")}
-                placeholder="{{ files_media_1.video_url }} или https://..."
-                className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs font-mono"
-              />
-              <WorkflowMediaPreview
-                url={data.videoUrl}
-                fileName={data.fileName}
-              />
-            </div>
+            {renderSocialMedia(
+              "bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 hover:bg-violet-100"
+            )}
           </div>
         )}
 

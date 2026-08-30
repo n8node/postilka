@@ -40,6 +40,174 @@ export const NODE_FLOW_INPUT: NodePort = {
   type: "any",
 };
 
+export const SOCIAL_CONTENT_INPUTS: NodePort[] = [
+  { id: "text", label: "Текст", type: "string" },
+  { id: "imageUrl", label: "Фото", type: "image" },
+  { id: "videoUrl", label: "Видео", type: "video" },
+];
+
+function isFilledSocialValue(value: unknown): boolean {
+  return typeof value === "string" && value.trim() !== "";
+}
+
+export function socialHasText(data: Record<string, any>): boolean {
+  return isFilledSocialValue(data?.text) || isFilledSocialValue(data?.description);
+}
+
+export function socialHasImage(data: Record<string, any>): boolean {
+  return isFilledSocialValue(data?.imageUrl) || isFilledSocialValue(data?.imageFileId);
+}
+
+export function socialHasVideo(data: Record<string, any>): boolean {
+  return isFilledSocialValue(data?.videoUrl) || isFilledSocialValue(data?.videoFileId);
+}
+
+export function socialHasMedia(data: Record<string, any>): boolean {
+  return (
+    socialHasImage(data) ||
+    socialHasVideo(data) ||
+    isFilledSocialValue(data?.mediaUrl) ||
+    isFilledSocialValue(data?.fileId)
+  );
+}
+
+export type SocialFieldNeed = "required" | "one_of" | "optional" | "hidden";
+
+export type SocialFieldNeeds = {
+  text: SocialFieldNeed;
+  image: SocialFieldNeed;
+  video: SocialFieldNeed;
+  titleText?: SocialFieldNeed;
+  hint: string;
+};
+
+export function socialFieldNeeds(
+  nodeType: string,
+  data: Record<string, any> = {}
+): SocialFieldNeeds {
+  const format = String(data.format || "");
+  if (nodeType === "social_telegram") {
+    if (format === "video_note") {
+      return {
+        text: "optional",
+        image: "hidden",
+        video: "required",
+        hint: "Для кружочка нужно видео. Текст уйдёт отдельным сообщением.",
+      };
+    }
+    if (format === "story") {
+      return {
+        text: "optional",
+        image: "one_of",
+        video: "one_of",
+        hint: "Для истории нужно фото или видео. Подпись необязательна.",
+      };
+    }
+    return {
+      text: "one_of",
+      image: "one_of",
+      video: "one_of",
+      hint: "Укажите хотя бы одно: текст, фото или видео.",
+    };
+  }
+  if (nodeType === "social_vk") {
+    if (format === "clip") {
+      return {
+        text: "optional",
+        image: "hidden",
+        video: "required",
+        hint: "Для клипа нужно видео. Текст необязателен.",
+      };
+    }
+    if (format === "story") {
+      return {
+        text: "optional",
+        image: "one_of",
+        video: "one_of",
+        hint: "Для истории нужно фото или видео.",
+      };
+    }
+    return {
+      text: "one_of",
+      image: "one_of",
+      video: "one_of",
+      hint: "Укажите хотя бы одно: текст, фото или видео.",
+    };
+  }
+  if (nodeType === "social_youtube") {
+    return {
+      text: "optional",
+      image: "optional",
+      video: "required",
+      titleText: "required",
+      hint: "Нужны заголовок и видео. Описание и обложка необязательны.",
+    };
+  }
+  if (nodeType === "social_dzen") {
+    if (format === "video") {
+      return {
+        text: "optional",
+        image: "optional",
+        video: "required",
+        hint: "Для видео в Дзен нужно видео. Текст необязателен.",
+      };
+    }
+    if (format === "article") {
+      return {
+        text: "required",
+        image: "optional",
+        video: "optional",
+        hint: "Для статьи нужен текст. Фото и видео необязательны.",
+      };
+    }
+    return {
+      text: "one_of",
+      image: "one_of",
+      video: "one_of",
+      hint: "Укажите хотя бы одно: текст, фото или видео.",
+    };
+  }
+  return {
+    text: "one_of",
+    image: "one_of",
+    video: "one_of",
+    hint: "Укажите хотя бы одно: текст, фото или видео.",
+  };
+}
+
+export function validateSocialContent(
+  nodeType: string,
+  data: Record<string, any> = {}
+): string | null {
+  if (!nodeType.startsWith("social_")) return null;
+  const needs = socialFieldNeeds(nodeType, data);
+  const text = socialHasText(data);
+  const image = socialHasImage(data);
+  const video = socialHasVideo(data);
+  const media = socialHasMedia(data);
+
+  if (needs.titleText === "required" && !isFilledSocialValue(data.titleText)) {
+    return "Укажите заголовок видео";
+  }
+  if (needs.video === "required" && !video && !media) {
+    return needs.hint;
+  }
+  if (needs.image === "required" && !image && !media) {
+    return needs.hint;
+  }
+  if (needs.text === "required" && !text) {
+    return needs.hint;
+  }
+  const oneOf: boolean[] = [];
+  if (needs.text === "one_of") oneOf.push(text);
+  if (needs.image === "one_of") oneOf.push(image || media);
+  if (needs.video === "one_of") oneOf.push(video || media);
+  if (oneOf.length > 0 && !oneOf.some(Boolean)) {
+    return needs.hint;
+  }
+  return null;
+}
+
 export type NodeTypeDefinition = {
   type: string;
   title: string;
@@ -199,11 +367,7 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       badge: "bg-sky-500 text-white",
       text: "text-sky-600 dark:text-sky-400",
     },
-    inputs: [
-      NODE_FLOW_INPUT,
-      { id: "text", label: "Текст сообщения", type: "string" },
-      { id: "mediaUrl", label: "Медиафайл (опционально)", type: "any" },
-    ],
+    inputs: [NODE_FLOW_INPUT, ...SOCIAL_CONTENT_INPUTS],
     outputs: [
       { id: "status", label: "Статус", type: "string" },
       { id: "channel_name", label: "Канал", type: "string" },
@@ -213,6 +377,8 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       channelId: "",
       channelName: "",
       text: "{{ ai_text_1.text }}",
+      imageUrl: "",
+      videoUrl: "",
       format: "message",
       mediaLayout: "separate",
       mediaPosition: "below",
@@ -240,11 +406,7 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       badge: "bg-blue-600 text-white",
       text: "text-blue-600 dark:text-blue-400",
     },
-    inputs: [
-      NODE_FLOW_INPUT,
-      { id: "text", label: "Текст записи", type: "string" },
-      { id: "mediaUrl", label: "Вложения", type: "any" },
-    ],
+    inputs: [NODE_FLOW_INPUT, ...SOCIAL_CONTENT_INPUTS],
     outputs: [
       { id: "status", label: "Статус", type: "string" },
       { id: "channel_name", label: "Сообщество", type: "string" },
@@ -252,6 +414,8 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
     defaultData: {
       title: "ВКонтакте Стена",
       text: "{{ ai_text_1.text }}",
+      imageUrl: "",
+      videoUrl: "",
       fromGroup: true,
       signed: false,
       firstComment: "",
@@ -269,12 +433,7 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       badge: "bg-red-600 text-white",
       text: "text-red-600 dark:text-red-400",
     },
-    inputs: [
-      NODE_FLOW_INPUT,
-      { id: "videoUrl", label: "Видеофайл (MP4)", type: "video" },
-      { id: "titleText", label: "Заголовок видео", type: "string" },
-      { id: "description", label: "Описание", type: "string" },
-    ],
+    inputs: [NODE_FLOW_INPUT, ...SOCIAL_CONTENT_INPUTS],
     outputs: [
       { id: "status", label: "Статус", type: "string" },
       { id: "channel_name", label: "Канал", type: "string" },
@@ -282,7 +441,10 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
     defaultData: {
       title: "YouTube Shorts",
       titleText: "Новое видео #shorts",
+      text: "{{ ai_text_1.text }}",
       description: "{{ ai_text_1.text }}",
+      imageUrl: "",
+      videoUrl: "",
       format: "shorts",
       privacyStatus: "public",
       tags: "shorts, ai, marketing",
@@ -300,11 +462,7 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       badge: "bg-violet-600 text-white",
       text: "text-violet-600 dark:text-violet-400",
     },
-    inputs: [
-      NODE_FLOW_INPUT,
-      { id: "text", label: "Текст сообщения", type: "string" },
-      { id: "mediaUrl", label: "Медиафайл (опционально)", type: "any" },
-    ],
+    inputs: [NODE_FLOW_INPUT, ...SOCIAL_CONTENT_INPUTS],
     outputs: [
       { id: "status", label: "Статус", type: "string" },
       { id: "channel_name", label: "Канал MAX", type: "string" },
@@ -314,6 +472,8 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       channelId: "",
       channelName: "",
       text: "{{ ai_text_1.text }}",
+      imageUrl: "",
+      videoUrl: "",
       silent: false,
       pin: false,
       disableLinkPreview: false,
@@ -332,16 +492,15 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       badge: "bg-orange-600 text-white",
       text: "text-orange-600 dark:text-orange-400",
     },
-    inputs: [
-      NODE_FLOW_INPUT,
-      { id: "text", label: "Текст статьи / поста", type: "string" },
-    ],
+    inputs: [NODE_FLOW_INPUT, ...SOCIAL_CONTENT_INPUTS],
     outputs: [
       { id: "status", label: "Статус", type: "string" },
     ],
     defaultData: {
       title: "Дзен Пост",
       text: "{{ ai_text_1.text }}",
+      imageUrl: "",
+      videoUrl: "",
       format: "brief",
     },
   },
@@ -357,12 +516,7 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       badge: "bg-violet-700 text-white",
       text: "text-violet-700 dark:text-violet-300",
     },
-    inputs: [
-      NODE_FLOW_INPUT,
-      { id: "text", label: "Текст поста", type: "string" },
-      { id: "imageUrl", label: "Фото", type: "image" },
-      { id: "videoUrl", label: "Видео", type: "video" },
-    ],
+    inputs: [NODE_FLOW_INPUT, ...SOCIAL_CONTENT_INPUTS],
     outputs: [
       { id: "status", label: "Статус", type: "string" },
       { id: "channel_name", label: "Канал Photochka", type: "string" },

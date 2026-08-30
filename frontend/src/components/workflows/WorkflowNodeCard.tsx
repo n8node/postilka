@@ -51,6 +51,23 @@ import {
   type NodeViewMode,
 } from "./nodeTypes";
 
+function SocialMediaBadges({ data }: { data: Record<string, any> }) {
+  return (
+    <>
+      {data.imageUrl ? (
+        <span className="rounded bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 text-[9px] text-zinc-600 dark:text-zinc-400">
+          Фото
+        </span>
+      ) : null}
+      {data.videoUrl ? (
+        <span className="rounded bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 text-[9px] text-zinc-600 dark:text-zinc-400">
+          Видео
+        </span>
+      ) : null}
+    </>
+  );
+}
+
 interface WorkflowNodeCardProps {
   node: WorkflowNode;
   isSelected: boolean;
@@ -919,6 +936,7 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
                     {btnCount} кн.
                   </span>
                 )}
+                <SocialMediaBadges data={node.data} />
               </div>
             </div>
           );
@@ -963,6 +981,7 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
                     {btnCount} кн.
                   </span>
                 )}
+                <SocialMediaBadges data={node.data} />
               </div>
             </div>
           );
@@ -988,6 +1007,7 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
               )}
               <span>{node.data.fromGroup ? "От сообщества" : "От автора"}</span>
               {node.data.firstComment && <span>• 1-й коммент</span>}
+              <SocialMediaBadges data={node.data} />
             </div>
           </div>
         )}
@@ -1000,7 +1020,7 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
                 {(node.data.titleText as string) || "Заголовок видео"}
               </div>
             </div>
-            <div className="flex items-center justify-between text-[10px] text-zinc-500 px-1">
+            <div className="flex flex-wrap items-center gap-1 text-[10px] text-zinc-500 px-1">
               {node.data.channelName ? (
                 <span className="rounded bg-red-100 dark:bg-red-950/60 border border-red-200 dark:border-red-800/40 px-1.5 py-0.5 text-[9px] text-red-700 dark:text-red-300 font-medium truncate max-w-[100px]">
                   {node.data.channelName}
@@ -1011,6 +1031,7 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
                 </span>
               )}
               <span>{(node.data.privacyStatus as string) || "Public"}</span>
+              <SocialMediaBadges data={node.data} />
             </div>
           </div>
         )}
@@ -1023,11 +1044,12 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
                 {(node.data.text as string) || "{{ AI.text }}"}
               </div>
             </div>
-            <div className="flex items-center justify-between text-[10px] text-zinc-500 px-1">
+            <div className="flex flex-wrap items-center gap-1 text-[10px] text-zinc-500 px-1">
               <span className="truncate max-w-[120px]">
                 {node.data.channelName || "Канал не выбран"}
               </span>
               <span className="capitalize">{node.data.format || "brief"}</span>
+              <SocialMediaBadges data={node.data} />
             </div>
           </div>
         )}

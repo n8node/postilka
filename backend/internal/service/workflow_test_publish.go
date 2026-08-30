@@ -64,6 +64,10 @@ func buildWorkflowTestPostRequest(nodeType string, inputs map[string]interface{}
 		return model.PostSaveRequest{}, fmt.Errorf("%w: выберите канал для тестовой публикации", ErrInvalidPost)
 	}
 
+	if err := validateSocialNodeInputs(nodeType, inputs); err != nil {
+		return model.PostSaveRequest{}, fmt.Errorf("%w: %s", ErrInvalidPost, err.Error())
+	}
+
 	targets := []model.PostTargetInput{{ChannelID: channelID}}
 	media := workflowTestMediaInputs(inputs)
 
@@ -127,17 +131,15 @@ func buildTelegramWorkflowTestPost(
 		format = rawFormat
 	}
 
-	if format == "message" || format == "short_video" {
-		if text == "" && len(media) == 0 {
-			return model.PostSaveRequest{}, fmt.Errorf("%w: укажите текст или медиафайл", ErrInvalidPost)
-		}
+	content := readSocialContent(inputs)
+	if format == "message" && text == "" && len(media) == 0 && !content.hasMedia() {
+		return model.PostSaveRequest{}, fmt.Errorf("%w: укажите текст, фото или видео", ErrInvalidPost)
 	}
-
-	if format == "story" && len(media) == 0 {
-		return model.PostSaveRequest{}, fmt.Errorf("%w: для истории нужен медиафайл", ErrInvalidPost)
+	if format == "story" && len(media) == 0 && !content.hasMedia() {
+		return model.PostSaveRequest{}, fmt.Errorf("%w: для истории нужно фото или видео", ErrInvalidPost)
 	}
-	if format == "short_video" && len(media) == 0 {
-		return model.PostSaveRequest{}, fmt.Errorf("%w: для кружочка нужен видеофайл", ErrInvalidPost)
+	if format == "short_video" && len(media) == 0 && !content.hasVideo() && !content.hasMedia() {
+		return model.PostSaveRequest{}, fmt.Errorf("%w: для кружочка нужно видео", ErrInvalidPost)
 	}
 
 	mediaLayout := getString(inputs, "mediaLayout", "separate")
@@ -191,9 +193,10 @@ func buildMaxWorkflowTestPost(
 	targets []model.PostTargetInput,
 	media []model.PostMediaInput,
 ) (model.PostSaveRequest, error) {
-	text := strings.TrimSpace(getString(inputs, "text", ""))
-	if text == "" && len(media) == 0 {
-		return model.PostSaveRequest{}, fmt.Errorf("%w: укажите текст или медиафайл", ErrInvalidPost)
+	content := readSocialContent(inputs)
+	text := content.Text
+	if text == "" && len(media) == 0 && !content.hasMedia() {
+		return model.PostSaveRequest{}, fmt.Errorf("%w: укажите текст, фото или видео", ErrInvalidPost)
 	}
 	settings := model.PostSettings{
 		TelegramSilent: getBool(inputs, "silent", false),
@@ -221,9 +224,10 @@ func buildVKWorkflowTestPost(
 	targets []model.PostTargetInput,
 	media []model.PostMediaInput,
 ) (model.PostSaveRequest, error) {
-	text := strings.TrimSpace(getString(inputs, "text", ""))
-	if text == "" && len(media) == 0 {
-		return model.PostSaveRequest{}, fmt.Errorf("%w: укажите текст или медиафайл", ErrInvalidPost)
+	content := readSocialContent(inputs)
+	text := content.Text
+	if text == "" && len(media) == 0 && !content.hasMedia() {
+		return model.PostSaveRequest{}, fmt.Errorf("%w: укажите текст, фото или видео", ErrInvalidPost)
 	}
 	format := getString(inputs, "format", "wall_post")
 	if format == "" {
@@ -269,7 +273,7 @@ func buildYouTubeWorkflowTestPost(
 		Content: model.PostContent{
 			Format:    format,
 			Title:     title,
-			Text:      strings.TrimSpace(getString(inputs, "description", "")),
+			Text:      strings.TrimSpace(getString(inputs, "text", getString(inputs, "description", ""))),
 			ParseMode: "HTML",
 		},
 		Targets: targets,
@@ -282,9 +286,10 @@ func buildDzenWorkflowTestPost(
 	targets []model.PostTargetInput,
 	media []model.PostMediaInput,
 ) (model.PostSaveRequest, error) {
-	text := strings.TrimSpace(getString(inputs, "text", ""))
-	if text == "" && len(media) == 0 {
-		return model.PostSaveRequest{}, fmt.Errorf("%w: укажите текст или медиафайл", ErrInvalidPost)
+	content := readSocialContent(inputs)
+	text := content.Text
+	if text == "" && len(media) == 0 && !content.hasMedia() {
+		return model.PostSaveRequest{}, fmt.Errorf("%w: укажите текст, фото или видео", ErrInvalidPost)
 	}
 	format := getString(inputs, "format", "brief")
 	return model.PostSaveRequest{

@@ -820,27 +820,18 @@ func (s *WorkflowService) executeNode(
 		return outputs, 0, 0, 0, nil
 
 	case "social_telegram":
-		text := getString(inputs, "text", "")
+		if err := validateSocialNodeInputs(node.Type, inputs); err != nil {
+			return nil, 0, 0, 0, err
+		}
+		content := readSocialContent(inputs)
+		text := content.Text
 		format := getString(inputs, "format", "message")
-		if format == "message" && text == "" && strings.TrimSpace(getString(inputs, "mediaUrl", "")) == "" && strings.TrimSpace(getString(inputs, "fileId", "")) == "" {
-			return nil, 0, 0, 0, errors.New("текст сообщения или медиафайл для Telegram обязателен")
-		}
-		if format == "short_video" || format == "video_note" {
-			if strings.TrimSpace(getString(inputs, "mediaUrl", "")) == "" && strings.TrimSpace(getString(inputs, "fileId", "")) == "" {
-				return nil, 0, 0, 0, errors.New("для кружочка нужен видеофайл")
-			}
-		}
-		if format == "story" {
-			if strings.TrimSpace(getString(inputs, "mediaUrl", "")) == "" && strings.TrimSpace(getString(inputs, "fileId", "")) == "" {
-				return nil, 0, 0, 0, errors.New("для истории нужен медиафайл")
-			}
-		}
 		silent := getBool(inputs, "silent", false)
 		pin := getBool(inputs, "pin", false)
 		protectContent := getBool(inputs, "protectContent", false)
 		disableLinkPreview := getBool(inputs, "disableLinkPreview", false)
 		mediaPosition := getString(inputs, "mediaPosition", "below")
-		mediaURL := getString(inputs, "mediaUrl", "")
+		mediaURL := content.resolvedMediaURL()
 		channelID := getString(inputs, "channelId", "")
 
 		channels, _ := s.channelRepo.ListByWorkspace(ctx, workspaceID)
@@ -868,6 +859,8 @@ func (s *WorkflowService) executeNode(
 		outputs["media_position"] = mediaPosition
 		outputs["media_order"] = getString(inputs, "mediaOrder", "media_first")
 		outputs["media_url"] = mediaURL
+		outputs["image_url"] = content.ImageURL
+		outputs["video_url"] = content.VideoURL
 		if btns, ok := inputs["buttons"]; ok && btns != nil {
 			outputs["buttons"] = btns
 		}
@@ -881,15 +874,16 @@ func (s *WorkflowService) executeNode(
 		return outputs, 0, 0, 0, nil
 
 	case "social_max":
-		text := getString(inputs, "text", "")
-		if text == "" {
-			return nil, 0, 0, 0, errors.New("текст сообщения для MAX обязателен")
+		if err := validateSocialNodeInputs(node.Type, inputs); err != nil {
+			return nil, 0, 0, 0, err
 		}
+		content := readSocialContent(inputs)
+		text := content.Text
 		format := getString(inputs, "format", "message")
 		silent := getBool(inputs, "silent", false)
 		pin := getBool(inputs, "pin", false)
 		disableLinkPreview := getBool(inputs, "disableLinkPreview", false)
-		mediaURL := getString(inputs, "mediaUrl", "")
+		mediaURL := content.resolvedMediaURL()
 		channelID := getString(inputs, "channelId", "")
 
 		channels, _ := s.channelRepo.ListByWorkspace(ctx, workspaceID)
@@ -913,6 +907,8 @@ func (s *WorkflowService) executeNode(
 		outputs["pin"] = pin
 		outputs["disable_link_preview"] = disableLinkPreview
 		outputs["media_url"] = mediaURL
+		outputs["image_url"] = content.ImageURL
+		outputs["video_url"] = content.VideoURL
 		if btns, ok := inputs["buttons"]; ok && btns != nil {
 			outputs["buttons"] = btns
 		}
@@ -926,17 +922,18 @@ func (s *WorkflowService) executeNode(
 		return outputs, 0, 0, 0, nil
 
 	case "social_vk":
-		text := getString(inputs, "text", "")
-		if text == "" {
-			return nil, 0, 0, 0, errors.New("текст записи для ВКонтакте обязателен")
+		if err := validateSocialNodeInputs(node.Type, inputs); err != nil {
+			return nil, 0, 0, 0, err
 		}
+		content := readSocialContent(inputs)
+		text := content.Text
 		format := getString(inputs, "format", "wall_post")
 		fromGroup := getBool(inputs, "fromGroup", true)
 		signed := getBool(inputs, "signed", false)
 		firstComment := getString(inputs, "firstComment", "")
 		donutOnly := getBool(inputs, "donutOnly", false)
 		closeComments := getBool(inputs, "closeComments", false)
-		mediaURL := getString(inputs, "mediaUrl", "")
+		mediaURL := content.resolvedMediaURL()
 		channelID := getString(inputs, "channelId", "")
 
 		channels, _ := s.channelRepo.ListByWorkspace(ctx, workspaceID)
@@ -962,6 +959,8 @@ func (s *WorkflowService) executeNode(
 		outputs["donut_only"] = donutOnly
 		outputs["close_comments"] = closeComments
 		outputs["media_url"] = mediaURL
+		outputs["image_url"] = content.ImageURL
+		outputs["video_url"] = content.VideoURL
 		if vkChannel != nil {
 			outputs["channel_id"] = vkChannel.ID
 			outputs["channel_name"] = vkChannel.Name
@@ -972,9 +971,16 @@ func (s *WorkflowService) executeNode(
 		return outputs, 0, 0, 0, nil
 
 	case "social_youtube":
-		videoURL := getString(inputs, "videoUrl", "")
-		title := getString(inputs, "titleText", "Новое видео")
-		description := getString(inputs, "description", "")
+		if err := validateSocialNodeInputs(node.Type, inputs); err != nil {
+			return nil, 0, 0, 0, err
+		}
+		content := readSocialContent(inputs)
+		videoURL := content.VideoURL
+		title := content.Title
+		if title == "" {
+			title = "Новое видео"
+		}
+		description := content.Text
 		format := getString(inputs, "format", "shorts")
 		privacy := getString(inputs, "privacyStatus", "public")
 		channelID := getString(inputs, "channelId", "")
@@ -997,7 +1003,9 @@ func (s *WorkflowService) executeNode(
 		outputs["format"] = format
 		outputs["title"] = title
 		outputs["description"] = description
+		outputs["text"] = description
 		outputs["video_url"] = videoURL
+		outputs["image_url"] = content.ImageURL
 		outputs["privacy_status"] = privacy
 		if ytChannel != nil {
 			outputs["channel_id"] = ytChannel.ID
@@ -1008,9 +1016,16 @@ func (s *WorkflowService) executeNode(
 		return outputs, 0, 0, 0, nil
 
 	case "social_rutube":
-		text := getString(inputs, "text", "")
-		title := getString(inputs, "title", getString(inputs, "titleText", "Новое видео"))
-		videoURL := getString(inputs, "videoUrl", "")
+		if err := validateSocialNodeInputs(node.Type, inputs); err != nil {
+			return nil, 0, 0, 0, err
+		}
+		content := readSocialContent(inputs)
+		text := content.Text
+		title := getString(inputs, "title", content.Title)
+		if title == "" {
+			title = "Новое видео"
+		}
+		videoURL := content.VideoURL
 		category := getString(inputs, "category", "Бизнес и стартапы")
 		privacy := getString(inputs, "privacyStatus", "public")
 		channelID := getString(inputs, "channelId", "")
@@ -1044,10 +1059,14 @@ func (s *WorkflowService) executeNode(
 		return outputs, 0, 0, 0, nil
 
 	case "social_dzen":
-		text := getString(inputs, "text", "")
+		if err := validateSocialNodeInputs(node.Type, inputs); err != nil {
+			return nil, 0, 0, 0, err
+		}
+		content := readSocialContent(inputs)
+		text := content.Text
 		title := getString(inputs, "title", "")
 		format := getString(inputs, "format", "brief")
-		mediaURL := getString(inputs, "mediaUrl", "")
+		mediaURL := content.resolvedMediaURL()
 		channelID := getString(inputs, "channelId", "")
 
 		channels, _ := s.channelRepo.ListByWorkspace(ctx, workspaceID)
@@ -1069,6 +1088,8 @@ func (s *WorkflowService) executeNode(
 		outputs["title"] = title
 		outputs["text"] = text
 		outputs["media_url"] = mediaURL
+		outputs["image_url"] = content.ImageURL
+		outputs["video_url"] = content.VideoURL
 		if dzenChannel != nil {
 			outputs["channel_id"] = dzenChannel.ID
 			outputs["channel_name"] = dzenChannel.Name
@@ -1078,28 +1099,16 @@ func (s *WorkflowService) executeNode(
 		return outputs, 0, 0, 0, nil
 
 	case "social_photochka":
-		text := getString(inputs, "text", "")
-		imageURL := getString(inputs, "imageUrl", "")
-		videoURL := getString(inputs, "videoUrl", "")
-		mediaURL := getString(inputs, "mediaUrl", "")
-		if mediaURL == "" {
-			if imageURL != "" {
-				mediaURL = imageURL
-			} else if videoURL != "" {
-				mediaURL = videoURL
-			}
+		if err := validateSocialNodeInputs(node.Type, inputs); err != nil {
+			return nil, 0, 0, 0, err
 		}
-		fileID := getString(inputs, "fileId", "")
-		if fileID == "" {
-			fileID = getString(inputs, "imageFileId", "")
-		}
-		if fileID == "" {
-			fileID = getString(inputs, "videoFileId", "")
-		}
+		content := readSocialContent(inputs)
+		text := content.Text
+		imageURL := content.ImageURL
+		videoURL := content.VideoURL
+		mediaURL := content.resolvedMediaURL()
+		fileID := content.resolvedFileID()
 		channelID := getString(inputs, "channelId", "")
-		if text == "" && mediaURL == "" && fileID == "" && imageURL == "" && videoURL == "" {
-			return nil, 0, 0, 0, errors.New("для Photochka укажите текст, фото или видео")
-		}
 
 		channels, _ := s.channelRepo.ListByWorkspace(ctx, workspaceID)
 		var photochkaChannel *model.Channel
@@ -1130,7 +1139,10 @@ func (s *WorkflowService) executeNode(
 		return outputs, 0, 0, 0, nil
 
 	case "social_ok":
-		text := getString(inputs, "text", "")
+		if err := validateSocialNodeInputs(node.Type, inputs); err != nil {
+			return nil, 0, 0, 0, err
+		}
+		text := readSocialContent(inputs).Text
 		outputs["status"] = "success"
 		outputs["provider"] = "ok"
 		outputs["text"] = text
