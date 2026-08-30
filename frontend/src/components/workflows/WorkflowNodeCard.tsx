@@ -1096,6 +1096,12 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
           </div>
         )}
 
+        {node.type.startsWith("social_") && (
+          <p className="px-1 text-[10px] leading-relaxed text-zinc-500">
+            После публикации можно поставить следующую сеть от точки «Далее»
+          </p>
+        )}
+
         {/* 8. APPROVAL */}
         {node.type === "draft_approval" && (
           <div className="space-y-2">

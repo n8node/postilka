@@ -886,7 +886,7 @@ func (s *WorkflowService) executeNode(
 		} else {
 			outputs["channel_name"] = "Telegram (Демо-канал)"
 		}
-		return outputs, 0, 0, 0, nil
+		return withSocialFlowOutput(outputs), 0, 0, 0, nil
 
 	case "social_max":
 		if err := validateSocialNodeInputs(node.Type, inputs); err != nil {
@@ -934,7 +934,7 @@ func (s *WorkflowService) executeNode(
 		} else {
 			outputs["channel_name"] = "MAX (Демо-канал)"
 		}
-		return outputs, 0, 0, 0, nil
+		return withSocialFlowOutput(outputs), 0, 0, 0, nil
 
 	case "social_vk":
 		if err := validateSocialNodeInputs(node.Type, inputs); err != nil {
@@ -983,7 +983,7 @@ func (s *WorkflowService) executeNode(
 		} else {
 			outputs["channel_name"] = "ВКонтакте (Демо-сообщество)"
 		}
-		return outputs, 0, 0, 0, nil
+		return withSocialFlowOutput(outputs), 0, 0, 0, nil
 
 	case "social_youtube":
 		if err := validateSocialNodeInputs(node.Type, inputs); err != nil {
@@ -1028,7 +1028,7 @@ func (s *WorkflowService) executeNode(
 		} else {
 			outputs["channel_name"] = "YouTube (Канал)"
 		}
-		return outputs, 0, 0, 0, nil
+		return withSocialFlowOutput(outputs), 0, 0, 0, nil
 
 	case "social_rutube":
 		if err := validateSocialNodeInputs(node.Type, inputs); err != nil {
@@ -1071,7 +1071,7 @@ func (s *WorkflowService) executeNode(
 		} else {
 			outputs["channel_name"] = "Rutube (Канал)"
 		}
-		return outputs, 0, 0, 0, nil
+		return withSocialFlowOutput(outputs), 0, 0, 0, nil
 
 	case "social_dzen":
 		if err := validateSocialNodeInputs(node.Type, inputs); err != nil {
@@ -1111,7 +1111,7 @@ func (s *WorkflowService) executeNode(
 		} else {
 			outputs["channel_name"] = "Дзен (Канал)"
 		}
-		return outputs, 0, 0, 0, nil
+		return withSocialFlowOutput(outputs), 0, 0, 0, nil
 
 	case "social_photochka":
 		if err := validateSocialNodeInputs(node.Type, inputs); err != nil {
@@ -1151,7 +1151,7 @@ func (s *WorkflowService) executeNode(
 		} else {
 			outputs["channel_name"] = "Photochka (Канал)"
 		}
-		return outputs, 0, 0, 0, nil
+		return withSocialFlowOutput(outputs), 0, 0, 0, nil
 
 	case "social_ok":
 		if err := validateSocialNodeInputs(node.Type, inputs); err != nil {
@@ -1161,7 +1161,7 @@ func (s *WorkflowService) executeNode(
 		outputs["status"] = "success"
 		outputs["provider"] = "ok"
 		outputs["text"] = text
-		return outputs, 0, 0, 0, nil
+		return withSocialFlowOutput(outputs), 0, 0, 0, nil
 
 	case "draft_approval", "human_review":
 		approvalOut, approvalErr := s.executeApprovalNode(ctx, workspaceID, userID, nil, nil, node, inputs, outputsAccumulator)

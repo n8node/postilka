@@ -52,6 +52,7 @@ import {
   isPortCompatible,
   calculateWorkflowCost,
   nodeMinHeightPx,
+  resolvePortId,
   type NodeViewMode,
 } from "./nodeTypes";
 import {
@@ -166,7 +167,8 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
     (node: WorkflowNode, portId?: string, isOutput = false) => {
       const def = NODE_DEFINITIONS[node.type];
       const ports = isOutput ? def?.outputs : def?.inputs;
-      const actualPortId = portId || ports?.[0]?.id;
+      const actualPortId =
+        resolvePortId(node.type, portId, isOutput) || portId || ports?.[0]?.id;
       const key = `${node.id}:${isOutput ? "out" : "in"}:${actualPortId}`;
       const portEl = portElementsRef.current.get(key);
       const canvasEl = canvasRef.current;

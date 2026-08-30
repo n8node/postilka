@@ -50,6 +50,30 @@ export const NODE_FLOW_INPUT: NodePort = {
   type: "any",
 };
 
+export const NODE_FLOW_OUTPUT: NodePort = {
+  id: "next",
+  label: "Далее",
+  type: "any",
+};
+
+const LEGACY_SOCIAL_FLOW_HANDLES = new Set(["status", "channel_name"]);
+
+export function resolvePortId(
+  nodeType: string,
+  portId: string | undefined,
+  isOutput: boolean
+): string | undefined {
+  if (!portId) return portId;
+  if (
+    isOutput &&
+    nodeType.startsWith("social_") &&
+    LEGACY_SOCIAL_FLOW_HANDLES.has(portId)
+  ) {
+    return NODE_FLOW_OUTPUT.id;
+  }
+  return portId;
+}
+
 export const SOCIAL_CONTENT_INPUTS: NodePort[] = [
   { id: "text", label: "Текст", type: "string" },
   { id: "imageUrl", label: "Фото", type: "image" },
@@ -492,10 +516,7 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       text: "text-sky-600 dark:text-sky-400",
     },
     inputs: [NODE_FLOW_INPUT, ...SOCIAL_CONTENT_INPUTS],
-    outputs: [
-      { id: "status", label: "Статус", type: "string" },
-      { id: "channel_name", label: "Канал", type: "string" },
-    ],
+    outputs: [NODE_FLOW_OUTPUT],
     defaultData: {
       title: "Telegram Пост",
       channelId: "",
@@ -531,10 +552,7 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       text: "text-blue-600 dark:text-blue-400",
     },
     inputs: [NODE_FLOW_INPUT, ...SOCIAL_CONTENT_INPUTS],
-    outputs: [
-      { id: "status", label: "Статус", type: "string" },
-      { id: "channel_name", label: "Сообщество", type: "string" },
-    ],
+    outputs: [NODE_FLOW_OUTPUT],
     defaultData: {
       title: "ВКонтакте Стена",
       text: "{{ ai_text_1.text }}",
@@ -558,10 +576,7 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       text: "text-red-600 dark:text-red-400",
     },
     inputs: [NODE_FLOW_INPUT, ...SOCIAL_CONTENT_INPUTS],
-    outputs: [
-      { id: "status", label: "Статус", type: "string" },
-      { id: "channel_name", label: "Канал", type: "string" },
-    ],
+    outputs: [NODE_FLOW_OUTPUT],
     defaultData: {
       title: "YouTube Shorts",
       titleText: "Новое видео #shorts",
@@ -587,10 +602,7 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       text: "text-violet-600 dark:text-violet-400",
     },
     inputs: [NODE_FLOW_INPUT, ...SOCIAL_CONTENT_INPUTS],
-    outputs: [
-      { id: "status", label: "Статус", type: "string" },
-      { id: "channel_name", label: "Канал MAX", type: "string" },
-    ],
+    outputs: [NODE_FLOW_OUTPUT],
     defaultData: {
       title: "MAX Пост",
       channelId: "",
@@ -617,9 +629,7 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       text: "text-orange-600 dark:text-orange-400",
     },
     inputs: [NODE_FLOW_INPUT, ...SOCIAL_CONTENT_INPUTS],
-    outputs: [
-      { id: "status", label: "Статус", type: "string" },
-    ],
+    outputs: [NODE_FLOW_OUTPUT],
     defaultData: {
       title: "Дзен Пост",
       text: "{{ ai_text_1.text }}",
@@ -641,10 +651,7 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       text: "text-violet-700 dark:text-violet-300",
     },
     inputs: [NODE_FLOW_INPUT, ...SOCIAL_CONTENT_INPUTS],
-    outputs: [
-      { id: "status", label: "Статус", type: "string" },
-      { id: "channel_name", label: "Канал Photochka", type: "string" },
-    ],
+    outputs: [NODE_FLOW_OUTPUT],
     defaultData: {
       title: "Photochka Пост",
       channelId: "",
@@ -977,8 +984,9 @@ export function isPortCompatible(sourceType: string, targetType: string): boolea
 export function getPortDefinition(nodeType: string, portId: string, isOutput: boolean): NodePort | undefined {
   const def = NODE_DEFINITIONS[nodeType];
   if (!def) return undefined;
+  const resolved = resolvePortId(nodeType, portId, isOutput) || portId;
   const list = isOutput ? def.outputs : def.inputs;
-  return list.find((p) => p.id === portId);
+  return list.find((p) => p.id === resolved);
 }
 
 export interface WorkflowEconomicsItem {

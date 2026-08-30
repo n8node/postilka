@@ -74,6 +74,14 @@ func (c socialContent) resolvedFileID() string {
 	return c.VideoFileID
 }
 
+func withSocialFlowOutput(outputs map[string]interface{}) map[string]interface{} {
+	if outputs == nil {
+		outputs = map[string]interface{}{}
+	}
+	outputs["next"] = getString(outputs, "status", "success")
+	return outputs
+}
+
 func validateSocialNodeInputs(nodeType string, inputs map[string]interface{}) error {
 	c := readSocialContent(inputs)
 	switch nodeType {
