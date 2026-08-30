@@ -33,7 +33,11 @@ type ChannelProviderInfo struct {
 	SupportTelegramURL      string `json:"support_telegram_url"`
 	SupportEmail            string `json:"support_email"`
 	SupportHoursText        string `json:"support_hours_text"`
-	Providers               []SocialProviderPublicInfo `json:"providers"`
+	TelegramLogoURL             string `json:"telegram_logo_url,omitempty"`
+	TelegramBusinessLogoURL     string `json:"telegram_business_logo_url,omitempty"`
+	PhotochkaLogoURL            string `json:"photochka_logo_url,omitempty"`
+	WordPressLogoURL            string `json:"wordpress_logo_url,omitempty"`
+	Providers                   []SocialProviderPublicInfo `json:"providers"`
 }
 
 type TelegramProviderSettingsRecord struct {

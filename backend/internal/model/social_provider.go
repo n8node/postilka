@@ -2,6 +2,58 @@ package model
 
 import "time"
 
+type ProviderLogoKey string
+
+const (
+	ProviderLogoTelegram         ProviderLogoKey = "telegram"
+	ProviderLogoTelegramBusiness ProviderLogoKey = "telegram_business"
+	ProviderLogoVK               ProviderLogoKey = "vk"
+	ProviderLogoMAX              ProviderLogoKey = "max"
+	ProviderLogoRutube           ProviderLogoKey = "rutube"
+	ProviderLogoDzen             ProviderLogoKey = "dzen"
+	ProviderLogoYouTube          ProviderLogoKey = "youtube"
+	ProviderLogoPhotochka        ProviderLogoKey = "photochka"
+	ProviderLogoWordPress        ProviderLogoKey = "wordpress"
+)
+
+var AllProviderLogoKeys = []ProviderLogoKey{
+	ProviderLogoTelegram,
+	ProviderLogoTelegramBusiness,
+	ProviderLogoVK,
+	ProviderLogoMAX,
+	ProviderLogoRutube,
+	ProviderLogoDzen,
+	ProviderLogoYouTube,
+	ProviderLogoPhotochka,
+	ProviderLogoWordPress,
+}
+
+func ParseProviderLogoKey(raw string) (ProviderLogoKey, bool) {
+	key := ProviderLogoKey(raw)
+	for _, item := range AllProviderLogoKeys {
+		if item == key {
+			return key, true
+		}
+	}
+	return "", false
+}
+
+func ProviderLogoAPIPath(key ProviderLogoKey) string {
+	return "/channels/provider-logos/" + string(key)
+}
+
+type ProviderLogoRecord struct {
+	Provider  ProviderLogoKey `json:"provider"`
+	S3Key     string          `json:"-"`
+	UpdatedAt time.Time       `json:"updated_at"`
+}
+
+type ProviderLogoView struct {
+	Provider  ProviderLogoKey `json:"provider"`
+	LogoURL   string          `json:"logo_url"`
+	UpdatedAt time.Time       `json:"updated_at"`
+}
+
 type SocialProvider string
 
 const (
@@ -107,6 +159,7 @@ type SocialProviderPublicInfo struct {
 	SupportEmail            string         `json:"support_email"`
 	SupportHoursText        string               `json:"support_hours_text"`
 	PublishCapabilities     PublishCapabilities  `json:"publish_capabilities"`
+	LogoURL                 string               `json:"logo_url,omitempty"`
 }
 
 type MAXPlatformBotAdminView struct {

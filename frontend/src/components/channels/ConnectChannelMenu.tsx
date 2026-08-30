@@ -18,6 +18,7 @@ import { ConnectYouTubeDialog } from "./ConnectYouTubeDialog";
 import { ConnectTelegramBusinessDialog } from "./ConnectTelegramBusinessDialog";
 import { ConnectPhotochkaDialog } from "./ConnectPhotochkaDialog";
 import { ConnectWordPressDialog } from "./ConnectWordPressDialog";
+import { ProviderLogoMark } from "./ProviderLogoMark";
 
 const PROVIDER_LABELS: Partial<Record<ChannelProvider, string>> = {
   telegram: "Telegram",
@@ -33,6 +34,7 @@ const PROVIDER_LABELS: Partial<Record<ChannelProvider, string>> = {
 type ConnectMenuItem = {
   key: ChannelProvider | "telegram_business";
   label: string;
+  logoUrl?: string;
 };
 
 type ConnectChannelMenuProps = {
@@ -65,12 +67,17 @@ export function ConnectChannelMenu({ onConnected }: ConnectChannelMenuProps) {
 
   const enabledProviders: ConnectMenuItem[] = [];
   if (providerInfo?.telegram_enabled) {
-    enabledProviders.push({ key: "telegram", label: "Telegram" });
+    enabledProviders.push({
+      key: "telegram",
+      label: "Telegram",
+      logoUrl: providerInfo.telegram_logo_url,
+    });
   }
   if (providerInfo?.telegram_business_stories_enabled) {
     enabledProviders.push({
       key: "telegram_business",
       label: "Telegram Business (Stories)",
+      logoUrl: providerInfo.telegram_business_logo_url || providerInfo.telegram_logo_url,
     });
   }
   for (const p of providerInfo?.providers ?? []) {
@@ -78,14 +85,23 @@ export function ConnectChannelMenu({ onConnected }: ConnectChannelMenuProps) {
       enabledProviders.push({
         key: p.provider as ChannelProvider,
         label: p.label,
+        logoUrl: p.logo_url,
       });
     }
   }
   if (providerInfo?.photochka_enabled !== false) {
-    enabledProviders.push({ key: "photochka", label: "Photochka" });
+    enabledProviders.push({
+      key: "photochka",
+      label: "Photochka",
+      logoUrl: providerInfo?.photochka_logo_url,
+    });
   }
   if (providerInfo?.wordpress_enabled !== false) {
-    enabledProviders.push({ key: "wordpress", label: "WordPress" });
+    enabledProviders.push({
+      key: "wordpress",
+      label: "WordPress",
+      logoUrl: providerInfo?.wordpress_logo_url,
+    });
   }
 
   function pickProvider(key: ChannelProvider | "telegram_business") {
@@ -112,15 +128,19 @@ export function ConnectChannelMenu({ onConnected }: ConnectChannelMenuProps) {
         </button>
 
         {open && enabledProviders.length > 0 && (
-          <ul className="absolute right-0 z-20 mt-1 min-w-[180px] overflow-hidden rounded-lg border border-border bg-surface py-1 shadow-lg">
+          <ul className="absolute right-0 z-20 mt-1 min-w-[220px] overflow-hidden rounded-lg border border-border bg-surface py-1 shadow-lg">
             {enabledProviders.map((item) => (
               <li key={item.key}>
                 <button
                   type="button"
                   onClick={() => pickProvider(item.key)}
-                  className="block w-full px-4 py-2 text-left text-sm hover:bg-zinc-50"
+                  className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-zinc-50"
                 >
-                  {item.label}
+                  <ProviderLogoMark
+                    provider={item.key === "telegram_business" ? "telegram" : item.key}
+                    logoUrl={item.logoUrl}
+                  />
+                  <span>{item.label}</span>
                 </button>
               </li>
             ))}

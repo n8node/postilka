@@ -18,10 +18,16 @@ type ChannelHandler struct {
 	channels *service.ChannelService
 	connect  *service.ChannelConnectService
 	test     *service.ChannelTestService
+	logos    *service.ProviderLogoService
 }
 
-func NewChannelHandler(channels *service.ChannelService, connect *service.ChannelConnectService, test *service.ChannelTestService) *ChannelHandler {
-	return &ChannelHandler{channels: channels, connect: connect, test: test}
+func NewChannelHandler(
+	channels *service.ChannelService,
+	connect *service.ChannelConnectService,
+	test *service.ChannelTestService,
+	logos *service.ProviderLogoService,
+) *ChannelHandler {
+	return &ChannelHandler{channels: channels, connect: connect, test: test, logos: logos}
 }
 
 func channelUserID(r *http.Request) (string, bool) {
@@ -53,7 +59,32 @@ func (h *ChannelHandler) ProviderInfo(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = userID
 	info := h.connect.CombinedProviderInfo(r.Context())
+	h.logos.AttachToProviderInfo(r.Context(), &info)
 	writeJSON(w, http.StatusOK, info)
+}
+
+func (h *ChannelHandler) ProviderLogo(w http.ResponseWriter, r *http.Request) {
+	if _, ok := channelUserID(r); !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
+		return
+	}
+	key, ok := model.ParseProviderLogoKey(chi.URLParam(r, "provider"))
+	if !ok {
+		writeError(w, http.StatusBadRequest, "неизвестная сеть")
+		return
+	}
+	body, contentType, err := h.logos.Fetch(r.Context(), key)
+	if err != nil {
+		if errors.Is(err, service.ErrProviderLogoNotFound) {
+			writeError(w, http.StatusNotFound, "Логотип не найден")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "Не удалось загрузить логотип")
+		return
+	}
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Cache-Control", "private, max-age=3600")
+	_, _ = w.Write(body)
 }
 
 func (h *ChannelHandler) DiscoverTelegram(w http.ResponseWriter, r *http.Request) {

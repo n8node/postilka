@@ -2013,6 +2013,42 @@ export function updateAdminSocialProvider(provider: SocialProviderKey, settings:
   });
 }
 
+export type ProviderLogoKey =
+  | "telegram"
+  | "telegram_business"
+  | "vk"
+  | "max"
+  | "rutube"
+  | "dzen"
+  | "youtube"
+  | "photochka"
+  | "wordpress";
+
+export type ProviderLogoView = {
+  provider: ProviderLogoKey;
+  logo_url: string;
+  updated_at: string;
+};
+
+export function fetchAdminProviderLogos() {
+  return apiFetch<{ logos: ProviderLogoView[] }>("/admin/social-providers/logos");
+}
+
+export function uploadAdminProviderLogo(provider: ProviderLogoKey, file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+  return postUserAvatarMultipart<ProviderLogoView>(
+    `/admin/social-providers/${provider}/logo`,
+    formData,
+  );
+}
+
+export function deleteAdminProviderLogo(provider: ProviderLogoKey) {
+  return apiFetch<{ ok: boolean }>(`/admin/social-providers/${provider}/logo`, {
+    method: "DELETE",
+  });
+}
+
 export type MAXPlatformBotAdminView = {
   enabled: boolean;
   bot_token_set: boolean;
@@ -2152,6 +2188,7 @@ export type SocialProviderPublicInfo = {
   provider: SocialProviderKey;
   label: string;
   enabled: boolean;
+  logo_url?: string;
   connect_flow: "oauth" | "user_oauth" | "bot_token" | "telegram_crosspost";
   platform_bot_enabled?: boolean;
   platform_oauth_enabled?: boolean;
@@ -2175,6 +2212,10 @@ export type SocialProviderPublicInfo = {
 export type ChannelProviderInfo = {
   telegram_enabled: boolean;
   telegram_business_stories_enabled: boolean;
+  telegram_logo_url?: string;
+  telegram_business_logo_url?: string;
+  photochka_logo_url?: string;
+  wordpress_logo_url?: string;
   photochka_enabled?: boolean;
   photochka_connect_help_text?: string;
   wordpress_enabled?: boolean;

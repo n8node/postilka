@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import {
   ApiError,
   fetchAdminMAXPlatformBot,
+  fetchAdminProviderLogos,
   fetchAdminSocialProviders,
   fetchAdminTelegramProviderSettings,
   fetchAdminYouTubeProviderSettings,
@@ -14,15 +15,18 @@ import {
   updateAdminTelegramProviderSettings,
   updateAdminYouTubeProviderSettings,
   type MAXPlatformBotAdminView,
+  type ProviderLogoKey,
+  type ProviderLogoView,
   type SocialProviderAdminView,
   type SocialProviderSettings,
   type TelegramProviderSettings,
   type YouTubeProviderSettings,
 } from "@/lib/api";
 import { MaxPlatformBotSettingsPanel } from "@/components/admin/AdminMaxPlatformBotPage";
+import { ProviderLogoField } from "@/components/admin/ProviderLogoField";
 import { cn } from "@/lib/utils";
 
-type ProviderKey = "telegram" | "vk" | "max" | "rutube" | "dzen" | "youtube";
+type ProviderKey = ProviderLogoKey;
 
 const PROVIDER_MENU: { key: ProviderKey; label: string; connectFlow: string }[] = [
   { key: "telegram", label: "Telegram", connectFlow: "bot_token" },
@@ -31,6 +35,8 @@ const PROVIDER_MENU: { key: ProviderKey; label: string; connectFlow: string }[] 
   { key: "rutube", label: "Rutube", connectFlow: "oauth" },
   { key: "youtube", label: "YouTube", connectFlow: "user_oauth" },
   { key: "dzen", label: "Дзен", connectFlow: "telegram_crosspost" },
+  { key: "photochka", label: "Photochka", connectFlow: "api_key" },
+  { key: "wordpress", label: "WordPress", connectFlow: "app_password" },
 ];
 
 function connectFlowLabel(flow: string): string {
@@ -43,6 +49,10 @@ function connectFlowLabel(flow: string): string {
       return "Кросспостинг через Telegram";
     case "bot_token":
       return "Токен бота";
+    case "api_key":
+      return "API-ключ";
+    case "app_password":
+      return "Пароль приложения";
     default:
       return flow;
   }
@@ -100,6 +110,7 @@ export function AdminSocialProvidersPage() {
   const [maxBot, setMaxBot] = useState<MAXPlatformBotAdminView | null>(null);
   const [maxBotEnabled, setMaxBotEnabled] = useState(false);
   const [maxBotTokenInput, setMaxBotTokenInput] = useState("");
+  const [logos, setLogos] = useState<Partial<Record<ProviderLogoKey, ProviderLogoView>>>({});
 
   const currentSocial = useMemo(
     () => socialProviders.find((p) => p.provider === selected),
@@ -110,11 +121,12 @@ export function AdminSocialProvidersPage() {
     setLoading(true);
     setError(null);
     try {
-      const [telegramData, socialData, youtubeData, maxBotData] = await Promise.all([
+      const [telegramData, socialData, youtubeData, maxBotData, logoData] = await Promise.all([
         fetchAdminTelegramProviderSettings(),
         fetchAdminSocialProviders(),
         fetchAdminYouTubeProviderSettings(),
         fetchAdminMAXPlatformBot(),
+        fetchAdminProviderLogos(),
       ]);
       const proxyUrls = telegramData.settings.proxy_urls || [];
       const proxyActive =
@@ -140,6 +152,11 @@ export function AdminSocialProvidersPage() {
       setMaxBot(maxBotData);
       setMaxBotEnabled(maxBotData.enabled);
       setMaxBotTokenInput("");
+      const nextLogos: Partial<Record<ProviderLogoKey, ProviderLogoView>> = {};
+      for (const item of logoData.logos ?? []) {
+        nextLogos[item.provider] = item;
+      }
+      setLogos(nextLogos);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Не удалось загрузить настройки");
     } finally {
@@ -186,6 +203,8 @@ export function AdminSocialProvidersPage() {
         const proxyUrls = proxyData.settings.proxy_urls || [];
         setYoutubeProxy({ ...proxyData.settings, proxy_urls: proxyUrls });
         setSuccess("Настройки YouTube сохранены");
+      } else if (selected === "photochka" || selected === "wordpress") {
+        setSuccess("Логотип сохраняется сразу при загрузке");
       } else if (selected === "max") {
         const [updated, botView] = await Promise.all([
           updateAdminSocialProvider("max", socialForm),
@@ -203,7 +222,10 @@ export function AdminSocialProvidersPage() {
         setMaxBotTokenInput("");
         setSuccess("Настройки MAX сохранены");
       } else {
-        const updated = await updateAdminSocialProvider(selected, socialForm);
+        const updated = await updateAdminSocialProvider(
+          selected as "vk" | "max" | "rutube" | "dzen" | "youtube",
+          socialForm,
+        );
         setSocialProviders((prev) =>
           prev.map((p) => (p.provider === updated.provider ? updated : p)),
         );
@@ -281,7 +303,9 @@ export function AdminSocialProvidersPage() {
                 const enabled =
                   item.key === "telegram"
                     ? telegram.enabled
-                    : socialProviders.find((p) => p.provider === item.key)?.settings.enabled;
+                    : item.key === "photochka" || item.key === "wordpress"
+                      ? true
+                      : socialProviders.find((p) => p.provider === item.key)?.settings.enabled;
                 return (
                   <li key={item.key}>
                     <button
@@ -330,7 +354,37 @@ export function AdminSocialProvidersPage() {
               onPatch={patchTelegram}
               onSave={() => void handleSave()}
               saving={saving}
+              telegramLogo={logos.telegram}
+              businessLogo={logos.telegram_business}
+              onLogoChanged={(key, logo) =>
+                setLogos((prev) => {
+                  const next = { ...prev };
+                  if (logo) next[key] = logo;
+                  else delete next[key];
+                  return next;
+                })
+              }
             />
+          ) : selected === "photochka" || selected === "wordpress" ? (
+            <div className="mx-auto max-w-2xl space-y-5">
+              <div>
+                <h2 className="text-lg font-medium text-slate-900">{menuItem.label}</h2>
+                <p className="text-sm text-slate-500">Логотип в меню «Подключить канал».</p>
+              </div>
+              <ProviderLogoField
+                provider={selected}
+                label={menuItem.label}
+                logo={logos[selected]}
+                onChanged={(logo) =>
+                  setLogos((prev) => {
+                    const next = { ...prev };
+                    if (logo) next[selected] = logo;
+                    else delete next[selected];
+                    return next;
+                  })
+                }
+              />
+            </div>
           ) : selected === "youtube" ? (
             <YouTubeSettingsForm
               settings={socialForm}
@@ -341,6 +395,15 @@ export function AdminSocialProvidersPage() {
               onPatchProxy={patchYoutubeProxy}
               onSave={() => void handleSave()}
               saving={saving}
+              logo={logos.youtube}
+              onLogoChanged={(logo) =>
+                setLogos((prev) => {
+                  const next = { ...prev };
+                  if (logo) next.youtube = logo;
+                  else delete next.youtube;
+                  return next;
+                })
+              }
             />
           ) : selected === "max" ? (
             <div className="mx-auto max-w-2xl space-y-6">
@@ -353,6 +416,15 @@ export function AdminSocialProvidersPage() {
                 onSave={() => void handleSave()}
                 saving={saving}
                 hideSaveButton
+                logo={logos.max}
+                onLogoChanged={(logo) =>
+                  setLogos((prev) => {
+                    const next = { ...prev };
+                    if (logo) next.max = logo;
+                    else delete next.max;
+                    return next;
+                  })
+                }
               />
               <MaxPlatformBotSettingsPanel
                 embedded
@@ -383,6 +455,15 @@ export function AdminSocialProvidersPage() {
               onPatch={patchSocial}
               onSave={() => void handleSave()}
               saving={saving}
+              logo={logos[selected]}
+              onLogoChanged={(logo) =>
+                setLogos((prev) => {
+                  const next = { ...prev };
+                  if (logo) next[selected] = logo;
+                  else delete next[selected];
+                  return next;
+                })
+              }
             />
           )}
         </div>
@@ -398,6 +479,9 @@ function TelegramSettingsForm({
   onPatch,
   onSave,
   saving,
+  telegramLogo,
+  businessLogo,
+  onLogoChanged,
 }: {
   settings: TelegramProviderSettings;
   proxyOptions: string[];
@@ -405,6 +489,9 @@ function TelegramSettingsForm({
   onPatch: (p: Partial<TelegramProviderSettings>) => void;
   onSave: () => void;
   saving: boolean;
+  telegramLogo?: ProviderLogoView;
+  businessLogo?: ProviderLogoView;
+  onLogoChanged: (key: "telegram" | "telegram_business", logo: ProviderLogoView | null) => void;
 }) {
   return (
     <div className="mx-auto max-w-2xl space-y-5">
@@ -412,6 +499,19 @@ function TelegramSettingsForm({
         <h2 className="text-lg font-medium text-slate-900">Telegram</h2>
         <p className="text-sm text-slate-500">Подключение через BotFather-токен.</p>
       </div>
+
+      <ProviderLogoField
+        provider="telegram"
+        label="Telegram"
+        logo={telegramLogo}
+        onChanged={(logo) => onLogoChanged("telegram", logo)}
+      />
+      <ProviderLogoField
+        provider="telegram_business"
+        label="Telegram Business"
+        logo={businessLogo}
+        onChanged={(logo) => onLogoChanged("telegram_business", logo)}
+      />
 
       <Section title="Провайдер">
         <label className="flex items-center gap-2 text-sm">
@@ -529,6 +629,8 @@ function YouTubeSettingsForm({
   onPatchProxy,
   onSave,
   saving,
+  logo,
+  onLogoChanged,
 }: {
   settings: SocialProviderSettings;
   proxy: YouTubeProviderSettings;
@@ -538,6 +640,8 @@ function YouTubeSettingsForm({
   onPatchProxy: (p: Partial<YouTubeProviderSettings>) => void;
   onSave: () => void;
   saving: boolean;
+  logo?: ProviderLogoView;
+  onLogoChanged: (logo: ProviderLogoView | null) => void;
 }) {
   return (
     <div className="mx-auto max-w-2xl space-y-5">
@@ -548,6 +652,13 @@ function YouTubeSettingsForm({
           их проекте. Запросы к Google идут через прокси Postilka.
         </p>
       </div>
+
+      <ProviderLogoField
+        provider="youtube"
+        label="YouTube"
+        logo={logo}
+        onChanged={onLogoChanged}
+      />
 
       <Section title="Провайдер">
         <label className="flex items-center gap-2 text-sm">
@@ -654,6 +765,8 @@ function SocialSettingsForm({
   onSave,
   saving,
   hideSaveButton = false,
+  logo,
+  onLogoChanged,
 }: {
   provider: string;
   label: string;
@@ -663,6 +776,8 @@ function SocialSettingsForm({
   onSave: () => void;
   saving: boolean;
   hideSaveButton?: boolean;
+  logo?: ProviderLogoView;
+  onLogoChanged: (logo: ProviderLogoView | null) => void;
 }) {
   const isUserOAuthApp = connectFlow === "user_oauth";
   const isVK = provider === "vk";
@@ -683,6 +798,15 @@ function SocialSettingsForm({
                   : "Подключение через токен бота MAX."}
         </p>
       </div>
+
+      {provider === "telegram" || provider === "telegram_business" ? null : (
+        <ProviderLogoField
+          provider={provider as ProviderLogoKey}
+          label={label}
+          logo={logo}
+          onChanged={onLogoChanged}
+        />
+      )}
 
       <Section title="Провайдер">
         <label className="flex items-center gap-2 text-sm">
