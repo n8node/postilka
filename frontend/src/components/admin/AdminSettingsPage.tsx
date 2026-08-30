@@ -20,6 +20,7 @@ import { AdminMetrikaPage } from "@/components/admin/AdminMetrikaPage";
 import { AdminYandexGptPage } from "@/components/admin/AdminYandexGptPage";
 import { AdminAdStudioPage } from "@/components/admin/AdminAdStudioPage";
 import { AdminSketchStylesPage } from "@/components/admin/AdminSketchStylesPage";
+import { AdminGenerationNavPage } from "@/components/admin/AdminGenerationNavPage";
 import { AdminBackupSettingsPage } from "@/components/admin/AdminBackupSettingsPage";
 // Hidden until agents return: import { AdminAgentTemplatesPage } from "@/components/admin/AdminAgentTemplatesPage";
 import { cn } from "@/lib/utils";
@@ -37,6 +38,7 @@ type SettingsKey =
   | "ai-kie-video"
   | "ai-ad-studio"
   | "ai-sketch-styles"
+  | "generation-nav"
   | "analytics-metrika";
 
 const SETTINGS_MENU: { key: SettingsKey; label: string; description: string }[] = [
@@ -100,6 +102,11 @@ const SETTINGS_MENU: { key: SettingsKey; label: string; description: string }[] 
     key: "ai-sketch-styles",
     label: "AI — Набросок",
     description: "Стили генерации из рисунка",
+  },
+  {
+    key: "generation-nav",
+    label: "Меню генерации",
+    description: "Плашки в сайдбаре кабинета",
   },
   {
     key: "analytics-metrika",
@@ -272,6 +279,9 @@ function SettingsSectionContent({
   }
   if (selected === "ai-sketch-styles") {
     return <AdminSketchStylesPage embedded />;
+  }
+  if (selected === "generation-nav") {
+    return <AdminGenerationNavPage embedded />;
   }
   if (selected === "analytics-metrika") {
     return <AdminMetrikaPage embedded />;

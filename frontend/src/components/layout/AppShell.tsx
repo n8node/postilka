@@ -8,7 +8,6 @@ import {
   PenSquare,
   CalendarDays,
   ImageIcon,
-  Sparkles,
   GitBranch,
   Wallet,
   Users,
@@ -20,7 +19,7 @@ import {
   PanelLeft,
   LogOut,
 } from "lucide-react";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { logout } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { WorkspaceSwitcher } from "@/components/layout/WorkspaceSwitcher";
@@ -28,6 +27,7 @@ import { EmailVerificationBanner } from "@/components/layout/EmailVerificationBa
 import { NotificationsBell } from "@/components/layout/NotificationsBell";
 import { SupportWidget } from "@/components/support/SupportWidget";
 import { WalletBalanceBadge } from "@/components/billing/WalletBalanceBadge";
+import { GenerationNavBlock } from "@/components/layout/GenerationNavBlock";
 import { GenerationCompleteToast } from "@/components/generation/GenerationCompleteToast";
 import { GenerationJobSync } from "@/components/generation/GenerationJobSync";
 import { VideoGenerationJobSync } from "@/components/generation/VideoGenerationJobSync";
@@ -47,7 +47,6 @@ const mainNav: NavItem[] = [
   // Hidden until agents return: { href: "/missions", label: "Ai агенты", icon: Bot },
   { href: "/calendar", label: "Календарь", icon: CalendarDays },
   { href: "/files", label: "Файлы", icon: ImageIcon },
-  { href: "/ai", label: "Ai контент", icon: Sparkles },
   { href: "/workflows", label: "Процессы", icon: GitBranch },
   { href: "/plans", label: "Тарифные планы", icon: Wallet },
   { href: "/team", label: "Команда", icon: Users },
@@ -134,6 +133,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
 
         <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-2 pb-3 pt-2">
+          <Suspense fallback={null}>
+            <GenerationNavBlock collapsed={collapsed} />
+          </Suspense>
+
           {mainNav.map((item) => {
             const Icon = item.icon;
             const active = isActive(pathname, item.href);

@@ -1,12 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Film, ImageIcon, LayoutGrid, Paintbrush } from "lucide-react";
 import { AdStudioPage } from "@/components/generation/AdStudioPage";
 import { GenerationPageContent } from "@/components/generation/GenerationPageContent";
 import { VideoGenerationPageContent } from "@/components/generation/VideoGenerationPageContent";
 import { SketchPage } from "@/components/sketch/SketchPage";
+import { aiTabHref } from "@/lib/ad-studio";
 import { cn } from "@/lib/utils";
 
 type AiTab = "studio" | "photo" | "video" | "sketch";
@@ -19,7 +21,6 @@ const tabs: { id: AiTab; label: string; icon: typeof ImageIcon }[] = [
 ];
 
 export function AiContentHub() {
-  const router = useRouter();
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab");
   const [tab, setTab] = useState<AiTab>(
@@ -44,22 +45,6 @@ export function AiContentHub() {
     );
   }, [tabParam]);
 
-  const switchTab = useCallback(
-    (next: AiTab) => {
-      setTab(next);
-      const qs =
-        next === "video"
-          ? "?tab=video"
-          : next === "photo"
-            ? "?tab=photo"
-            : next === "sketch"
-              ? "?tab=sketch"
-              : "";
-      router.replace(`/ai${qs}`, { scroll: false });
-    },
-    [router],
-  );
-
   if (tab === "sketch") {
     return (
       <div className="-mx-4 -mt-6 sm:-mx-6 sm:-mt-6 lg:-mx-8 lg:-mt-8">
@@ -75,10 +60,10 @@ export function AiContentHub() {
           const Icon = item.icon;
           const active = tab === item.id;
           return (
-            <button
+            <Link
               key={item.id}
-              type="button"
-              onClick={() => switchTab(item.id)}
+              href={aiTabHref(item.id)}
+              scroll={false}
               className={cn(
                 "flex items-center gap-2 rounded-md px-4 py-2 text-[13px] font-medium transition-colors",
                 active
@@ -88,7 +73,7 @@ export function AiContentHub() {
             >
               <Icon size={16} />
               {item.label}
-            </button>
+            </Link>
           );
         })}
       </div>

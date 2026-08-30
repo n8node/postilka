@@ -241,6 +241,9 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	sketchStyleRepo := repository.NewSketchStyleRepository(db.Pool)
 	sketchSvc := service.NewSketchService(sketchStyleRepo, generationSvc, objectStorage)
 	sketchHandler := handler.NewSketchHandler(sketchSvc)
+	generationNavRepo := repository.NewGenerationNavRepository(db.Pool)
+	generationNavSvc := service.NewGenerationNavService(generationNavRepo, objectStorage)
+	generationNavHandler := handler.NewGenerationNavHandler(generationNavSvc)
 
 	workflowSvc := service.NewWorkflowService(
 		workflowRepo, channelRepo, postSvc, generationSvc, aiBillingSvc, yandexGptConfigSvc, wsSvc, fileStorageSvc, planRepo, quotaSvc, notificationSvc, logger,
@@ -524,6 +527,8 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Post("/generation/compose-text", generationHandler.ComposePostText)
 			r.Get("/media/ai-generations/{id}", generationHandler.ResultMedia)
 			r.Get("/media/ai-generations/{id}/preview", generationHandler.ResultPreviewMedia)
+			r.Get("/generation-nav", generationNavHandler.GetCabinet)
+			r.Get("/generation-nav/items/{id}/icon", generationNavHandler.ServeIcon)
 			r.Get("/ad-studio/templates", adStudioHandler.List)
 			r.Get("/ad-studio/templates/{id}", adStudioHandler.Get)
 			r.Get("/ad-studio/templates/{id}/preview", adStudioHandler.Preview)
@@ -615,6 +620,14 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Get("/config/kie-video/examples", kieVideoConfigHandler.ListExamplesAdmin)
 				r.Post("/config/kie-video/examples", kieVideoConfigHandler.CreateExampleAdmin)
 				r.Delete("/config/kie-video/examples/{id}", kieVideoConfigHandler.DeleteExampleAdmin)
+				r.Get("/generation-nav", generationNavHandler.GetAdmin)
+				r.Put("/generation-nav/settings", generationNavHandler.UpdateSettings)
+				r.Post("/generation-nav/items", generationNavHandler.CreateItem)
+				r.Put("/generation-nav/items/{id}", generationNavHandler.UpdateItem)
+				r.Delete("/generation-nav/items/{id}", generationNavHandler.DeleteItem)
+				r.Put("/generation-nav/reorder", generationNavHandler.Reorder)
+				r.Post("/generation-nav/items/{id}/icon", generationNavHandler.UploadIcon)
+				r.Delete("/generation-nav/items/{id}/icon", generationNavHandler.DeleteIcon)
 				r.Get("/ad-studio/categories", adStudioHandler.AdminGetCategories)
 				r.Put("/ad-studio/categories", adStudioHandler.AdminUpdateCategories)
 				r.Get("/ad-studio/templates", adStudioHandler.AdminList)

@@ -3019,3 +3019,100 @@ export function replyAdminSupportTicket(id: string, body: string, files?: File[]
   });
 }
 
+export type GenerationNavIconKind = "lucide" | "upload";
+
+export type GenerationNavSettings = {
+  title: string;
+  studio_href: string;
+  more_href: string;
+  preview_limit: number;
+};
+
+export type GenerationNavItem = {
+  id: string;
+  title: string;
+  subtitle: string;
+  href: string;
+  position: number;
+  visible: boolean;
+  featured: boolean;
+  icon_kind: GenerationNavIconKind;
+  icon_name: string;
+  icon_url?: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type GenerationNavView = {
+  settings: GenerationNavSettings;
+  items: GenerationNavItem[];
+};
+
+export type GenerationNavItemWrite = {
+  title: string;
+  subtitle: string;
+  href: string;
+  position?: number;
+  visible?: boolean;
+  featured?: boolean;
+  icon_kind?: GenerationNavIconKind;
+  icon_name?: string;
+};
+
+export function fetchGenerationNav() {
+  return apiFetch<GenerationNavView>("/generation-nav");
+}
+
+export function fetchAdminGenerationNav() {
+  return apiFetch<GenerationNavView>("/admin/generation-nav");
+}
+
+export function updateAdminGenerationNavSettings(settings: GenerationNavSettings) {
+  return apiFetch<GenerationNavSettings>("/admin/generation-nav/settings", {
+    method: "PUT",
+    body: JSON.stringify(settings),
+  });
+}
+
+export function createAdminGenerationNavItem(item: GenerationNavItemWrite) {
+  return apiFetch<GenerationNavItem>("/admin/generation-nav/items", {
+    method: "POST",
+    body: JSON.stringify(item),
+  });
+}
+
+export function updateAdminGenerationNavItem(id: string, item: GenerationNavItemWrite) {
+  return apiFetch<GenerationNavItem>(`/admin/generation-nav/items/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(item),
+  });
+}
+
+export function deleteAdminGenerationNavItem(id: string) {
+  return apiFetch<{ ok: boolean }>(`/admin/generation-nav/items/${id}`, {
+    method: "DELETE",
+  });
+}
+
+export function reorderAdminGenerationNav(ids: string[]) {
+  return apiFetch<{ ok: boolean }>("/admin/generation-nav/reorder", {
+    method: "PUT",
+    body: JSON.stringify({ ids }),
+  });
+}
+
+export function uploadAdminGenerationNavIcon(id: string, file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+  return postUserAvatarMultipart<GenerationNavItem>(
+    `/admin/generation-nav/items/${id}/icon`,
+    formData,
+  );
+}
+
+export function deleteAdminGenerationNavIcon(id: string) {
+  return apiFetch<GenerationNavItem>(`/admin/generation-nav/items/${id}/icon`, {
+    method: "DELETE",
+  });
+}
+

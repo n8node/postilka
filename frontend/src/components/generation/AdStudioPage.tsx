@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { ImagePlus, Sparkles, UserRound } from "lucide-react";
 import { FileThumbnail } from "@/components/files/FileThumbnail";
 import { ProtectedMediaImage } from "@/components/media/ProtectedMediaImage";
@@ -17,8 +18,10 @@ import {
   fetchAdStudioTemplates,
   generateFromAdStudioTemplate,
   resolveAdStudioMode,
+  AD_STUDIO_CATEGORIES,
+  parseStudioSection,
+  studioHref,
   visibleAdStudioCategories,
-  type AdStudioCategoryId,
   type AdStudioTemplate,
 } from "@/lib/ad-studio";
 import {
@@ -45,7 +48,7 @@ import {
 import { useVideoGenerationJobStore } from "@/lib/video-generation-job-store";
 import { cn } from "@/lib/utils";
 
-type FilterId = "all" | AdStudioCategoryId;
+type FilterId = string;
 
 function aspectClass(ratio: string): string {
   switch (ratio) {
@@ -278,7 +281,7 @@ export function AdStudioPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const templateParam = searchParams.get("template");
-  const [filter, setFilter] = useState<FilterId>("all");
+  const filter = parseStudioSection(searchParams.get("section")) as FilterId;
   const [items, setItems] = useState<AdStudioTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
@@ -345,15 +348,16 @@ export function AdStudioPage() {
       setItems(res.items ?? []);
       setHiddenCategories(res.hidden_categories ?? []);
       const visible = visibleAdStudioCategories(res.hidden_categories);
-      if (filter !== "all" && !visible.some((item) => item.id === filter)) {
-        setFilter("all");
+      const known = AD_STUDIO_CATEGORIES.some((item) => item.id === filter);
+      if (known && filter !== "all" && !visible.some((item) => item.id === filter)) {
+        router.replace(studioHref("all", templateParam), { scroll: false });
       }
     } catch (err) {
       setListError(err instanceof ApiError ? err.message : "Не удалось загрузить шаблоны");
     } finally {
       setLoading(false);
     }
-  }, [filter]);
+  }, [filter, router, templateParam]);
 
   useEffect(() => {
     void load();
@@ -420,10 +424,10 @@ export function AdStudioPage() {
     (item: AdStudioTemplate) => {
       applyTemplate(item);
       if (templateParam !== item.id) {
-        router.replace(`/ai?template=${encodeURIComponent(item.id)}`, { scroll: false });
+        router.replace(studioHref(filter, item.id), { scroll: false });
       }
     },
-    [applyTemplate, router, templateParam],
+    [applyTemplate, filter, router, templateParam],
   );
 
   // Apply the query only when `?template=` actually changes. Do not depend on
@@ -783,10 +787,10 @@ export function AdStudioPage() {
             {filters.map((item) => {
               const active = filter === item.id;
               return (
-                <button
+                <Link
                   key={item.id}
-                  type="button"
-                  onClick={() => setFilter(item.id)}
+                  href={studioHref(item.id)}
+                  scroll={false}
                   className={cn(
                     "rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors",
                     active
@@ -795,7 +799,7 @@ export function AdStudioPage() {
                   )}
                 >
                   {item.label}
-                </button>
+                </Link>
               );
             })}
           </div>

@@ -21,6 +21,7 @@ import {
   deleteAdminAdStudioTemplate,
   fetchAdminAdStudioCategories,
   fetchAdminAdStudioTemplates,
+  studioHref,
   updateAdminAdStudioCategories,
   updateAdminAdStudioTemplate,
   uploadAdminAdStudioPreview,
@@ -291,6 +292,8 @@ export function AdminAdStudioPage({ embedded = false }: { embedded?: boolean }) 
         <p className="text-sm font-medium text-slate-800">Разделы в кабинете</p>
         <p className="mt-1 text-xs text-slate-500">
           Снимите галочку, чтобы скрыть раздел у пользователей. Шаблоны останутся в админке.
+          Ссылка вкладки «Все»: <code className="font-mono">/ai</code>. Новые разделы получают
+          ссылку <code className="font-mono">/ai?tab=studio&amp;section=id</code>.
         </p>
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
           {AD_STUDIO_CATEGORIES.map((item) => {
@@ -303,7 +306,8 @@ export function AdminAdStudioPage({ embedded = false }: { embedded?: boolean }) 
                   disabled={savingSections}
                   onChange={(e) => void toggleSection(item.id, e.target.checked)}
                 />
-                {item.label}
+                <span>{item.label}</span>
+                <code className="text-[10px] text-slate-400">{studioHref(item.id)}</code>
                 {!visible ? <span className="text-xs text-slate-400">скрыт</span> : null}
               </label>
             );

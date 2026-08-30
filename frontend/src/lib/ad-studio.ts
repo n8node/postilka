@@ -167,6 +167,45 @@ export function visibleAdStudioCategories(hidden: string[] | undefined) {
   return AD_STUDIO_CATEGORIES.filter((item) => !blocked.has(item.id));
 }
 
+export type AiHubTab = "studio" | "photo" | "video" | "sketch";
+
+export function parseStudioSection(raw: string | null | undefined): string {
+  const value = raw?.trim() ?? "";
+  if (!value || value === "all") return "all";
+  return value;
+}
+
+export function studioHref(section: string = "all", templateId?: string | null): string {
+  const params = new URLSearchParams();
+  if (section && section !== "all") {
+    params.set("tab", "studio");
+    params.set("section", section);
+  }
+  if (templateId) {
+    params.set("template", templateId);
+  }
+  const qs = params.toString();
+  return qs ? `/ai?${qs}` : "/ai";
+}
+
+export function aiTabHref(tab: AiHubTab): string {
+  if (tab === "studio") return "/ai";
+  return `/ai?tab=${tab}`;
+}
+
+export function generationNavSuggestedHrefs(): { href: string; label: string }[] {
+  return [
+    { href: "/ai", label: "Студия — все" },
+    { href: "/ai?tab=photo", label: "Фото" },
+    { href: "/ai?tab=video", label: "Видео" },
+    { href: "/ai?tab=sketch", label: "Набросок" },
+    ...AD_STUDIO_CATEGORIES.map((item) => ({
+      href: studioHref(item.id),
+      label: `Студия — ${item.label}`,
+    })),
+  ];
+}
+
 export function fetchAdStudioTemplates(category?: string) {
   const qs = category ? `?category=${encodeURIComponent(category)}` : "";
   return apiFetch<{ items: AdStudioTemplate[]; hidden_categories?: string[] }>(
