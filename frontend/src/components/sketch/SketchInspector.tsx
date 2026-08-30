@@ -374,7 +374,7 @@ export function SketchInspector({
       <div className="shrink-0 border-t border-zinc-100 dark:border-zinc-800 p-3">
         <p className="mb-2 text-center text-[10px] text-zinc-500">
           {costLabel}
-          {creditsRemaining != null ? ` · осталось ${creditsRemaining}` : ""}
+          {creditsRemaining != null ? ` · осталось ${creditsRemaining} кред.` : ""}
         </p>
         <button
           type="button"

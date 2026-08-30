@@ -1,6 +1,7 @@
 "use client";
 
 import { create } from "zustand";
+import { refreshBillingBalances } from "@/lib/billing-balances-store";
 import type { GenerationJob } from "@/lib/generation-api";
 import { useGenerationCreditsStore } from "@/lib/generation-credits-store";
 
@@ -92,6 +93,7 @@ export const useGenerationJobStore = create<GenerationJobState>((set, get) => ({
     if (creditsRemaining !== undefined) {
       useGenerationCreditsStore.getState().setCreditsRemaining(creditsRemaining);
     }
+    void refreshBillingBalances().catch(() => undefined);
 
     set((s) => ({
       jobId: job.id,

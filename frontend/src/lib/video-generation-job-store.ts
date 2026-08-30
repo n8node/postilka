@@ -1,6 +1,7 @@
 "use client";
 
 import { create } from "zustand";
+import { refreshBillingBalances } from "@/lib/billing-balances-store";
 import type { VideoGenerationJob } from "@/lib/video-generation-api";
 import { useGenerationCreditsStore } from "@/lib/generation-credits-store";
 
@@ -97,6 +98,7 @@ export const useVideoGenerationJobStore = create<VideoGenerationJobState>(
           .getState()
           .setCreditsRemaining(creditsRemaining);
       }
+      void refreshBillingBalances().catch(() => undefined);
 
       set((s) => ({
         jobId: job.id,

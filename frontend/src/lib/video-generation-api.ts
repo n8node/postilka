@@ -191,9 +191,9 @@ export function videoWalletRubForCost(
 }
 
 function mediaCreditsFromOverview(overview: BillingOverview): number | null {
-  const quota = overview.plan?.ai_media_credits_quota;
-  if (quota == null) return null;
-  return Math.max(0, quota - overview.usage.ai_media_credits_used);
+  const media = overview.media_balance;
+  if (media?.unlimited) return null;
+  return Math.max(0, (media?.quota_remaining ?? 0) + (media?.purchased_remaining ?? 0));
 }
 
 export async function fetchVideoGenerationPricing() {

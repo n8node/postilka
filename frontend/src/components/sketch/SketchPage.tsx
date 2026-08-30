@@ -34,6 +34,7 @@ import {
   type SketchBrushId,
 } from "@/lib/harmony-brushes";
 import { fetchSketchStyles, generateFromSketch, type SketchStyle } from "@/lib/sketch-api";
+import { refreshBillingBalances } from "@/lib/billing-balances-store";
 import { mediaUrl } from "@/lib/media-display";
 import {
   deleteSketchSave,
@@ -106,12 +107,19 @@ export function SketchPage() {
 
   useEffect(() => {
     void fetchGenerationPricing()
-      .then(({ pricing }) => setImagePricing(pricing))
+      .then(({ pricing }) => {
+        setImagePricing(pricing);
+        if (pricing.unlimited || pricing.credits_remaining === null) {
+          setCreditsRemaining(null);
+        } else if (pricing.credits_remaining !== undefined) {
+          setCreditsRemaining(pricing.credits_remaining);
+        }
+      })
       .catch(() => setImagePricing(null));
     void fetchVideoGenerationPricing()
       .then(({ pricing }) => setVideoPricing(pricing))
       .catch(() => setVideoPricing(null));
-  }, []);
+  }, [setCreditsRemaining]);
 
   useEffect(() => {
     if (selectedStyle) {
@@ -221,6 +229,7 @@ export function SketchPage() {
           setCreditsRemaining(res.credits_remaining);
         }
       }
+      void refreshBillingBalances().catch(() => undefined);
     } catch (err) {
       setGenerateError(err instanceof ApiError ? err.message : "Не удалось сгенерировать");
     } finally {

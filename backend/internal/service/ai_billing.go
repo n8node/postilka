@@ -223,6 +223,8 @@ func (s *AIBillingService) GetMediaCreditsRemaining(ctx context.Context, workspa
 		walletCredits = int(balance / int64(kopecks))
 	}
 
+	// Remaining credits are quota + purchased packages only.
+	// Wallet ₽ stay a separate economy and must not be folded into the credit count.
 	out := model.MediaCreditsRemainingView{
 		PurchasedCredits: purchased,
 		WalletCredits:    walletCredits,
@@ -230,10 +232,10 @@ func (s *AIBillingService) GetMediaCreditsRemaining(ctx context.Context, workspa
 		Unlimited:        unlimited,
 	}
 	if unlimited {
-		out.TotalAvailable = purchased + walletCredits
+		out.TotalAvailable = purchased
 		return out, nil
 	}
-	out.TotalAvailable = remaining + purchased + walletCredits
+	out.TotalAvailable = remaining + purchased
 	rem := remaining
 	out.QuotaRemaining = &rem
 	return out, nil

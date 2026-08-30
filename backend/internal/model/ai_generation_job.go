@@ -90,7 +90,7 @@ type MediaCreditsRemainingView struct {
 	QuotaRemaining   *int    `json:"quota_remaining,omitempty"`
 	PurchasedCredits int     `json:"purchased_credits"`
 	WalletCredits    int     `json:"wallet_credits"`
-	TotalAvailable   int     `json:"total_available"`
+	TotalAvailable   int     `json:"total_available"` // quota + purchased packages; wallet ₽ are not converted
 	Unlimited        bool    `json:"unlimited"`
 	WalletBalanceRub float64 `json:"wallet_balance_rub"`
 }

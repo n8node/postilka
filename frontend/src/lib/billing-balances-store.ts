@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { BillingOverview } from "@/lib/api";
+import { fetchBillingOverview, type BillingOverview } from "@/lib/api";
 
 export type BillingBalances = {
   walletCents: number;
@@ -42,3 +42,8 @@ export const useBillingBalancesStore = create<BillingBalancesState>((set) => ({
   balances: null,
   setFromOverview: (overview) => set({ balances: balancesFromOverview(overview) }),
 }));
+
+export async function refreshBillingBalances(): Promise<void> {
+  const overview = await fetchBillingOverview();
+  useBillingBalancesStore.getState().setFromOverview(overview);
+}
