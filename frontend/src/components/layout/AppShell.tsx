@@ -237,7 +237,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex h-14 items-center justify-end gap-2 border-b border-border bg-surface/95 px-4 backdrop-blur-md sm:px-6">
+        <header className="sticky top-0 z-40 flex h-14 items-center justify-end gap-2 border-b border-border bg-surface/95 px-4 backdrop-blur-md sm:px-6">
           <SupportWidget />
           <NotificationsBell />
         </header>
