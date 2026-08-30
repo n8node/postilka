@@ -181,3 +181,72 @@ export function SocialMediaFields({
     </div>
   );
 }
+
+export function ImageDropField({
+  field,
+  label,
+  need = "optional",
+  value,
+  fileName,
+  accentClass = "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200",
+  placeholder = "{{ files_media_1.image_url }} или https://...",
+  nodeId,
+  showVariablePickerFor,
+  setShowVariablePickerFor,
+  onFieldChange,
+  onOpenMediaPicker,
+}: {
+  field: string;
+  label: string;
+  need?: SocialFieldNeed;
+  value: string;
+  fileName?: string;
+  accentClass?: string;
+  placeholder?: string;
+  nodeId: string;
+  showVariablePickerFor: string | null;
+  setShowVariablePickerFor: (field: string | null) => void;
+  onFieldChange: (key: string, value: string) => void;
+  onOpenMediaPicker?: (nodeId: string, field: string) => void;
+}) {
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between">
+        <label className="font-medium text-zinc-700 dark:text-zinc-300">
+          <FieldNeedLabel label={label} need={need} />
+        </label>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => onOpenMediaPicker?.(nodeId, field)}
+            className="flex items-center gap-1 rounded bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 text-[10px] text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200"
+          >
+            <Folder className="h-2.5 w-2.5" />
+            Медиатека
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              setShowVariablePickerFor(
+                showVariablePickerFor === field ? null : field
+              )
+            }
+            className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium ${accentClass}`}
+          >
+            <Variable className="h-3 w-3" />
+            Переменная
+          </button>
+        </div>
+      </div>
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onFieldChange(field, e.target.value)}
+        {...varDropAttrs(field, "image")}
+        placeholder={placeholder}
+        className="w-full rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 px-3 py-1.5 text-xs font-mono"
+      />
+      <WorkflowMediaPreview url={value} fileName={fileName} />
+    </div>
+  );
+}

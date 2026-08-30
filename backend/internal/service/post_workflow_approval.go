@@ -19,6 +19,10 @@ type WorkflowApprovalDraftInput struct {
 	WorkflowNodeID string
 	Text           string
 	FileID         string
+	ImageFileID    string
+	VideoFileID    string
+	ImageURL       string
+	VideoURL       string
 	ChannelIDs     []string
 	ApproverIDs    []string
 	DueAt          *time.Time
@@ -49,9 +53,14 @@ func (s *PostService) CreateWorkflowApprovalPost(
 		return nil, fmt.Errorf("%w: выберите канал для согласования", ErrInvalidPost)
 	}
 	text := strings.TrimSpace(in.Text)
-	fileID := strings.TrimSpace(in.FileID)
-	if text == "" && fileID == "" {
-		return nil, fmt.Errorf("%w: укажите текст или медиафайл", ErrInvalidPost)
+	media := workflowTestMediaInputs(map[string]interface{}{
+		"imageFileId": in.ImageFileID,
+		"videoFileId": in.VideoFileID,
+		"fileId":      in.FileID,
+	})
+	hasURL := strings.TrimSpace(in.ImageURL) != "" || strings.TrimSpace(in.VideoURL) != ""
+	if text == "" && len(media) == 0 && !hasURL {
+		return nil, fmt.Errorf("%w: укажите текст, фото или видео", ErrInvalidPost)
 	}
 	if in.DueAt != nil && !in.DueAt.After(time.Now()) {
 		return nil, fmt.Errorf("%w: время публикации должно быть в будущем", ErrInvalidPost)
@@ -60,10 +69,6 @@ func (s *PostService) CreateWorkflowApprovalPost(
 	targets := make([]model.PostTargetInput, 0, len(channels))
 	for _, id := range channels {
 		targets = append(targets, model.PostTargetInput{ChannelID: id})
-	}
-	var media []model.PostMediaInput
-	if fileID != "" {
-		media = []model.PostMediaInput{{FileID: fileID}}
 	}
 
 	req := model.PostSaveRequest{

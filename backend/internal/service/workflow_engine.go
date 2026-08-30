@@ -154,8 +154,22 @@ func executeMergeNode(inputs map[string]interface{}) map[string]interface{} {
 }
 
 func normalizeMergeMediaAliases(merged map[string]interface{}) {
-	if getString(merged, "mediaUrl", "") == "" {
+	if getString(merged, "imageUrl", "") == "" {
 		if img := getString(merged, "image_url", ""); img != "" {
+			merged["imageUrl"] = img
+		}
+	}
+	if getString(merged, "videoUrl", "") == "" {
+		if vid := getString(merged, "video_url", ""); vid != "" {
+			merged["videoUrl"] = vid
+		}
+	}
+	if getString(merged, "mediaUrl", "") == "" {
+		if img := getString(merged, "imageUrl", ""); img != "" {
+			merged["mediaUrl"] = img
+		} else if vid := getString(merged, "videoUrl", ""); vid != "" {
+			merged["mediaUrl"] = vid
+		} else if img := getString(merged, "image_url", ""); img != "" {
 			merged["mediaUrl"] = img
 		} else if vid := getString(merged, "video_url", ""); vid != "" {
 			merged["mediaUrl"] = vid

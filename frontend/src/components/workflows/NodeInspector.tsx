@@ -58,9 +58,17 @@ import {
 } from "@/lib/api";
 import { uploadFile } from "@/lib/files-api";
 import { getCachedFileMediaUrl } from "@/lib/file-media-cache";
-import { NODE_DEFINITIONS, socialFieldNeeds, validateSocialContent } from "./nodeTypes";
+import {
+  NODE_DEFINITIONS,
+  socialFieldNeeds,
+  validateFormatterTemplate,
+  validatePlainText,
+  validatePromptRequired,
+  validateSocialContent,
+} from "./nodeTypes";
 import {
   FieldNeedLabel,
+  ImageDropField,
   SocialMediaFields,
   SocialRequirementsBanner,
 } from "./SocialMediaFields";
@@ -386,6 +394,9 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
 
   const socialNeeds = socialFieldNeeds(node.type, data);
   const socialError = validateSocialContent(node.type, data);
+  const promptError = validatePromptRequired(node.type, data);
+  const plainTextError = validatePlainText(node.type, data);
+  const formatterError = validateFormatterTemplate(node.type, data);
 
   const renderSocialMedia = (
     accentClass: string,
@@ -887,10 +898,11 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
         {/* 2. AI TEXT (YANDEX GPT) */}
         {node.type === "ai_text" && (
           <div className="space-y-3">
+            <SocialRequirementsBanner error={promptError} hint="Промпт обязателен. Роль можно оставить по умолчанию." />
             <div>
               <div className="mb-1 flex items-center justify-between">
                 <label className="font-medium text-zinc-700 dark:text-zinc-300">
-                  Промпт для генерации
+                  <FieldNeedLabel label="Промпт для генерации" need="required" />
                 </label>
                 <button
                   type="button"
@@ -917,7 +929,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
 
             <div>
               <label className="mb-1 block font-medium text-zinc-700 dark:text-zinc-300">
-                Роль / Системный промпт
+                <FieldNeedLabel label="Роль / Системный промпт" need="optional" />
               </label>
               <input
                 type="text"
@@ -934,10 +946,11 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
         {/* 2b. PLAIN TEXT (без AI) */}
         {node.type === "plain_text" && (
           <div className="space-y-2">
+            <SocialRequirementsBanner error={plainTextError} hint="Текст обязателен. Переменные подставятся при запуске." />
             <div>
               <div className="mb-1 flex items-center justify-between">
                 <label className="font-medium text-zinc-700 dark:text-zinc-300">
-                  Текст поста
+                  <FieldNeedLabel label="Текст поста" need="required" />
                 </label>
                 <button
                   type="button"
@@ -971,10 +984,11 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
         {/* 3. AI IMAGE */}
         {node.type === "ai_image" && (
           <div className="space-y-3">
+            <SocialRequirementsBanner error={promptError} hint="Промпт обязателен. Референс необязателен." />
             <div>
               <div className="mb-1 flex items-center justify-between">
                 <label className="font-medium text-zinc-700 dark:text-zinc-300">
-                  Промпт для изображения
+                  <FieldNeedLabel label="Промпт для изображения" need="required" />
                 </label>
                 <button
                   type="button"
@@ -998,6 +1012,21 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                 placeholder="Digital art, futuristic composition, 4k..."
               />
             </div>
+
+            <ImageDropField
+              field="referenceImage"
+              label="Референс"
+              need="optional"
+              value={data.referenceImage || ""}
+              fileName={data.fileName}
+              accentClass="bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100"
+              placeholder="{{ files_media_1.image_url }}"
+              nodeId={node.id}
+              showVariablePickerFor={showVariablePickerFor}
+              setShowVariablePickerFor={setShowVariablePickerFor}
+              onFieldChange={(key, value) => handleFieldChange(key, value)}
+              onOpenMediaPicker={onOpenMediaPicker}
+            />
 
             <div>
               <label className="mb-1 block font-medium text-zinc-700 dark:text-zinc-300">
@@ -1026,10 +1055,11 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
         {/* 4. AI VIDEO */}
         {node.type === "ai_video" && (
           <div className="space-y-3">
+            <SocialRequirementsBanner error={promptError} hint="Промпт обязателен. Первый кадр необязателен." />
             <div>
               <div className="mb-1 flex items-center justify-between">
                 <label className="font-medium text-zinc-700 dark:text-zinc-300">
-                  Промпт / Сценарий видео
+                  <FieldNeedLabel label="Промпт / Сценарий видео" need="required" />
                 </label>
                 <button
                   type="button"
@@ -1053,6 +1083,21 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                 placeholder="Cinematic camera move, neon reflections..."
               />
             </div>
+
+            <ImageDropField
+              field="firstFrame"
+              label="Первый кадр"
+              need="optional"
+              value={data.firstFrame || ""}
+              fileName={data.fileName}
+              accentClass="bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-100"
+              placeholder="{{ files_media_1.image_url }}"
+              nodeId={node.id}
+              showVariablePickerFor={showVariablePickerFor}
+              setShowVariablePickerFor={setShowVariablePickerFor}
+              onFieldChange={(key, value) => handleFieldChange(key, value)}
+              onOpenMediaPicker={onOpenMediaPicker}
+            />
 
             <div className="grid grid-cols-2 gap-2">
               <div>
@@ -2051,10 +2096,12 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                 После решения в разделе постов публикация уйдёт в выбранный канал, а прогон завершится.
               </div>
 
+              <SocialRequirementsBanner error={socialError} hint={socialNeeds.hint} />
+
               <div>
                 <div className="mb-1 flex items-center justify-between">
                   <label className="font-medium text-zinc-700 dark:text-zinc-300">
-                    Текст публикации
+                    <FieldNeedLabel label="Текст публикации" need={socialNeeds.text} />
                   </label>
                   <button
                     type="button"
@@ -2078,6 +2125,10 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                   placeholder="{{ ai_text_1.text }}"
                 />
               </div>
+
+              {renderSocialMedia(
+                "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-400 hover:bg-amber-100"
+              )}
 
               <div className="space-y-1.5">
                 <label className="font-semibold text-zinc-800 dark:text-zinc-200 text-xs">
@@ -2510,10 +2561,11 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
         {/* 10. FORMATTER & UTM */}
         {node.type === "formatter" && (
           <div className="space-y-3">
+            <SocialRequirementsBanner error={formatterError} hint="Шаблон обязателен. Результат доступен как .text." />
             <div>
               <div className="mb-1 flex items-center justify-between">
                 <label className="font-medium text-zinc-700 dark:text-zinc-300">
-                  Шаблон текста (Template)
+                  <FieldNeedLabel label="Шаблон текста" need="required" />
                 </label>
                 <button
                   type="button"
@@ -2538,7 +2590,10 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
               />
             </div>
             <p className="text-[10px] text-zinc-500">
-              Поддерживает подстановку переменных вида <code className="font-mono text-[9px]">{`{{ node_id.output }}`}</code>.
+              Переменные вида <code className="font-mono text-[9px]">{`{{ node_id.field }}`}</code>.
+              Выход —{" "}
+              <code className="font-mono text-[9px]">{`{{ ${node.id}.text }}`}</code>
+              .
             </p>
           </div>
         )}
@@ -2563,7 +2618,9 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                   результат; поля доступны как{" "}
                   <code className="font-mono text-[9px]">{`{{ ${node.id}.text }}`}</code>
                   ,{" "}
-                  <code className="font-mono text-[9px]">{`{{ ${node.id}.mediaUrl }}`}</code>
+                  <code className="font-mono text-[9px]">{`{{ ${node.id}.image_url }}`}</code>
+                  ,{" "}
+                  <code className="font-mono text-[9px]">{`{{ ${node.id}.video_url }}`}</code>
                   .
                 </li>
               </ul>
@@ -2598,6 +2655,13 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
 
         {node.type === "set_fields" && (
           <div className="space-y-3">
+            <p className="text-[10px] leading-relaxed text-zinc-500">
+              Для публикаций используйте ключи{" "}
+              <code className="font-mono text-[9px]">text</code>,{" "}
+              <code className="font-mono text-[9px]">imageUrl</code> и{" "}
+              <code className="font-mono text-[9px]">videoUrl</code> — их понимают
+              соцсети и согласование.
+            </p>
             {(Array.isArray(data.fields) ? data.fields : []).map(
               (field: { key?: string; value?: string }, idx: number) => (
                 <div key={idx} className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-2.5 space-y-2">
@@ -2609,7 +2673,7 @@ export const NodeInspector: React.FC<NodeInspectorProps> = ({
                       next[idx] = { ...next[idx], key: e.target.value };
                       handleFieldChange("fields", next);
                     }}
-                    placeholder="Имя поля (например client_name)"
+                    placeholder="Имя поля (text, imageUrl, videoUrl)"
                     className="w-full rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 px-2 py-1 text-xs"
                   />
                   <input

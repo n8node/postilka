@@ -25,11 +25,15 @@ func (s *WorkflowService) executeApprovalNode(
 	if s.postSvc == nil {
 		return nil, fmt.Errorf("сервис публикаций недоступен")
 	}
+	if err := validateSocialNodeInputs("draft_approval", inputs); err != nil {
+		return nil, err
+	}
 
 	channelIDs := collectApprovalChannelIDs(node, graph, inputs, outputsAccumulator, func(data map[string]interface{}) map[string]interface{} {
 		return s.resolveNodeData(data, outputsAccumulator)
 	})
-	fileID := getString(inputs, "fileId", "")
+	content := readSocialContent(inputs)
+	fileID := content.resolvedFileID()
 	if fileID == "" && graph != nil {
 		fileID = collectDownstreamFileID(node, graph, outputsAccumulator, func(data map[string]interface{}) map[string]interface{} {
 			return s.resolveNodeData(data, outputsAccumulator)
@@ -38,8 +42,12 @@ func (s *WorkflowService) executeApprovalNode(
 
 	in := WorkflowApprovalDraftInput{
 		WorkflowNodeID: node.ID,
-		Text:           getString(inputs, "text", ""),
+		Text:           content.Text,
 		FileID:         fileID,
+		ImageFileID:    content.ImageFileID,
+		VideoFileID:    content.VideoFileID,
+		ImageURL:       content.ImageURL,
+		VideoURL:       content.VideoURL,
 		ChannelIDs:     channelIDs,
 		ApproverIDs:    getStringSlice(inputs, "approverUserIds"),
 		DueAt:          parseOptionalDueAt(getString(inputs, "dueAt", "")),
@@ -58,6 +66,10 @@ func (s *WorkflowService) executeApprovalNode(
 		"status":      string(post.Status),
 		"post_id":     post.ID,
 		"content":     post.Content.Text,
+		"text":        post.Content.Text,
+		"image_url":   content.ImageURL,
+		"video_url":   content.VideoURL,
+		"file_id":     fileID,
 		"approved":    false,
 		"channel_ids": channelIDs,
 	}
@@ -159,8 +171,10 @@ func collectDownstreamFileID(
 			continue
 		}
 		resolved := resolve(next.Data)
-		if id := getString(resolved, "fileId", ""); id != "" {
-			return id
+		for _, key := range []string{"fileId", "imageFileId", "videoFileId"} {
+			if id := getString(resolved, key, ""); id != "" {
+				return id
+			}
 		}
 	}
 	_ = outputsAccumulator

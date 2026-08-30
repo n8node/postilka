@@ -1214,11 +1214,24 @@ func (s *WorkflowService) executeNode(
 
 	case "formatter":
 		templateStr := getString(inputs, "template", "")
+		if templateStr == "" {
+			templateStr = getString(inputs, "text", "")
+		}
+		if templateStr == "" {
+			templateStr = getString(inputs, "sourceText", "")
+		}
+		if strings.TrimSpace(templateStr) == "" {
+			return nil, 0, 0, 0, errors.New("укажите шаблон текста")
+		}
+		outputs["text"] = templateStr
 		outputs["result"] = templateStr
 		return outputs, 0, 0, 0, nil
 
 	case "plain_text":
 		text := getString(inputs, "text", "")
+		if strings.TrimSpace(text) == "" {
+			return nil, 0, 0, 0, errors.New("укажите текст")
+		}
 		outputs["text"] = text
 		return outputs, 0, 0, 0, nil
 

@@ -1146,6 +1146,8 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                 } else if (field === "videoUrl") {
                   patch.videoUrl = url;
                   patch.videoFileId = file.id;
+                } else if (field === "referenceImage" || field === "firstFrame") {
+                  patch[field] = url;
                 } else {
                   patch.fileId = file.id;
                   patch.mediaKind = isVid ? "video" : "image";

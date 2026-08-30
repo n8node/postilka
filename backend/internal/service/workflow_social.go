@@ -161,7 +161,7 @@ func validateSocialNodeInputs(nodeType string, inputs map[string]interface{}) er
 			return errors.New("укажите видео")
 		}
 		return nil
-	case "social_ok":
+	case "social_ok", "draft_approval", "human_review":
 		if !c.hasText() && !c.hasMedia() {
 			return errors.New("укажите текст, фото или видео")
 		}

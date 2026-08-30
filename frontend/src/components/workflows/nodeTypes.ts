@@ -46,7 +46,7 @@ export type NodePort = {
 /** Universal flow input — every node except trigger must have at least one input port. */
 export const NODE_FLOW_INPUT: NodePort = {
   id: "input",
-  label: "Вход",
+  label: "Поток",
   type: "any",
 };
 
@@ -153,6 +153,14 @@ export function socialFieldNeeds(
       hint: "Нужны заголовок и видео. Описание и обложка необязательны.",
     };
   }
+  if (nodeType === "draft_approval") {
+    return {
+      text: "one_of",
+      image: "one_of",
+      video: "one_of",
+      hint: "Укажите хотя бы одно: текст, фото или видео.",
+    };
+  }
   if (nodeType === "social_dzen") {
     if (format === "video") {
       return {
@@ -189,7 +197,9 @@ export function validateSocialContent(
   nodeType: string,
   data: Record<string, any> = {}
 ): string | null {
-  if (!nodeType.startsWith("social_")) return null;
+  if (!nodeType.startsWith("social_") && nodeType !== "draft_approval") {
+    return null;
+  }
   const needs = socialFieldNeeds(nodeType, data);
   const text = socialHasText(data);
   const image = socialHasImage(data);
@@ -214,6 +224,41 @@ export function validateSocialContent(
   if (needs.video === "one_of") oneOf.push(video || media);
   if (oneOf.length > 0 && !oneOf.some(Boolean)) {
     return needs.hint;
+  }
+  return null;
+}
+
+export function validatePromptRequired(
+  nodeType: string,
+  data: Record<string, any> = {}
+): string | null {
+  if (nodeType !== "ai_text" && nodeType !== "ai_image" && nodeType !== "ai_video") {
+    return null;
+  }
+  if (!isFilledSocialValue(data.prompt)) {
+    return "Укажите промпт";
+  }
+  return null;
+}
+
+export function validatePlainText(
+  nodeType: string,
+  data: Record<string, any> = {}
+): string | null {
+  if (nodeType !== "plain_text") return null;
+  if (!isFilledSocialValue(data.text)) {
+    return "Укажите текст";
+  }
+  return null;
+}
+
+export function validateFormatterTemplate(
+  nodeType: string,
+  data: Record<string, any> = {}
+): string | null {
+  if (nodeType !== "formatter") return null;
+  if (!isFilledSocialValue(data.template) && !isFilledSocialValue(data.text)) {
+    return "Укажите шаблон текста";
   }
   return null;
 }
@@ -333,6 +378,7 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
     defaultData: {
       title: "AI Изображение",
       prompt: "Modern aesthetic digital portrait, cinematic lighting, 4k",
+      referenceImage: "",
       aspectRatio: "1:1",
       model: "AI Studio Pro",
       resolution: "2k",
@@ -361,6 +407,7 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
     defaultData: {
       title: "AI Видеоролик",
       prompt: "Cinematic drone shot flying through modern futuristic skyscraper city",
+      firstFrame: "",
       aspectRatio: "9:16",
       durationSeconds: 5,
     },
@@ -581,10 +628,7 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       badge: "bg-amber-500 text-white",
       text: "text-amber-600 dark:text-amber-400",
     },
-    inputs: [
-      NODE_FLOW_INPUT,
-      { id: "text", label: "Текст публикации", type: "string" },
-    ],
+    inputs: [NODE_FLOW_INPUT, ...SOCIAL_CONTENT_INPUTS],
     outputs: [
       { id: "post_id", label: "ID публикации", type: "string" },
       { id: "status", label: "Статус", type: "string" },
@@ -592,6 +636,10 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
     defaultData: {
       title: "Согласование",
       text: "{{ ai_text_1.text }}",
+      imageUrl: "",
+      videoUrl: "",
+      imageFileId: "",
+      videoFileId: "",
       channelId: "",
       channelName: "",
       approverUserIds: [],
@@ -673,10 +721,10 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
     },
     inputs: [
       NODE_FLOW_INPUT,
-      { id: "sourceText", label: "Исходный текст", type: "string" },
+      { id: "text", label: "Текст", type: "string" },
     ],
     outputs: [
-      { id: "result", label: "Отформатированный текст", type: "string" },
+      { id: "text", label: "Текст", type: "string" },
     ],
     defaultData: {
       title: "Форматирование текста",
@@ -726,7 +774,8 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       title: "Сборка полей",
       fields: [
         { key: "text", value: "{{ merge_1.text }}" },
-        { key: "mediaUrl", value: "{{ merge_1.image_url }}" },
+        { key: "imageUrl", value: "{{ merge_1.image_url }}" },
+        { key: "videoUrl", value: "{{ merge_1.video_url }}" },
       ],
     },
   },
@@ -844,7 +893,7 @@ export const PORT_TYPE_COLORS: Record<string, {
     badge: "bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800",
     text: "text-indigo-600 dark:text-indigo-400",
     stroke: "#6366f1",
-    label: "Медиа / Любой",
+    label: "Поток",
   },
 };
 

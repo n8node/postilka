@@ -1118,6 +1118,7 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
                   Согласующие не выбраны
                 </span>
               )}
+              <SocialMediaBadges data={node.data} />
             </div>
           </div>
         )}
@@ -1181,7 +1182,8 @@ export const WorkflowNodeCard: React.FC<WorkflowNodeCardProps> = ({
               <p className="mt-1.5 text-[10px] text-zinc-600 dark:text-zinc-400">
                 Пример: текст с Input 1 + картинка с Input 2 →{" "}
                 <code className="font-mono">{`{{ ${node.id}.text }}`}</code>,{" "}
-                <code className="font-mono">{`{{ ${node.id}.mediaUrl }}`}</code>
+                <code className="font-mono">{`{{ ${node.id}.image_url }}`}</code>,{" "}
+                <code className="font-mono">{`{{ ${node.id}.video_url }}`}</code>
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-1 pt-0.5">
