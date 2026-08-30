@@ -86,6 +86,13 @@ type GenerationPricingView struct {
 	Unlimited          bool    `json:"unlimited,omitempty"`
 }
 
+// TextGenerationPricingView is the cabinet-facing Yandex GPT rate for workflow/composer estimates.
+type TextGenerationPricingView struct {
+	InputPer1K  float64 `json:"input_per_1k"`
+	OutputPer1K float64 `json:"output_per_1k"`
+	Currency    string  `json:"currency"`
+}
+
 type MediaCreditsRemainingView struct {
 	QuotaRemaining   *int    `json:"quota_remaining,omitempty"`
 	PurchasedCredits int     `json:"purchased_credits"`

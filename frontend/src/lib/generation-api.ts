@@ -28,6 +28,12 @@ export type GenerationPricing = {
   unlimited?: boolean;
 };
 
+export type TextGenerationPricing = {
+  input_per_1k: number;
+  output_per_1k: number;
+  currency: string;
+};
+
 export type GenerationJob = {
   id: string;
   status: string;
@@ -83,6 +89,25 @@ export function mediaCreditsFromOverview(overview: BillingOverview): number | nu
   const media = overview.media_balance;
   if (media?.unlimited) return null;
   return Math.max(0, (media?.quota_remaining ?? 0) + (media?.purchased_remaining ?? 0));
+}
+
+export async function fetchTextGenerationPricing() {
+  try {
+    return await apiFetch<{ pricing: TextGenerationPricing }>(
+      "/generation/text-pricing",
+    );
+  } catch (err) {
+    if (err instanceof ApiError && (err.status === 404 || err.status === 501)) {
+      return {
+        pricing: {
+          input_per_1k: 0,
+          output_per_1k: 0,
+          currency: "RUB",
+        },
+      };
+    }
+    throw err;
+  }
 }
 
 export async function fetchGenerationPricing() {

@@ -97,6 +97,21 @@ func (h *GenerationHandler) Pricing(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"pricing": pricing})
 }
 
+func (h *GenerationHandler) TextPricing(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
+		return
+	}
+
+	pricing, err := h.generation.GetTextPricing(r.Context(), userID, r)
+	if err != nil {
+		h.mapError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"pricing": pricing})
+}
+
 type deleteGenerationsRequest struct {
 	IDs []string `json:"ids"`
 }

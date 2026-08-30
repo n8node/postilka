@@ -497,6 +497,7 @@ export const NODE_DEFINITIONS: Record<string, NodeTypeDefinition> = {
       referenceImageFileIds: ["", "", "", "", "", "", "", "", ""],
       referenceVideos: ["", "", ""],
       referenceVideoFileIds: ["", "", ""],
+      referenceVideoDurations: [0, 0, 0],
       referenceAudios: ["", "", ""],
       referenceAudioFileIds: ["", "", ""],
       aspectRatio: "16:9",
@@ -989,115 +990,13 @@ export function getPortDefinition(nodeType: string, portId: string, isOutput: bo
   return list.find((p) => p.id === resolved);
 }
 
-export interface WorkflowEconomicsItem {
-  id: string;
-  nodeTitle: string;
-  category: string;
-  unit: string;
-  quotaLabel: string;
-  walletRubles: number;
-}
-
-export interface WorkflowEconomicsSummary {
-  textCount: number;
-  imageCount: number;
-  videoCount: number;
-  socialCount: number;
-  totalNodes: number;
-  estimatedTokens: number;
-  estimatedImageCredits: number;
-  estimatedVideoCredits: number;
-  totalWalletRubles: number;
-  items: WorkflowEconomicsItem[];
-}
-
-export function calculateWorkflowCost(
-  nodes: Array<{ id: string; type: string; data: Record<string, any> }>
-): WorkflowEconomicsSummary {
-  let textCount = 0;
-  let imageCount = 0;
-  let videoCount = 0;
-  let socialCount = 0;
-  let estimatedTokens = 0;
-  let estimatedImageCredits = 0;
-  let estimatedVideoCredits = 0;
-  let totalWalletRubles = 0;
-  const items: WorkflowEconomicsItem[] = [];
-
-  nodes.forEach((n) => {
-    const title = (n.data?.title as string) || n.type;
-    if (n.type === "ai_text") {
-      textCount++;
-      estimatedTokens += 500;
-      const rubles = 0.5; // ~0.50 ₽ за генерацию текста при исчерпании квоты
-      totalWalletRubles += rubles;
-      items.push({
-        id: n.id,
-        nodeTitle: title,
-        category: "Текст AI",
-        unit: "1 генерация (~500 токенов)",
-        quotaLabel: "1 генерация из квоты тарифа",
-        walletRubles: rubles,
-      });
-    } else if (n.type === "ai_image") {
-      imageCount++;
-      estimatedImageCredits += 1;
-      const rubles = 5.0; // ~5.00 ₽ за изображение при исчерпании квоты
-      totalWalletRubles += rubles;
-      items.push({
-        id: n.id,
-        nodeTitle: title,
-        category: "Изображение AI",
-        unit: "1 изображение (2k)",
-        quotaLabel: "1 кредит из квоты тарифа",
-        walletRubles: rubles,
-      });
-    } else if (n.type === "ai_video") {
-      videoCount++;
-      const duration = (n.data?.durationSeconds as number) || 5;
-      const credits = duration <= 5 ? 5 : 10;
-      estimatedVideoCredits += credits;
-      const rubles = duration <= 5 ? 25.0 : 50.0;
-      totalWalletRubles += rubles;
-      items.push({
-        id: n.id,
-        nodeTitle: title,
-        category: "Видео AI",
-        unit: `${duration} сек видео (${credits} кредитов)`,
-        quotaLabel: `${credits} кредитов из квоты тарифа`,
-        walletRubles: rubles,
-      });
-    } else if (
-      n.type === "social_telegram" ||
-      n.type === "social_vk" ||
-      n.type === "social_youtube" ||
-      n.type === "social_max" ||
-      n.type === "social_dzen" ||
-      n.type === "social_photochka"
-    ) {
-      socialCount++;
-      items.push({
-        id: n.id,
-        nodeTitle: title,
-        category: "Публикация",
-        unit: "1 публикация",
-        quotaLabel: "Лимит постов тарифа",
-        walletRubles: 0,
-      });
-    }
-  });
-
-  return {
-    textCount,
-    imageCount,
-    videoCount,
-    socialCount,
-    totalNodes: nodes.length,
-    estimatedTokens,
-    estimatedImageCredits,
-    estimatedVideoCredits,
-    totalWalletRubles: Math.round(totalWalletRubles * 100) / 100,
-    items,
-  };
-}
+export type {
+  WorkflowCostPricing,
+  WorkflowEconomicsItem,
+  WorkflowEconomicsSummary,
+} from "@/lib/workflow-cost";
+export {
+  calculateWorkflowCost,
+  formatWorkflowCostChip,
+} from "@/lib/workflow-cost";
 

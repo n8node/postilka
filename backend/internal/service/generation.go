@@ -283,6 +283,43 @@ func (s *GenerationService) GetPricing(ctx context.Context, userID string, r *ht
 	return out, nil
 }
 
+func (s *GenerationService) GetTextPricing(ctx context.Context, userID string, r *http.Request) (model.TextGenerationPricingView, error) {
+	if _, err := s.resolveWorkspace(ctx, userID, r); err != nil {
+		return model.TextGenerationPricingView{}, err
+	}
+	out := model.TextGenerationPricingView{Currency: "RUB"}
+	if s.yandexGPT == nil {
+		return out, nil
+	}
+	rec, err := s.yandexGPT.GetStored(ctx)
+	if err != nil {
+		return model.TextGenerationPricingView{}, err
+	}
+	modelID := ModelForTask(rec.Config, "text_generation")
+	pricing := lookupYandexModelPricing(rec.Config, modelID)
+	out.InputPer1K = pricing.InputPer1K
+	out.OutputPer1K = pricing.OutputPer1K
+	if strings.TrimSpace(pricing.Currency) != "" {
+		out.Currency = pricing.Currency
+	}
+	return out, nil
+}
+
+func lookupYandexModelPricing(cfg model.YandexGptStoredConfig, modelID string) model.YandexModelPricing {
+	if cfg.ModelPricing == nil {
+		return model.YandexModelPricing{}
+	}
+	if p, ok := cfg.ModelPricing[strings.TrimSpace(modelID)]; ok {
+		return p
+	}
+	if def := strings.TrimSpace(cfg.ModelDefault); def != "" {
+		if p, ok := cfg.ModelPricing[def]; ok {
+			return p
+		}
+	}
+	return model.YandexModelPricing{}
+}
+
 func (s *GenerationService) ListHistory(ctx context.Context, userID string, r *http.Request, limit int) ([]model.AIGenerationView, error) {
 	ws, err := s.resolveWorkspace(ctx, userID, r)
 	if err != nil {

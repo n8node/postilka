@@ -517,6 +517,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Get("/generation/usage-history", generationHandler.UsageHistory)
 			r.Post("/generation/history/delete", generationHandler.DeleteHistory)
 			r.Get("/generation/pricing", generationHandler.Pricing)
+			r.Get("/generation/text-pricing", generationHandler.TextPricing)
 			r.Get("/generation/video-examples", kieVideoConfigHandler.ListExamplesPublic)
 			r.Post("/generation/video/generate", videoGenerationHandler.Generate)
 			r.Get("/generation/video/jobs/{id}", videoGenerationHandler.GetJob)

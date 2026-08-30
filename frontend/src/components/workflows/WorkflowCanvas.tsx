@@ -34,8 +34,14 @@ import type {
   WorkflowGraph,
 } from "@/lib/workflows-api";
 import { WorkspaceMediaPickerModal } from "@/components/generation/WorkspaceMediaPickerModal";
+import {
+  fetchGenerationPricing,
+  fetchTextGenerationPricing,
+} from "@/lib/generation-api";
+import { fetchVideoGenerationPricing } from "@/lib/video-generation-api";
 import { getCachedFileMediaUrl } from "@/lib/file-media-cache";
-import type { WorkspaceFile } from "@/lib/files-api";
+import { getFile, type WorkspaceFile } from "@/lib/files-api";
+import { getFileDuration } from "@/lib/file-media";
 import {
   applyGenerationSlotValue,
   isGenerationSlotField,
@@ -51,9 +57,11 @@ import {
   PORT_TYPE_COLORS,
   isPortCompatible,
   calculateWorkflowCost,
+  formatWorkflowCostChip,
   nodeMinHeightPx,
   resolvePortId,
   type NodeViewMode,
+  type WorkflowCostPricing,
 } from "./nodeTypes";
 import {
   EDGE_STYLE_STORAGE_KEY,
@@ -176,9 +184,79 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
     field: string;
     mediaKind?: "image" | "video" | "audio";
   } | null>(null);
+  const [costPricing, setCostPricing] = useState<WorkflowCostPricing>({});
+  const [fileDurations, setFileDurations] = useState<Record<string, number>>({});
 
-  // Workflow economic cost calculation
-  const costSummary = useMemo(() => calculateWorkflowCost(nodes), [nodes]);
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      fetchGenerationPricing()
+        .then((res) => res.pricing)
+        .catch(() => null),
+      fetchVideoGenerationPricing()
+        .then((res) => res.pricing)
+        .catch(() => null),
+      fetchTextGenerationPricing()
+        .then((res) => res.pricing)
+        .catch(() => null),
+    ]).then(([image, video, text]) => {
+      if (!cancelled) {
+        setCostPricing((prev) => ({ ...prev, image, video, text }));
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const missing = new Set<string>();
+    for (const node of nodes) {
+      if (node.type !== "ai_video") continue;
+      const ids = Array.isArray(node.data.referenceVideoFileIds)
+        ? node.data.referenceVideoFileIds
+        : [];
+      const stored = Array.isArray(node.data.referenceVideoDurations)
+        ? node.data.referenceVideoDurations
+        : [];
+      ids.forEach((raw, index) => {
+        const fileId = String(raw ?? "").trim();
+        if (!fileId) return;
+        if (Number(stored[index]) > 0) return;
+        if (fileDurations[fileId] != null) return;
+        missing.add(fileId);
+      });
+    }
+    if (missing.size === 0) return;
+    let cancelled = false;
+    Promise.all(
+      [...missing].map(async (id) => {
+        try {
+          const file = await getFile(id);
+          return [id, getFileDuration(file) ?? 0] as const;
+        } catch {
+          return [id, 0] as const;
+        }
+      }),
+    ).then((pairs) => {
+      if (cancelled) return;
+      setFileDurations((prev) => {
+        const next = { ...prev };
+        for (const [id, duration] of pairs) {
+          next[id] = duration;
+        }
+        return next;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [nodes, fileDurations]);
+
+  const costSummary = useMemo(
+    () => calculateWorkflowCost(nodes, { ...costPricing, fileDurations }),
+    [nodes, costPricing, fileDurations],
+  );
 
   // Registered Port DOM Elements for exact anchor coordinates
   const portElementsRef = useRef<Map<string, HTMLElement>>(new Map());
@@ -1001,11 +1079,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
           >
             <Coins className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
             <span className="hidden sm:inline">Стоимость:</span>
-            <span>
-              {costSummary.totalWalletRubles > 0
-                ? `0 ₽ тариф (~${costSummary.totalWalletRubles.toFixed(1)} ₽)`
-                : "0 ₽ (квота)"}
-            </span>
+            <span>{formatWorkflowCostChip(costSummary)}</span>
           </button>
 
           <button
@@ -1428,7 +1502,13 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                 let patch: Record<string, unknown>;
                 if (isGenerationSlotField(field)) {
                   patch = {
-                    ...applyGenerationSlotValue(current, field, url, file.id),
+                    ...applyGenerationSlotValue(
+                      current,
+                      field,
+                      url,
+                      file.id,
+                      file.media_metadata?.duration_seconds,
+                    ),
                     fileName: file.name,
                   };
                 } else {
@@ -1515,7 +1595,7 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                       Экономика и стоимость запуска
                     </h3>
                     <p className="text-[11px] text-zinc-500">
-                      Полный расчёт расхода квот тарифа и баланса кошелька
+                      По тарифам админки и параметрам узлов на холсте
                     </p>
                   </div>
                 </div>
@@ -1561,11 +1641,21 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                   <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
                     {costSummary.textCount}
                   </span>
+                  <span className="block text-[10px] text-zinc-400">
+                    {costSummary.estimatedTokens > 0
+                      ? `~${costSummary.estimatedTokens} ток.`
+                      : "—"}
+                  </span>
                 </div>
                 <div className="rounded-lg bg-zinc-100/70 dark:bg-zinc-800/40 p-2 text-center">
                   <span className="text-[10px] text-zinc-500 block">AI Фото</span>
                   <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
                     {costSummary.imageCount}
+                  </span>
+                  <span className="block text-[10px] text-zinc-400">
+                    {costSummary.estimatedImageCredits > 0
+                      ? `${costSummary.estimatedImageCredits} кред.`
+                      : "—"}
                   </span>
                 </div>
                 <div className="rounded-lg bg-zinc-100/70 dark:bg-zinc-800/40 p-2 text-center">
@@ -1573,12 +1663,18 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                   <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
                     {costSummary.videoCount}
                   </span>
+                  <span className="block text-[10px] text-zinc-400">
+                    {costSummary.estimatedVideoCredits > 0
+                      ? `${costSummary.estimatedVideoCredits} кред.`
+                      : "—"}
+                  </span>
                 </div>
                 <div className="rounded-lg bg-zinc-100/70 dark:bg-zinc-800/40 p-2 text-center">
                   <span className="text-[10px] text-zinc-500 block">Посты</span>
                   <span className="text-xs font-bold text-zinc-800 dark:text-zinc-200">
                     {costSummary.socialCount}
                   </span>
+                  <span className="block text-[10px] text-zinc-400">лимит тарифа</span>
                 </div>
               </div>
 
@@ -1631,9 +1727,12 @@ export const WorkflowCanvas: React.FC<WorkflowCanvasProps> = ({
                   <span>Принцип расчёта экономики:</span>
                 </div>
                 <p className="text-[10px] text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                  1. Сначала расходуются включенные квоты действующего тарифа.
-                  2. При нуле квоты расходуется баланс кошелька по тарифам генераций.
-                  3. Социальные посты не списывают баланс кошелька и используют только лимит постов тарифа.
+                  Считаются все AI-узлы на холсте: режим, длительность выхода, секунды
+                  референс-видео и тарифы из админки. Формула видео: кред/сек ×
+                  (выход + реф. видео) + доп. фото. Сначала квота тарифа, затем кошелёк.
+                  {costSummary.hasUnknownVideoDuration
+                    ? " У части референс-видео нет длительности — после выбора файла из медиатеки кредиты уточнятся."
+                    : ""}
                 </p>
               </div>
 

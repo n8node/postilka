@@ -30,10 +30,14 @@ import { WorkflowMediaPreview } from "./WorkflowMediaPreview";
 import { varDropAttrs } from "./variableDrag";
 import type { SocialFieldNeed } from "./nodeTypes";
 
-const SLOT_ARRAYS: Record<string, { ids: string; len: number }> = {
+const SLOT_ARRAYS: Record<string, { ids: string; durations?: string; len: number }> = {
   combineImages: { ids: "combineImageFileIds", len: COMBINE_PHOTO_SLOTS },
   referenceImages: { ids: "referenceImageFileIds", len: REFERENCE_IMAGE_MAX },
-  referenceVideos: { ids: "referenceVideoFileIds", len: REFERENCE_VIDEO_MAX },
+  referenceVideos: {
+    ids: "referenceVideoFileIds",
+    durations: "referenceVideoDurations",
+    len: REFERENCE_VIDEO_MAX,
+  },
   referenceAudios: { ids: "referenceAudioFileIds", len: REFERENCE_AUDIO_MAX },
 };
 
@@ -55,11 +59,28 @@ export function readSlotArray(
   return arr.slice(0, len);
 }
 
+export function readSlotNumberArray(
+  data: Record<string, any>,
+  key: string,
+  len: number
+): number[] {
+  const raw = data[key];
+  const arr = Array.isArray(raw)
+    ? raw.map((item) => {
+        const n = Number(item);
+        return Number.isFinite(n) && n > 0 ? n : 0;
+      })
+    : [];
+  while (arr.length < len) arr.push(0);
+  return arr.slice(0, len);
+}
+
 export function applyGenerationSlotValue(
   data: Record<string, any>,
   field: string,
   value: string,
-  fileId?: string
+  fileId?: string,
+  durationSeconds?: number
 ): Record<string, any> {
   const dot = field.indexOf(".");
   if (dot > 0) {
@@ -71,7 +92,17 @@ export function applyGenerationSlotValue(
       const ids = readSlotArray(data, meta.ids, meta.len);
       urls[idx] = value;
       ids[idx] = fileId ?? "";
-      return { ...data, [base]: urls, [meta.ids]: ids };
+      const next: Record<string, any> = { ...data, [base]: urls, [meta.ids]: ids };
+      if (meta.durations) {
+        const durs = readSlotNumberArray(data, meta.durations, meta.len);
+        const trimmed = value.trim();
+        durs[idx] =
+          trimmed && durationSeconds != null && durationSeconds > 0
+            ? durationSeconds
+            : 0;
+        next[meta.durations] = durs;
+      }
+      return next;
     }
   }
   const idKey = SCALAR_FILE[field];
@@ -143,8 +174,8 @@ function MediaSlotField({
         ? "audio/*"
         : "image/*";
 
-  const setValue = (next: string, fileId?: string) => {
-    onPatch(applyGenerationSlotValue(data, field, next, fileId));
+  const setValue = (next: string, fileId?: string, durationSeconds?: number) => {
+    onPatch(applyGenerationSlotValue(data, field, next, fileId, durationSeconds));
   };
 
   return (
@@ -167,7 +198,11 @@ function MediaSlotField({
               try {
                 const uploaded = await uploadFile(file);
                 const url = await getCachedFileMediaUrl(uploaded.id, "preview");
-                setValue(url, uploaded.id);
+                setValue(
+                  url,
+                  uploaded.id,
+                  uploaded.media_metadata?.duration_seconds
+                );
               } catch {
                 setValue("");
               } finally {
