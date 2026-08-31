@@ -279,6 +279,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 		supportTicketRepo, supportSettingsSvc, userRepo, notificationSvc, emailSvc,
 		oauthclient.NewMAXBotClient(), telegramBotClient, objectStorage, cfg, logger,
 	)
+	supportTicketSvc.BindTelegramUpdates(telegramSvc)
 	supportTicketSvc.Start()
 	supportTicketHandler := handler.NewSupportTicketHandler(supportTicketSvc)
 	adminSupportHandler := handler.NewAdminSupportHandler(supportTicketSvc, supportSettingsSvc)

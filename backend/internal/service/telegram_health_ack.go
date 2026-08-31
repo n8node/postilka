@@ -4,13 +4,10 @@ import (
 	"context"
 	"strconv"
 	"strings"
-	"time"
 )
 
 const (
 	telegramHealthAckCallback = "health_ack"
-	telegramHealthAckTimeout  = 25 * time.Second
-	telegramHealthAckIdleWait = 15 * time.Second
 	telegramHealthAckMaxKeep  = 64
 )
 
@@ -56,81 +53,6 @@ func (s *TelegramService) takeHealthMessages(chatID string, messageID string) []
 	return taken
 }
 
-func (s *TelegramService) healthAckLoop() {
-	for {
-		select {
-		case <-s.stopCh:
-			return
-		default:
-		}
-		if !s.pollHealthAcksOnce() {
-			select {
-			case <-s.stopCh:
-				return
-			case <-time.After(telegramHealthAckIdleWait):
-			}
-		}
-	}
-}
-
-func (s *TelegramService) pollHealthAcksOnce() bool {
-	ctx, cancel := context.WithTimeout(context.Background(), telegramHealthAckTimeout+5*time.Second)
-	defer cancel()
-
-	cfg, err := s.settings.GetEffective(ctx)
-	if err != nil || !cfg.Enabled {
-		return false
-	}
-	token := strings.TrimSpace(cfg.BotToken)
-	adminChat := strings.TrimSpace(cfg.ChatID)
-	if token == "" || adminChat == "" {
-		return false
-	}
-
-	s.pendingHealthMu.Lock()
-	offset := s.healthAckOffset
-	primed := s.healthAckPrimed
-	s.pendingHealthMu.Unlock()
-
-	if !primed {
-		updates, primeErr := s.telegramGetAdminUpdates(ctx, token, -1, 0)
-		if primeErr != nil {
-			s.logger.Warn("telegram health ack prime failed", "err", primeErr)
-			return false
-		}
-		next := int64(1)
-		if len(updates) > 0 {
-			next = updates[len(updates)-1].UpdateID + 1
-		}
-		s.pendingHealthMu.Lock()
-		s.healthAckOffset = next
-		s.healthAckPrimed = true
-		s.pendingHealthMu.Unlock()
-		return true
-	}
-
-	updates, err := s.telegramGetAdminUpdates(ctx, token, offset, 20)
-	if err != nil {
-		s.logger.Warn("telegram health ack poll failed", "err", err)
-		return false
-	}
-	if len(updates) == 0 {
-		return true
-	}
-
-	nextOffset := offset
-	for _, upd := range updates {
-		if upd.UpdateID >= nextOffset {
-			nextOffset = upd.UpdateID + 1
-		}
-		s.handleHealthAckUpdate(ctx, token, adminChat, upd)
-	}
-	s.pendingHealthMu.Lock()
-	s.healthAckOffset = nextOffset
-	s.pendingHealthMu.Unlock()
-	return true
-}
-
 func (s *TelegramService) handleHealthAckUpdate(ctx context.Context, token, adminChat string, upd adminBotUpdate) {
 	if cb := upd.CallbackQuery; cb != nil && strings.TrimSpace(cb.Data) == telegramHealthAckCallback {
 		chatID := adminChat
@@ -147,6 +69,9 @@ func (s *TelegramService) handleHealthAckUpdate(ctx context.Context, token, admi
 		if messageID != "" {
 			if err := s.telegramDeleteMessage(ctx, token, chatID, messageID); err != nil {
 				s.logger.Warn("telegram health message delete failed", "err", err, "message_id", messageID)
+				if clearErr := s.telegramClearInlineKeyboard(ctx, token, chatID, messageID); clearErr != nil {
+					s.logger.Warn("telegram health keyboard clear failed", "err", clearErr, "message_id", messageID)
+				}
 			}
 			s.takeHealthMessages(chatID, messageID)
 			return

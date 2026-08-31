@@ -13,8 +13,23 @@ import (
 	"github.com/postilka/postilka/internal/repository"
 )
 
+func (s *SupportTicketService) BindTelegramUpdates(runtime *TelegramService) {
+	if s == nil || runtime == nil {
+		return
+	}
+	s.runtime = runtime
+	runtime.WatchBotToken("support", func(ctx context.Context) string {
+		cfg, err := s.settings.GetEffective(ctx)
+		if err != nil || !cfg.TelegramEnabled {
+			return ""
+		}
+		return strings.TrimSpace(cfg.TelegramBotToken)
+	})
+	runtime.OnBotUpdate(s.onTelegramBotUpdate)
+}
+
 func (s *SupportTicketService) Start() {
-	if s == nil || s.telegram == nil {
+	if s == nil {
 		return
 	}
 	s.pollMu.Lock()
@@ -25,9 +40,12 @@ func (s *SupportTicketService) Start() {
 	s.pollStarted = true
 	s.pollMu.Unlock()
 	if s.log != nil {
-		s.log.Info("support telegram topic poller started")
+		if s.runtime == nil {
+			s.log.Warn("support telegram ingest skipped: updates not bound")
+			return
+		}
+		s.log.Info("support telegram topic ingest attached")
 	}
-	go s.pollSupportTelegramLoop()
 }
 
 func (s *SupportTicketService) sendTelegramForTicket(ctx context.Context, cfg model.SupportSettings, ticket *model.SupportTicket, text string, _ bool) error {
@@ -142,73 +160,48 @@ func (s *SupportTicketService) healTelegramTopic(ctx context.Context, cfg model.
 	return ticket.TelegramTopicID > 0
 }
 
-func (s *SupportTicketService) pollSupportTelegramLoop() {
-	for {
-		cfg, err := s.settings.GetEffective(context.Background())
-		if err != nil || !cfg.TelegramEnabled || strings.TrimSpace(cfg.TelegramBotToken) == "" {
-			time.Sleep(3 * time.Second)
-			continue
-		}
-		token := strings.TrimSpace(cfg.TelegramBotToken)
-
-		if s.needsSupportTelegramPrime(token) {
-			s.primeSupportTelegramOffset(token)
-		}
-
-		ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
-		updates, pollErr := s.telegram.GetSupportUpdates(ctx, token, s.currentPollOffset(), 10)
-		cancel()
-		if pollErr != nil {
-			s.log.Warn("support telegram getUpdates failed", "err", pollErr)
-			time.Sleep(5 * time.Second)
-			continue
-		}
-		for _, upd := range updates {
-			s.advancePollOffset(upd.UpdateID)
-			s.handleSupportTelegramUpdate(cfg, upd)
-		}
-	}
-}
-
-func (s *SupportTicketService) needsSupportTelegramPrime(token string) bool {
-	s.pollMu.Lock()
-	defer s.pollMu.Unlock()
-	return !s.pollPrimed || s.pollToken != token
-}
-
-func (s *SupportTicketService) primeSupportTelegramOffset(token string) {
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-	_ = s.telegram.DeleteWebhookDropPending(ctx, token)
-	offset, err := s.telegram.PrimeSupportUpdateOffset(ctx, token)
-	if err != nil {
-		s.log.Warn("support telegram prime offset failed", "err", err)
+func (s *SupportTicketService) onTelegramBotUpdate(ctx context.Context, token string, upd adminBotUpdate) {
+	cfg, err := s.settings.GetEffective(ctx)
+	if err != nil || !cfg.TelegramEnabled {
 		return
 	}
-	s.pollMu.Lock()
-	if s.pollToken != token {
-		s.pollOffset = 0
+	if strings.TrimSpace(cfg.TelegramBotToken) != strings.TrimSpace(token) {
+		return
 	}
-	s.pollPrimed = true
-	s.pollToken = token
-	if offset > s.pollOffset {
-		s.pollOffset = offset
-	}
-	s.pollMu.Unlock()
+	s.handleSupportTelegramUpdate(cfg, supportUpdateFromAdmin(upd))
 }
 
-func (s *SupportTicketService) currentPollOffset() int64 {
-	s.pollMu.Lock()
-	defer s.pollMu.Unlock()
-	return s.pollOffset
-}
-
-func (s *SupportTicketService) advancePollOffset(updateID int64) {
-	s.pollMu.Lock()
-	defer s.pollMu.Unlock()
-	if next := updateID + 1; next > s.pollOffset {
-		s.pollOffset = next
+func supportUpdateFromAdmin(upd adminBotUpdate) supportBotUpdate {
+	out := supportBotUpdate{UpdateID: upd.UpdateID}
+	if upd.Message == nil {
+		return out
 	}
+	msg := upd.Message
+	converted := &supportBotMessage{
+		MessageID:         int(msg.MessageID),
+		Text:              msg.Text,
+		Caption:           msg.Caption,
+		Chat:              supportBotChat{ID: msg.Chat.ID, Type: msg.Chat.Type},
+		MessageThreadID:   msg.MessageThreadID,
+		ForumTopicCreated: msg.ForumTopicCreated,
+		Document:          msg.Document,
+		Photo:             msg.Photo,
+		Video:             msg.Video,
+		Voice:             msg.Voice,
+		Audio:             msg.Audio,
+		Sticker:           msg.Sticker,
+	}
+	if msg.From != nil {
+		converted.From = &supportBotUser{
+			ID:        msg.From.ID,
+			IsBot:     msg.From.IsBot,
+			Username:  msg.From.Username,
+			FirstName: msg.From.FirstName,
+			LastName:  msg.From.LastName,
+		}
+	}
+	out.Message = converted
+	return out
 }
 
 func (s *SupportTicketService) handleSupportTelegramUpdate(cfg model.SupportSettings, upd supportBotUpdate) {

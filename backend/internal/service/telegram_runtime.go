@@ -32,10 +32,13 @@ type TelegramService struct {
 	triggerCh         chan struct{}
 	queueTriggerCh    chan struct{}
 
-	pendingHealthMu  sync.Mutex
-	pendingHealth    []healthAckMessage
-	healthAckOffset  int64
-	healthAckPrimed  bool
+	pendingHealthMu sync.Mutex
+	pendingHealth   []healthAckMessage
+
+	pollersMu      sync.Mutex
+	tokenSources   []telegramTokenSource
+	updateHandlers []TelegramBotUpdateHandler
+	activePollers  map[string]chan struct{}
 }
 
 func NewTelegramService(
@@ -79,7 +82,7 @@ func (s *TelegramService) Start() {
 	s.logger.Info("telegram bot supervisor starting")
 	go s.supervisorLoop()
 	go s.queueLoop()
-	go s.healthAckLoop()
+	go s.botUpdateLoop()
 	s.triggerQueueDelivery()
 }
 

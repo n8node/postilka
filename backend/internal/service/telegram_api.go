@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -182,9 +183,37 @@ func (s *TelegramService) telegramDeleteMessage(ctx context.Context, token, chat
 	}
 	_, err := s.telegramAPI(ctx, token, "deleteMessage", map[string]any{
 		"chat_id":    strings.TrimSpace(chatID),
-		"message_id": messageID,
+		"message_id": telegramAPIMessageID(messageID),
 	})
 	return sanitizeTelegramError(err)
+}
+
+func (s *TelegramService) telegramClearInlineKeyboard(ctx context.Context, token, chatID, messageID string) error {
+	messageID = strings.TrimSpace(messageID)
+	if messageID == "" {
+		return nil
+	}
+	_, err := s.telegramAPI(ctx, token, "editMessageReplyMarkup", map[string]any{
+		"chat_id":      strings.TrimSpace(chatID),
+		"message_id":   telegramAPIMessageID(messageID),
+		"reply_markup": telegramInlineKeyboardMarkup{InlineKeyboard: [][]telegramInlineKeyboardButton{}},
+	})
+	return sanitizeTelegramError(err)
+}
+
+func (s *TelegramService) telegramDeleteWebhook(ctx context.Context, token string) error {
+	_, err := s.telegramAPI(ctx, token, "deleteWebhook", map[string]any{
+		"drop_pending_updates": false,
+	})
+	return sanitizeTelegramError(err)
+}
+
+func telegramAPIMessageID(messageID string) any {
+	messageID = strings.TrimSpace(messageID)
+	if n, err := strconv.ParseInt(messageID, 10, 64); err == nil {
+		return n
+	}
+	return messageID
 }
 
 func (s *TelegramService) telegramAnswerCallback(ctx context.Context, token, callbackID, text string) error {
@@ -201,13 +230,24 @@ func (s *TelegramService) telegramAnswerCallback(ctx context.Context, token, cal
 }
 
 type adminBotChat struct {
-	ID int64 `json:"id"`
+	ID   int64  `json:"id"`
+	Type string `json:"type"`
 }
 
 type adminBotMessage struct {
-	MessageID int64        `json:"message_id"`
-	Chat      adminBotChat `json:"chat"`
-	From      *telegramUser `json:"from"`
+	MessageID         int64             `json:"message_id"`
+	Chat              adminBotChat      `json:"chat"`
+	From              *telegramUser     `json:"from"`
+	Text              string            `json:"text"`
+	Caption           string            `json:"caption"`
+	MessageThreadID   int               `json:"message_thread_id"`
+	ForumTopicCreated json.RawMessage   `json:"forum_topic_created"`
+	Document          *supportBotFile   `json:"document"`
+	Photo             []json.RawMessage `json:"photo"`
+	Video             json.RawMessage   `json:"video"`
+	Voice             json.RawMessage   `json:"voice"`
+	Audio             json.RawMessage   `json:"audio"`
+	Sticker           json.RawMessage   `json:"sticker"`
 }
 
 type adminBotCallback struct {
@@ -222,12 +262,14 @@ type adminBotUpdate struct {
 	CallbackQuery *adminBotCallback `json:"callback_query"`
 }
 
+var telegramBotPollAllowedUpdates = []string{"callback_query", "message"}
+
 func (s *TelegramService) telegramGetAdminUpdates(ctx context.Context, token string, offset int64, timeoutSec int) ([]adminBotUpdate, error) {
 	raw, err := s.telegramAPI(ctx, token, "getUpdates", map[string]any{
 		"offset":          offset,
 		"timeout":         timeoutSec,
 		"limit":           50,
-		"allowed_updates": []string{"callback_query", "message"},
+		"allowed_updates": telegramBotPollAllowedUpdates,
 	})
 	if err != nil {
 		return nil, sanitizeTelegramError(err)

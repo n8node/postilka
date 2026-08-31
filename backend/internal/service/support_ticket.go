@@ -30,14 +30,12 @@ type SupportTicketService struct {
 	email       *EmailService
 	maxClient   *oauthclient.MAXBotClient
 	telegram    *TelegramBotClient
+	runtime     *TelegramService
 	store       *ObjectStorage
 	cfg         *config.Config
 	log         *slog.Logger
 	pollMu      sync.Mutex
-	pollOffset  int64
 	pollStarted bool
-	pollPrimed  bool
-	pollToken   string
 }
 
 func NewSupportTicketService(

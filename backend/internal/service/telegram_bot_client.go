@@ -351,7 +351,7 @@ func (c *TelegramBotClient) GetSupportUpdates(ctx context.Context, token string,
 		"offset":          offset,
 		"timeout":         timeoutSec,
 		"limit":           50,
-		"allowed_updates": []string{"message"},
+		"allowed_updates": telegramBotPollAllowedUpdates,
 	})
 	if err != nil {
 		return nil, sanitizeTelegramError(err)
@@ -1614,7 +1614,7 @@ func (c *TelegramBotClient) DiscoverAdminChats(ctx context.Context, token string
 	raw, err := c.api(ctx, token, "getUpdates", map[string]any{
 		"limit":           100,
 		"timeout":         0,
-		"allowed_updates": []string{"my_chat_member", "message", "channel_post", "edited_channel_post"},
+		"allowed_updates": []string{"my_chat_member", "message", "channel_post", "edited_channel_post", "callback_query"},
 	})
 	if err != nil {
 		return nil, err

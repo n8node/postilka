@@ -26,6 +26,30 @@ func TestSupportForumTopicNameTruncates(t *testing.T) {
 	}
 }
 
+func TestSupportUpdateFromAdminMapsMessage(t *testing.T) {
+	upd := adminBotUpdate{
+		UpdateID: 15,
+		Message: &adminBotMessage{
+			MessageID:       99,
+			Text:            "ответ в теме",
+			MessageThreadID: 7,
+			Chat:            adminBotChat{ID: -1001, Type: "supergroup"},
+			From:            &telegramUser{ID: 1, FirstName: "Анна"},
+			Document:        &supportBotFile{FileName: "log.txt"},
+		},
+	}
+	got := supportUpdateFromAdmin(upd)
+	if got.UpdateID != 15 || got.Message == nil {
+		t.Fatalf("unexpected update: %+v", got)
+	}
+	if got.Message.MessageThreadID != 7 || got.Message.Text != "ответ в теме" {
+		t.Fatalf("message fields not copied: %+v", got.Message)
+	}
+	if got.Message.Document == nil || got.Message.Document.FileName != "log.txt" {
+		t.Fatalf("document not copied: %+v", got.Message.Document)
+	}
+}
+
 func TestSupportChatIDEqual(t *testing.T) {
 	if !supportChatIDEqual("-1003911499538", "-1003911499538") {
 		t.Fatal("same ids should match")
