@@ -221,15 +221,6 @@ func nextTelegramUpdateOffset(updates []adminBotUpdate, fallback int64) int64 {
 	return next
 }
 
-func isTelegramGetUpdatesConflict(err error) bool {
-	if err == nil {
-		return false
-	}
-	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "terminated by other getupdates") ||
-		(strings.Contains(msg, "webhook") && strings.Contains(msg, "getupdates"))
-}
-
 func sleepOrStop(stop <-chan struct{}, d time.Duration) bool {
 	timer := time.NewTimer(d)
 	defer timer.Stop()
