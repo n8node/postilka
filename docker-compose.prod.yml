@@ -121,6 +121,11 @@ services:
         max-file: "3"
 
   wordpress:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      # Same gost hop as Telegram (host :8889 → TELEGRAM_UPSTREAM). Used only by Hub mu-plugin.
+      HUB_OUTBOUND_PROXY: http://host.docker.internal:8889
     volumes:
       - ./wordpress/plugins/postilka-voxel:/var/www/html/wp-content/plugins/postilka-voxel
       - ./wordpress/mu-plugins:/var/www/html/wp-content/mu-plugins
