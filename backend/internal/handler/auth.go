@@ -110,6 +110,10 @@ func (h *AuthHandler) ResendVerificationMe(w http.ResponseWriter, r *http.Reques
 	}
 
 	if err := h.auth.ResendVerificationForUser(r.Context(), userID); err != nil {
+		if errors.Is(err, service.ErrEmailNotBound) {
+			writeError(w, http.StatusBadRequest, "Сначала укажите email в настройках")
+			return
+		}
 		h.writeAuthError(w, err)
 		return
 	}

@@ -591,7 +591,7 @@ func (s *OAuthLoginService) completeOAuth(
 func (s *OAuthLoginService) createOAuthUser(ctx context.Context, profile OAuthIdentityProfile) (*model.User, error) {
 	email := profile.Email
 	if email == "" {
-		email = fmt.Sprintf("%s_%s@login.postilka.local", profile.Provider, profile.ProviderUserID)
+		email = fmt.Sprintf("%s_%s@%s", profile.Provider, profile.ProviderUserID, model.PlaceholderLoginEmailDomain)
 	}
 	name := profile.DisplayName
 	if name == "" {

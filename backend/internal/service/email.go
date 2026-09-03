@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"errors"
+
+	"github.com/postilka/postilka/internal/model"
 )
 
 type EmailService struct {
@@ -28,6 +30,9 @@ func (e *EmailService) Render(ctx context.Context, body EmailBody) (string, erro
 }
 
 func (e *EmailService) Send(ctx context.Context, to, subject string, body EmailBody) error {
+	if !model.IsDeliverableEmail(to) {
+		return nil
+	}
 	html, err := e.Render(ctx, body)
 	if err != nil {
 		return err

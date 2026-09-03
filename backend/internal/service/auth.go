@@ -22,6 +22,7 @@ var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	ErrEmailTaken         = errors.New("email already registered")
 	ErrEmailNotVerified   = errors.New("email not verified")
+	ErrEmailNotBound      = errors.New("email not bound")
 	ErrUserBlocked        = errors.New("account blocked")
 	ErrInvalidInput       = errors.New("invalid input")
 )
@@ -392,24 +393,29 @@ func (s *AuthService) ResendVerificationForUser(ctx context.Context, userID stri
 	if err != nil {
 		return err
 	}
-	if user.EmailVerifiedAt != nil {
-		return nil
+	target := strings.TrimSpace(user.PendingEmail)
+	if target == "" {
+		if model.IsPlaceholderLoginEmail(user.Email) {
+			return ErrEmailNotBound
+		}
+		if user.EmailVerifiedAt != nil {
+			return nil
+		}
+		target = user.Email
 	}
-	return s.verification.SendRegistrationConfirmation(ctx, user.ID, user.Email, user.Name)
+	if !model.IsDeliverableEmail(target) {
+		return ErrEmailNotBound
+	}
+	if strings.TrimSpace(user.PendingEmail) != "" {
+		return s.verification.SendEmailConfirmation(ctx, user.ID, target, user.Name)
+	}
+	return s.verification.SendRegistrationConfirmation(ctx, user.ID, target, user.Name)
 }
 
 func (s *AuthService) ChangeEmail(ctx context.Context, userID, newEmail, password string) (*model.User, error) {
 	newEmail = normalizeEmail(newEmail)
-	if _, err := mail.ParseAddress(newEmail); err != nil {
+	if _, err := mail.ParseAddress(newEmail); err != nil || model.IsPlaceholderLoginEmail(newEmail) {
 		return nil, ErrInvalidInput
-	}
-
-	existing, _, err := s.users.GetByEmail(ctx, newEmail)
-	if err == nil && existing.ID != userID {
-		return nil, ErrEmailTaken
-	}
-	if err != nil && !errors.Is(err, repository.ErrNotFound) {
-		return nil, err
 	}
 
 	current, err := s.users.GetByID(ctx, userID)
@@ -424,23 +430,46 @@ func (s *AuthService) ChangeEmail(ctx context.Context, userID, newEmail, passwor
 	if err != nil {
 		return nil, err
 	}
-	if storedHash == "" {
-		return nil, ErrInvalidCredentials
-	}
-	if err := bcrypt.CompareHashAndPassword([]byte(storedHash), []byte(password)); err != nil {
-		return nil, ErrInvalidCredentials
+	if storedHash != "" {
+		if err := bcrypt.CompareHashAndPassword([]byte(storedHash), []byte(password)); err != nil {
+			return nil, ErrInvalidCredentials
+		}
 	}
 
 	if normalizeEmail(current.Email) == newEmail {
+		if current.EmailVerifiedAt != nil && strings.TrimSpace(current.PendingEmail) == "" {
+			return current, nil
+		}
+		if s.verification != nil {
+			s.verification.SendEmailConfirmationBestEffort(ctx, userID, newEmail, current.Name)
+		}
 		return current, nil
 	}
 
-	updated, err := s.users.UpdateEmail(ctx, userID, newEmail)
+	if normalizeEmail(current.PendingEmail) == newEmail {
+		if s.verification != nil {
+			s.verification.SendEmailConfirmationBestEffort(ctx, userID, newEmail, current.Name)
+		}
+		return current, nil
+	}
+
+	taken, err := s.users.EmailTakenByOther(ctx, newEmail, userID)
 	if err != nil {
 		return nil, err
 	}
+	if taken {
+		return nil, ErrEmailTaken
+	}
+
+	updated, err := s.users.SetPendingEmail(ctx, userID, newEmail)
+	if err != nil {
+		if isUniqueViolation(err) {
+			return nil, ErrEmailTaken
+		}
+		return nil, err
+	}
 	if s.verification != nil {
-		s.verification.SendRegistrationConfirmationBestEffort(ctx, userID, updated.Email, updated.Name)
+		s.verification.SendEmailConfirmationBestEffort(ctx, userID, newEmail, updated.Name)
 	}
 	return updated, nil
 }

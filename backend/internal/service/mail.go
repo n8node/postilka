@@ -75,6 +75,14 @@ func (m *MailService) Probe(ctx context.Context) error {
 }
 
 func (m *MailService) Send(ctx context.Context, to, subject, bodyHTML string) error {
+	to = strings.TrimSpace(to)
+	if to == "" {
+		return fmt.Errorf("%w: recipient required", ErrInvalidInput)
+	}
+	if model.IsPlaceholderLoginEmail(to) {
+		return nil
+	}
+
 	cfg, err := m.smtpSettings.GetEffective(ctx)
 	if err != nil {
 		return err
@@ -84,10 +92,6 @@ func (m *MailService) Send(ctx context.Context, to, subject, bodyHTML string) er
 	}
 	if strings.TrimSpace(cfg.Host) == "" || cfg.Port <= 0 {
 		return ErrSMTPNotConfigured
-	}
-	to = strings.TrimSpace(to)
-	if to == "" {
-		return fmt.Errorf("%w: recipient required", ErrInvalidInput)
 	}
 
 	fromEmail := strings.TrimSpace(cfg.FromEmail)

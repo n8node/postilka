@@ -176,7 +176,7 @@ func (n *YouTubeOAuthReconnectNotifier) notifyWorkspace(ctx context.Context, ch 
 	sent := false
 	for _, member := range members {
 		email := strings.TrimSpace(member.Email)
-		if email == "" {
+		if !model.IsDeliverableEmail(email) {
 			continue
 		}
 		if err := n.email.Send(ctx, email, subject, body); err != nil {

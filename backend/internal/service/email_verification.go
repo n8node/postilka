@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/postilka/postilka/internal/config"
+	"github.com/postilka/postilka/internal/model"
 	"github.com/postilka/postilka/internal/repository"
 )
 
@@ -52,7 +53,18 @@ func (s *EmailVerificationService) BindTelegram(telegram *TelegramService) {
 }
 
 func (s *EmailVerificationService) SendRegistrationConfirmation(ctx context.Context, userID, email, name string) error {
+	return s.sendConfirmation(ctx, userID, email, name, false)
+}
+
+func (s *EmailVerificationService) SendEmailConfirmation(ctx context.Context, userID, email, name string) error {
+	return s.sendConfirmation(ctx, userID, email, name, true)
+}
+
+func (s *EmailVerificationService) sendConfirmation(ctx context.Context, userID, email, name string, bind bool) error {
 	if s.email == nil {
+		return nil
+	}
+	if !model.IsDeliverableEmail(email) {
 		return nil
 	}
 
@@ -70,7 +82,12 @@ func (s *EmailVerificationService) SendRegistrationConfirmation(ctx context.Cont
 
 	confirmURL := registrationConfirmURL(s.cfg.PublicAppURLNormalized(), token)
 	body := RegistrationConfirmationEmailBody(name, confirmURL)
-	if err := s.email.Send(ctx, email, "Postilka — подтвердите регистрацию", body); err != nil {
+	subject := "Postilka — подтвердите регистрацию"
+	if bind {
+		body = EmailBindConfirmationEmailBody(name, confirmURL)
+		subject = "Postilka — подтвердите email"
+	}
+	if err := s.email.Send(ctx, email, subject, body); err != nil {
 		return err
 	}
 	return nil
@@ -80,6 +97,14 @@ func (s *EmailVerificationService) SendRegistrationConfirmationBestEffort(ctx co
 	if err := s.SendRegistrationConfirmation(ctx, userID, email, name); err != nil {
 		if s.logger != nil {
 			s.logger.Warn("registration confirmation email failed", "user_id", userID, "email", email, "error", err)
+		}
+	}
+}
+
+func (s *EmailVerificationService) SendEmailConfirmationBestEffort(ctx context.Context, userID, email, name string) {
+	if err := s.SendEmailConfirmation(ctx, userID, email, name); err != nil {
+		if s.logger != nil {
+			s.logger.Warn("email confirmation failed", "user_id", userID, "email", email, "error", err)
 		}
 	}
 }
@@ -103,14 +128,34 @@ func (s *EmailVerificationService) Verify(ctx context.Context, rawToken string) 
 	if err != nil {
 		return "", err
 	}
-	if user.EmailVerifiedAt != nil {
+
+	pending := strings.TrimSpace(user.PendingEmail)
+	if pending != "" {
+		if !model.IsDeliverableEmail(pending) {
+			return "", ErrEmailVerificationInvalid
+		}
+		taken, err := s.users.EmailTakenByOther(ctx, pending, user.ID)
+		if err != nil {
+			return "", err
+		}
+		if taken {
+			return "", ErrEmailTaken
+		}
+		if _, err := s.users.ApplyPendingEmail(ctx, user.ID); err != nil {
+			if isUniqueViolation(err) {
+				return "", ErrEmailTaken
+			}
+			return "", err
+		}
+	} else if user.EmailVerifiedAt != nil {
 		_ = s.tokens.MarkUsed(ctx, rec.ID)
 		return user.ID, nil
+	} else {
+		if err := s.users.SetEmailVerified(ctx, rec.UserID); err != nil {
+			return "", err
+		}
 	}
 
-	if err := s.users.SetEmailVerified(ctx, rec.UserID); err != nil {
-		return "", err
-	}
 	if err := s.tokens.MarkUsed(ctx, rec.ID); err != nil {
 		return "", err
 	}
@@ -153,6 +198,25 @@ func RegistrationConfirmationEmailBody(name, confirmURL string) EmailBody {
 
 	return EmailBody{
 		Preheader:   "Подтвердите email, чтобы публиковать посты и оплачивать тариф в Postilka",
+		ContentHTML: content,
+		CTALabel:    "Подтвердить email",
+		CTAURL:      confirmURL,
+	}
+}
+
+func EmailBindConfirmationEmailBody(name, confirmURL string) EmailBody {
+	displayName := strings.TrimSpace(name)
+	if displayName == "" {
+		displayName = "друг"
+	}
+
+	content := emailGreetingRow(displayName) +
+		emailParagraphRow("Подтвердите этот адрес, чтобы привязать его к аккаунту Postilka. После подтверждения уведомления будут приходить сюда.") +
+		emailLinkBoxRow(confirmURL) +
+		emailNoteRow("Ссылка действительна 24 часа. Если вы не запрашивали привязку email — проигнорируйте письмо.")
+
+	return EmailBody{
+		Preheader:   "Подтвердите email, чтобы получать уведомления Postilka",
 		ContentHTML: content,
 		CTALabel:    "Подтвердить email",
 		CTAURL:      confirmURL,

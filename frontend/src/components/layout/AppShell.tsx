@@ -20,7 +20,7 @@ import {
   LogOut,
 } from "lucide-react";
 import { Suspense, useState } from "react";
-import { logout } from "@/lib/api";
+import { logout, isPlaceholderLoginEmail } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { WorkspaceSwitcher } from "@/components/layout/WorkspaceSwitcher";
 import { EmailVerificationBanner } from "@/components/layout/EmailVerificationBanner";
@@ -78,8 +78,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     router.refresh();
   }
 
-  const displayName = user.name?.trim() || user.email;
-  const initials = (user.name || user.email)
+  const displayEmail = isPlaceholderLoginEmail(user.email)
+    ? user.pending_email?.trim() || "Email не указан"
+    : user.email;
+  const displayName = user.name?.trim() || (isPlaceholderLoginEmail(user.email) ? "Пользователь" : user.email);
+  const initials = (user.name || (isPlaceholderLoginEmail(user.email) ? "П" : user.email))
     .split(/[\s@]+/)
     .filter(Boolean)
     .slice(0, 2)
@@ -212,7 +215,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{displayName}</p>
-                  <p className="truncate text-xs text-muted">{user.email}</p>
+                  <p className="truncate text-xs text-muted">{displayEmail}</p>
                 </div>
                 <button
                   type="button"

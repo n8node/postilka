@@ -17,7 +17,7 @@ func (s *NotificationService) dispatchOutbound(ctx context.Context, in Notificat
 		return
 	}
 	appURL := s.appURL(in.Href)
-	if s.email != nil && strings.TrimSpace(user.Email) != "" && !notificationHasDedicatedEmail(in.Type) {
+	if s.email != nil && user.HasDeliverableEmail() && !notificationHasDedicatedEmail(in.Type) {
 		s.email.SendNotificationNoticeBestEffort(ctx, user, in, appURL)
 	}
 	if s.messenger != nil {

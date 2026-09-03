@@ -10,7 +10,7 @@ import { ChangeEmailForm } from "@/components/settings/ChangeEmailForm";
 import { WorkspaceSettingsBlock } from "@/components/settings/WorkspaceSettingsBlock";
 import { TimezoneSettingsBlock } from "@/components/settings/TimezoneSettingsBlock";
 import { NotificationSettingsBlock } from "@/components/settings/NotificationSettingsBlock";
-import { fetchUserInvites } from "@/lib/api";
+import { fetchUserInvites, isPlaceholderLoginEmail } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
 
@@ -30,7 +30,7 @@ const SETTINGS_MENU: {
 }[] = [
   { key: "profile", label: "Профиль", description: "Аватар, имя и email" },
   { key: "workspace", label: "Workspace", description: "Название и удаление" },
-  { key: "email", label: "Смена email", description: "Подтверждение адреса" },
+  { key: "email", label: "Email", description: "Привязка и подтверждение" },
   { key: "invites", label: "Мои инвайты", description: "Ключи регистрации" },
   { key: "login", label: "Вход через соцсети", description: "VK и MAX" },
   { key: "timezone", label: "Таймзона", description: "Расписание публикаций" },
@@ -43,7 +43,9 @@ function isSettingsKey(value: string | null): value is UserSettingsKey {
 
 function ProfileSection() {
   const { user } = useAuth();
-  const emailVerified = Boolean(user.email_verified_at);
+  const placeholder = isPlaceholderLoginEmail(user.email);
+  const pendingEmail = user.pending_email?.trim() ?? "";
+  const emailVerified = Boolean(user.email_verified_at) && !placeholder;
 
   return (
     <div className="space-y-6">
@@ -60,9 +62,15 @@ function ProfileSection() {
         <div>
           <dt className="text-muted">Email</dt>
           <dd className="mt-1 font-medium">
-            {user.email}
-            {!emailVerified && (
+            {placeholder ? "не указан" : user.email}
+            {placeholder && pendingEmail && (
+              <span className="ml-2 text-xs text-amber-700">ожидает подтверждения {pendingEmail}</span>
+            )}
+            {!placeholder && !emailVerified && (
               <span className="ml-2 text-xs text-amber-700">не подтверждён</span>
+            )}
+            {!placeholder && pendingEmail && (
+              <span className="ml-2 text-xs text-amber-700">новая почта {pendingEmail} не подтверждена</span>
             )}
           </dd>
         </div>
@@ -72,12 +80,19 @@ function ProfileSection() {
 }
 
 function EmailSection() {
+  const { user } = useAuth();
+  const placeholder = isPlaceholderLoginEmail(user.email);
+
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold text-text">Смена email</h2>
+        <h2 className="text-lg font-semibold text-text">
+          {placeholder ? "Привязка email" : "Смена email"}
+        </h2>
         <p className="mt-1 text-sm text-muted">
-          После смены адреса потребуется подтверждение нового email по ссылке из письма.
+          {placeholder
+            ? "Укажите адрес — мы отправим письмо со ссылкой. После подтверждения уведомления будут приходить на эту почту."
+            : "После смены адреса потребуется подтверждение нового email по ссылке из письма. До подтверждения письма продолжат приходить на текущий адрес."}
         </p>
       </div>
       <div className="max-w-lg">

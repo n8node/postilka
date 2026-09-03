@@ -50,6 +50,8 @@ func (h *UserHandler) ChangeEmail(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusUnauthorized, "Неверный пароль")
 		case errors.Is(err, service.ErrInvalidInput):
 			writeError(w, http.StatusBadRequest, "Укажите корректный email")
+		case errors.Is(err, service.ErrEmailNotBound):
+			writeError(w, http.StatusBadRequest, "Сначала укажите email в настройках")
 		case errors.Is(err, service.ErrUserBlocked):
 			writeError(w, http.StatusForbidden, "Аккаунт заблокирован")
 		default:
@@ -60,7 +62,7 @@ func (h *UserHandler) ChangeEmail(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"user":    user,
-		"message": "Email обновлён. Подтвердите новый адрес по ссылке из письма.",
+		"message": "Письмо с подтверждением отправлено. После перехода по ссылке уведомления будут приходить на этот адрес.",
 	})
 }
 

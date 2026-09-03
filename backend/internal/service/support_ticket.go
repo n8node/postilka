@@ -516,7 +516,7 @@ func (s *SupportTicketService) notifyUserReply(ctx context.Context, ticket *mode
 	})
 
 	user, err := s.users.GetByID(ctx, ticket.UserID)
-	if err != nil || user == nil {
+	if err != nil || user == nil || !user.HasDeliverableEmail() {
 		return
 	}
 	ticketURL := s.userTicketURL(ticket.ID)

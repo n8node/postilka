@@ -43,6 +43,9 @@ func (s *TransactionalEmailService) SendSubscriptionPaidBestEffort(ctx context.C
 	if err != nil {
 		return
 	}
+	if !user.HasDeliverableEmail() {
+		return
+	}
 	plan, err := s.plans.GetByID(ctx, checkout.PlanID)
 	if err != nil {
 		return
@@ -68,6 +71,9 @@ func (s *TransactionalEmailService) SendWalletTopupPaidBestEffort(ctx context.Co
 	}
 	user, err := s.users.GetByID(ctx, topup.UserID)
 	if err != nil {
+		return
+	}
+	if !user.HasDeliverableEmail() {
 		return
 	}
 	amount := FormatRubOutSum(topup.AmountCents)
@@ -200,7 +206,7 @@ func workspaceInviteURL(publicAppURL, token string) string {
 }
 
 func (s *TransactionalEmailService) SendNotificationNoticeBestEffort(ctx context.Context, user *model.User, in NotificationInput, appURL string) {
-	if s == nil || s.email == nil || user == nil || strings.TrimSpace(user.Email) == "" {
+	if s == nil || s.email == nil || !user.HasDeliverableEmail() {
 		return
 	}
 	subject, body := notificationNoticeEmail(user.Name, in, appURL)

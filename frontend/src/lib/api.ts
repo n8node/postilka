@@ -8,6 +8,8 @@ export type User = {
   is_platform_admin: boolean;
   avatar_url?: string;
   email_verified_at?: string | null;
+  pending_email?: string | null;
+  has_password?: boolean;
   created_at: string;
 };
 
@@ -301,8 +303,20 @@ export function login(email: string, password: string) {
 export const EMAIL_UNVERIFIED_RESTRICTED_MESSAGE =
   "Подтвердите email, чтобы публиковать посты, пополнять счёт и оплачивать тариф";
 
+export const PLACEHOLDER_LOGIN_EMAIL_DOMAIN = "login.postilka.local";
+
+export function isPlaceholderLoginEmail(email: string | null | undefined) {
+  const addr = (email ?? "").trim().toLowerCase();
+  const at = addr.lastIndexOf("@");
+  return at >= 0 && addr.slice(at + 1) === PLACEHOLDER_LOGIN_EMAIL_DOMAIN;
+}
+
 export function isEmailVerified(user: Pick<User, "email_verified_at"> | null | undefined) {
   return Boolean(user?.email_verified_at);
+}
+
+export function hasBoundEmail(user: Pick<User, "email"> | null | undefined) {
+  return Boolean(user?.email) && !isPlaceholderLoginEmail(user?.email);
 }
 
 export function register(
@@ -355,10 +369,13 @@ export function resendVerificationMe() {
   );
 }
 
-export function changeEmail(email: string, password: string) {
+export function changeEmail(email: string, password?: string) {
   return apiFetch<{ user: User; message: string }>("/user/email", {
     method: "PATCH",
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({
+      email,
+      ...(password ? { password } : {}),
+    }),
   });
 }
 

@@ -22,7 +22,7 @@ func NewUserRepository(pool *pgxpool.Pool) *UserRepository {
 	return &UserRepository{pool: pool}
 }
 
-const userColumns = `id, email, name, locale, timezone, is_blocked, is_platform_admin, email_verified_at, created_at, avatar_s3_key`
+const userColumns = `id, email, name, locale, timezone, is_blocked, is_platform_admin, email_verified_at, pending_email, created_at, avatar_s3_key, (password_hash IS NOT NULL AND password_hash <> '')`
 
 func (r *UserRepository) Create(ctx context.Context, email, passwordHash, name string) (*model.User, error) {
 	const q = `
@@ -91,11 +91,53 @@ func (r *UserRepository) ClearEmailVerified(ctx context.Context, userID string) 
 func (r *UserRepository) UpdateEmail(ctx context.Context, userID, email string) (*model.User, error) {
 	const q = `
 		UPDATE users
-		SET email = $2, email_verified_at = NULL, updated_at = NOW()
+		SET email = $2, email_verified_at = NULL, pending_email = NULL, updated_at = NOW()
 		WHERE id = $1
 		RETURNING ` + userColumns + `
 	`
 	return scanUser(r.pool.QueryRow(ctx, q, userID, email))
+}
+
+func (r *UserRepository) SetPendingEmail(ctx context.Context, userID, email string) (*model.User, error) {
+	const q = `
+		UPDATE users
+		SET pending_email = $2, updated_at = NOW()
+		WHERE id = $1
+		RETURNING ` + userColumns + `
+	`
+	u, err := scanUser(r.pool.QueryRow(ctx, q, userID, email))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	return u, err
+}
+
+func (r *UserRepository) ApplyPendingEmail(ctx context.Context, userID string) (*model.User, error) {
+	const q = `
+		UPDATE users
+		SET email = pending_email,
+		    pending_email = NULL,
+		    email_verified_at = COALESCE(email_verified_at, NOW()),
+		    updated_at = NOW()
+		WHERE id = $1 AND pending_email IS NOT NULL AND pending_email <> ''
+		RETURNING ` + userColumns + `
+	`
+	u, err := scanUser(r.pool.QueryRow(ctx, q, userID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	return u, err
+}
+
+func (r *UserRepository) EmailTakenByOther(ctx context.Context, email, userID string) (bool, error) {
+	var taken bool
+	err := r.pool.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM users
+			WHERE (email = $1 OR pending_email = $1) AND id <> $2
+		)
+	`, email, userID).Scan(&taken)
+	return taken, err
 }
 
 func (r *UserRepository) UpdateTimezone(ctx context.Context, userID, timezone string) (*model.User, error) {
@@ -151,7 +193,7 @@ func (r *UserRepository) GetPasswordHash(ctx context.Context, userID string) (st
 
 func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*model.User, string, error) {
 	const q = `
-		SELECT id, email, password_hash, name, locale, timezone, is_blocked, is_platform_admin, email_verified_at, created_at, avatar_s3_key
+		SELECT id, email, password_hash, name, locale, timezone, is_blocked, is_platform_admin, email_verified_at, pending_email, created_at, avatar_s3_key
 		FROM users WHERE email = $1
 	`
 	var hash *string
@@ -184,7 +226,9 @@ func (r *UserRepository) GetByID(ctx context.Context, id string) (*model.User, e
 
 func (r *UserRepository) ExistsByEmail(ctx context.Context, email string) (bool, error) {
 	var exists bool
-	err := r.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)`, email).Scan(&exists)
+	err := r.pool.QueryRow(ctx, `
+		SELECT EXISTS(SELECT 1 FROM users WHERE email = $1 OR pending_email = $1)
+	`, email).Scan(&exists)
 	return exists, err
 }
 
@@ -431,37 +475,43 @@ func (r *UserRepository) GetAvatarS3Key(ctx context.Context, userID string) (str
 func scanUser(row pgx.Row) (*model.User, error) {
 	var u model.User
 	var createdAt time.Time
-	var avatarKey *string
+	var pendingEmail, avatarKey *string
 	err := row.Scan(
 		&u.ID, &u.Email, &u.Name, &u.Locale, &u.Timezone,
-		&u.IsBlocked, &u.IsPlatformAdmin, &u.EmailVerifiedAt, &createdAt, &avatarKey,
+		&u.IsBlocked, &u.IsPlatformAdmin, &u.EmailVerifiedAt, &pendingEmail, &createdAt, &avatarKey, &u.HasPassword,
 	)
 	if err != nil {
 		return nil, err
 	}
-	u.CreatedAt = createdAt
-	if avatarKey != nil {
-		u.AvatarS3Key = strings.TrimSpace(*avatarKey)
-	}
-	model.ApplyUserAvatarURL(&u)
+	finishUser(&u, pendingEmail, avatarKey, createdAt)
 	return &u, nil
 }
 
 func scanUserWithHash(row pgx.Row, hash **string) (*model.User, error) {
 	var u model.User
 	var createdAt time.Time
-	var avatarKey *string
+	var pendingEmail, avatarKey *string
 	err := row.Scan(
 		&u.ID, &u.Email, hash, &u.Name, &u.Locale, &u.Timezone,
-		&u.IsBlocked, &u.IsPlatformAdmin, &u.EmailVerifiedAt, &createdAt, &avatarKey,
+		&u.IsBlocked, &u.IsPlatformAdmin, &u.EmailVerifiedAt, &pendingEmail, &createdAt, &avatarKey,
 	)
 	if err != nil {
 		return nil, err
 	}
+	if hash != nil && *hash != nil && strings.TrimSpace(**hash) != "" {
+		u.HasPassword = true
+	}
+	finishUser(&u, pendingEmail, avatarKey, createdAt)
+	return &u, nil
+}
+
+func finishUser(u *model.User, pendingEmail, avatarKey *string, createdAt time.Time) {
 	u.CreatedAt = createdAt
+	if pendingEmail != nil {
+		u.PendingEmail = strings.TrimSpace(*pendingEmail)
+	}
 	if avatarKey != nil {
 		u.AvatarS3Key = strings.TrimSpace(*avatarKey)
 	}
-	model.ApplyUserAvatarURL(&u)
-	return &u, nil
+	model.ApplyUserAvatarURL(u)
 }
