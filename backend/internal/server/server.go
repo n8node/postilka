@@ -194,6 +194,11 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 		storageSettingsSvc, kieConfigSvc, kieVideoConfigSvc, yandexGptConfigSvc, socialProviderSettingsSvc,
 		telegramProviderSettingsSvc, telegramBotClient, secretCipher, photochkaClient, logger,
 	)
+	loadMonitorRepo := repository.NewLoadMonitorRepository(db.Pool)
+	loadMonitorSvc := service.NewLoadMonitorService(
+		settingsRepo, loadMonitorRepo, postRepo, opsStateRepo, db, telegramSvc, telegramSettingsSvc, logger,
+	)
+	loadMonitorHandler := handler.NewLoadMonitorHandler(loadMonitorSvc)
 	telegramHandler := handler.NewTelegramSettingsHandler(telegramSettingsSvc, telegramSvc, opsDigestSvc)
 	yandexGptConfigHandler := handler.NewYandexGptConfigHandler(yandexGptConfigSvc)
 	kieConfigHandler := handler.NewKieConfigHandler(kieConfigSvc)
@@ -718,6 +723,11 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Get("/posts/{postID}", adminHandler.GetPost)
 
 				r.Get("/analytics", adminHandler.Analytics)
+
+				r.Get("/load-monitor", loadMonitorHandler.GetDashboard)
+				r.Put("/load-monitor/settings", loadMonitorHandler.UpdateSettings)
+				r.Post("/load-monitor/snapshot", loadMonitorHandler.RecordSnapshotNow)
+				r.Post("/load-monitor/report/test", loadMonitorHandler.SendReportTest)
 
 				r.Get("/support/settings", adminSupportHandler.GetSettings)
 				r.Put("/support/settings", adminSupportHandler.UpdateSettings)

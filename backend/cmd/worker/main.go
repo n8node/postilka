@@ -133,6 +133,11 @@ func main() {
 		storageSettingsSvc, kieConfigSvc, kieVideoConfigSvc, yandexGptConfigSvc, socialProviderSettingsSvc,
 		telegramProviderSettingsSvc, telegramBotClient, secretCipher, photochkaClient, logger,
 	)
+	settingsRepo := repository.NewSettingsRepository(db.Pool)
+	loadMonitorRepo := repository.NewLoadMonitorRepository(db.Pool)
+	loadMonitorSvc := service.NewLoadMonitorService(
+		settingsRepo, loadMonitorRepo, postRepo, opsStateRepo, db, telegramSvc, telegramSettingsSvc, logger,
+	)
 	genRepo := repository.NewAIGenerationRepository(db.Pool)
 	genJobRepo := repository.NewAIGenerationJobRepository(db.Pool)
 	genUploadRepo := repository.NewGenerationSourceUploadRepository(db.Pool)
@@ -165,6 +170,12 @@ func main() {
 			}
 			if err := opsDigestSvc.ProcessDue(ctx); err != nil {
 				logger.Warn("ops digest tick failed", "error", err)
+			}
+			if err := loadMonitorSvc.ProcessSnapshotIfDue(ctx); err != nil {
+				logger.Warn("load monitor snapshot failed", "error", err)
+			}
+			if err := loadMonitorSvc.ProcessDailyReport(ctx); err != nil {
+				logger.Warn("load monitor report failed", "error", err)
 			}
 			if backupRunning.CompareAndSwap(false, true) {
 				go func() {

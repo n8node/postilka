@@ -63,3 +63,25 @@ func (r *OpsStateRepository) ClearDigestClaim(ctx context.Context, day time.Time
 	`, day)
 	return err
 }
+
+func (r *OpsStateRepository) TryClaimLoadReport(ctx context.Context, day time.Time) (bool, error) {
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE platform_ops_state
+		SET load_report_last_sent_on = $1, updated_at = NOW()
+		WHERE id = 1
+		  AND (load_report_last_sent_on IS NULL OR load_report_last_sent_on < $1)
+	`, day)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() > 0, nil
+}
+
+func (r *OpsStateRepository) ClearLoadReportClaim(ctx context.Context, day time.Time) error {
+	_, err := r.pool.Exec(ctx, `
+		UPDATE platform_ops_state
+		SET load_report_last_sent_on = NULL, updated_at = NOW()
+		WHERE id = 1 AND load_report_last_sent_on = $1
+	`, day)
+	return err
+}

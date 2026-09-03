@@ -28,6 +28,7 @@ const nav: NavSection[] = [
     label: "Обзор",
     items: [
       { href: "/admin/analytics", label: "Аналитика" },
+      { href: "/admin/load-monitor", label: "Мониторинг нагрузки" },
       { href: "/admin", label: "Сводка", soon: true },
     ],
   },
@@ -56,6 +57,7 @@ const nav: NavSection[] = [
 
 function breadcrumbLabel(pathname: string) {
   if (pathname.startsWith("/admin/analytics")) return "Аналитика";
+  if (pathname.startsWith("/admin/load-monitor")) return "Мониторинг нагрузки";
   if (pathname.startsWith("/admin/support")) return "Тикеты поддержки";
   if (pathname.startsWith("/admin/files")) return "Файлы";
   if (pathname.startsWith("/admin/posts")) return "Посты";

@@ -3226,3 +3226,74 @@ export function deleteAdminGenerationNavIcon(id: string) {
   });
 }
 
+export type LoadTrendLevel = "stable" | "watch" | "growing";
+
+export type LoadMonitorSettings = {
+  report_enabled: boolean;
+  report_hour: number;
+  server_ram_gb: number;
+};
+
+export type LoadSnapshot = {
+  id?: number;
+  collected_at: string;
+  publish_backlog: number;
+  posts_due_next_hour: number;
+  gen_jobs_active: number;
+  workflow_runs_running: number;
+  db_pool_max: number;
+  db_pool_acquired: number;
+  worker_heartbeat_age_sec?: number;
+};
+
+export type LoadDailyAggregate = {
+  day: string;
+  avg_publish_backlog: number;
+  max_publish_backlog: number;
+  avg_gen_jobs_active: number;
+  max_gen_jobs_active: number;
+  avg_db_pool_util: number;
+};
+
+export type LoadTrendAssessment = {
+  level: LoadTrendLevel;
+  summary: string;
+  ram_advice: string;
+  signals: string[];
+};
+
+export type LoadMonitorDashboard = {
+  settings: LoadMonitorSettings;
+  current: LoadSnapshot;
+  history: LoadDailyAggregate[];
+  trend: LoadTrendAssessment;
+  worker_alive: boolean;
+  worker_age_sec?: number;
+  last_snapshot_at?: string;
+  scaling_plan_path: string;
+  plan_pause_after_step: number;
+};
+
+export function fetchAdminLoadMonitor() {
+  return apiFetch<LoadMonitorDashboard>("/admin/load-monitor");
+}
+
+export function updateAdminLoadMonitorSettings(settings: LoadMonitorSettings) {
+  return apiFetch<LoadMonitorSettings>("/admin/load-monitor/settings", {
+    method: "PUT",
+    body: JSON.stringify(settings),
+  });
+}
+
+export function recordAdminLoadMonitorSnapshot() {
+  return apiFetch<LoadMonitorDashboard>("/admin/load-monitor/snapshot", {
+    method: "POST",
+  });
+}
+
+export function sendAdminLoadMonitorReportTest() {
+  return apiFetch<{ status: string; message: string }>("/admin/load-monitor/report/test", {
+    method: "POST",
+  });
+}
+
