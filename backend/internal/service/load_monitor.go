@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"html"
 	"log/slog"
 	"math"
 	"strings"
@@ -174,10 +173,9 @@ func (s *LoadMonitorService) ProcessDailyReport(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	model.NormalizeTelegramDigestSettings(&tgCfg)
-	if strings.TrimSpace(tgCfg.BotToken) == "" ||
-		strings.TrimSpace(tgCfg.DigestChatID) == "" ||
-		tgCfg.DigestTopicID <= 0 {
+	if !tgCfg.Enabled ||
+		strings.TrimSpace(tgCfg.BotToken) == "" ||
+		strings.TrimSpace(tgCfg.ChatID) == "" {
 		return nil
 	}
 
@@ -197,13 +195,13 @@ func (s *LoadMonitorService) ProcessDailyReport(ctx context.Context) error {
 	if !claimed {
 		return nil
 	}
-	if err := s.sendDailyReport(ctx, tgCfg, cfg); err != nil {
+	if err := s.sendDailyReport(ctx, cfg); err != nil {
 		if clearErr := s.opsState.ClearLoadReportClaim(ctx, day); clearErr != nil {
 			s.logger.Warn("load report: clear claim failed", "err", clearErr)
 		}
 		return err
 	}
-	s.logger.Info("load report sent", "chat_id", tgCfg.DigestChatID, "topic_id", tgCfg.DigestTopicID)
+	s.logger.Info("load report sent", "chat_id", tgCfg.ChatID)
 	return nil
 }
 
@@ -219,20 +217,22 @@ func (s *LoadMonitorService) SendReportNow(ctx context.Context) (bool, string) {
 	if err != nil {
 		return false, err.Error()
 	}
-	model.NormalizeTelegramDigestSettings(&tgCfg)
+	if !tgCfg.Enabled {
+		return false, "Включите Telegram-уведомления в админке"
+	}
 	if strings.TrimSpace(tgCfg.BotToken) == "" {
-		return false, "Укажите токен Telegram-бота в настройках уведомлений"
+		return false, "Укажите токен Telegram-бота"
 	}
-	if strings.TrimSpace(tgCfg.DigestChatID) == "" || tgCfg.DigestTopicID <= 0 {
-		return false, "Укажите группу и тему для ежедневной сводки (Telegram → уведомления)"
+	if strings.TrimSpace(tgCfg.ChatID) == "" {
+		return false, "Укажите ID личного чата (Telegram → уведомления → ID чата)"
 	}
-	if err := s.sendDailyReport(ctx, tgCfg, cfg); err != nil {
+	if err := s.sendDailyReport(ctx, cfg); err != nil {
 		return false, sanitizeOpsReason(err.Error())
 	}
-	return true, "Отчёт о нагрузке отправлен в Telegram"
+	return true, "Отчёт о нагрузке отправлен в ваш Telegram"
 }
 
-func (s *LoadMonitorService) sendDailyReport(ctx context.Context, tgCfg model.TelegramSettings, cfg model.LoadMonitorSettings) error {
+func (s *LoadMonitorService) sendDailyReport(ctx context.Context, cfg model.LoadMonitorSettings) error {
 	current, err := s.collectSnapshot(ctx)
 	if err != nil {
 		return err
@@ -243,7 +243,7 @@ func (s *LoadMonitorService) sendDailyReport(ctx context.Context, tgCfg model.Te
 	}
 	trend := assessLoadTrend(history, cfg.ServerRAMGB)
 	text := formatLoadReportMessage(time.Now().In(moscowLocation), current, trend, cfg.ServerRAMGB)
-	return s.telegram.SendDigestMessage(ctx, tgCfg.DigestChatID, text, tgCfg.DigestTopicID)
+	return s.telegram.SendDirectAdminMessage(ctx, text)
 }
 
 func (s *LoadMonitorService) collectSnapshot(ctx context.Context) (model.LoadSnapshot, error) {
@@ -440,7 +440,7 @@ func formatLoadReportMessage(now time.Time, snap model.LoadSnapshot, trend model
 		"📊 Postilka — нагрузка",
 		now.Format("02.01.2006  15:04") + " МСК",
 		"",
-		"<b>Сейчас</b>",
+		"Сейчас",
 		fmt.Sprintf("Очередь публикаций: %d", snap.PublishBacklog),
 		fmt.Sprintf("Постов в ближайший час: %d", snap.PostsDueNextHour),
 		fmt.Sprintf("Генераций в работе: %d", snap.GenJobsActive),
@@ -448,16 +448,16 @@ func formatLoadReportMessage(now time.Time, snap model.LoadSnapshot, trend model
 		fmt.Sprintf("Соединения с базой: %s", poolLine),
 		workerLine,
 		"",
-		"<b>Тренд</b>",
-		html.EscapeString(trend.Summary),
+		"Тренд",
+		trend.Summary,
 	}
 	if len(trend.Signals) > 0 {
 		lines = append(lines, "")
 		for _, sig := range trend.Signals {
-			lines = append(lines, "• "+html.EscapeString(sig))
+			lines = append(lines, "• "+sig)
 		}
 	}
-	lines = append(lines, "", "<b>Оперативная память</b>", html.EscapeString(trend.RAMAdvice))
+	lines = append(lines, "", "Оперативная память", trend.RAMAdvice)
 	lines = append(lines, "", fmt.Sprintf("На сервере указано: %d ГБ", serverRAMGB))
 	lines = append(lines, "", "План масштабирования: scripts/scaling-plan.md")
 	lines = append(lines, fmt.Sprintf("Пауза после шага %d — дальше только по вашей команде.", loadMonitorPlanPauseStep))

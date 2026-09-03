@@ -249,11 +249,11 @@ export function AdminLoadMonitorPage() {
       <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="text-lg font-semibold text-slate-900">Настройки отчёта</h2>
         <p className="mt-1 text-sm text-slate-500">
-          Отчёт уходит в ту же Telegram-группу и тему, что и{" "}
+          Отчёт приходит в ваш личный Telegram — туда же, куда самодиагностика бота и прокси (
           <Link href="/admin/settings?section=telegram-notifications" className="text-blue-600 hover:underline">
-            ежедневная сводка
+            Telegram → уведомления → ID чата
           </Link>
-          . Там же должен быть настроен бот.
+          ). Не в групповую тему сводки.
         </p>
 
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
