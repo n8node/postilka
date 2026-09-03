@@ -82,7 +82,7 @@ import {
   deleteTelegramStory,
   fetchPost,
   fetchPostApprovalEvents,
-  publishPost,
+  publishPostAndWait,
   rejectPost,
   schedulePost,
   syncTelegramStory,
@@ -2373,9 +2373,9 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
         const saved = postId
           ? await updatePost(postId, buildPayload())
           : await createPost(buildPayload());
-        finalPost = await publishPost(saved.id);
+        finalPost = await publishPostAndWait(saved.id);
       } else if (canPublishWithoutSave) {
-        finalPost = await publishPost(postId!);
+        finalPost = await publishPostAndWait(postId!);
       } else {
         const saved = postId
           ? await updatePost(postId, buildPayload())
@@ -2415,7 +2415,9 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
               ? "Черновик сохранён"
               : action === "schedule"
                 ? "Публикация запланирована"
-                : "Публикация передана в очередь",
+                : finalPost.status === "published"
+                  ? "Опубликовано"
+                  : "Публикация передана в очередь",
       );
     } catch (saveError) {
       if (postId && action === "now") {

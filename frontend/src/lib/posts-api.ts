@@ -1,4 +1,4 @@
-import { apiFetch } from "@/lib/api";
+import { apiFetch, ApiError } from "@/lib/api";
 import type { TelegramStorySettings } from "@/lib/telegram-story";
 
 export type TelegramEntity = {
@@ -263,6 +263,34 @@ export function schedulePost(id: string, dueAt: string) {
 
 export function publishPost(id: string) {
   return apiFetch<Post>(`/posts/${encodeURIComponent(id)}/publish`, { method: "POST" });
+}
+
+export async function waitForPostPublish(
+  id: string,
+  opts?: { timeoutMs?: number; intervalMs?: number },
+): Promise<Post> {
+  const timeoutMs = opts?.timeoutMs ?? 120_000;
+  const intervalMs = opts?.intervalMs ?? 2000;
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    const post = await fetchPost(id);
+    if (post.status === "published" || post.status === "failed") {
+      return post;
+    }
+    if (post.status !== "scheduled" && post.status !== "publishing") {
+      return post;
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+  throw new ApiError(504, "Публикация занимает больше времени, чем ожидалось");
+}
+
+export async function publishPostAndWait(id: string) {
+  const queued = await publishPost(id);
+  if (queued.status === "published" || queued.status === "failed") {
+    return queued;
+  }
+  return waitForPostPublish(id);
 }
 
 export function syncTelegramStory(id: string) {

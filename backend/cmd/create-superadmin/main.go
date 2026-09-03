@@ -34,7 +34,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	db, err := repository.NewPostgres(ctx, databaseURL)
+	db, err := repository.NewPostgres(ctx, databaseURL, 0)
 	if err != nil {
 		fail("connect postgres: %v", err)
 	}

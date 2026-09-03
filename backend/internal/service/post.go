@@ -322,34 +322,19 @@ func (s *PostService) PublishNow(
 	if submit {
 		return s.SubmitForApproval(ctx, userID, r, postID, model.PostApprovalSubmitRequest{})
 	}
-	if err := s.posts.SetPublishing(ctx, ws.ID, postID); err != nil {
-		return nil, ErrPostConflict
-	}
-	return s.publishAndGet(ctx, ws.ID, postID)
+	return s.enqueueForPublish(ctx, ws.ID, postID)
 }
 
-func (s *PostService) publishAndGet(ctx context.Context, workspaceID, postID string) (*model.Post, error) {
-	if err := s.publication.Publish(ctx, postID, false); err != nil {
-		post, getErr := s.posts.Get(ctx, workspaceID, postID)
-		if getErr == nil && postPublishDelivered(*post) {
-			return post, nil
-		}
-		if errors.Is(err, repository.ErrNotFound) ||
-			errors.Is(err, ErrInvalidPost) ||
-			errors.Is(err, ErrQuotaExceeded) ||
-			errors.Is(err, ErrPublishFailed) {
-			return nil, err
-		}
-		return nil, fmt.Errorf("%w: %s", ErrPublishFailed, safePublishError(err))
-	}
-	post, err := s.posts.Get(ctx, workspaceID, postID)
+func (s *PostService) enqueueForPublish(ctx context.Context, workspaceID, postID string) (*model.Post, error) {
+	scheduled, err := s.posts.SetScheduled(ctx, workspaceID, postID, time.Now().UTC())
 	if err != nil {
-		if fallback, fbErr := s.posts.GetByID(ctx, postID); fbErr == nil && fallback.WorkspaceID == workspaceID {
-			return fallback, nil
-		}
 		return nil, err
 	}
-	return post, nil
+	if scheduled.MissionID != "" {
+		_ = s.posts.MarkPlanManuallyChanged(ctx, workspaceID, postID)
+		scheduled.PlanManuallyChanged = true
+	}
+	return scheduled, nil
 }
 
 func postPublishDelivered(post model.Post) bool {

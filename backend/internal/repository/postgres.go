@@ -12,12 +12,15 @@ type Postgres struct {
 	Pool *pgxpool.Pool
 }
 
-func NewPostgres(ctx context.Context, databaseURL string) (*Postgres, error) {
+func NewPostgres(ctx context.Context, databaseURL string, maxConns int) (*Postgres, error) {
 	cfg, err := pgxpool.ParseConfig(databaseURL)
 	if err != nil {
 		return nil, fmt.Errorf("parse database url: %w", err)
 	}
-	cfg.MaxConns = 10
+	if maxConns <= 0 {
+		maxConns = 10
+	}
+	cfg.MaxConns = int32(maxConns)
 	cfg.MinConns = 1
 	cfg.MaxConnLifetime = time.Hour
 

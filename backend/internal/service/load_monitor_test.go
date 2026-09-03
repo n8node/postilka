@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/postilka/postilka/internal/config"
 	"github.com/postilka/postilka/internal/model"
 )
 
@@ -38,6 +39,41 @@ func TestAssessLoadTrendGrowingBacklog(t *testing.T) {
 	}
 	if out.RAMAdvice == "" {
 		t.Fatal("expected RAM advice")
+	}
+}
+
+func TestRuntimeTuningRecommendations(t *testing.T) {
+	rec6 := runtimeTuningRecommendations(6)
+	if rec6.PublishConcurrencyMax != 5 || rec6.PublishIntervalSec != 30 {
+		t.Fatalf("unexpected 6GB rec: %+v", rec6)
+	}
+	rec16 := runtimeTuningRecommendations(16)
+	if rec16.PublishConcurrencyMin != 10 || rec16.PublishIntervalSec != 10 {
+		t.Fatalf("unexpected 16GB rec: %+v", rec16)
+	}
+	rec32 := runtimeTuningRecommendations(32)
+	if rec32.PublishConcurrencyMin != 25 || rec32.PublishIntervalSec != 5 {
+		t.Fatalf("unexpected 32GB rec: %+v", rec32)
+	}
+}
+
+func TestResolveRuntimeTuning(t *testing.T) {
+	cfg := &config.Config{
+		WorkerPublishConcurrency: 3,
+		WorkerPublishIntervalSec: 30,
+		DatabaseMaxConns:         10,
+	}
+	effective := resolveRuntimeTuning(cfg, model.LoadMonitorSettings{
+		RuntimeTuning: model.RuntimeTuningSettings{
+			PublishConcurrency: 25,
+			PublishIntervalSec: 5,
+		},
+	}, 10)
+	if effective.PublishConcurrency != 25 || effective.PublishIntervalSec != 5 {
+		t.Fatalf("admin override failed: %+v", effective)
+	}
+	if effective.EstimatedPostsPerHour != 25*(3600/5) {
+		t.Fatalf("expected 18000 posts/h, got %d", effective.EstimatedPostsPerHour)
 	}
 }
 

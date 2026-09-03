@@ -2,10 +2,37 @@ package model
 
 import "time"
 
+type RuntimeTuningSettings struct {
+	// Zero means "use env default".
+	PublishConcurrency int `json:"publish_concurrency"`
+	PublishIntervalSec int `json:"publish_interval_sec"`
+	DatabaseMaxConns   int `json:"database_max_conns"`
+}
+
+type RuntimeTuningEffective struct {
+	PublishConcurrency              int  `json:"publish_concurrency"`
+	PublishIntervalSec              int  `json:"publish_interval_sec"`
+	DatabaseMaxConns                int  `json:"database_max_conns"`
+	DatabaseMaxConnsRequiresRestart bool `json:"database_max_conns_requires_restart"`
+	PoolMaxConnsCurrent             int  `json:"pool_max_conns_current"`
+	EstimatedPostsPerHour           int  `json:"estimated_posts_per_hour"`
+}
+
+type RuntimeTuningRecommendations struct {
+	PublishConcurrencyMin int    `json:"publish_concurrency_min"`
+	PublishConcurrencyMax int    `json:"publish_concurrency_max"`
+	PublishIntervalSec    int    `json:"publish_interval_sec"`
+	DatabaseMaxConnsMin   int    `json:"database_max_conns_min"`
+	DatabaseMaxConnsMax   int    `json:"database_max_conns_max"`
+	Summary               string `json:"summary"`
+	EnvHint               string `json:"env_hint"`
+}
+
 type LoadMonitorSettings struct {
-	ReportEnabled bool `json:"report_enabled"`
-	ReportHour    int  `json:"report_hour"`
-	ServerRAMGB   int  `json:"server_ram_gb"`
+	ReportEnabled bool                  `json:"report_enabled"`
+	ReportHour    int                   `json:"report_hour"`
+	ServerRAMGB   int                   `json:"server_ram_gb"`
+	RuntimeTuning RuntimeTuningSettings `json:"runtime_tuning"`
 }
 
 type LoadSnapshot struct {
@@ -45,13 +72,15 @@ type LoadTrendAssessment struct {
 }
 
 type LoadMonitorDashboard struct {
-	Settings         LoadMonitorSettings   `json:"settings"`
-	Current          LoadSnapshot          `json:"current"`
-	History          []LoadDailyAggregate  `json:"history"`
-	Trend            LoadTrendAssessment   `json:"trend"`
-	WorkerAlive      bool                  `json:"worker_alive"`
-	WorkerAgeSec     *int                  `json:"worker_age_sec,omitempty"`
-	LastSnapshotAt   *time.Time            `json:"last_snapshot_at,omitempty"`
-	ScalingPlanPath  string                `json:"scaling_plan_path"`
-	PlanPauseAfterStep int                 `json:"plan_pause_after_step"`
+	Settings           LoadMonitorSettings          `json:"settings"`
+	EffectiveTuning    RuntimeTuningEffective       `json:"effective_tuning"`
+	Recommendations    RuntimeTuningRecommendations `json:"recommendations"`
+	Current            LoadSnapshot                 `json:"current"`
+	History            []LoadDailyAggregate         `json:"history"`
+	Trend              LoadTrendAssessment          `json:"trend"`
+	WorkerAlive        bool                         `json:"worker_alive"`
+	WorkerAgeSec       *int                         `json:"worker_age_sec,omitempty"`
+	LastSnapshotAt     *time.Time                   `json:"last_snapshot_at,omitempty"`
+	ScalingPlanPath    string                       `json:"scaling_plan_path"`
+	PlanPauseAfterStep int                          `json:"plan_pause_after_step"`
 }

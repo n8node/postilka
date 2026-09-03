@@ -3228,10 +3228,37 @@ export function deleteAdminGenerationNavIcon(id: string) {
 
 export type LoadTrendLevel = "stable" | "watch" | "growing";
 
+export type RuntimeTuningSettings = {
+  /** 0 = use env default */
+  publish_concurrency: number;
+  publish_interval_sec: number;
+  database_max_conns: number;
+};
+
+export type RuntimeTuningEffective = {
+  publish_concurrency: number;
+  publish_interval_sec: number;
+  database_max_conns: number;
+  database_max_conns_requires_restart: boolean;
+  pool_max_conns_current: number;
+  estimated_posts_per_hour: number;
+};
+
+export type RuntimeTuningRecommendations = {
+  publish_concurrency_min: number;
+  publish_concurrency_max: number;
+  publish_interval_sec: number;
+  database_max_conns_min: number;
+  database_max_conns_max: number;
+  summary: string;
+  env_hint: string;
+};
+
 export type LoadMonitorSettings = {
   report_enabled: boolean;
   report_hour: number;
   server_ram_gb: number;
+  runtime_tuning: RuntimeTuningSettings;
 };
 
 export type LoadSnapshot = {
@@ -3264,6 +3291,8 @@ export type LoadTrendAssessment = {
 
 export type LoadMonitorDashboard = {
   settings: LoadMonitorSettings;
+  effective_tuning: RuntimeTuningEffective;
+  recommendations: RuntimeTuningRecommendations;
   current: LoadSnapshot;
   history: LoadDailyAggregate[];
   trend: LoadTrendAssessment;

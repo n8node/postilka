@@ -11,6 +11,7 @@ import {
   updateAdminLoadMonitorSettings,
   type LoadMonitorDashboard,
   type LoadMonitorSettings,
+  type RuntimeTuningSettings,
   type LoadTrendLevel,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -43,13 +44,22 @@ function MetricCard({ label, value, hint }: { label: string; value: string; hint
   );
 }
 
-export function AdminLoadMonitorPage() {
-  const [dash, setDash] = useState<LoadMonitorDashboard | null>(null);
-  const [form, setForm] = useState<LoadMonitorSettings>({
+function defaultRuntimeTuning(): RuntimeTuningSettings {
+  return { publish_concurrency: 0, publish_interval_sec: 0, database_max_conns: 0 };
+}
+
+function defaultFormSettings(): LoadMonitorSettings {
+  return {
     report_enabled: true,
     report_hour: 9,
     server_ram_gb: 6,
-  });
+    runtime_tuning: defaultRuntimeTuning(),
+  };
+}
+
+export function AdminLoadMonitorPage() {
+  const [dash, setDash] = useState<LoadMonitorDashboard | null>(null);
+  const [form, setForm] = useState<LoadMonitorSettings>(defaultFormSettings());
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -62,10 +72,13 @@ export function AdminLoadMonitorPage() {
     try {
       const res = await fetchAdminLoadMonitor();
       setDash(res);
-      setForm(res.settings ?? {
-        report_enabled: true,
-        report_hour: 9,
-        server_ram_gb: 6,
+      setForm({
+        ...defaultFormSettings(),
+        ...res.settings,
+        runtime_tuning: {
+          ...defaultRuntimeTuning(),
+          ...res.settings?.runtime_tuning,
+        },
       });
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Не удалось загрузить мониторинг");
@@ -132,6 +145,8 @@ export function AdminLoadMonitorPage() {
   const trend = dash?.trend;
   const badge = trend ? trendBadge(trend.level) : trendBadge("stable");
   const current = dash?.current;
+  const effective = dash?.effective_tuning;
+  const recommendations = dash?.recommendations;
   const poolPct =
     current && current.db_pool_max > 0
       ? Math.round((current.db_pool_acquired / current.db_pool_max) * 100)
@@ -245,6 +260,156 @@ export function AdminLoadMonitorPage() {
           История пока пуста — снимки накапливаются после первого часа работы worker или после кнопки «Записать снимок».
         </p>
       )}
+
+      {recommendations ? (
+        <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-5 shadow-sm">
+          <h2 className="text-lg font-semibold text-slate-900">Рекомендуемые лимиты для {form.server_ram_gb} ГБ RAM</h2>
+          <p className="mt-2 text-sm text-slate-700">{recommendations.summary}</p>
+          <ul className="mt-3 space-y-1 text-sm text-slate-700">
+            <li>
+              Параллельных публикаций:{" "}
+              <strong>
+                {recommendations.publish_concurrency_min}–{recommendations.publish_concurrency_max}
+              </strong>
+            </li>
+            <li>
+              Интервал проверки очереди: <strong>{recommendations.publish_interval_sec} сек</strong>
+            </li>
+            <li>
+              Соединений с базой:{" "}
+              <strong>
+                {recommendations.database_max_conns_min}
+                {recommendations.database_max_conns_max !== recommendations.database_max_conns_min
+                  ? `–${recommendations.database_max_conns_max}`
+                  : ""}
+              </strong>{" "}
+              (после перезапуска backend и worker)
+            </li>
+            <li>
+              Ориентир пропускной способности:{" "}
+              <strong>
+                ~
+                {Math.round(
+                  recommendations.publish_concurrency_max * (3600 / recommendations.publish_interval_sec),
+                )}{" "}
+                постов/ч
+              </strong>{" "}
+              при верхней границе параллельности
+            </li>
+          </ul>
+          <p className="mt-3 text-xs text-slate-500">
+            Переменные окружения: <code className="rounded bg-white px-1">{recommendations.env_hint}</code>
+          </p>
+        </div>
+      ) : null}
+
+      {effective ? (
+        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="text-lg font-semibold text-slate-900">Сейчас применяется</h2>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <MetricCard
+              label="Параллельных публикаций"
+              value={String(effective.publish_concurrency)}
+              hint="worker, без перезапуска"
+            />
+            <MetricCard
+              label="Интервал очереди"
+              value={`${effective.publish_interval_sec} сек`}
+              hint="worker, без перезапуска"
+            />
+            <MetricCard
+              label="Пул базы (цель)"
+              value={String(effective.database_max_conns)}
+              hint={
+                effective.database_max_conns_requires_restart
+                  ? `сейчас ${effective.pool_max_conns_current} — нужен перезапуск`
+                  : `активно ${effective.pool_max_conns_current}`
+              }
+            />
+            <MetricCard
+              label="Оценка постов/ч"
+              value={`~${effective.estimated_posts_per_hour}`}
+              hint="concurrency × (3600 / interval)"
+            />
+          </div>
+        </div>
+      ) : null}
+
+      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 className="text-lg font-semibold text-slate-900">Нагрузка и очереди</h2>
+        <p className="mt-1 text-sm text-slate-500">
+          Значение <strong>0</strong> — использовать дефолт из переменных окружения. Публикации и интервал worker
+          подхватывает за ~30 секунд. Размер пула базы — только после перезапуска backend и worker.
+        </p>
+
+        <div className="mt-4 grid gap-4 sm:grid-cols-3">
+          <label className="block text-sm">
+            <span className="font-medium text-slate-700">Параллельных публикаций</span>
+            <span className="mt-1 block text-xs text-slate-500">0 = env WORKER_PUBLISH_CONCURRENCY</span>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={form.runtime_tuning?.publish_concurrency ?? 0}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  runtime_tuning: {
+                    ...defaultRuntimeTuning(),
+                    ...form.runtime_tuning,
+                    publish_concurrency: Number(e.target.value),
+                  },
+                })
+              }
+              className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2"
+            />
+          </label>
+
+          <label className="block text-sm">
+            <span className="font-medium text-slate-700">Интервал очереди (сек)</span>
+            <span className="mt-1 block text-xs text-slate-500">0 = env WORKER_PUBLISH_INTERVAL_SEC</span>
+            <input
+              type="number"
+              min={0}
+              max={300}
+              value={form.runtime_tuning?.publish_interval_sec ?? 0}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  runtime_tuning: {
+                    ...defaultRuntimeTuning(),
+                    ...form.runtime_tuning,
+                    publish_interval_sec: Number(e.target.value),
+                  },
+                })
+              }
+              className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2"
+            />
+          </label>
+
+          <label className="block text-sm">
+            <span className="font-medium text-slate-700">Соединений с базой</span>
+            <span className="mt-1 block text-xs text-slate-500">0 = env DATABASE_MAX_CONNS</span>
+            <input
+              type="number"
+              min={0}
+              max={200}
+              value={form.runtime_tuning?.database_max_conns ?? 0}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  runtime_tuning: {
+                    ...defaultRuntimeTuning(),
+                    ...form.runtime_tuning,
+                    database_max_conns: Number(e.target.value),
+                  },
+                })
+              }
+              className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2"
+            />
+          </label>
+        </div>
+      </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
         <h2 className="text-lg font-semibold text-slate-900">Настройки отчёта</h2>

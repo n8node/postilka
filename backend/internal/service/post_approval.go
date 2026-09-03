@@ -125,17 +125,14 @@ func (s *PostService) ApprovePost(
 		notifyPost.DueAt = dueAt
 	}
 	if publishNow {
-		if err := s.posts.SetPublishing(ctx, ws.ID, postID); err != nil {
-			return nil, ErrPostConflict
-		}
 		if s.notify != nil {
 			s.notify.NotifyApprovalDecision(ctx, notifyPost, userID, true, true, req.Comment)
 		}
-		published, err := s.publishAndGet(ctx, ws.ID, postID)
+		queued, err := s.enqueueForPublish(ctx, ws.ID, postID)
 		if err == nil {
-			s.resolveWorkflowApprovalRun(ctx, published, true)
+			s.resolveWorkflowApprovalRun(ctx, queued, true)
 		}
-		return published, err
+		return queued, err
 	}
 	scheduled, err := s.posts.SetScheduled(ctx, ws.ID, postID, *dueAt)
 	if err != nil {

@@ -196,7 +196,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	)
 	loadMonitorRepo := repository.NewLoadMonitorRepository(db.Pool)
 	loadMonitorSvc := service.NewLoadMonitorService(
-		settingsRepo, loadMonitorRepo, postRepo, opsStateRepo, db, telegramSvc, telegramSettingsSvc, logger,
+		settingsRepo, loadMonitorRepo, postRepo, opsStateRepo, db, telegramSvc, telegramSettingsSvc, cfg, logger,
 	)
 	loadMonitorHandler := handler.NewLoadMonitorHandler(loadMonitorSvc)
 	telegramHandler := handler.NewTelegramSettingsHandler(telegramSettingsSvc, telegramSvc, opsDigestSvc)

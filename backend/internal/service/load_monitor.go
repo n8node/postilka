@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/postilka/postilka/internal/config"
 	"github.com/postilka/postilka/internal/model"
 	"github.com/postilka/postilka/internal/repository"
 )
@@ -23,14 +24,15 @@ const (
 )
 
 type LoadMonitorService struct {
-	settings *repository.SettingsRepository
-	loadRepo *repository.LoadMonitorRepository
-	posts    *repository.PostRepository
-	opsState *repository.OpsStateRepository
-	db       *repository.Postgres
-	telegram *TelegramService
+	settings   *repository.SettingsRepository
+	loadRepo   *repository.LoadMonitorRepository
+	posts      *repository.PostRepository
+	opsState   *repository.OpsStateRepository
+	db         *repository.Postgres
+	telegram   *TelegramService
 	tgSettings *TelegramSettingsService
-	logger   *slog.Logger
+	env        *config.Config
+	logger     *slog.Logger
 }
 
 func NewLoadMonitorService(
@@ -41,6 +43,7 @@ func NewLoadMonitorService(
 	db *repository.Postgres,
 	telegram *TelegramService,
 	tgSettings *TelegramSettingsService,
+	env *config.Config,
 	logger *slog.Logger,
 ) *LoadMonitorService {
 	if logger == nil {
@@ -49,7 +52,7 @@ func NewLoadMonitorService(
 	return &LoadMonitorService{
 		settings: settings, loadRepo: loadRepo, posts: posts,
 		opsState: opsState, db: db, telegram: telegram, tgSettings: tgSettings,
-		logger: logger,
+		env: env, logger: logger,
 	}
 }
 
@@ -71,9 +74,17 @@ func (s *LoadMonitorService) GetDashboard(ctx context.Context) (*model.LoadMonit
 	}
 	trend := assessLoadTrend(history, cfg.ServerRAMGB)
 	lastAt, _ := s.loadRepo.LatestSnapshotAt(ctx)
+	poolMax := 0
+	if s.db != nil && s.db.Pool != nil {
+		poolMax = int(s.db.Pool.Stat().MaxConns())
+	}
+	effective := s.GetEffectiveRuntimeTuning(ctx, poolMax)
+	recommendations := runtimeTuningRecommendations(cfg.ServerRAMGB)
 
 	dash := &model.LoadMonitorDashboard{
 		Settings:           cfg,
+		EffectiveTuning:    effective,
+		Recommendations:    recommendations,
 		Current:            current,
 		History:            history,
 		Trend:              trend,
@@ -111,6 +122,14 @@ func (s *LoadMonitorService) GetSettings(ctx context.Context) (model.LoadMonitor
 	}
 	normalizeLoadMonitorSettings(&out)
 	return out, nil
+}
+
+func (s *LoadMonitorService) GetEffectiveRuntimeTuning(ctx context.Context, poolMaxConns int) model.RuntimeTuningEffective {
+	cfg, err := s.GetSettings(ctx)
+	if err != nil {
+		return resolveRuntimeTuning(s.env, defaultLoadMonitorSettings(), poolMaxConns)
+	}
+	return resolveRuntimeTuning(s.env, cfg, poolMaxConns)
 }
 
 func (s *LoadMonitorService) UpdateSettings(ctx context.Context, in model.LoadMonitorSettings) (model.LoadMonitorSettings, error) {
@@ -301,6 +320,7 @@ func normalizeLoadMonitorSettings(cfg *model.LoadMonitorSettings) {
 	if cfg.ServerRAMGB > 512 {
 		cfg.ServerRAMGB = 512
 	}
+	normalizeRuntimeTuningSettings(&cfg.RuntimeTuning)
 }
 
 func assessLoadTrend(history []model.LoadDailyAggregate, serverRAMGB int) model.LoadTrendAssessment {

@@ -38,7 +38,7 @@ import {
   createPost,
   deletePost,
   fetchPosts,
-  publishPost,
+  publishPostAndWait,
   rejectPost,
   type Post,
 } from "@/lib/posts-api";
@@ -364,7 +364,7 @@ export function PostsListPage() {
     setActionId(post.id);
     setError(null);
     try {
-      await publishPost(post.id);
+      await publishPostAndWait(post.id);
       await load();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Не удалось повторить публикацию");

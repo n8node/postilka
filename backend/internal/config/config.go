@@ -25,7 +25,9 @@ type Config struct {
 	Domain       string `env:"DOMAIN" envDefault:"localhost"`
 	LinkBaseURL  string `env:"LINK_BASE_URL" envDefault:"https://postilka.ru/go"`
 
-	WorkerPublishConcurrency int `env:"WORKER_PUBLISH_CONCURRENCY" envDefault:"3"`
+	WorkerPublishConcurrency   int `env:"WORKER_PUBLISH_CONCURRENCY" envDefault:"3"`
+	WorkerPublishIntervalSec   int `env:"WORKER_PUBLISH_INTERVAL_SEC" envDefault:"30"`
+	DatabaseMaxConns           int `env:"DATABASE_MAX_CONNS" envDefault:"10"`
 
 	// Optional local hop for Telegram Bot API (Docker: host.docker.internal:8889 → gost → upstream).
 	TelegramLocalProxy string `env:"TELEGRAM_LOCAL_PROXY"`

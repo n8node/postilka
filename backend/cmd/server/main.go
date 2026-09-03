@@ -37,7 +37,7 @@ func main() {
 		logger.Warn("migrations failed", "error", err)
 	}
 
-	db, err := repository.NewPostgres(ctx, cfg.DatabaseURL)
+	db, err := repository.NewPostgres(ctx, cfg.DatabaseURL, cfg.DatabaseMaxConns)
 	if err != nil {
 		logger.Error("connect postgres", "error", err)
 		os.Exit(1)

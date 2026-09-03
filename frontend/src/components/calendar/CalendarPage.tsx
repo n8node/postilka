@@ -47,7 +47,7 @@ import {
   deletePost,
   fetchCalendarPosts,
   fetchUnscheduledPosts,
-  publishPost,
+  publishPostAndWait,
   schedulePost,
   type Post,
 } from "@/lib/posts-api";
@@ -796,7 +796,7 @@ export function CalendarPage() {
                     if (!emailVerified) {
                       throw new ApiError(403, EMAIL_UNVERIFIED_RESTRICTED_MESSAGE, "email_not_verified");
                     }
-                    const updated = await publishPost(selected.id);
+                    const updated = await publishPostAndWait(selected.id);
                     updatePostLocal(updated);
                     await load();
                   })

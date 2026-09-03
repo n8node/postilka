@@ -27,7 +27,7 @@ func main() {
 	}
 
 	ctx := context.Background()
-	db, err := repository.NewPostgres(ctx, cfg.DatabaseURL)
+	db, err := repository.NewPostgres(ctx, cfg.DatabaseURL, cfg.DatabaseMaxConns)
 	if err != nil {
 		logger.Error("connect postgres", "error", err)
 		os.Exit(1)
@@ -110,7 +110,6 @@ func main() {
 	metricsCollector := service.NewMetricsCollectorService(
 		analyticsRepo, linkCodeRepo, postRepo, channelRepo, channelTestSvc, metrikaSvc, telegramBotClient, photochkaClient, logger,
 	)
-	logger.Info("worker started", "publish_concurrency", cfg.WorkerPublishConcurrency, "version", config.Version)
 
 	approvalRepo := repository.NewPostApprovalRepository(db.Pool)
 	postSvc := service.NewPostService(postRepo, channelRepo, wsSvc, publicationSvc, approvalRepo, userRepo)
@@ -136,7 +135,7 @@ func main() {
 	settingsRepo := repository.NewSettingsRepository(db.Pool)
 	loadMonitorRepo := repository.NewLoadMonitorRepository(db.Pool)
 	loadMonitorSvc := service.NewLoadMonitorService(
-		settingsRepo, loadMonitorRepo, postRepo, opsStateRepo, db, telegramSvc, telegramSettingsSvc, logger,
+		settingsRepo, loadMonitorRepo, postRepo, opsStateRepo, db, telegramSvc, telegramSettingsSvc, cfg, logger,
 	)
 	genRepo := repository.NewAIGenerationRepository(db.Pool)
 	genJobRepo := repository.NewAIGenerationJobRepository(db.Pool)
@@ -149,6 +148,17 @@ func main() {
 	)
 	workflowSvc.SetWorkflowConfig(cfg)
 	workflowSvc.SetNotifier(notificationSvc)
+
+	logger.Info("worker started",
+		"publish_concurrency", cfg.WorkerPublishConcurrency,
+		"publish_interval_sec", cfg.WorkerPublishIntervalSec,
+		"database_max_conns", cfg.DatabaseMaxConns,
+		"version", config.Version,
+	)
+
+	workerCtx, workerCancel := context.WithCancel(ctx)
+	defer workerCancel()
+	go runPublishLoop(workerCtx, logger, loadMonitorSvc, publicationSvc, db)
 
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
@@ -196,11 +206,6 @@ func main() {
 			if err := notificationSvc.ProcessScheduled(ctx); err != nil {
 				logger.Warn("notification scheduled tick failed", "error", err)
 			}
-			if n, err := publicationSvc.ProcessDue(ctx, cfg.WorkerPublishConcurrency); err != nil {
-				logger.Warn("post publication tick failed", "error", err, "claimed", n)
-			} else if n > 0 {
-				logger.Info("processed due posts", "count", n)
-			}
 			if n, err := fileStorageSvc.PurgeExpiredTrash(ctx); err != nil {
 				logger.Warn("purge trash tick failed", "error", err)
 			} else if n > 0 {
@@ -220,6 +225,7 @@ func main() {
 				lastMetricsRun = time.Now()
 			}
 		case <-quit:
+			workerCancel()
 			logger.Info("worker stopped")
 			return
 		}
