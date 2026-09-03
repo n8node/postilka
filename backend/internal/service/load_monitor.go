@@ -67,6 +67,9 @@ func (s *LoadMonitorService) GetDashboard(ctx context.Context) (*model.LoadMonit
 	if err != nil {
 		return nil, err
 	}
+	if history == nil {
+		history = []model.LoadDailyAggregate{}
+	}
 	trend := assessLoadTrend(history, cfg.ServerRAMGB)
 	lastAt, _ := s.loadRepo.LatestSnapshotAt(ctx)
 
@@ -305,6 +308,7 @@ func assessLoadTrend(history []model.LoadDailyAggregate, serverRAMGB int) model.
 		Level:     model.LoadTrendStable,
 		Summary:   "Нагрузка стабильна, резкого роста не видно.",
 		RAMAdvice: ramAdviceForLevel(model.LoadTrendStable, serverRAMGB),
+		Signals:   []string{},
 	}
 	if len(history) < 4 {
 		out.Summary = "Мало данных для тренда — нужно несколько дней снимков."

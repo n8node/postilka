@@ -62,7 +62,11 @@ export function AdminLoadMonitorPage() {
     try {
       const res = await fetchAdminLoadMonitor();
       setDash(res);
-      setForm(res.settings);
+      setForm(res.settings ?? {
+        report_enabled: true,
+        report_hour: 9,
+        server_ram_gb: 6,
+      });
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Не удалось загрузить мониторинг");
     } finally {
@@ -98,7 +102,7 @@ export function AdminLoadMonitorPage() {
     try {
       const res = await recordAdminLoadMonitorSnapshot();
       setDash(res);
-      setForm(res.settings);
+      setForm(res.settings ?? form);
       setMessage("Снимок записан");
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Не удалось записать снимок");
@@ -197,9 +201,9 @@ export function AdminLoadMonitorPage() {
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="text-lg font-semibold text-slate-900">Тренд и рекомендации</h2>
           <p className="mt-2 text-sm text-slate-700">{trend.summary}</p>
-          {trend.signals.length > 0 ? (
+          {(trend.signals ?? []).length > 0 ? (
             <ul className="mt-3 list-inside list-disc text-sm text-slate-600">
-              {trend.signals.map((sig) => (
+              {(trend.signals ?? []).map((sig) => (
                 <li key={sig}>{sig}</li>
               ))}
             </ul>
@@ -223,13 +227,13 @@ export function AdminLoadMonitorPage() {
                 </tr>
               </thead>
               <tbody>
-                {dash.history.map((row) => (
+                {(dash.history ?? []).map((row) => (
                   <tr key={row.day} className="border-b border-slate-100">
                     <td className="py-2 pr-4">{formatDateTime(row.day).slice(0, 10)}</td>
-                    <td className="py-2 pr-4">{row.avg_publish_backlog.toFixed(1)}</td>
-                    <td className="py-2 pr-4">{row.max_publish_backlog}</td>
-                    <td className="py-2 pr-4">{row.avg_gen_jobs_active.toFixed(1)}</td>
-                    <td className="py-2">{Math.round(row.avg_db_pool_util * 100)}%</td>
+                    <td className="py-2 pr-4">{(row.avg_publish_backlog ?? 0).toFixed(1)}</td>
+                    <td className="py-2 pr-4">{row.max_publish_backlog ?? 0}</td>
+                    <td className="py-2 pr-4">{(row.avg_gen_jobs_active ?? 0).toFixed(1)}</td>
+                    <td className="py-2">{Math.round((row.avg_db_pool_util ?? 0) * 100)}%</td>
                   </tr>
                 ))}
               </tbody>
