@@ -7,6 +7,7 @@ import { ProtectedMediaImage } from "@/components/media/ProtectedMediaImage";
 import { SketchCanvas, type SketchCanvasHandle } from "@/components/sketch/SketchCanvas";
 import { SketchGenerationModal } from "@/components/sketch/SketchGenerationModal";
 import { SketchInspector } from "@/components/sketch/SketchInspector";
+import { GenerationProgressPanel } from "@/components/generation/GenerationProgressPanel";
 import { useAuth } from "@/context/AuthContext";
 import { ApiError } from "@/lib/api";
 import type { AspectRatioId } from "@/lib/generation-data";
@@ -70,6 +71,9 @@ export function SketchPage() {
   const resultIsVideo = useSketchJobStore((s) => s.resultIsVideo);
   const resultGenerationId = useSketchJobStore((s) => s.resultGenerationId);
   const completionSeq = useSketchJobStore((s) => s.completionSeq);
+  const jobProgress = useSketchJobStore((s) => s.progress);
+  const jobStatus = useSketchJobStore((s) => s.status);
+  const mediaKind = useSketchJobStore((s) => s.mediaKind);
   const [savedSketches, setSavedSketches] = useState<SavedSketch[]>([]);
   const [selectedSaveId, setSelectedSaveId] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -447,18 +451,29 @@ export function SketchPage() {
                 </div>
               </div>
 
-              <SketchCanvas
-                ref={canvasRef}
-                width={canvasSize.width}
-                height={canvasSize.height}
-                brush={brush}
-                color={color}
-                brushSize={brushSize}
-                backgroundImage={backgroundImage}
-                backgroundOpacity={backgroundOpacity}
-                onHistoryChange={refreshUndo}
-                maxHeight="calc(100vh - 24rem)"
-              />
+              <div className="relative inline-flex min-w-0 max-w-full overflow-hidden rounded-xl">
+                <SketchCanvas
+                  ref={canvasRef}
+                  width={canvasSize.width}
+                  height={canvasSize.height}
+                  brush={brush}
+                  color={color}
+                  brushSize={brushSize}
+                  backgroundImage={backgroundImage}
+                  backgroundOpacity={backgroundOpacity}
+                  onHistoryChange={refreshUndo}
+                  maxHeight="calc(100vh - 24rem)"
+                />
+                {generating ? (
+                  <GenerationProgressPanel
+                    progress={jobProgress}
+                    status={jobStatus}
+                    active
+                    overlay
+                    variant={mediaKind === "video" || output === "video" ? "video" : "image"}
+                  />
+                ) : null}
+              </div>
 
               <div className="mt-2 flex items-center justify-end gap-2">
                 <button

@@ -11,6 +11,7 @@ type GenerationProgressPanelProps = {
   active: boolean;
   empty?: boolean;
   variant?: "image" | "video";
+  overlay?: boolean;
 };
 
 export function GenerationProgressPanel({
@@ -19,13 +20,20 @@ export function GenerationProgressPanel({
   active,
   empty = false,
   variant = "image",
+  overlay = false,
 }: GenerationProgressPanelProps) {
   const pct = useSmoothProgress(progress, active);
   const isVideo = variant === "video";
   const Icon = isVideo ? Film : Wand2;
 
   return (
-    <div className="flex min-h-[360px] flex-col items-center justify-center rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-6 py-12 text-center">
+    <div
+      className={
+        overlay
+          ? "absolute inset-0 z-10 flex flex-col items-center justify-center bg-white/60 px-6 py-8 text-center backdrop-blur-md dark:bg-zinc-950/55"
+          : "flex min-h-[360px] flex-col items-center justify-center rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-6 py-12 text-center"
+      }
+    >
       <div
         className={[
           "generation-shimmer-wrap mb-4",

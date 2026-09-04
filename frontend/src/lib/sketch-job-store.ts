@@ -19,9 +19,12 @@ type SketchJobState = {
   resultThumbUrl: string | null;
   sketchId: string | null;
   workspaceId: string | null;
+  progress: number;
+  status: string;
   pollSerial: number;
   completionSeq: number;
   markStarting: () => void;
+  patchJob: (progress: number, status: string) => void;
   beginJob: (input: {
     jobId: string;
     mediaKind: SketchMediaKind;
@@ -55,6 +58,8 @@ const initialRun = {
   resultThumbUrl: null as string | null,
   sketchId: null as string | null,
   workspaceId: null as string | null,
+  progress: 0,
+  status: "preparing",
 };
 
 export const useSketchJobStore = create<SketchJobState>((set, get) => ({
@@ -83,9 +88,14 @@ export const useSketchJobStore = create<SketchJobState>((set, get) => ({
       startedAt,
       sketchId,
       workspaceId,
+      progress: 0,
+      status: "preparing",
       pollSerial: s.pollSerial + 1,
       completionSeq: s.completionSeq,
     })),
+
+  patchJob: (progress, status) =>
+    set((s) => (s.running && s.jobId ? { progress, status } : {})),
 
   completeJob: ({ url, thumbUrl, generationId, isVideo, createdAt, creditsRemaining }) => {
     const current = get();

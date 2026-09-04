@@ -30,9 +30,16 @@ export function resumeSketchPoll() {
 
   const run =
     mediaKind === "video"
-      ? pollVideoGenerationJob(jobId, () => undefined, {
-          shouldContinue: stillCurrent,
-        }).then((job) => {
+      ? pollVideoGenerationJob(
+          jobId,
+          (job) => {
+            if (!stillCurrent()) return;
+            useSketchJobStore.getState().patchJob(job.progress ?? 0, job.status);
+          },
+          {
+            shouldContinue: stillCurrent,
+          },
+        ).then((job) => {
           if (!stillCurrent()) return;
           if (job.status === "failed") {
             finishError(job.fail_message || "Ошибка генерации видео");
@@ -51,7 +58,10 @@ export function resumeSketchPoll() {
             createdAt: gen.created_at,
           });
         })
-      : pollGenerationJob(jobId, () => undefined).then((res) => {
+      : pollGenerationJob(jobId, (job) => {
+          if (!stillCurrent()) return;
+          useSketchJobStore.getState().patchJob(job.progress ?? 0, job.status);
+        }).then((res) => {
           if (!stillCurrent()) return;
           if (res.job.status === "failed") {
             finishError(res.job.fail_message || "Ошибка генерации");
