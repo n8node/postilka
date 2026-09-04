@@ -18,7 +18,7 @@ export function formatProviderLabel(provider: ChannelProvider, chatType?: string
   return PROVIDER_LABEL[provider] ?? provider;
 }
 
-const ICON_COLOR: Record<ChannelProvider, string> = {
+export const PROVIDER_BRAND_COLOR: Record<ChannelProvider, string> = {
   telegram: "#2AABEE",
   vk: "#0077FF",
   ok: "#EE8208",
@@ -37,7 +37,7 @@ export function ProviderIcon({
   provider: ChannelProvider;
   className?: string;
 }) {
-  const color = ICON_COLOR[provider] ?? "#71717A";
+  const color = PROVIDER_BRAND_COLOR[provider] ?? "#71717A";
   return (
     <svg viewBox="0 0 24 24" className={cn("h-3.5 w-3.5 shrink-0", className)} aria-hidden>
       {provider === "telegram" ? (

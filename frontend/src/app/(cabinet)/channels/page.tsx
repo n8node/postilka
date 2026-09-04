@@ -5,7 +5,8 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { CabinetPage } from "@/components/layout/CabinetPage";
 import { EmptyState } from "@/components/layout/EmptyState";
-import { ConnectChannelMenu } from "@/components/channels/ConnectChannelMenu";
+import { ConnectChannelMenu, useConnectChannelFlow } from "@/components/channels/ConnectChannelMenu";
+import { ChannelProviderPlates } from "@/components/channels/ChannelProviderPlates";
 import { ChannelAvatar } from "@/components/channels/ChannelAvatar";
 import { EditChannelDialog } from "@/components/channels/EditChannelDialog";
 import {
@@ -193,6 +194,8 @@ export default function ChannelsPage() {
     [load],
   );
 
+  const connect = useConnectChannelFlow(handleChannelConnected);
+
   function replaceItem(updated: ChannelListItem) {
     setItems((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
   }
@@ -288,7 +291,12 @@ export default function ChannelsPage() {
       <PageHeader
         title="Каналы"
         description="Подключённые каналы и сообщества workspace во всех соцсетях."
-        actions={<ConnectChannelMenu onConnected={(connected) => void handleChannelConnected(connected)} />}
+        actions={
+          <ConnectChannelMenu
+            providers={connect.enabledProviders}
+            onPick={connect.pickProvider}
+          />
+        }
       />
 
       {error && (
@@ -296,6 +304,13 @@ export default function ChannelsPage() {
           {error}
         </div>
       )}
+
+      <ChannelProviderPlates
+        items={connect.enabledProviders}
+        channels={items}
+        loading={connect.infoLoading}
+        onPick={connect.pickProvider}
+      />
 
       <CabinetPage
         rightTitle={displayName ?? undefined}
@@ -686,6 +701,7 @@ export default function ChannelsPage() {
           }}
         />
       )}
+      {connect.dialogs}
     </div>
   );
 }

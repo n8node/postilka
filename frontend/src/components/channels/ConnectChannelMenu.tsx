@@ -1,7 +1,7 @@
 "use client";
 
 import { ChevronDown, Loader2 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchChannelProviderInfo,
   type ChannelListItem,
@@ -31,29 +31,199 @@ const PROVIDER_LABELS: Partial<Record<ChannelProvider, string>> = {
   wordpress: "WordPress",
 };
 
-type ConnectMenuItem = {
-  key: ChannelProvider | "telegram_business";
+export type ConnectProviderKey = ChannelProvider | "telegram_business";
+
+export type ConnectProviderItem = {
+  key: ConnectProviderKey;
   label: string;
+  plateLabel: string;
   logoUrl?: string;
 };
 
-type ConnectChannelMenuProps = {
-  onConnected: (connected?: ChannelListItem[]) => void;
-};
+export function connectProviderLogoKey(key: ConnectProviderKey): ChannelProvider {
+  return key === "telegram_business" ? "telegram" : key;
+}
 
-export function ConnectChannelMenu({ onConnected }: ConnectChannelMenuProps) {
-  const [open, setOpen] = useState(false);
+export function buildEnabledConnectProviders(
+  info: ChannelProviderInfo | null,
+): ConnectProviderItem[] {
+  const enabled: ConnectProviderItem[] = [];
+  if (info?.telegram_enabled) {
+    enabled.push({
+      key: "telegram",
+      label: "Telegram",
+      plateLabel: "Telegram",
+      logoUrl: info.telegram_logo_url,
+    });
+  }
+  if (info?.telegram_business_stories_enabled) {
+    enabled.push({
+      key: "telegram_business",
+      label: "Telegram Business (Stories)",
+      plateLabel: "Telegram Business",
+      logoUrl: info.telegram_business_logo_url || info.telegram_logo_url,
+    });
+  }
+  for (const p of info?.providers ?? []) {
+    if (p.enabled) {
+      enabled.push({
+        key: p.provider as ChannelProvider,
+        label: p.label,
+        plateLabel: p.label,
+        logoUrl: p.logo_url,
+      });
+    }
+  }
+  if (info?.photochka_enabled !== false) {
+    enabled.push({
+      key: "photochka",
+      label: "Photochka",
+      plateLabel: "Photochka",
+      logoUrl: info?.photochka_logo_url,
+    });
+  }
+  if (info?.wordpress_enabled !== false) {
+    enabled.push({
+      key: "wordpress",
+      label: "WordPress",
+      plateLabel: "WordPress",
+      logoUrl: info?.wordpress_logo_url,
+    });
+  }
+  return enabled;
+}
+
+export function countConnectedChannels(
+  key: ConnectProviderKey,
+  channels: ChannelListItem[],
+): number {
+  if (key === "telegram_business") {
+    return channels.filter((c) => c.provider === "telegram" && c.chat_type === "business").length;
+  }
+  if (key === "telegram") {
+    return channels.filter((c) => c.provider === "telegram" && c.chat_type !== "business").length;
+  }
+  return channels.filter((c) => c.provider === key).length;
+}
+
+export function useConnectChannelFlow(onConnected: (connected?: ChannelListItem[]) => void) {
   const [providerInfo, setProviderInfo] = useState<ChannelProviderInfo | null>(null);
-  const [activeProvider, setActiveProvider] = useState<ChannelProvider | "telegram_business" | null>(
-    null,
-  );
-  const menuRef = useRef<HTMLDivElement>(null);
+  const [infoLoading, setInfoLoading] = useState(true);
+  const [activeProvider, setActiveProvider] = useState<ConnectProviderKey | null>(null);
 
   useEffect(() => {
     fetchChannelProviderInfo()
       .then(setProviderInfo)
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setInfoLoading(false));
   }, []);
+
+  const enabledProviders = useMemo(
+    () => buildEnabledConnectProviders(providerInfo),
+    [providerInfo],
+  );
+
+  const pickProvider = useCallback((key: ConnectProviderKey) => {
+    setActiveProvider(key);
+  }, []);
+
+  const handleConnected = useCallback(
+    (connected?: ChannelListItem[]) => {
+      setActiveProvider(null);
+      onConnected(connected);
+    },
+    [onConnected],
+  );
+
+  return {
+    enabledProviders,
+    infoLoading,
+    pickProvider,
+    dialogs: (
+      <ConnectChannelDialogs
+        activeProvider={activeProvider}
+        onClose={() => setActiveProvider(null)}
+        onConnected={handleConnected}
+        onConnectTelegram={() => setActiveProvider("telegram")}
+      />
+    ),
+  };
+}
+
+function ConnectChannelDialogs({
+  activeProvider,
+  onClose,
+  onConnected,
+  onConnectTelegram,
+}: {
+  activeProvider: ConnectProviderKey | null;
+  onClose: () => void;
+  onConnected: (connected?: ChannelListItem[]) => void;
+  onConnectTelegram: () => void;
+}) {
+  return (
+    <>
+      <ConnectTelegramDialog
+        open={activeProvider === "telegram"}
+        onClose={onClose}
+        onConnected={onConnected}
+      />
+
+      <ConnectTelegramBusinessDialog
+        open={activeProvider === "telegram_business"}
+        onClose={onClose}
+        onConnected={onConnected}
+      />
+
+      {activeProvider === "max" && (
+        <ConnectMAXDialog open onClose={onClose} onConnected={onConnected} />
+      )}
+
+      {activeProvider === "vk" && (
+        <ConnectVKDialog open onClose={onClose} onConnected={onConnected} />
+      )}
+
+      {activeProvider === "dzen" && (
+        <ConnectDzenDialog open onClose={onClose} onConnectTelegram={onConnectTelegram} />
+      )}
+
+      {activeProvider === "rutube" && (
+        <ConnectOAuthProviderDialog
+          open
+          provider="rutube"
+          label={PROVIDER_LABELS.rutube ?? "Rutube"}
+          onClose={onClose}
+          onConnected={onConnected}
+        />
+      )}
+
+      {activeProvider === "youtube" && (
+        <ConnectYouTubeDialog open onClose={onClose} onConnected={onConnected} />
+      )}
+
+      <ConnectPhotochkaDialog
+        open={activeProvider === "photochka"}
+        onClose={onClose}
+        onConnected={onConnected}
+      />
+
+      <ConnectWordPressDialog
+        open={activeProvider === "wordpress"}
+        onClose={onClose}
+        onConnected={onConnected}
+      />
+    </>
+  );
+}
+
+type ConnectChannelMenuProps = {
+  providers: ConnectProviderItem[];
+  onPick: (key: ConnectProviderKey) => void;
+};
+
+export function ConnectChannelMenu({ providers, onPick }: ConnectChannelMenuProps) {
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
@@ -65,155 +235,41 @@ export function ConnectChannelMenu({ onConnected }: ConnectChannelMenuProps) {
     return () => document.removeEventListener("mousedown", onDocClick);
   }, []);
 
-  const enabledProviders: ConnectMenuItem[] = [];
-  if (providerInfo?.telegram_enabled) {
-    enabledProviders.push({
-      key: "telegram",
-      label: "Telegram",
-      logoUrl: providerInfo.telegram_logo_url,
-    });
-  }
-  if (providerInfo?.telegram_business_stories_enabled) {
-    enabledProviders.push({
-      key: "telegram_business",
-      label: "Telegram Business (Stories)",
-      logoUrl: providerInfo.telegram_business_logo_url || providerInfo.telegram_logo_url,
-    });
-  }
-  for (const p of providerInfo?.providers ?? []) {
-    if (p.enabled) {
-      enabledProviders.push({
-        key: p.provider as ChannelProvider,
-        label: p.label,
-        logoUrl: p.logo_url,
-      });
-    }
-  }
-  if (providerInfo?.photochka_enabled !== false) {
-    enabledProviders.push({
-      key: "photochka",
-      label: "Photochka",
-      logoUrl: providerInfo?.photochka_logo_url,
-    });
-  }
-  if (providerInfo?.wordpress_enabled !== false) {
-    enabledProviders.push({
-      key: "wordpress",
-      label: "WordPress",
-      logoUrl: providerInfo?.wordpress_logo_url,
-    });
-  }
-
-  function pickProvider(key: ChannelProvider | "telegram_business") {
-    setOpen(false);
-    setActiveProvider(key);
-  }
-
-  function handleConnected(connected?: ChannelListItem[]) {
-    setActiveProvider(null);
-    onConnected(connected);
-  }
-
   return (
-    <>
-      <div className="relative" ref={menuRef}>
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          disabled={enabledProviders.length === 0}
-          className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
-        >
-          Подключить канал
-          <ChevronDown className={cn("h-4 w-4 transition-transform", open && "rotate-180")} />
-        </button>
+    <div className="relative" ref={menuRef}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        disabled={providers.length === 0}
+        className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+      >
+        Подключить канал
+        <ChevronDown className={cn("h-4 w-4 transition-transform", open && "rotate-180")} />
+      </button>
 
-        {open && enabledProviders.length > 0 && (
-          <ul className="absolute right-0 z-20 mt-1 min-w-[220px] overflow-hidden rounded-lg border border-border bg-surface py-1 shadow-lg">
-            {enabledProviders.map((item) => (
-              <li key={item.key}>
-                <button
-                  type="button"
-                  onClick={() => pickProvider(item.key)}
-                  className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-zinc-50"
-                >
-                  <ProviderLogoMark
-                    provider={item.key === "telegram_business" ? "telegram" : item.key}
-                    logoUrl={item.logoUrl}
-                  />
-                  <span>{item.label}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      <ConnectTelegramDialog
-        open={activeProvider === "telegram"}
-        onClose={() => setActiveProvider(null)}
-        onConnected={handleConnected}
-      />
-
-      <ConnectTelegramBusinessDialog
-        open={activeProvider === "telegram_business"}
-        onClose={() => setActiveProvider(null)}
-        onConnected={handleConnected}
-      />
-
-      {activeProvider === "max" && (
-        <ConnectMAXDialog
-          open
-          onClose={() => setActiveProvider(null)}
-          onConnected={handleConnected}
-        />
+      {open && providers.length > 0 && (
+        <ul className="absolute right-0 z-20 mt-1 min-w-[220px] overflow-hidden rounded-lg border border-border bg-surface py-1 shadow-lg">
+          {providers.map((item) => (
+            <li key={item.key}>
+              <button
+                type="button"
+                onClick={() => {
+                  setOpen(false);
+                  onPick(item.key);
+                }}
+                className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-zinc-50"
+              >
+                <ProviderLogoMark
+                  provider={connectProviderLogoKey(item.key)}
+                  logoUrl={item.logoUrl}
+                />
+                <span>{item.label}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
       )}
-
-      {activeProvider === "vk" && (
-        <ConnectVKDialog
-          open
-          onClose={() => setActiveProvider(null)}
-          onConnected={handleConnected}
-        />
-      )}
-
-      {activeProvider === "dzen" && (
-        <ConnectDzenDialog
-          open
-          onClose={() => setActiveProvider(null)}
-          onConnectTelegram={() => setActiveProvider("telegram")}
-        />
-      )}
-
-      {activeProvider === "rutube" && (
-        <ConnectOAuthProviderDialog
-          open
-          provider="rutube"
-          label={PROVIDER_LABELS.rutube ?? "Rutube"}
-          onClose={() => setActiveProvider(null)}
-          onConnected={handleConnected}
-        />
-      )}
-
-      {activeProvider === "youtube" && (
-        <ConnectYouTubeDialog
-          open
-          onClose={() => setActiveProvider(null)}
-          onConnected={handleConnected}
-        />
-      )}
-
-      <ConnectPhotochkaDialog
-        open={activeProvider === "photochka"}
-        onClose={() => setActiveProvider(null)}
-        onConnected={handleConnected}
-      />
-
-      <ConnectWordPressDialog
-        open={activeProvider === "wordpress"}
-        onClose={() => setActiveProvider(null)}
-        onConnected={handleConnected}
-      />
-    </>
+    </div>
   );
 }
 

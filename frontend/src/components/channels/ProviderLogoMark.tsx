@@ -11,6 +11,8 @@ type ProviderLogoMarkProps = {
   logoUrl?: string | null;
   cacheKey?: string;
   className?: string;
+  iconClassName?: string;
+  contain?: boolean;
 };
 
 export function ProviderLogoMark({
@@ -18,6 +20,8 @@ export function ProviderLogoMark({
   logoUrl,
   cacheKey,
   className,
+  iconClassName,
+  contain = false,
 }: ProviderLogoMarkProps) {
   const [failed, setFailed] = useState(false);
   const resolved = logoUrl?.trim() ? mediaUrl(logoUrl) : null;
@@ -43,11 +47,11 @@ export function ProviderLogoMark({
         <img
           src={src}
           alt=""
-          className="h-full w-full object-cover"
+          className={cn("h-full w-full", contain ? "object-contain p-1.5" : "object-cover")}
           onError={() => setFailed(true)}
         />
       ) : (
-        <ProviderIcon provider={provider} className="h-3.5 w-3.5" />
+        <ProviderIcon provider={provider} className={iconClassName ?? "h-3.5 w-3.5"} />
       )}
     </span>
   );
