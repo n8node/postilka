@@ -65,6 +65,10 @@ function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+function isPostComposerPath(pathname: string) {
+  return pathname === "/posts/new" || /^\/posts\/[^/]+$/.test(pathname);
+}
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { user, workspace, active_workspace } = useAuth();
   const workspaceId = active_workspace?.id ?? workspace?.id ?? "none";
@@ -278,7 +282,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   isActive(pathname, "/ai") ||
                   isActive(pathname, "/team") ||
                   isActive(pathname, "/channels") ||
-                  isActive(pathname, "/support")
+                  isActive(pathname, "/support") ||
+                  isPostComposerPath(pathname)
                 ? "max-w-none px-4 py-6 sm:px-6 lg:px-8"
                 : "max-w-7xl px-4 py-6 sm:px-6 lg:px-8",
             )}

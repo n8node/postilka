@@ -15,7 +15,8 @@ body {
 
 .post-composer-layout {
   display: grid;
-  grid-template-columns: minmax(560px, 1fr) 12px var(--preview-width, 380px);
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr) 12px var(--preview-width, 380px);
   align-items: start;
 }
 

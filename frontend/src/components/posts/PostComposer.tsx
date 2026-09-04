@@ -2535,7 +2535,7 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
   }
 
   return (
-    <div>
+    <div className="w-full min-w-0">
       <PageHeader
         title={
           isViewOnly
