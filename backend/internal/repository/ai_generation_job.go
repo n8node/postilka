@@ -23,6 +23,18 @@ func (r *AIGenerationJobRepository) Create(ctx context.Context, job model.AIGene
 	if job.ID == "" {
 		job.ID = uuid.NewString()
 	}
+	if job.CombineUploadIDs == nil {
+		job.CombineUploadIDs = []string{}
+	}
+	if job.ReferenceUploadIDs == nil {
+		job.ReferenceUploadIDs = []string{}
+	}
+	if job.ReferenceVideoUploadIDs == nil {
+		job.ReferenceVideoUploadIDs = []string{}
+	}
+	if job.ReferenceAudioUploadIDs == nil {
+		job.ReferenceAudioUploadIDs = []string{}
+	}
 	combineJSON, err := json.Marshal(job.CombineUploadIDs)
 	if err != nil {
 		return model.AIGenerationJob{}, err

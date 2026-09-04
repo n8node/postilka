@@ -132,17 +132,7 @@ func buildGenericVideoTaskInput(modelID, mode, prompt, aspectRatio string, durat
 			}
 		}
 	case "reference-to-video":
-		refs := src.ReferenceImageURLs
-		if len(refs) > 0 {
-			switch {
-			case strings.HasPrefix(modelID, "wan/"):
-				input["reference_image"] = refs
-			case strings.HasPrefix(modelID, "happyhorse"):
-				input["reference_image"] = refs
-			default:
-				input["reference_image"] = refs
-			}
-		}
+		attachGenericReferenceMedia(input, modelID, src)
 	}
 
 	if strings.HasPrefix(modelID, "kling-2.6/") {
@@ -150,6 +140,47 @@ func buildGenericVideoTaskInput(modelID, mode, prompt, aspectRatio string, durat
 	}
 
 	return input
+}
+
+func attachGenericReferenceMedia(input map[string]any, modelID string, src VideoTaskSources) {
+	images := nonEmptyURLs(src.ReferenceImageURLs)
+	videos := nonEmptyURLs(src.ReferenceVideoURLs)
+	audios := nonEmptyURLs(src.ReferenceAudioURLs)
+	if len(images) == 0 && len(videos) == 0 && len(audios) == 0 {
+		return
+	}
+
+	useSingular := strings.HasPrefix(modelID, "wan/") || strings.HasPrefix(modelID, "happyhorse")
+	if len(images) > 0 {
+		input["reference_image"] = images
+		if !useSingular {
+			input["reference_image_urls"] = images
+		}
+	}
+	if len(videos) > 0 {
+		if useSingular {
+			input["reference_video"] = videos
+		} else {
+			input["reference_video_urls"] = videos
+		}
+	}
+	if len(audios) > 0 {
+		if useSingular {
+			input["reference_audio"] = audios
+		} else {
+			input["reference_audio_urls"] = audios
+		}
+	}
+}
+
+func nonEmptyURLs(urls []string) []string {
+	out := make([]string, 0, len(urls))
+	for _, raw := range urls {
+		if u := strings.TrimSpace(raw); u != "" {
+			out = append(out, u)
+		}
+	}
+	return out
 }
 
 func clampVideoDuration(n int) int {

@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -206,6 +207,14 @@ func (h *VideoGenerationHandler) mapError(w http.ResponseWriter, err error) {
 		writeErrorWithCode(w, http.StatusBadRequest, "upload_invalid", "Неподдерживаемый или слишком большой файл")
 	case errors.Is(err, service.ErrGenerationUploadNotFound):
 		writeErrorWithCode(w, http.StatusBadRequest, "upload_not_found", "Файл не найден на диске проекта")
+	case errors.Is(err, service.ErrGenerationSourceRead), errors.Is(err, service.ErrStorageNotConfigured):
+		writeErrorWithCode(w, http.StatusBadRequest, "source_unreadable", "Не удалось прочитать исходное видео или фото. Загрузите файл снова.")
+	case errors.Is(err, service.ErrVideoGenerationRefsRequired):
+		writeErrorWithCode(w, http.StatusBadRequest, "source_required", "Загрузите референс-фото или видео")
+	case errors.Is(err, service.ErrVideoGenerationAudioOnly):
+		writeErrorWithCode(w, http.StatusBadRequest, "source_required", "Аудио можно добавить только вместе с фото или видео")
+	case errors.Is(err, service.ErrVideoGenerationTooManyRefs):
+		writeErrorWithCode(w, http.StatusBadRequest, "too_many_references", "Слишком много референсов: до 9 фото, 3 видео и 3 аудио")
 	case errors.Is(err, service.ErrVideoGenerationSourceRequired):
 		writeErrorWithCode(w, http.StatusBadRequest, "source_required", "Загрузите исходное фото")
 	case errors.Is(err, service.ErrNoPrimaryWS):
@@ -216,6 +225,7 @@ func (h *VideoGenerationHandler) mapError(w http.ResponseWriter, err error) {
 		writeErrorWithCode(w, http.StatusBadGateway, "generation_failed", service.UserVideoGenerationFailMessage(generationErrorMessage(err)))
 	default:
 		msg := err.Error()
+		lower := strings.ToLower(msg)
 		if strings.Contains(msg, "prompt is required") {
 			writeErrorWithCode(w, http.StatusBadRequest, "invalid_prompt", "Укажите описание для генерации")
 			return
@@ -224,10 +234,19 @@ func (h *VideoGenerationHandler) mapError(w http.ResponseWriter, err error) {
 			writeErrorWithCode(w, http.StatusBadRequest, "invalid_prompt", "Описание слишком длинное")
 			return
 		}
-		if strings.Contains(strings.ToLower(msg), "kie") || strings.Contains(strings.ToLower(msg), "generation") {
+		if strings.Contains(lower, "source media") || strings.Contains(lower, "unreadable") || strings.Contains(lower, "storage not configured") {
+			writeErrorWithCode(w, http.StatusBadRequest, "source_unreadable", "Не удалось прочитать исходное видео или фото. Загрузите файл снова.")
+			return
+		}
+		if strings.Contains(lower, "reference video duration") || strings.Contains(lower, "ffprobe") {
+			writeErrorWithCode(w, http.StatusBadRequest, "reference_video_duration", service.ReferenceVideoDurationHTTPMessage(err))
+			return
+		}
+		if strings.Contains(lower, "kie") || strings.Contains(lower, "generation") {
 			writeErrorWithCode(w, http.StatusBadGateway, "generation_failed", service.UserVideoGenerationFailMessage(msg))
 			return
 		}
+		slog.Error("video generation unmapped error", "err", err)
 		writeError(w, http.StatusInternalServerError, "Внутренняя ошибка")
 	}
 }

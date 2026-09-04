@@ -16,8 +16,11 @@ import (
 )
 
 var (
-	ErrVideoGenerationNotConfigured = errors.New("video generation provider not configured")
+	ErrVideoGenerationNotConfigured  = errors.New("video generation provider not configured")
 	ErrVideoGenerationSourceRequired = errors.New("video generation source image required")
+	ErrVideoGenerationRefsRequired   = errors.New("reference image or video required")
+	ErrVideoGenerationTooManyRefs    = errors.New("too many reference files")
+	ErrVideoGenerationAudioOnly      = errors.New("reference audio requires image or video")
 )
 
 type GenerateVideoInput struct {
@@ -101,15 +104,16 @@ func (s *GenerationService) StartGenerateVideo(ctx context.Context, userID strin
 		videoCount := countNonEmptyIDs(in.ReferenceVideoUploadIDs)
 		audioCount := countNonEmptyIDs(in.ReferenceAudioUploadIDs)
 		if imageCount == 0 && videoCount == 0 {
-			return StartGenerateResult{}, errors.New("reference image or video required")
+			return StartGenerateResult{}, ErrVideoGenerationRefsRequired
 		}
 		if audioCount > 0 && imageCount == 0 && videoCount == 0 {
-			return StartGenerateResult{}, errors.New("reference audio requires image or video")
+			return StartGenerateResult{}, ErrVideoGenerationAudioOnly
 		}
 		if imageCount > 9 || videoCount > 3 || audioCount > 3 {
-			return StartGenerateResult{}, errors.New("too many reference files")
+			return StartGenerateResult{}, ErrVideoGenerationTooManyRefs
 		}
 		if err := s.validateReferenceVideoUploadIDs(ctx, userID, ws.ID, in.ReferenceVideoUploadIDs); err != nil {
+			slog.Warn("reference video validation failed", "user_id", userID, "err", err)
 			return StartGenerateResult{}, err
 		}
 	}
@@ -165,18 +169,23 @@ func (s *GenerationService) StartGenerateVideo(ctx context.Context, userID strin
 		PollAfter:               time.Now(),
 	})
 	if err != nil {
+		slog.Error("create video generation job failed", "user_id", userID, "mode", mode, "err", err)
 		return StartGenerateResult{}, err
 	}
 
 	submitCtx := context.Background()
-	if err := s.submitPendingVideoJob(submitCtx, job.ID, s.createGate); err != nil {
-		slog.Warn("inline video submit failed", "job_id", job.ID, "err", err)
+	submitErr := s.submitPendingVideoJob(submitCtx, job.ID, s.createGate)
+	if submitErr != nil {
+		slog.Warn("inline video submit failed", "job_id", job.ID, "err", submitErr)
 	}
 	if refreshed, err := s.jobRepo.GetByIDInternal(submitCtx, job.ID); err == nil {
 		job = refreshed
 	}
 	if job.Status == model.GenJobStatusFailed {
-		return StartGenerateResult{}, fmt.Errorf("%s", job.FailMessage)
+		if submitErr != nil {
+			return StartGenerateResult{}, submitErr
+		}
+		return StartGenerateResult{}, videoJobFailError(job.FailMessage)
 	}
 
 	return StartGenerateResult{Job: videoJobToView(job, nil)}, nil
@@ -615,6 +624,26 @@ func videoGenerationResultS3Key(workspaceID, ext string) string {
 
 func videoGenerationPreviewS3Key(workspaceID string) string {
 	return fmt.Sprintf("postilka/video-generations/%s/%s-preview.jpg", workspaceID, uuid.NewString())
+}
+
+func videoJobFailError(failMessage string) error {
+	msg := strings.TrimSpace(failMessage)
+	if msg == "" {
+		return ErrGenerationFailed
+	}
+	lower := strings.ToLower(msg)
+	switch {
+	case strings.Contains(lower, "source media"), strings.Contains(lower, "unreadable"), strings.Contains(lower, "storage"):
+		return fmt.Errorf("%w: %s", ErrGenerationSourceRead, msg)
+	case strings.Contains(lower, "reference video duration"), strings.Contains(lower, "duration must be"):
+		return fmt.Errorf("%w: %s", ErrReferenceVideoDuration, msg)
+	case strings.Contains(lower, "upload invalid"), strings.Contains(lower, "ffprobe"):
+		return fmt.Errorf("%w: %s", ErrGenerationUploadInvalid, msg)
+	case strings.Contains(lower, "upload not found"), strings.Contains(lower, "not found"):
+		return fmt.Errorf("%w: %s", ErrGenerationUploadNotFound, msg)
+	default:
+		return fmt.Errorf("%s", msg)
+	}
 }
 
 func countNonEmptyIDs(ids []string) int {

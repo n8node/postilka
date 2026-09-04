@@ -75,6 +75,28 @@ func TestBuildVideoTaskInput_MiniMaxH3ReferenceToVideo(t *testing.T) {
 	}
 }
 
+func TestBuildVideoTaskInput_GenericReferenceIncludesVideo(t *testing.T) {
+	input := BuildVideoTaskInput(
+		"wan/2-7-r2v",
+		"reference-to-video",
+		"test",
+		"16:9",
+		8,
+		VideoTaskSources{
+			ReferenceImageURLs: []string{"https://example.com/a.jpg"},
+			ReferenceVideoURLs: []string{"https://example.com/v.mp4"},
+		},
+	)
+	refs, ok := input["reference_image"].([]string)
+	if !ok || len(refs) != 1 {
+		t.Fatalf("reference_image=%v", input["reference_image"])
+	}
+	vids, ok := input["reference_video"].([]string)
+	if !ok || len(vids) != 1 {
+		t.Fatalf("reference_video=%v", input["reference_video"])
+	}
+}
+
 func TestBuildVideoTaskInput_KlingV3AspectClamp(t *testing.T) {
 	input := BuildVideoTaskInput(
 		"kling/v3-turbo-text-to-video",

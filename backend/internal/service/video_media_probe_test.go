@@ -43,3 +43,11 @@ func TestReferenceVideoDurationHTTPMessage(t *testing.T) {
 		t.Fatalf("message = %q, want %q", msg, want)
 	}
 }
+
+func TestVideoJobFailErrorClassifiesSourceRead(t *testing.T) {
+	t.Parallel()
+	err := videoJobFailError("source media read: NoSuchKey")
+	if !errors.Is(err, ErrGenerationSourceRead) {
+		t.Fatalf("got %v, want ErrGenerationSourceRead", err)
+	}
+}

@@ -78,6 +78,8 @@ func translateGenerationError(raw string, video bool) string {
 		return "На аккаунте KIE недостаточно кредитов. Пополните баланс провайдера или обратитесь в поддержку."
 	case strings.Contains(lower, "not configured"), strings.Contains(lower, "api key"):
 		return "Сервис генерации временно недоступен. Обратитесь в поддержку."
+	case strings.Contains(lower, "source media"), strings.Contains(lower, "unreadable"), strings.Contains(lower, "storage not configured"):
+		return "Не удалось прочитать исходное видео или фото. Загрузите файл снова."
 	case strings.Contains(lower, "image upload"), strings.Contains(lower, "upload"), strings.Contains(lower, "source photo"), strings.Contains(lower, "upload_not_found"):
 		return "Не удалось использовать исходное фото. Загрузите файл снова или выберите другое."
 	case strings.Contains(lower, "at least 2 photos"), strings.Contains(lower, "combine"):

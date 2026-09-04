@@ -76,10 +76,29 @@ func probeVideoDurationSeconds(data []byte) (float64, error) {
 		return 0, err
 	}
 
+	seconds, err := runFfprobeDuration(videoPath, "format=duration")
+	if err == nil && seconds > 0 {
+		return seconds, nil
+	}
+	// Some MP4/MOV files have empty format duration but a valid stream duration.
+	streamSec, streamErr := runFfprobeDuration(videoPath, "stream=duration")
+	if streamErr == nil && streamSec > 0 {
+		return streamSec, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	if streamErr != nil {
+		return 0, streamErr
+	}
+	return 0, errors.New("ffprobe returned empty duration")
+}
+
+func runFfprobeDuration(videoPath, entries string) (float64, error) {
 	cmd := exec.Command(
 		"ffprobe",
 		"-v", "error",
-		"-show_entries", "format=duration",
+		"-show_entries", entries,
 		"-of", "default=noprint_wrappers=1:nokey=1",
 		videoPath,
 	)
@@ -87,13 +106,16 @@ func probeVideoDurationSeconds(data []byte) (float64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("ffprobe duration: %w", err)
 	}
-	raw := strings.TrimSpace(string(out))
-	if raw == "" {
-		return 0, errors.New("ffprobe returned empty duration")
+	for _, line := range strings.Split(string(out), "\n") {
+		raw := strings.TrimSpace(line)
+		if raw == "" || strings.EqualFold(raw, "n/a") {
+			continue
+		}
+		seconds, parseErr := strconv.ParseFloat(raw, 64)
+		if parseErr != nil || seconds <= 0 {
+			continue
+		}
+		return seconds, nil
 	}
-	seconds, err := strconv.ParseFloat(raw, 64)
-	if err != nil {
-		return 0, fmt.Errorf("parse duration %q: %w", raw, err)
-	}
-	return seconds, nil
+	return 0, errors.New("ffprobe returned empty duration")
 }

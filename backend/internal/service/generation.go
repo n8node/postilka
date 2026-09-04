@@ -29,6 +29,7 @@ var (
 	ErrGenerationCombineMin     = errors.New("combine mode requires at least 2 photos")
 	ErrGenerationUploadNotFound = errors.New("generation upload not found")
 	ErrGenerationUploadInvalid  = errors.New("generation upload invalid")
+	ErrGenerationSourceRead     = errors.New("generation source media unreadable")
 )
 
 const generationModeFilter = "filter"
@@ -749,12 +750,12 @@ func (s *GenerationService) referenceVideoDurationsForUploadIDs(ctx context.Cont
 		}
 		body, _, err := s.objectStore.GetObject(ctx, upload.S3Key)
 		if err != nil {
-			return nil, fmt.Errorf("source media read: %w", err)
+			return nil, fmt.Errorf("%w: %v", ErrGenerationSourceRead, err)
 		}
 		data, readErr := io.ReadAll(io.LimitReader(body, (50<<20)+1))
 		_ = body.Close()
 		if readErr != nil {
-			return nil, readErr
+			return nil, fmt.Errorf("%w: %v", ErrGenerationSourceRead, readErr)
 		}
 		dur, err := probeVideoDurationSeconds(data)
 		if err != nil {
@@ -1110,7 +1111,7 @@ func (s *GenerationService) kieSourceURLs(
 		}
 		body, contentType, err := s.objectStore.GetObject(ctx, upload.S3Key)
 		if err != nil {
-			return nil, fmt.Errorf("source media read: %w", err)
+			return nil, fmt.Errorf("%w: %v", ErrGenerationSourceRead, err)
 		}
 		maxSize := kieUploadMaxBytes(upload.ContentType)
 		if maxSize <= 0 {
