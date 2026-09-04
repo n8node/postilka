@@ -1,0 +1,166 @@
+.pse-root {
+  --pse-gap: 10px;
+  --pse-radius: 16px;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  color: #111;
+  font-family: inherit;
+}
+
+.pse-root *,
+.pse-root *::before,
+.pse-root *::after {
+  box-sizing: border-box;
+}
+
+.pse-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 16px;
+}
+
+.pse-filter {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: #3f3f46;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 8px 14px;
+  border-radius: 999px;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.pse-filter:hover {
+  background: #f4f4f5;
+  color: #111;
+}
+
+.pse-filter.is-active {
+  background: #111;
+  color: #fff;
+}
+
+.pse-filter:focus-visible {
+  outline: 2px solid #111;
+  outline-offset: 2px;
+}
+
+.pse-status {
+  margin: 0 0 16px;
+  font-size: 14px;
+  color: #71717a;
+}
+
+.pse-status[hidden] {
+  display: none;
+}
+
+.pse-status.is-error {
+  color: #991b1b;
+  background: #fef2f2;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.pse-grid {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--pse-gap);
+  width: 100%;
+}
+
+.pse-col {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: var(--pse-gap);
+  min-width: 0;
+}
+
+.pse-card {
+  display: block;
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: var(--pse-radius);
+  background: #f4f4f5;
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 6%);
+}
+
+.pse-card.is-static {
+  cursor: default;
+}
+
+.pse-media {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  background: #f4f4f5;
+}
+
+.pse-media.is-1-1 { aspect-ratio: 1 / 1; }
+.pse-media.is-4-5 { aspect-ratio: 4 / 5; }
+.pse-media.is-9-16 { aspect-ratio: 9 / 16; }
+.pse-media.is-16-9 { aspect-ratio: 16 / 9; }
+
+.pse-media img,
+.pse-media video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.pse-badge {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 1;
+  max-width: calc(100% - 16px);
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: rgb(0 0 0 / 55%);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1.3;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pse-sentinel {
+  width: 100%;
+  height: 1px;
+  margin-top: 8px;
+}
+
+.pse-sentinel[hidden] {
+  display: none;
+}
+
+@media (min-width: 640px) {
+  .pse-root {
+    --pse-gap: 12px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .pse-root {
+    --pse-gap: 12px;
+  }
+}

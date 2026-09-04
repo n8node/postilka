@@ -47,7 +47,12 @@ func NewAdStudioService(
 	return &AdStudioService{repo: repo, settings: settings, generation: generation, objectStore: objectStore}
 }
 
-func (s *AdStudioService) ListPublic(ctx context.Context, category string) ([]model.AdStudioTemplatePublicView, []string, error) {
+const (
+	adStudioCatalogDefaultLimit = 18
+	adStudioCatalogMaxLimit     = 48
+)
+
+func (s *AdStudioService) listPublishedFiltered(ctx context.Context, category string) ([]model.AdStudioTemplate, []string, error) {
 	if err := validateAdStudioCategory(category, true); err != nil {
 		return nil, nil, err
 	}
@@ -56,24 +61,66 @@ func (s *AdStudioService) ListPublic(ctx context.Context, category string) ([]mo
 		return nil, nil, err
 	}
 	if cat := strings.TrimSpace(category); cat != "" && hiddenSet(hidden)[cat] {
-		return []model.AdStudioTemplatePublicView{}, hidden, nil
+		return []model.AdStudioTemplate{}, hidden, nil
 	}
 	items, err := s.repo.List(ctx, category, true)
 	if err != nil {
 		return nil, hidden, err
 	}
 	blocked := hiddenSet(hidden)
-	out := make([]model.AdStudioTemplatePublicView, 0, len(items))
+	out := make([]model.AdStudioTemplate, 0, len(items))
 	for _, t := range items {
 		if blocked[t.Category] {
 			continue
 		}
+		out = append(out, t)
+	}
+	return out, hidden, nil
+}
+
+func (s *AdStudioService) ListPublic(ctx context.Context, category string) ([]model.AdStudioTemplatePublicView, []string, error) {
+	items, hidden, err := s.listPublishedFiltered(ctx, category)
+	if err != nil {
+		return nil, hidden, err
+	}
+	out := make([]model.AdStudioTemplatePublicView, 0, len(items))
+	for _, t := range items {
 		out = append(out, t.ToPublicView())
 	}
 	if shuffle, err := s.ShuffleTemplatesEnabled(ctx); err == nil && shuffle {
 		shuffleAdStudioPublicViews(out)
 	}
 	return out, hidden, nil
+}
+
+func (s *AdStudioService) ListCatalog(ctx context.Context, category string, limit, offset int) ([]model.AdStudioTemplatePublicView, []string, int, error) {
+	if limit < 1 {
+		limit = adStudioCatalogDefaultLimit
+	}
+	if limit > adStudioCatalogMaxLimit {
+		limit = adStudioCatalogMaxLimit
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	items, hidden, err := s.listPublishedFiltered(ctx, category)
+	if err != nil {
+		return nil, hidden, 0, err
+	}
+	total := len(items)
+	if offset >= total {
+		return []model.AdStudioTemplatePublicView{}, hidden, total, nil
+	}
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+	page := items[offset:end]
+	out := make([]model.AdStudioTemplatePublicView, 0, len(page))
+	for _, t := range page {
+		out = append(out, t.ToCatalogView())
+	}
+	return out, hidden, total, nil
 }
 
 func (s *AdStudioService) GetPublic(ctx context.Context, id string) (model.AdStudioTemplatePublicView, error) {

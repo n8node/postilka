@@ -128,6 +128,7 @@ services:
       HUB_OUTBOUND_PROXY: http://host.docker.internal:8889
     volumes:
       - ./wordpress/plugins/postilka-voxel:/var/www/html/wp-content/plugins/postilka-voxel
+      - ./wordpress/plugins/postilka-studio-examples:/var/www/html/wp-content/plugins/postilka-studio-examples
       - ./wordpress/mu-plugins:/var/www/html/wp-content/mu-plugins
     logging:
       driver: json-file

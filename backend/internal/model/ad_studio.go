@@ -82,6 +82,43 @@ type AdStudioTemplate struct {
 	UpdatedAt          time.Time
 }
 
+type AdStudioCategoryView struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
+}
+
+var AdStudioCategories = []AdStudioCategoryView{
+	{ID: AdStudioCategoryProductShot, Label: "Съёмка товара"},
+	{ID: AdStudioCategoryMotion, Label: "Движение"},
+	{ID: AdStudioCategoryUGC, Label: "UGC"},
+	{ID: AdStudioCategoryAds, Label: "Реклама"},
+	{ID: AdStudioCategoryPosters, Label: "Постеры"},
+	{ID: AdStudioCategoryMarketplace, Label: "Маркетплейс"},
+}
+
+func AdStudioCategoryLabel(id string) string {
+	for _, item := range AdStudioCategories {
+		if item.ID == id {
+			return item.Label
+		}
+	}
+	return id
+}
+
+func VisibleAdStudioCategories(hidden []string) []AdStudioCategoryView {
+	blocked := make(map[string]bool, len(hidden))
+	for _, id := range hidden {
+		blocked[strings.TrimSpace(id)] = true
+	}
+	out := make([]AdStudioCategoryView, 0, len(AdStudioCategories))
+	for _, item := range AdStudioCategories {
+		if !blocked[item.ID] {
+			out = append(out, item)
+		}
+	}
+	return out
+}
+
 type AdStudioTemplatePublicView struct {
 	ID               string `json:"id"`
 	Title            string `json:"title"`
@@ -147,6 +184,20 @@ func (t AdStudioTemplate) PreviewSourcePath() string {
 	return "/ad-studio/templates/" + t.ID + "/preview/source"
 }
 
+func (t AdStudioTemplate) CatalogPreviewPath() string {
+	if t.PreviewS3Key == "" {
+		return ""
+	}
+	return "/public/ad-studio/templates/" + t.ID + "/preview"
+}
+
+func (t AdStudioTemplate) CatalogPreviewSourcePath() string {
+	if t.PreviewS3Key == "" || !AdStudioPreviewIsVideo(t.PreviewContentType) {
+		return ""
+	}
+	return "/public/ad-studio/templates/" + t.ID + "/preview/source"
+}
+
 func (t AdStudioTemplate) ToPublicView() AdStudioTemplatePublicView {
 	previewKind := AdStudioMediaImage
 	if AdStudioPreviewIsVideo(t.PreviewContentType) {
@@ -169,6 +220,15 @@ func (t AdStudioTemplate) ToPublicView() AdStudioTemplatePublicView {
 	}
 	if previewKind == AdStudioMediaVideo {
 		view.PreviewSourceURL = t.PreviewSourcePath()
+	}
+	return view
+}
+
+func (t AdStudioTemplate) ToCatalogView() AdStudioTemplatePublicView {
+	view := t.ToPublicView()
+	view.PreviewURL = t.CatalogPreviewPath()
+	if view.PreviewKind == AdStudioMediaVideo {
+		view.PreviewSourceURL = t.CatalogPreviewSourcePath()
 	}
 	return view
 }

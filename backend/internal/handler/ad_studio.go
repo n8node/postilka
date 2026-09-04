@@ -34,6 +34,56 @@ func (h *AdStudioHandler) List(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"items": items, "hidden_categories": hidden})
 }
 
+func (h *AdStudioHandler) ListCatalog(w http.ResponseWriter, r *http.Request) {
+	limit := parseIntDefault(r.URL.Query().Get("limit"), 18)
+	offset := parseIntDefault(r.URL.Query().Get("offset"), 0)
+	if limit < 1 {
+		limit = 18
+	}
+	if limit > 48 {
+		limit = 48
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	category := strings.TrimSpace(r.URL.Query().Get("category"))
+	if category == "all" {
+		category = ""
+	}
+	items, hidden, total, err := h.svc.ListCatalog(r.Context(), category, limit, offset)
+	if err != nil {
+		h.mapError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"items":             items,
+		"categories":        model.VisibleAdStudioCategories(hidden),
+		"hidden_categories": hidden,
+		"total":             total,
+		"limit":             limit,
+		"offset":            offset,
+		"has_more":          offset+len(items) < total,
+	})
+}
+
+func (h *AdStudioHandler) PublicPreview(w http.ResponseWriter, r *http.Request) {
+	url, err := h.svc.PreviewPresignedURL(r.Context(), chi.URLParam(r, "id"), true, false)
+	if err != nil {
+		h.mapError(w, err)
+		return
+	}
+	redirectPresignedObject(w, r, url)
+}
+
+func (h *AdStudioHandler) PublicPreviewSource(w http.ResponseWriter, r *http.Request) {
+	url, err := h.svc.PreviewPresignedURL(r.Context(), chi.URLParam(r, "id"), true, true)
+	if err != nil {
+		h.mapError(w, err)
+		return
+	}
+	redirectPresignedObject(w, r, url)
+}
+
 func (h *AdStudioHandler) Get(w http.ResponseWriter, r *http.Request) {
 	if _, ok := middleware.UserIDFromContext(r.Context()); !ok {
 		writeError(w, http.StatusUnauthorized, "Требуется авторизация")

@@ -332,6 +332,9 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 		r.Get("/public/billing/plans", billingHandler.PublicListPlans)
 		r.Get("/public/billing/packages", tokenPackageHandler.ListPublic)
 		r.Get("/public/workspace-invites/preview", wsInviteHandler.Preview)
+		r.Get("/public/ad-studio/templates", adStudioHandler.ListCatalog)
+		r.Get("/public/ad-studio/templates/{id}/preview", adStudioHandler.PublicPreview)
+		r.Get("/public/ad-studio/templates/{id}/preview/source", adStudioHandler.PublicPreviewSource)
 
 		r.Route("/webhooks", func(r chi.Router) {
 			r.Get("/robokassa/result", paymentWebhookHandler.RobokassaResult)
