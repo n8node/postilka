@@ -20,7 +20,7 @@ func NewAdStudioRepository(pool *pgxpool.Pool) *AdStudioRepository {
 }
 
 const adStudioSelect = `
-	SELECT id, title, description, category, media_kind, generation_mode, aspect_ratio, duration,
+	SELECT id, title, description, catalog, category, media_kind, generation_mode, aspect_ratio, duration,
 	       system_prompt, preview_s3_key, preview_content_type, preview_thumb_s3_key,
 	       requires_product, requires_avatar, sort_order, is_published,
 	       created_at, updated_at
@@ -28,7 +28,7 @@ const adStudioSelect = `
 `
 
 const adStudioReturning = `
-		RETURNING id, title, description, category, media_kind, generation_mode, aspect_ratio, duration,
+		RETURNING id, title, description, catalog, category, media_kind, generation_mode, aspect_ratio, duration,
 		          system_prompt, preview_s3_key, preview_content_type, preview_thumb_s3_key,
 		          requires_product, requires_avatar, sort_order, is_published,
 		          created_at, updated_at
@@ -37,7 +37,7 @@ const adStudioReturning = `
 func scanAdStudioTemplate(row pgx.Row) (model.AdStudioTemplate, error) {
 	var t model.AdStudioTemplate
 	err := row.Scan(
-		&t.ID, &t.Title, &t.Description, &t.Category, &t.MediaKind, &t.GenerationMode, &t.AspectRatio, &t.Duration,
+		&t.ID, &t.Title, &t.Description, &t.Catalog, &t.Category, &t.MediaKind, &t.GenerationMode, &t.AspectRatio, &t.Duration,
 		&t.SystemPrompt, &t.PreviewS3Key, &t.PreviewContentType, &t.PreviewThumbS3Key,
 		&t.RequiresProduct, &t.RequiresAvatar, &t.SortOrder, &t.IsPublished,
 		&t.CreatedAt, &t.UpdatedAt,
@@ -51,10 +51,15 @@ func scanAdStudioTemplate(row pgx.Row) (model.AdStudioTemplate, error) {
 	return t, nil
 }
 
-func (r *AdStudioRepository) List(ctx context.Context, category string, publishedOnly bool) ([]model.AdStudioTemplate, error) {
+func (r *AdStudioRepository) List(ctx context.Context, catalog, category string, publishedOnly bool) ([]model.AdStudioTemplate, error) {
 	q := adStudioSelect + ` WHERE 1=1`
 	args := []any{}
 	n := 1
+	if catalog := model.NormalizeAdStudioCatalog(catalog); catalog != "" {
+		q += ` AND catalog = $` + strconv.Itoa(n)
+		args = append(args, catalog)
+		n++
+	}
 	if publishedOnly {
 		q += ` AND is_published = TRUE`
 	}
@@ -90,16 +95,19 @@ func (r *AdStudioRepository) Create(ctx context.Context, t model.AdStudioTemplat
 	if t.ID == "" {
 		t.ID = uuid.NewString()
 	}
+	if t.Catalog == "" {
+		t.Catalog = model.AdStudioCatalogStudio
+	}
 	return scanAdStudioTemplate(r.pool.QueryRow(ctx, `
 		INSERT INTO ad_studio_templates (
-			id, title, description, category, media_kind, generation_mode, aspect_ratio, duration,
+			id, title, description, catalog, category, media_kind, generation_mode, aspect_ratio, duration,
 			system_prompt, preview_s3_key, preview_content_type, preview_thumb_s3_key,
 			requires_product, requires_avatar, sort_order, is_published
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8,
-			$9, $10, $11, $12,
-			$13, $14, $15, $16
-		)`+adStudioReturning, t.ID, t.Title, t.Description, t.Category, t.MediaKind, t.GenerationMode, t.AspectRatio, t.Duration,
+			$1, $2, $3, $4, $5, $6, $7, $8, $9,
+			$10, $11, $12, $13,
+			$14, $15, $16, $17
+		)`+adStudioReturning, t.ID, t.Title, t.Description, t.Catalog, t.Category, t.MediaKind, t.GenerationMode, t.AspectRatio, t.Duration,
 		t.SystemPrompt, t.PreviewS3Key, t.PreviewContentType, t.PreviewThumbS3Key,
 		t.RequiresProduct, t.RequiresAvatar, t.SortOrder, t.IsPublished,
 	))
@@ -110,19 +118,20 @@ func (r *AdStudioRepository) Update(ctx context.Context, t model.AdStudioTemplat
 		UPDATE ad_studio_templates SET
 			title = $2,
 			description = $3,
-			category = $4,
-			media_kind = $5,
-			generation_mode = $6,
-			aspect_ratio = $7,
-			duration = $8,
-			system_prompt = $9,
-			requires_product = $10,
-			requires_avatar = $11,
-			sort_order = $12,
-			is_published = $13,
+			catalog = $4,
+			category = $5,
+			media_kind = $6,
+			generation_mode = $7,
+			aspect_ratio = $8,
+			duration = $9,
+			system_prompt = $10,
+			requires_product = $11,
+			requires_avatar = $12,
+			sort_order = $13,
+			is_published = $14,
 			updated_at = NOW()
 		WHERE id = $1`+adStudioReturning,
-		t.ID, t.Title, t.Description, t.Category, t.MediaKind, t.GenerationMode, t.AspectRatio, t.Duration,
+		t.ID, t.Title, t.Description, t.Catalog, t.Category, t.MediaKind, t.GenerationMode, t.AspectRatio, t.Duration,
 		t.SystemPrompt, t.RequiresProduct, t.RequiresAvatar, t.SortOrder, t.IsPublished,
 	))
 }

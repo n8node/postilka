@@ -35,7 +35,7 @@ var allowedGenerationNavIcons = map[string]struct{}{
 	"Link2": {}, "Megaphone": {}, "MessageSquare": {}, "Mic": {}, "Newspaper": {},
 	"Package": {}, "Paintbrush": {}, "Palette": {}, "Pencil": {}, "PenLine": {},
 	"Play": {}, "Radio": {}, "Scan": {}, "ShoppingBag": {}, "Smile": {},
-	"Sparkles": {}, "Sticker": {}, "Store": {}, "Type": {}, "UserRound": {},
+	"Sparkles": {}, "Sticker": {}, "Store": {}, "TrendingUp": {}, "Type": {}, "UserRound": {},
 	"Users": {}, "Video": {}, "Volume2": {}, "Wand2": {}, "Workflow": {},
 }
 

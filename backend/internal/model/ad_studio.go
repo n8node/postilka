@@ -6,12 +6,22 @@ import (
 )
 
 const (
+	AdStudioCatalogStudio = "studio"
+	AdStudioCatalogTrends = "trends"
+
 	AdStudioCategoryProductShot = "product_shot"
 	AdStudioCategoryMotion      = "motion"
 	AdStudioCategoryUGC         = "ugc"
 	AdStudioCategoryAds         = "ads"
 	AdStudioCategoryPosters     = "posters"
 	AdStudioCategoryMarketplace = "marketplace"
+
+	AdTrendsCategoryViral      = "viral"
+	AdTrendsCategoryMemes      = "memes"
+	AdTrendsCategoryChallenges = "challenges"
+	AdTrendsCategorySeasonal   = "seasonal"
+	AdTrendsCategoryNews       = "news"
+	AdTrendsCategoryFormats    = "formats"
 
 	AdStudioMediaImage = "image"
 	AdStudioMediaVideo = "video"
@@ -61,10 +71,20 @@ func AdStudioModeUsesTemplateInput(mode string) bool {
 	}
 }
 
+func NormalizeAdStudioCatalog(catalog string) string {
+	switch strings.TrimSpace(catalog) {
+	case AdStudioCatalogTrends:
+		return AdStudioCatalogTrends
+	default:
+		return AdStudioCatalogStudio
+	}
+}
+
 type AdStudioTemplate struct {
 	ID                 string
 	Title              string
 	Description        string
+	Catalog            string
 	Category           string
 	MediaKind          string
 	GenerationMode     string
@@ -96,8 +116,47 @@ var AdStudioCategories = []AdStudioCategoryView{
 	{ID: AdStudioCategoryMarketplace, Label: "Маркетплейс"},
 }
 
+var AdTrendsCategories = []AdStudioCategoryView{
+	{ID: AdTrendsCategoryViral, Label: "Вирусное"},
+	{ID: AdTrendsCategoryMemes, Label: "Мемы"},
+	{ID: AdTrendsCategoryChallenges, Label: "Челленджи"},
+	{ID: AdTrendsCategorySeasonal, Label: "Сезонное"},
+	{ID: AdTrendsCategoryNews, Label: "Новости"},
+	{ID: AdTrendsCategoryFormats, Label: "Форматы"},
+}
+
+func CategoriesForCatalog(catalog string) []AdStudioCategoryView {
+	if NormalizeAdStudioCatalog(catalog) == AdStudioCatalogTrends {
+		return AdTrendsCategories
+	}
+	return AdStudioCategories
+}
+
+func IsAdStudioCategory(id string) bool {
+	return categoryInList(id, AdStudioCategories)
+}
+
+func IsAdTrendsCategory(id string) bool {
+	return categoryInList(id, AdTrendsCategories)
+}
+
+func categoryInList(id string, items []AdStudioCategoryView) bool {
+	id = strings.TrimSpace(id)
+	for _, item := range items {
+		if item.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
 func AdStudioCategoryLabel(id string) string {
 	for _, item := range AdStudioCategories {
+		if item.ID == id {
+			return item.Label
+		}
+	}
+	for _, item := range AdTrendsCategories {
 		if item.ID == id {
 			return item.Label
 		}
@@ -106,12 +165,17 @@ func AdStudioCategoryLabel(id string) string {
 }
 
 func VisibleAdStudioCategories(hidden []string) []AdStudioCategoryView {
+	return VisibleCategoriesForCatalog(AdStudioCatalogStudio, hidden)
+}
+
+func VisibleCategoriesForCatalog(catalog string, hidden []string) []AdStudioCategoryView {
 	blocked := make(map[string]bool, len(hidden))
 	for _, id := range hidden {
 		blocked[strings.TrimSpace(id)] = true
 	}
-	out := make([]AdStudioCategoryView, 0, len(AdStudioCategories))
-	for _, item := range AdStudioCategories {
+	src := CategoriesForCatalog(catalog)
+	out := make([]AdStudioCategoryView, 0, len(src))
+	for _, item := range src {
 		if !blocked[item.ID] {
 			out = append(out, item)
 		}
@@ -123,6 +187,7 @@ type AdStudioTemplatePublicView struct {
 	ID               string `json:"id"`
 	Title            string `json:"title"`
 	Description      string `json:"description"`
+	Catalog          string `json:"catalog,omitempty"`
 	Category         string `json:"category"`
 	MediaKind        string `json:"media_kind"`
 	GenerationMode   string `json:"generation_mode"`
@@ -148,6 +213,7 @@ type AdStudioTemplateAdminView struct {
 type AdStudioTemplateWriteRequest struct {
 	Title           string `json:"title"`
 	Description     string `json:"description"`
+	Catalog         string `json:"catalog"`
 	Category        string `json:"category"`
 	MediaKind       string `json:"media_kind"`
 	GenerationMode  string `json:"generation_mode"`
@@ -207,6 +273,7 @@ func (t AdStudioTemplate) ToPublicView() AdStudioTemplatePublicView {
 		ID:              t.ID,
 		Title:           t.Title,
 		Description:     t.Description,
+		Catalog:         NormalizeAdStudioCatalog(t.Catalog),
 		Category:        t.Category,
 		MediaKind:       t.MediaKind,
 		GenerationMode:  t.GenerationMode,

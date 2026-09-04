@@ -37,6 +37,7 @@ import {
   Sparkles,
   Sticker,
   Store,
+  TrendingUp,
   Type,
   UserRound,
   Users,
@@ -49,6 +50,7 @@ import {
 export const GENERATION_NAV_LUCIDE_ICONS: { name: string; Icon: LucideIcon }[] = [
   { name: "Sparkles", Icon: Sparkles },
   { name: "LayoutGrid", Icon: LayoutGrid },
+  { name: "TrendingUp", Icon: TrendingUp },
   { name: "Image", Icon: Image },
   { name: "Images", Icon: Images },
   { name: "Film", Icon: Film },

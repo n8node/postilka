@@ -52,18 +52,19 @@ const (
 	adStudioCatalogMaxLimit     = 48
 )
 
-func (s *AdStudioService) listPublishedFiltered(ctx context.Context, category string) ([]model.AdStudioTemplate, []string, error) {
-	if err := validateAdStudioCategory(category, true); err != nil {
+func (s *AdStudioService) listPublishedFiltered(ctx context.Context, catalog, category string) ([]model.AdStudioTemplate, []string, error) {
+	catalog = model.NormalizeAdStudioCatalog(catalog)
+	if err := validateAdStudioCategory(catalog, category, true); err != nil {
 		return nil, nil, err
 	}
-	hidden, err := s.HiddenCategories(ctx)
+	hidden, err := s.HiddenCategories(ctx, catalog)
 	if err != nil {
 		return nil, nil, err
 	}
 	if cat := strings.TrimSpace(category); cat != "" && hiddenSet(hidden)[cat] {
 		return []model.AdStudioTemplate{}, hidden, nil
 	}
-	items, err := s.repo.List(ctx, category, true)
+	items, err := s.repo.List(ctx, catalog, category, true)
 	if err != nil {
 		return nil, hidden, err
 	}
@@ -78,8 +79,8 @@ func (s *AdStudioService) listPublishedFiltered(ctx context.Context, category st
 	return out, hidden, nil
 }
 
-func (s *AdStudioService) ListPublic(ctx context.Context, category string) ([]model.AdStudioTemplatePublicView, []string, error) {
-	items, hidden, err := s.listPublishedFiltered(ctx, category)
+func (s *AdStudioService) ListPublic(ctx context.Context, catalog, category string) ([]model.AdStudioTemplatePublicView, []string, error) {
+	items, hidden, err := s.listPublishedFiltered(ctx, catalog, category)
 	if err != nil {
 		return nil, hidden, err
 	}
@@ -87,13 +88,13 @@ func (s *AdStudioService) ListPublic(ctx context.Context, category string) ([]mo
 	for _, t := range items {
 		out = append(out, t.ToPublicView())
 	}
-	if shuffle, err := s.ShuffleTemplatesEnabled(ctx); err == nil && shuffle {
+	if shuffle, err := s.ShuffleTemplatesEnabled(ctx, catalog); err == nil && shuffle {
 		shuffleAdStudioPublicViews(out)
 	}
 	return out, hidden, nil
 }
 
-func (s *AdStudioService) ListCatalog(ctx context.Context, category string, limit, offset int) ([]model.AdStudioTemplatePublicView, []string, int, error) {
+func (s *AdStudioService) ListCatalog(ctx context.Context, catalog, category string, limit, offset int) ([]model.AdStudioTemplatePublicView, []string, int, error) {
 	if limit < 1 {
 		limit = adStudioCatalogDefaultLimit
 	}
@@ -103,7 +104,7 @@ func (s *AdStudioService) ListCatalog(ctx context.Context, category string, limi
 	if offset < 0 {
 		offset = 0
 	}
-	items, hidden, err := s.listPublishedFiltered(ctx, category)
+	items, hidden, err := s.listPublishedFiltered(ctx, catalog, category)
 	if err != nil {
 		return nil, hidden, 0, err
 	}
@@ -131,7 +132,7 @@ func (s *AdStudioService) GetPublic(ctx context.Context, id string) (model.AdStu
 	if !t.IsPublished {
 		return model.AdStudioTemplatePublicView{}, ErrAdStudioNotPublished
 	}
-	hidden, err := s.categoryIsHidden(ctx, t.Category)
+	hidden, err := s.categoryIsHidden(ctx, t.Catalog, t.Category)
 	if err != nil {
 		return model.AdStudioTemplatePublicView{}, err
 	}
@@ -141,8 +142,8 @@ func (s *AdStudioService) GetPublic(ctx context.Context, id string) (model.AdStu
 	return t.ToPublicView(), nil
 }
 
-func (s *AdStudioService) HiddenCategories(ctx context.Context) ([]string, error) {
-	settings, err := s.CategorySettings(ctx)
+func (s *AdStudioService) HiddenCategories(ctx context.Context, catalog string) ([]string, error) {
+	settings, err := s.CategorySettings(ctx, catalog)
 	if err != nil {
 		return nil, err
 	}
@@ -154,53 +155,55 @@ type AdStudioCategorySettings struct {
 	ShuffleTemplates bool
 }
 
-func (s *AdStudioService) CategorySettings(ctx context.Context) (AdStudioCategorySettings, error) {
+func (s *AdStudioService) CategorySettings(ctx context.Context, catalog string) (AdStudioCategorySettings, error) {
+	catalog = model.NormalizeAdStudioCatalog(catalog)
 	if s.settings == nil {
 		return AdStudioCategorySettings{}, nil
 	}
-	hidden, err := s.settings.GetAdStudioHiddenCategories(ctx)
+	hidden, err := s.settings.GetCatalogHiddenCategories(ctx, catalog)
 	if err != nil {
 		return AdStudioCategorySettings{}, err
 	}
-	shuffle, err := s.settings.GetAdStudioShuffleTemplates(ctx)
+	shuffle, err := s.settings.GetCatalogShuffleTemplates(ctx, catalog)
 	if err != nil {
 		return AdStudioCategorySettings{}, err
 	}
 	return AdStudioCategorySettings{
-		HiddenCategories: normalizeHiddenAdStudioCategories(hidden),
+		HiddenCategories: normalizeHiddenAdStudioCategories(catalog, hidden),
 		ShuffleTemplates: shuffle,
 	}, nil
 }
 
-func (s *AdStudioService) ShuffleTemplatesEnabled(ctx context.Context) (bool, error) {
-	settings, err := s.CategorySettings(ctx)
+func (s *AdStudioService) ShuffleTemplatesEnabled(ctx context.Context, catalog string) (bool, error) {
+	settings, err := s.CategorySettings(ctx, catalog)
 	if err != nil {
 		return false, err
 	}
 	return settings.ShuffleTemplates, nil
 }
 
-func (s *AdStudioService) SetHiddenCategories(ctx context.Context, hidden []string) ([]string, error) {
-	current, err := s.CategorySettings(ctx)
+func (s *AdStudioService) SetHiddenCategories(ctx context.Context, catalog string, hidden []string) ([]string, error) {
+	current, err := s.CategorySettings(ctx, catalog)
 	if err != nil {
 		return nil, err
 	}
-	updated, err := s.SetCategorySettings(ctx, hidden, current.ShuffleTemplates)
+	updated, err := s.SetCategorySettings(ctx, catalog, hidden, current.ShuffleTemplates)
 	if err != nil {
 		return nil, err
 	}
 	return updated.HiddenCategories, nil
 }
 
-func (s *AdStudioService) SetCategorySettings(ctx context.Context, hidden []string, shuffle bool) (AdStudioCategorySettings, error) {
+func (s *AdStudioService) SetCategorySettings(ctx context.Context, catalog string, hidden []string, shuffle bool) (AdStudioCategorySettings, error) {
+	catalog = model.NormalizeAdStudioCatalog(catalog)
 	if s.settings == nil {
 		return AdStudioCategorySettings{}, errors.New("ad studio settings unavailable")
 	}
-	normalized := normalizeHiddenAdStudioCategories(hidden)
-	if err := s.settings.SetAdStudioHiddenCategories(ctx, normalized); err != nil {
+	normalized := normalizeHiddenAdStudioCategories(catalog, hidden)
+	if err := s.settings.SetCatalogHiddenCategories(ctx, catalog, normalized); err != nil {
 		return AdStudioCategorySettings{}, err
 	}
-	if err := s.settings.SetAdStudioShuffleTemplates(ctx, shuffle); err != nil {
+	if err := s.settings.SetCatalogShuffleTemplates(ctx, catalog, shuffle); err != nil {
 		return AdStudioCategorySettings{}, err
 	}
 	return AdStudioCategorySettings{
@@ -215,11 +218,12 @@ func shuffleAdStudioPublicViews(items []model.AdStudioTemplatePublicView) {
 	})
 }
 
-func (s *AdStudioService) ListAdmin(ctx context.Context, category string) ([]model.AdStudioTemplateAdminView, error) {
-	if err := validateAdStudioCategory(category, true); err != nil {
+func (s *AdStudioService) ListAdmin(ctx context.Context, catalog, category string) ([]model.AdStudioTemplateAdminView, error) {
+	catalog = model.NormalizeAdStudioCatalog(catalog)
+	if err := validateAdStudioCategory(catalog, category, true); err != nil {
 		return nil, err
 	}
-	items, err := s.repo.List(ctx, category, false)
+	items, err := s.repo.List(ctx, catalog, category, false)
 	if err != nil {
 		return nil, err
 	}
@@ -231,7 +235,7 @@ func (s *AdStudioService) ListAdmin(ctx context.Context, category string) ([]mod
 }
 
 func (s *AdStudioService) CreateAdmin(ctx context.Context, req model.AdStudioTemplateWriteRequest) (model.AdStudioTemplateAdminView, error) {
-	t, err := templateFromWrite(model.AdStudioTemplate{}, req, true)
+	t, err := templateFromWrite(model.AdStudioTemplate{Catalog: model.NormalizeAdStudioCatalog(req.Catalog)}, req, true)
 	if err != nil {
 		return model.AdStudioTemplateAdminView{}, err
 	}
@@ -380,7 +384,7 @@ func (s *AdStudioService) previewAccess(ctx context.Context, id string, publishe
 		return model.AdStudioTemplate{}, ErrAdStudioNotPublished
 	}
 	if publishedOnly {
-		hidden, err := s.categoryIsHidden(ctx, t.Category)
+		hidden, err := s.categoryIsHidden(ctx, t.Catalog, t.Category)
 		if err != nil {
 			return model.AdStudioTemplate{}, err
 		}
@@ -470,10 +474,15 @@ func (s *AdStudioService) PreviewPresignedURL(ctx context.Context, id string, pu
 }
 
 func (s *AdStudioService) BackfillMissingPreviewThumbs(ctx context.Context) (ready int, failed int, err error) {
-	items, err := s.repo.List(ctx, "", false)
+	studioItems, err := s.repo.List(ctx, model.AdStudioCatalogStudio, "", false)
 	if err != nil {
 		return 0, 0, err
 	}
+	trendItems, err := s.repo.List(ctx, model.AdStudioCatalogTrends, "", false)
+	if err != nil {
+		return 0, 0, err
+	}
+	items := append(studioItems, trendItems...)
 	for _, t := range items {
 		if strings.TrimSpace(t.PreviewS3Key) == "" || strings.TrimSpace(t.PreviewThumbS3Key) != "" {
 			continue
@@ -525,7 +534,7 @@ func (s *AdStudioService) PreviewSourceObject(ctx context.Context, id string, pu
 		return nil, "", ErrAdStudioNotPublished
 	}
 	if publishedOnly {
-		hidden, err := s.categoryIsHidden(ctx, t.Category)
+		hidden, err := s.categoryIsHidden(ctx, t.Catalog, t.Category)
 		if err != nil {
 			return nil, "", err
 		}
@@ -605,7 +614,7 @@ func (s *AdStudioService) Generate(
 	if !t.IsPublished {
 		return StartGenerateResult{}, "", ErrAdStudioNotPublished
 	}
-	if hidden, err := s.categoryIsHidden(ctx, t.Category); err != nil {
+	if hidden, err := s.categoryIsHidden(ctx, t.Catalog, t.Category); err != nil {
 		return StartGenerateResult{}, "", err
 	} else if hidden {
 		return StartGenerateResult{}, "", ErrAdStudioNotPublished
@@ -787,14 +796,19 @@ func templateFromWrite(base model.AdStudioTemplate, req model.AdStudioTemplateWr
 	if len(prompt) > 8000 {
 		prompt = prompt[:8000]
 	}
+	catalog := model.NormalizeAdStudioCatalog(req.Catalog)
+	if !creating && strings.TrimSpace(base.Catalog) != "" {
+		catalog = model.NormalizeAdStudioCatalog(base.Catalog)
+	}
 	category := strings.TrimSpace(req.Category)
-	if err := validateAdStudioCategory(category, false); err != nil {
+	if err := validateAdStudioCategory(catalog, category, false); err != nil {
 		return model.AdStudioTemplate{}, err
 	}
 	mode := model.NormalizeAdStudioGenerationMode(req.GenerationMode)
 	if mode == "" {
 		if creating {
-			if category == model.AdStudioCategoryMotion || category == model.AdStudioCategoryUGC {
+			if category == model.AdStudioCategoryMotion || category == model.AdStudioCategoryUGC ||
+				category == model.AdTrendsCategoryChallenges || category == model.AdTrendsCategoryViral {
 				mode = model.AdStudioModeReferenceToVideo
 			} else {
 				mode = model.AdStudioModeCombine
@@ -828,6 +842,7 @@ func templateFromWrite(base model.AdStudioTemplate, req model.AdStudioTemplateWr
 	t := base
 	t.Title = title
 	t.Description = strings.TrimSpace(req.Description)
+	t.Catalog = catalog
 	t.Category = category
 	t.MediaKind = kind
 	t.GenerationMode = mode
@@ -851,8 +866,8 @@ func templateFromWrite(base model.AdStudioTemplate, req model.AdStudioTemplateWr
 	return t, nil
 }
 
-func (s *AdStudioService) categoryIsHidden(ctx context.Context, category string) (bool, error) {
-	hidden, err := s.HiddenCategories(ctx)
+func (s *AdStudioService) categoryIsHidden(ctx context.Context, catalog, category string) (bool, error) {
+	hidden, err := s.HiddenCategories(ctx, catalog)
 	if err != nil {
 		return false, err
 	}
@@ -867,12 +882,12 @@ func hiddenSet(hidden []string) map[string]bool {
 	return out
 }
 
-func normalizeHiddenAdStudioCategories(hidden []string) []string {
+func normalizeHiddenAdStudioCategories(catalog string, hidden []string) []string {
 	out := make([]string, 0, len(hidden))
 	seen := map[string]bool{}
 	for _, id := range hidden {
 		id = strings.TrimSpace(id)
-		if id == "" || seen[id] || validateAdStudioCategory(id, false) != nil {
+		if id == "" || seen[id] || validateAdStudioCategory(catalog, id, false) != nil {
 			continue
 		}
 		seen[id] = true
@@ -881,7 +896,7 @@ func normalizeHiddenAdStudioCategories(hidden []string) []string {
 	return out
 }
 
-func validateAdStudioCategory(category string, allowEmpty bool) error {
+func validateAdStudioCategory(catalog, category string, allowEmpty bool) error {
 	cat := strings.TrimSpace(category)
 	if cat == "" {
 		if allowEmpty {
@@ -889,17 +904,16 @@ func validateAdStudioCategory(category string, allowEmpty bool) error {
 		}
 		return ErrAdStudioInvalidCategory
 	}
-	switch cat {
-	case model.AdStudioCategoryProductShot,
-		model.AdStudioCategoryMotion,
-		model.AdStudioCategoryUGC,
-		model.AdStudioCategoryAds,
-		model.AdStudioCategoryPosters,
-		model.AdStudioCategoryMarketplace:
-		return nil
-	default:
+	if model.NormalizeAdStudioCatalog(catalog) == model.AdStudioCatalogTrends {
+		if model.IsAdTrendsCategory(cat) {
+			return nil
+		}
 		return ErrAdStudioInvalidCategory
 	}
+	if model.IsAdStudioCategory(cat) {
+		return nil
+	}
+	return ErrAdStudioInvalidCategory
 }
 
 func defaultAdStudioRatio(category, kind string) string {
@@ -907,7 +921,8 @@ func defaultAdStudioRatio(category, kind string) string {
 		return "9:16"
 	}
 	switch category {
-	case model.AdStudioCategoryPosters, model.AdStudioCategoryProductShot:
+	case model.AdStudioCategoryPosters, model.AdStudioCategoryProductShot,
+		model.AdTrendsCategoryMemes, model.AdTrendsCategoryFormats:
 		return "4:5"
 	default:
 		return "1:1"

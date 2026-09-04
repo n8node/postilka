@@ -143,12 +143,20 @@ export function GenerationNavBlock({ collapsed }: { collapsed: boolean }) {
         <p className="truncate text-[11px] font-semibold uppercase tracking-[0.04em] text-muted">
           {title}
         </p>
-        <Link
-          href={studioHref}
-          className="shrink-0 text-[11px] font-medium text-accent hover:underline"
-        >
-          Студия
-        </Link>
+        <div className="flex shrink-0 items-center gap-2">
+          <Link
+            href={studioHref}
+            className="text-[11px] font-medium text-accent hover:underline"
+          >
+            Студия
+          </Link>
+          <Link
+            href="/ai?tab=trends"
+            className="text-[11px] font-medium text-accent hover:underline"
+          >
+            Тренды
+          </Link>
+        </div>
       </div>
       <div className="grid grid-cols-2 gap-1.5">
         {preview.map((item) => {

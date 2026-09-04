@@ -17,7 +17,19 @@ export const AD_STUDIO_CATEGORIES = [
   { id: "marketplace", label: "Маркетплейс" },
 ] as const;
 
+export const TRENDS_CATEGORIES = [
+  { id: "viral", label: "Вирусное" },
+  { id: "memes", label: "Мемы" },
+  { id: "challenges", label: "Челленджи" },
+  { id: "seasonal", label: "Сезонное" },
+  { id: "news", label: "Новости" },
+  { id: "formats", label: "Форматы" },
+] as const;
+
+export type AdStudioCatalog = "studio" | "trends";
 export type AdStudioCategoryId = (typeof AD_STUDIO_CATEGORIES)[number]["id"];
+export type TrendsCategoryId = (typeof TRENDS_CATEGORIES)[number]["id"];
+export type CatalogCategoryId = AdStudioCategoryId | TrendsCategoryId;
 export type AdStudioMediaKind = "image" | "video";
 export type AdStudioGenerationMode =
   | "text-to-image"
@@ -75,7 +87,8 @@ export type AdStudioTemplate = {
   id: string;
   title: string;
   description: string;
-  category: AdStudioCategoryId;
+  catalog?: AdStudioCatalog;
+  category: CatalogCategoryId;
   media_kind: AdStudioMediaKind;
   generation_mode: AdStudioGenerationMode;
   aspect_ratio: string;
@@ -99,7 +112,8 @@ export type AdStudioTemplateAdmin = AdStudioTemplate & {
 export type AdStudioWritePayload = {
   title: string;
   description: string;
-  category: AdStudioCategoryId;
+  catalog?: AdStudioCatalog;
+  category: CatalogCategoryId;
   media_kind: AdStudioMediaKind;
   generation_mode: AdStudioGenerationMode;
   aspect_ratio: string;
@@ -111,16 +125,29 @@ export type AdStudioWritePayload = {
   is_published: boolean;
 };
 
-export function adStudioCategoryLabel(id: string): string {
-  return AD_STUDIO_CATEGORIES.find((c) => c.id === id)?.label ?? id;
+export function categoriesForCatalog(catalog: AdStudioCatalog) {
+  return catalog === "trends" ? TRENDS_CATEGORIES : AD_STUDIO_CATEGORIES;
 }
 
-export function defaultAdStudioKind(category: AdStudioCategoryId): AdStudioMediaKind {
+export function adStudioCategoryLabel(id: string): string {
+  return (
+    AD_STUDIO_CATEGORIES.find((c) => c.id === id)?.label ??
+    TRENDS_CATEGORIES.find((c) => c.id === id)?.label ??
+    id
+  );
+}
+
+export function defaultAdStudioKind(category: CatalogCategoryId): AdStudioMediaKind {
   return adStudioMediaKindForMode(defaultAdStudioMode(category));
 }
 
-export function defaultAdStudioMode(category: AdStudioCategoryId): AdStudioGenerationMode {
-  return category === "motion" || category === "ugc" ? "reference-to-video" : "combine";
+export function defaultAdStudioMode(category: CatalogCategoryId): AdStudioGenerationMode {
+  return category === "motion" ||
+    category === "ugc" ||
+    category === "viral" ||
+    category === "challenges"
+    ? "reference-to-video"
+    : "combine";
 }
 
 export function adStudioMediaKindForMode(mode: AdStudioGenerationMode): AdStudioMediaKind {
@@ -154,20 +181,35 @@ export function resolveAdStudioMode(item: {
 }
 
 export function defaultAdStudioRatio(
-  category: AdStudioCategoryId,
+  category: CatalogCategoryId,
   kind: AdStudioMediaKind,
 ): string {
   if (kind === "video") return "9:16";
-  if (category === "posters" || category === "product_shot") return "4:5";
+  if (
+    category === "posters" ||
+    category === "product_shot" ||
+    category === "memes" ||
+    category === "formats"
+  ) {
+    return "4:5";
+  }
   return "1:1";
 }
 
 export function visibleAdStudioCategories(hidden: string[] | undefined) {
-  const blocked = new Set(hidden ?? []);
-  return AD_STUDIO_CATEGORIES.filter((item) => !blocked.has(item.id));
+  return visibleCategoriesForCatalog("studio", hidden);
 }
 
-export type AiHubTab = "studio" | "photo" | "video" | "sketch";
+export function visibleCategoriesForCatalog(
+  catalog: AdStudioCatalog,
+  hidden: string[] | undefined,
+) {
+  const blocked = new Set(hidden ?? []);
+  return categoriesForCatalog(catalog).filter((item) => !blocked.has(item.id));
+}
+
+export type AiHubTab = "studio" | "trends" | "photo" | "video" | "sketch";
+export type CatalogMediaFilter = "all" | "image" | "video";
 
 export function parseStudioSection(raw: string | null | undefined): string {
   const value = raw?.trim() ?? "";
@@ -175,17 +217,46 @@ export function parseStudioSection(raw: string | null | undefined): string {
   return value;
 }
 
-export function studioHref(section: string = "all", templateId?: string | null): string {
+export function parseCatalogMedia(raw: string | null | undefined): CatalogMediaFilter {
+  if (raw === "image" || raw === "video") return raw;
+  return "all";
+}
+
+export function catalogHref(
+  catalog: AdStudioCatalog,
+  section: string = "all",
+  templateId?: string | null,
+  media?: CatalogMediaFilter | null,
+): string {
   const params = new URLSearchParams();
-  if (section && section !== "all") {
+  if (catalog !== "studio") {
+    params.set("tab", catalog);
+  } else if ((section && section !== "all") || templateId || (media && media !== "all")) {
     params.set("tab", "studio");
+  }
+  if (section && section !== "all") {
     params.set("section", section);
+  }
+  if (media && media !== "all") {
+    params.set("media", media);
   }
   if (templateId) {
     params.set("template", templateId);
   }
   const qs = params.toString();
   return qs ? `/ai?${qs}` : "/ai";
+}
+
+export function studioHref(section: string = "all", templateId?: string | null): string {
+  return catalogHref("studio", section, templateId);
+}
+
+export function trendsHref(
+  section: string = "all",
+  templateId?: string | null,
+  media?: CatalogMediaFilter | null,
+): string {
+  return catalogHref("trends", section, templateId, media);
 }
 
 export function aiTabHref(tab: AiHubTab): string {
@@ -196,6 +267,7 @@ export function aiTabHref(tab: AiHubTab): string {
 export function generationNavSuggestedHrefs(): { href: string; label: string }[] {
   return [
     { href: "/ai", label: "Студия — все" },
+    { href: "/ai?tab=trends", label: "Тренды — все" },
     { href: "/ai?tab=photo", label: "Фото" },
     { href: "/ai?tab=video", label: "Видео" },
     { href: "/ai?tab=sketch", label: "Набросок" },
@@ -203,25 +275,40 @@ export function generationNavSuggestedHrefs(): { href: string; label: string }[]
       href: studioHref(item.id),
       label: `Студия — ${item.label}`,
     })),
+    ...TRENDS_CATEGORIES.map((item) => ({
+      href: trendsHref(item.id),
+      label: `Тренды — ${item.label}`,
+    })),
   ];
 }
 
-export function fetchAdStudioTemplates(category?: string) {
-  const qs = category ? `?category=${encodeURIComponent(category)}` : "";
+function catalogQuery(catalog: AdStudioCatalog, category?: string) {
+  const params = new URLSearchParams();
+  if (catalog !== "studio") params.set("catalog", catalog);
+  if (category) params.set("category", category);
+  const qs = params.toString();
+  return qs ? `?${qs}` : "";
+}
+
+export function fetchAdStudioTemplates(category?: string, catalog: AdStudioCatalog = "studio") {
   return apiFetch<{ items: AdStudioTemplate[]; hidden_categories?: string[] }>(
-    `/ad-studio/templates${qs}`,
+    `/ad-studio/templates${catalogQuery(catalog, category)}`,
   );
 }
 
-export function fetchAdminAdStudioCategories() {
+export function fetchAdminAdStudioCategories(catalog: AdStudioCatalog = "studio") {
   return apiFetch<{ hidden_categories: string[]; shuffle_templates?: boolean }>(
-    "/admin/ad-studio/categories",
+    `/admin/ad-studio/categories${catalogQuery(catalog)}`,
   );
 }
 
-export function updateAdminAdStudioCategories(hidden: string[], shuffleTemplates: boolean) {
+export function updateAdminAdStudioCategories(
+  hidden: string[],
+  shuffleTemplates: boolean,
+  catalog: AdStudioCatalog = "studio",
+) {
   return apiFetch<{ hidden_categories: string[]; shuffle_templates: boolean }>(
-    "/admin/ad-studio/categories",
+    `/admin/ad-studio/categories${catalogQuery(catalog)}`,
     {
       method: "PUT",
       body: JSON.stringify({
@@ -245,18 +332,24 @@ export function generateFromAdStudioTemplate(
   });
 }
 
-export function fetchAdminAdStudioTemplates(category?: string) {
-  const qs = category ? `?category=${encodeURIComponent(category)}` : "";
+export function fetchAdminAdStudioTemplates(
+  category?: string,
+  catalog: AdStudioCatalog = "studio",
+) {
   return apiFetch<{ items: AdStudioTemplateAdmin[] }>(
-    `/admin/ad-studio/templates${qs}`,
+    `/admin/ad-studio/templates${catalogQuery(catalog, category)}`,
   );
 }
 
 export function createAdminAdStudioTemplate(payload: AdStudioWritePayload) {
-  return apiFetch<{ item: AdStudioTemplateAdmin }>("/admin/ad-studio/templates", {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
+  const catalog = payload.catalog ?? "studio";
+  return apiFetch<{ item: AdStudioTemplateAdmin }>(
+    `/admin/ad-studio/templates${catalogQuery(catalog)}`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
 }
 
 export function updateAdminAdStudioTemplate(

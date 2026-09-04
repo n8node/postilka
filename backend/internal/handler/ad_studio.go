@@ -21,12 +21,16 @@ func NewAdStudioHandler(svc *service.AdStudioService) *AdStudioHandler {
 	return &AdStudioHandler{svc: svc}
 }
 
+func catalogFromRequest(r *http.Request) string {
+	return model.NormalizeAdStudioCatalog(r.URL.Query().Get("catalog"))
+}
+
 func (h *AdStudioHandler) List(w http.ResponseWriter, r *http.Request) {
 	if _, ok := middleware.UserIDFromContext(r.Context()); !ok {
 		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
 		return
 	}
-	items, hidden, err := h.svc.ListPublic(r.Context(), r.URL.Query().Get("category"))
+	items, hidden, err := h.svc.ListPublic(r.Context(), catalogFromRequest(r), r.URL.Query().Get("category"))
 	if err != nil {
 		h.mapError(w, err)
 		return
@@ -50,14 +54,15 @@ func (h *AdStudioHandler) ListCatalog(w http.ResponseWriter, r *http.Request) {
 	if category == "all" {
 		category = ""
 	}
-	items, hidden, total, err := h.svc.ListCatalog(r.Context(), category, limit, offset)
+	catalog := catalogFromRequest(r)
+	items, hidden, total, err := h.svc.ListCatalog(r.Context(), catalog, category, limit, offset)
 	if err != nil {
 		h.mapError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"items":             items,
-		"categories":        model.VisibleAdStudioCategories(hidden),
+		"categories":        model.VisibleCategoriesForCatalog(catalog, hidden),
 		"hidden_categories": hidden,
 		"total":             total,
 		"limit":             limit,
@@ -143,7 +148,7 @@ func (h *AdStudioHandler) Generate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AdStudioHandler) AdminGetCategories(w http.ResponseWriter, r *http.Request) {
-	settings, err := h.svc.CategorySettings(r.Context())
+	settings, err := h.svc.CategorySettings(r.Context(), catalogFromRequest(r))
 	if err != nil {
 		h.mapError(w, err)
 		return
@@ -163,7 +168,7 @@ func (h *AdStudioHandler) AdminUpdateCategories(w http.ResponseWriter, r *http.R
 		writeError(w, http.StatusBadRequest, "Некорректное тело запроса")
 		return
 	}
-	settings, err := h.svc.SetCategorySettings(r.Context(), req.HiddenCategories, req.ShuffleTemplates)
+	settings, err := h.svc.SetCategorySettings(r.Context(), catalogFromRequest(r), req.HiddenCategories, req.ShuffleTemplates)
 	if err != nil {
 		h.mapError(w, err)
 		return
@@ -175,7 +180,7 @@ func (h *AdStudioHandler) AdminUpdateCategories(w http.ResponseWriter, r *http.R
 }
 
 func (h *AdStudioHandler) AdminList(w http.ResponseWriter, r *http.Request) {
-	items, err := h.svc.ListAdmin(r.Context(), r.URL.Query().Get("category"))
+	items, err := h.svc.ListAdmin(r.Context(), catalogFromRequest(r), r.URL.Query().Get("category"))
 	if err != nil {
 		h.mapError(w, err)
 		return
@@ -188,6 +193,9 @@ func (h *AdStudioHandler) AdminCreate(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "Некорректное тело запроса")
 		return
+	}
+	if strings.TrimSpace(req.Catalog) == "" {
+		req.Catalog = catalogFromRequest(r)
 	}
 	item, err := h.svc.CreateAdmin(r.Context(), req)
 	if err != nil {

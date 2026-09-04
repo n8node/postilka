@@ -9,7 +9,7 @@ export function AiPageWrapper() {
     <div>
       <PageHeader
         title="AI контент"
-        description="Студия рекламы, фото, видео и набросок. Списание: квота тарифа → кошелёк."
+        description="Студия, тренды, фото, видео и набросок. Списание: квота тарифа → кошелёк."
       />
       <Suspense fallback={null}>
         <AiContentHub />

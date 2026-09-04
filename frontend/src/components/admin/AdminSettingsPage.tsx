@@ -37,6 +37,7 @@ type SettingsKey =
   | "ai-kie"
   | "ai-kie-video"
   | "ai-ad-studio"
+  | "ai-ad-trends"
   | "ai-sketch-styles"
   | "generation-nav"
   | "analytics-metrika";
@@ -97,6 +98,11 @@ const SETTINGS_MENU: { key: SettingsKey; label: string; description: string }[] 
     key: "ai-ad-studio",
     label: "AI — Студия рекламы",
     description: "Шаблоны: товар, движение, UGC, реклама",
+  },
+  {
+    key: "ai-ad-trends",
+    label: "AI — Тренды",
+    description: "Шаблоны: вирусное, мемы, челленджи, форматы",
   },
   {
     key: "ai-sketch-styles",
@@ -275,7 +281,10 @@ function SettingsSectionContent({
     return <AdminKieVideoPage embedded />;
   }
   if (selected === "ai-ad-studio") {
-    return <AdminAdStudioPage embedded />;
+    return <AdminAdStudioPage embedded catalog="studio" />;
+  }
+  if (selected === "ai-ad-trends") {
+    return <AdminAdStudioPage embedded catalog="trends" />;
   }
   if (selected === "ai-sketch-styles") {
     return <AdminSketchStylesPage embedded />;

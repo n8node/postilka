@@ -18,11 +18,13 @@ import {
   fetchAdStudioTemplates,
   generateFromAdStudioTemplate,
   resolveAdStudioMode,
-  AD_STUDIO_CATEGORIES,
+  catalogHref,
+  parseCatalogMedia,
   parseStudioSection,
-  studioHref,
-  visibleAdStudioCategories,
+  visibleCategoriesForCatalog,
+  type AdStudioCatalog,
   type AdStudioTemplate,
+  type CatalogMediaFilter,
 } from "@/lib/ad-studio";
 import {
   fetchGenerationPricing,
@@ -272,16 +274,20 @@ function TemplateCard({
         <span className="absolute left-2 top-2 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-white">
           {adStudioCategoryLabel(item.category)}
         </span>
+        <span className="absolute right-2 top-2 rounded-md bg-black/55 px-1.5 py-0.5 text-[10px] font-medium text-white">
+          {item.media_kind === "video" ? "Видео" : "Фото"}
+        </span>
       </div>
     </button>
   );
 }
 
-export function AdStudioPage() {
+export function AdStudioPage({ catalog = "studio" }: { catalog?: AdStudioCatalog }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const templateParam = searchParams.get("template");
   const filter = parseStudioSection(searchParams.get("section")) as FilterId;
+  const mediaFilter = parseCatalogMedia(searchParams.get("media"));
   const [items, setItems] = useState<AdStudioTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
@@ -344,20 +350,20 @@ export function AdStudioPage() {
     setLoading(true);
     setListError(null);
     try {
-      const res = await fetchAdStudioTemplates(filter === "all" ? undefined : filter);
+      const res = await fetchAdStudioTemplates(filter === "all" ? undefined : filter, catalog);
       setItems(res.items ?? []);
       setHiddenCategories(res.hidden_categories ?? []);
-      const visible = visibleAdStudioCategories(res.hidden_categories);
-      const known = AD_STUDIO_CATEGORIES.some((item) => item.id === filter);
+      const visible = visibleCategoriesForCatalog(catalog, res.hidden_categories);
+      const known = visibleCategoriesForCatalog(catalog, []).some((item) => item.id === filter);
       if (known && filter !== "all" && !visible.some((item) => item.id === filter)) {
-        router.replace(studioHref("all", templateParam), { scroll: false });
+        router.replace(catalogHref(catalog, "all", templateParam, mediaFilter), { scroll: false });
       }
     } catch (err) {
       setListError(err instanceof ApiError ? err.message : "Не удалось загрузить шаблоны");
     } finally {
       setLoading(false);
     }
-  }, [filter, router, templateParam]);
+  }, [catalog, filter, mediaFilter, router, templateParam]);
 
   useEffect(() => {
     void load();
@@ -424,10 +430,10 @@ export function AdStudioPage() {
     (item: AdStudioTemplate) => {
       applyTemplate(item);
       if (templateParam !== item.id) {
-        router.replace(studioHref(filter, item.id), { scroll: false });
+        router.replace(catalogHref(catalog, filter, item.id, mediaFilter), { scroll: false });
       }
     },
-    [applyTemplate, filter, router, templateParam],
+    [applyTemplate, catalog, filter, mediaFilter, router, templateParam],
   );
 
   // Apply the query only when `?template=` actually changes. Do not depend on
@@ -585,13 +591,23 @@ export function AdStudioPage() {
     router.push(`/posts/new?generation=${encodeURIComponent(resultId)}`);
   };
 
+  const mediaFiltered = items.filter((item) => {
+    if (mediaFilter === "all") return true;
+    return item.media_kind === mediaFilter;
+  });
   const explore = selected
-    ? items.filter((item) => item.id !== selected.id)
-    : items;
+    ? mediaFiltered.filter((item) => item.id !== selected.id)
+    : mediaFiltered;
   const filters: { id: FilterId; label: string }[] = [
     { id: "all", label: "Все" },
-    ...visibleAdStudioCategories(hiddenCategories),
+    ...visibleCategoriesForCatalog(catalog, hiddenCategories),
   ];
+  const mediaFilters: { id: CatalogMediaFilter; label: string }[] = [
+    { id: "all", label: "Все" },
+    { id: "image", label: "Фото" },
+    { id: "video", label: "Видео" },
+  ];
+  const isTrends = catalog === "trends";
 
   return (
     <div className="flex flex-col gap-6">
@@ -767,7 +783,7 @@ export function AdStudioPage() {
                 selectedIdRef.current = undefined;
                 setSelected(null);
                 if (templateParam) {
-                  router.replace("/ai", { scroll: false });
+                  router.replace(catalogHref(catalog, filter, null, mediaFilter), { scroll: false });
                 }
               }}
               className="text-[12px] text-muted hover:text-text"
@@ -786,9 +802,35 @@ export function AdStudioPage() {
                 {selected ? "Ещё шаблоны" : "Библиотека"}
               </p>
               <h2 className="mt-1 text-base font-semibold text-text">
-                {selected ? "Попробуйте другой стиль" : "Готовые рекламные решения"}
+                {selected
+                  ? "Попробуйте другой стиль"
+                  : isTrends
+                    ? "Трендовые форматы"
+                    : "Готовые рекламные решения"}
               </h2>
             </div>
+            {isTrends ? (
+              <div className="flex flex-wrap gap-1.5">
+                {mediaFilters.map((item) => {
+                  const active = mediaFilter === item.id;
+                  return (
+                    <Link
+                      key={item.id}
+                      href={catalogHref(catalog, filter, templateParam, item.id)}
+                      scroll={false}
+                      className={cn(
+                        "rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors",
+                        active
+                          ? "bg-accent text-white"
+                          : "bg-zinc-100 text-muted hover:bg-zinc-200 hover:text-text",
+                      )}
+                    >
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            ) : null}
           </div>
 
           <div className="mb-4 flex flex-wrap gap-1.5">
@@ -797,7 +839,7 @@ export function AdStudioPage() {
               return (
                 <Link
                   key={item.id}
-                  href={studioHref(item.id)}
+                  href={catalogHref(catalog, item.id, templateParam, mediaFilter)}
                   scroll={false}
                   className={cn(
                     "rounded-full px-3 py-1.5 text-[12px] font-medium transition-colors",
@@ -822,12 +864,13 @@ export function AdStudioPage() {
             <div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50 px-6 py-12 text-center">
               <p className="text-sm font-medium text-text">Пока нет шаблонов</p>
               <p className="mt-1 text-[13px] text-muted">
-                Администратор добавит их в настройках платформы — «AI — Студия рекламы».
+                Администратор добавит их в настройках платформы —{" "}
+                {isTrends ? "«AI — Тренды»" : "«AI — Студия рекламы»"}.
               </p>
             </div>
           ) : (
             <TemplateMasonryGrid
-              items={selected ? explore : items}
+              items={explore}
               selectedId={selected?.id}
               onSelect={selectTemplate}
             />

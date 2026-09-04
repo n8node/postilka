@@ -8,6 +8,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/postilka/postilka/internal/model"
 )
 
 type SettingsRepository struct {
@@ -66,10 +67,45 @@ func (r *SettingsRepository) IsOAuthLoginEnabled(ctx context.Context, provider s
 	return value == "true", nil
 }
 
-const adStudioHiddenCategoriesKey = "ad_studio.hidden_categories"
+const (
+	adStudioHiddenCategoriesKey  = "ad_studio.hidden_categories"
+	adStudioShuffleTemplatesKey  = "ad_studio.shuffle_templates"
+	adTrendsHiddenCategoriesKey  = "ad_trends.hidden_categories"
+	adTrendsShuffleTemplatesKey  = "ad_trends.shuffle_templates"
+)
+
+func catalogHiddenCategoriesKey(catalog string) string {
+	if model.NormalizeAdStudioCatalog(catalog) == model.AdStudioCatalogTrends {
+		return adTrendsHiddenCategoriesKey
+	}
+	return adStudioHiddenCategoriesKey
+}
+
+func catalogShuffleTemplatesKey(catalog string) string {
+	if model.NormalizeAdStudioCatalog(catalog) == model.AdStudioCatalogTrends {
+		return adTrendsShuffleTemplatesKey
+	}
+	return adStudioShuffleTemplatesKey
+}
 
 func (r *SettingsRepository) GetAdStudioHiddenCategories(ctx context.Context) ([]string, error) {
-	value, err := r.Get(ctx, adStudioHiddenCategoriesKey)
+	return r.GetCatalogHiddenCategories(ctx, model.AdStudioCatalogStudio)
+}
+
+func (r *SettingsRepository) SetAdStudioHiddenCategories(ctx context.Context, hidden []string) error {
+	return r.SetCatalogHiddenCategories(ctx, model.AdStudioCatalogStudio, hidden)
+}
+
+func (r *SettingsRepository) GetAdStudioShuffleTemplates(ctx context.Context) (bool, error) {
+	return r.GetCatalogShuffleTemplates(ctx, model.AdStudioCatalogStudio)
+}
+
+func (r *SettingsRepository) SetAdStudioShuffleTemplates(ctx context.Context, enabled bool) error {
+	return r.SetCatalogShuffleTemplates(ctx, model.AdStudioCatalogStudio, enabled)
+}
+
+func (r *SettingsRepository) GetCatalogHiddenCategories(ctx context.Context, catalog string) ([]string, error) {
+	value, err := r.Get(ctx, catalogHiddenCategoriesKey(catalog))
 	if errors.Is(err, ErrNotFound) || strings.TrimSpace(value) == "" {
 		return nil, nil
 	}
@@ -93,7 +129,7 @@ func (r *SettingsRepository) GetAdStudioHiddenCategories(ctx context.Context) ([
 	return out, nil
 }
 
-func (r *SettingsRepository) SetAdStudioHiddenCategories(ctx context.Context, hidden []string) error {
+func (r *SettingsRepository) SetCatalogHiddenCategories(ctx context.Context, catalog string, hidden []string) error {
 	if hidden == nil {
 		hidden = []string{}
 	}
@@ -101,13 +137,11 @@ func (r *SettingsRepository) SetAdStudioHiddenCategories(ctx context.Context, hi
 	if err != nil {
 		return err
 	}
-	return r.Set(ctx, adStudioHiddenCategoriesKey, string(raw))
+	return r.Set(ctx, catalogHiddenCategoriesKey(catalog), string(raw))
 }
 
-const adStudioShuffleTemplatesKey = "ad_studio.shuffle_templates"
-
-func (r *SettingsRepository) GetAdStudioShuffleTemplates(ctx context.Context) (bool, error) {
-	value, err := r.Get(ctx, adStudioShuffleTemplatesKey)
+func (r *SettingsRepository) GetCatalogShuffleTemplates(ctx context.Context, catalog string) (bool, error) {
+	value, err := r.Get(ctx, catalogShuffleTemplatesKey(catalog))
 	if errors.Is(err, ErrNotFound) || strings.TrimSpace(value) == "" {
 		return false, nil
 	}
@@ -117,12 +151,12 @@ func (r *SettingsRepository) GetAdStudioShuffleTemplates(ctx context.Context) (b
 	return value == "true", nil
 }
 
-func (r *SettingsRepository) SetAdStudioShuffleTemplates(ctx context.Context, enabled bool) error {
+func (r *SettingsRepository) SetCatalogShuffleTemplates(ctx context.Context, catalog string, enabled bool) error {
 	v := "false"
 	if enabled {
 		v = "true"
 	}
-	return r.Set(ctx, adStudioShuffleTemplatesKey, v)
+	return r.Set(ctx, catalogShuffleTemplatesKey(catalog), v)
 }
 
 func (r *SettingsRepository) SetOAuthLoginEnabled(ctx context.Context, provider string, enabled bool) error {

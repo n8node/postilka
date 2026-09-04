@@ -6,7 +6,6 @@ import { ProtectedMediaImage } from "@/components/media/ProtectedMediaImage";
 import { ProtectedMediaVideo } from "@/components/media/ProtectedMediaVideo";
 import { ApiError } from "@/lib/api";
 import {
-  AD_STUDIO_CATEGORIES,
   AD_STUDIO_GENERATION_MODES,
   adminAdStudioPreviewSourceUrl,
   adminAdStudioPreviewUrl,
@@ -15,50 +14,59 @@ import {
   adStudioMediaKindForMode,
   adStudioModeLabel,
   adStudioModeNeedsProduct,
+  catalogHref,
+  categoriesForCatalog,
   createAdminAdStudioTemplate,
   defaultAdStudioMode,
   defaultAdStudioRatio,
   deleteAdminAdStudioTemplate,
   fetchAdminAdStudioCategories,
   fetchAdminAdStudioTemplates,
-  studioHref,
   updateAdminAdStudioCategories,
   updateAdminAdStudioTemplate,
   uploadAdminAdStudioPreview,
   validateAdStudioPreviewFile,
   validateAdStudioPreviewVideoDuration,
-  type AdStudioCategoryId,
+  type AdStudioCatalog,
   type AdStudioGenerationMode,
   type AdStudioTemplateAdmin,
   type AdStudioWritePayload,
+  type CatalogCategoryId,
 } from "@/lib/ad-studio";
 
 const IMAGE_RATIOS = ["1:1", "4:5", "9:16", "16:9"];
 const VIDEO_RATIOS = ["9:16", "16:9", "1:1"];
 
-const emptyForm = (category: AdStudioCategoryId = "ads"): AdStudioWritePayload => {
-  const mode = defaultAdStudioMode(category);
+const emptyForm = (
+  catalog: AdStudioCatalog = "studio",
+  category?: CatalogCategoryId,
+): AdStudioWritePayload => {
+  const fallback = (categoriesForCatalog(catalog)[0]?.id ?? "ads") as CatalogCategoryId;
+  const nextCategory = category ?? fallback;
+  const mode = defaultAdStudioMode(nextCategory);
   const kind = adStudioMediaKindForMode(mode);
   return {
     title: "",
     description: "",
-    category,
+    catalog,
+    category: nextCategory,
     media_kind: kind,
     generation_mode: mode,
-    aspect_ratio: defaultAdStudioRatio(category, kind),
+    aspect_ratio: defaultAdStudioRatio(nextCategory, kind),
     duration: 5,
     system_prompt: "",
     requires_product: adStudioModeNeedsProduct(mode),
-    requires_avatar: category === "ugc",
+    requires_avatar: nextCategory === "ugc",
     sort_order: 0,
     is_published: false,
   };
 };
 
-function toForm(item: AdStudioTemplateAdmin): AdStudioWritePayload {
+function toForm(item: AdStudioTemplateAdmin, catalog: AdStudioCatalog): AdStudioWritePayload {
   return {
     title: item.title,
     description: item.description,
+    catalog: item.catalog ?? catalog,
     category: item.category,
     media_kind: item.media_kind,
     generation_mode: item.generation_mode,
@@ -72,11 +80,19 @@ function toForm(item: AdStudioTemplateAdmin): AdStudioWritePayload {
   };
 }
 
-export function AdminAdStudioPage({ embedded = false }: { embedded?: boolean }) {
+export function AdminAdStudioPage({
+  embedded = false,
+  catalog = "studio",
+}: {
+  embedded?: boolean;
+  catalog?: AdStudioCatalog;
+}) {
+  const categories = categoriesForCatalog(catalog);
+  const isTrends = catalog === "trends";
   const [items, setItems] = useState<AdStudioTemplateAdmin[]>([]);
   const [selectedId, setSelectedId] = useState<string>("");
-  const [form, setForm] = useState<AdStudioWritePayload>(emptyForm());
-  const [filter, setFilter] = useState<"" | AdStudioCategoryId>("");
+  const [form, setForm] = useState<AdStudioWritePayload>(emptyForm(catalog));
+  const [filter, setFilter] = useState<"" | CatalogCategoryId>("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -93,8 +109,8 @@ export function AdminAdStudioPage({ embedded = false }: { embedded?: boolean }) 
     setError(null);
     try {
       const [res, cats] = await Promise.all([
-        fetchAdminAdStudioTemplates(filter || undefined),
-        fetchAdminAdStudioCategories(),
+        fetchAdminAdStudioTemplates(filter || undefined, catalog),
+        fetchAdminAdStudioCategories(catalog),
       ]);
       setItems(res.items ?? []);
       setHiddenCategories(cats.hidden_categories ?? []);
@@ -108,7 +124,7 @@ export function AdminAdStudioPage({ embedded = false }: { embedded?: boolean }) 
     } finally {
       setLoading(false);
     }
-  }, [filter]);
+  }, [catalog, filter]);
 
   useEffect(() => {
     void load();
@@ -116,14 +132,14 @@ export function AdminAdStudioPage({ embedded = false }: { embedded?: boolean }) 
 
   useEffect(() => {
     const item = items.find((x) => x.id === selectedId);
-    if (item) setForm(toForm(item));
-  }, [selectedId, items]);
+    if (item) setForm(toForm(item, catalog));
+  }, [selectedId, items, catalog]);
 
   function patch<K extends keyof AdStudioWritePayload>(key: K, value: AdStudioWritePayload[K]) {
     setForm((prev) => {
       const next = { ...prev, [key]: value };
       if (key === "category") {
-        const category = value as AdStudioCategoryId;
+        const category = value as CatalogCategoryId;
         const mode = defaultAdStudioMode(category);
         const kind = adStudioMediaKindForMode(mode);
         next.generation_mode = mode;
@@ -150,14 +166,14 @@ export function AdminAdStudioPage({ embedded = false }: { embedded?: boolean }) 
     setSaved(false);
     try {
       if (selectedId) {
-        const { item } = await updateAdminAdStudioTemplate(selectedId, form);
+        const { item } = await updateAdminAdStudioTemplate(selectedId, { ...form, catalog });
         setItems((prev) => prev.map((x) => (x.id === item.id ? item : x)));
-        setForm(toForm(item));
+        setForm(toForm(item, catalog));
       } else {
-        const { item } = await createAdminAdStudioTemplate(form);
+        const { item } = await createAdminAdStudioTemplate({ ...form, catalog });
         setItems((prev) => [item, ...prev]);
         setSelectedId(item.id);
-        setForm(toForm(item));
+        setForm(toForm(item, catalog));
       }
       setSaved(true);
     } catch (err) {
@@ -169,7 +185,7 @@ export function AdminAdStudioPage({ embedded = false }: { embedded?: boolean }) 
 
   async function createNew() {
     setSelectedId("");
-    setForm(emptyForm(filter || "ads"));
+    setForm(emptyForm(catalog, filter || undefined));
     setSaved(false);
     setError(null);
   }
@@ -184,7 +200,7 @@ export function AdminAdStudioPage({ embedded = false }: { embedded?: boolean }) 
       const next = items.filter((item) => item.id !== selectedId);
       setItems(next);
       setSelectedId(next[0]?.id ?? "");
-      setForm(next[0] ? toForm(next[0]) : emptyForm());
+      setForm(next[0] ? toForm(next[0], catalog) : emptyForm(catalog));
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Не удалось удалить");
     } finally {
@@ -222,14 +238,14 @@ export function AdminAdStudioPage({ embedded = false }: { embedded?: boolean }) 
     }
   }
 
-  async function toggleSection(id: AdStudioCategoryId, visible: boolean) {
+  async function toggleSection(id: CatalogCategoryId, visible: boolean) {
     const next = visible
       ? hiddenCategories.filter((item) => item !== id)
       : [...new Set([...hiddenCategories, id])];
     setSavingSections(true);
     setError(null);
     try {
-      const res = await updateAdminAdStudioCategories(next, shuffleTemplates);
+      const res = await updateAdminAdStudioCategories(next, shuffleTemplates, catalog);
       setHiddenCategories(res.hidden_categories ?? next);
       setShuffleTemplates(Boolean(res.shuffle_templates));
       setSaved(true);
@@ -260,7 +276,7 @@ export function AdminAdStudioPage({ embedded = false }: { embedded?: boolean }) 
     setSavingSections(true);
     setError(null);
     try {
-      const res = await updateAdminAdStudioCategories(hiddenCategories, enabled);
+      const res = await updateAdminAdStudioCategories(hiddenCategories, enabled, catalog);
       setHiddenCategories(res.hidden_categories ?? hiddenCategories);
       setShuffleTemplates(Boolean(res.shuffle_templates));
       setSaved(true);
@@ -275,10 +291,13 @@ export function AdminAdStudioPage({ embedded = false }: { embedded?: boolean }) 
 
   return (
     <div className={embedded ? "space-y-4" : "mx-auto max-w-5xl space-y-4 p-6"}>
-      {!embedded ? <h1 className="text-lg font-semibold">Студия рекламы</h1> : null}
+      {!embedded ? (
+        <h1 className="text-lg font-semibold">{isTrends ? "Тренды" : "Студия рекламы"}</h1>
+      ) : null}
       <p className="text-sm text-slate-600">
-        Готовые медиа-решения для кабинета. Пользователь выбирает шаблон, подставляет товар и
-        генерирует свой кадр. Режимы: съёмка товара, движение, UGC, реклама, постеры, маркетплейс.
+        {isTrends
+          ? "Каталог трендовых фото и видео для кабинета. Пользователь выбирает шаблон и генерирует свой кадр. Разделы: вирусное, мемы, челленджи, сезонное, новости, форматы."
+          : "Готовые медиа-решения для кабинета. Пользователь выбирает шаблон, подставляет товар и генерирует свой кадр. Режимы: съёмка товара, движение, UGC, реклама, постеры, маркетплейс."}
       </p>
 
       {error ? (
@@ -292,11 +311,16 @@ export function AdminAdStudioPage({ embedded = false }: { embedded?: boolean }) 
         <p className="text-sm font-medium text-slate-800">Разделы в кабинете</p>
         <p className="mt-1 text-xs text-slate-500">
           Снимите галочку, чтобы скрыть раздел у пользователей. Шаблоны останутся в админке.
-          Ссылка вкладки «Все»: <code className="font-mono">/ai</code>. Новые разделы получают
-          ссылку <code className="font-mono">/ai?tab=studio&amp;section=id</code>.
+          Ссылка вкладки «Все»:{" "}
+          <code className="font-mono">{isTrends ? "/ai?tab=trends" : "/ai"}</code>. Новые разделы
+          получают ссылку{" "}
+          <code className="font-mono">
+            {isTrends ? "/ai?tab=trends&amp;section=id" : "/ai?tab=studio&amp;section=id"}
+          </code>
+          .
         </p>
         <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
-          {AD_STUDIO_CATEGORIES.map((item) => {
+          {categories.map((item) => {
             const visible = !hiddenCategories.includes(item.id);
             return (
               <label key={item.id} className="flex items-center gap-2 text-sm">
@@ -304,10 +328,12 @@ export function AdminAdStudioPage({ embedded = false }: { embedded?: boolean }) 
                   type="checkbox"
                   checked={visible}
                   disabled={savingSections}
-                  onChange={(e) => void toggleSection(item.id, e.target.checked)}
+                  onChange={(e) => void toggleSection(item.id as CatalogCategoryId, e.target.checked)}
                 />
                 <span>{item.label}</span>
-                <code className="text-[10px] text-slate-400">{studioHref(item.id)}</code>
+                <code className="text-[10px] text-slate-400">
+                  {catalogHref(catalog, item.id)}
+                </code>
                 {!visible ? <span className="text-xs text-slate-400">скрыт</span> : null}
               </label>
             );
@@ -338,11 +364,11 @@ export function AdminAdStudioPage({ embedded = false }: { embedded?: boolean }) 
       <div className="flex flex-wrap gap-2">
         <select
           value={filter}
-          onChange={(e) => setFilter(e.target.value as "" | AdStudioCategoryId)}
+          onChange={(e) => setFilter(e.target.value as "" | CatalogCategoryId)}
           className="rounded-md border border-slate-200 px-3 py-2 text-sm"
         >
           <option value="">Все режимы</option>
-          {AD_STUDIO_CATEGORIES.map((c) => (
+          {categories.map((c) => (
             <option key={c.id} value={c.id}>
               {c.label}
             </option>
@@ -413,10 +439,10 @@ export function AdminAdStudioPage({ embedded = false }: { embedded?: boolean }) 
                 Категория
                 <select
                   value={form.category}
-                  onChange={(e) => patch("category", e.target.value as AdStudioCategoryId)}
+                  onChange={(e) => patch("category", e.target.value as CatalogCategoryId)}
                   className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
                 >
-                  {AD_STUDIO_CATEGORIES.map((c) => (
+                  {categories.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.label}
                     </option>
