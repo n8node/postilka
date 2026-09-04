@@ -45,6 +45,7 @@ import {
   emptyReferenceImageSlots,
   emptyReferenceVideoSlots,
   filledReferenceCount,
+  KIE_VIDEO_PROMPT_MAX_CHARS,
   toVideoHistoryItem,
   videoGenerationModes,
   videoModeIcons,
@@ -238,8 +239,11 @@ export function VideoGenerationPageContent() {
     [firstFrame, lastFrame, referenceImages, referenceVideos],
   );
 
+  const promptLength = [...prompt].length;
+  const promptOverLimit = promptLength > KIE_VIDEO_PROMPT_MAX_CHARS;
+
   const canGenerate = useMemo(() => {
-    if (!prompt.trim() || generating || !hasMediaCredits(creditsRemaining)) {
+    if (!prompt.trim() || generating || !hasMediaCredits(creditsRemaining) || promptOverLimit) {
       return false;
     }
     if (mode === "image-to-video") {
@@ -254,6 +258,7 @@ export function VideoGenerationPageContent() {
     return true;
   }, [
     prompt,
+    promptOverLimit,
     generating,
     creditsRemaining,
     mode,
@@ -520,7 +525,7 @@ export function VideoGenerationPageContent() {
             <button
               type="button"
               onClick={() => void improvePrompt()}
-              disabled={!prompt.trim() || improving}
+              disabled={!prompt.trim() || improving || promptOverLimit}
               className="flex items-center gap-1 text-[11px] font-medium text-accent disabled:opacity-40"
             >
               <Sparkles size={11} />
@@ -533,6 +538,20 @@ export function VideoGenerationPageContent() {
             placeholder={videoPromptPlaceholders[mode]}
             className="box-border min-h-[88px] w-full resize-y rounded-lg border border-zinc-300 px-3 py-2.5 text-[13px] leading-relaxed text-text outline-none focus:border-zinc-400"
           />
+          <p
+            className={
+              promptOverLimit
+                ? "mt-1.5 text-right text-[11px] text-red-600"
+                : "mt-1.5 text-right text-[11px] text-zinc-400"
+            }
+          >
+            {promptLength}/{KIE_VIDEO_PROMPT_MAX_CHARS}
+          </p>
+          {promptOverLimit ? (
+            <p className="mt-1 text-[12px] text-red-600">
+              Описание слишком длинное. Лимит KIE — {KIE_VIDEO_PROMPT_MAX_CHARS} символов.
+            </p>
+          ) : null}
           {improveError && (
             <p className="mt-2 text-[12px] text-red-600">{improveError}</p>
           )}

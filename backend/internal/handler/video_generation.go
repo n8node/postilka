@@ -233,7 +233,7 @@ func (h *VideoGenerationHandler) mapError(w http.ResponseWriter, err error) {
 			return
 		}
 		if strings.Contains(msg, "prompt too long") {
-			writeErrorWithCode(w, http.StatusBadRequest, "invalid_prompt", "Описание слишком длинное")
+			writeErrorWithCode(w, http.StatusBadRequest, "invalid_prompt", "Описание слишком длинное. Для видео — до 7000 символов.")
 			return
 		}
 		if strings.Contains(lower, "source media") || strings.Contains(lower, "unreadable") || strings.Contains(lower, "storage not configured") {

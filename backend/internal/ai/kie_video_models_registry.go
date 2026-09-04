@@ -8,6 +8,8 @@ import (
 const (
 	// DefaultMiniMaxH3Resolution is the KIE enum value for MiniMax H3 (768P or 2K).
 	DefaultMiniMaxH3Resolution = "768P"
+	// KieVideoPromptMaxChars is the official MiniMax H3 / KIE prompt limit.
+	KieVideoPromptMaxChars = 7000
 )
 
 // KieVideoMarketModels returns video models from KIE Market catalog.

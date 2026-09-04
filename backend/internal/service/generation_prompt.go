@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/postilka/postilka/internal/ai"
 )
@@ -18,7 +19,12 @@ func (s *GenerationService) ImprovePrompt(ctx context.Context, userID string, in
 	if prompt == "" {
 		return "", errors.New("prompt is required")
 	}
-	if len(prompt) > 4000 {
+	maxChars := 4000
+	switch strings.TrimSpace(in.Mode) {
+	case "text-to-video", "image-to-video", "reference-to-video":
+		maxChars = ai.KieVideoPromptMaxChars
+	}
+	if utf8.RuneCountInString(prompt) > maxChars {
 		return "", errors.New("prompt too long")
 	}
 

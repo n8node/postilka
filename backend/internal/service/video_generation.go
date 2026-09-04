@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 	"github.com/postilka/postilka/internal/ai"
@@ -78,7 +79,7 @@ func (s *GenerationService) StartGenerateVideo(ctx context.Context, userID strin
 	if prompt == "" {
 		return StartGenerateResult{}, errors.New("prompt is required")
 	}
-	if len(prompt) > 4000 {
+	if kieVideoPromptOverLimit(prompt) {
 		return StartGenerateResult{}, errors.New("prompt too long")
 	}
 
@@ -664,4 +665,8 @@ func nonEmptyUploadIDs(ids []string) []string {
 		}
 	}
 	return out
+}
+
+func kieVideoPromptOverLimit(prompt string) bool {
+	return utf8.RuneCountInString(prompt) > ai.KieVideoPromptMaxChars
 }

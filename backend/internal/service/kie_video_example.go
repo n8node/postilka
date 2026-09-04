@@ -87,7 +87,7 @@ func (s *KieVideoExampleService) Create(ctx context.Context, in model.KieVideoEx
 	if prompt == "" {
 		return model.KieVideoExampleView{}, errors.New("prompt is required")
 	}
-	if len(prompt) > 4000 {
+	if kieVideoPromptOverLimit(prompt) {
 		return model.KieVideoExampleView{}, errors.New("prompt too long")
 	}
 

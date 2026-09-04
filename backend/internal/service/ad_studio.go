@@ -11,8 +11,10 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
+	"github.com/postilka/postilka/internal/ai"
 	"github.com/postilka/postilka/internal/model"
 	"github.com/postilka/postilka/internal/repository"
 )
@@ -784,8 +786,13 @@ func composeAdStudioPrompt(t model.AdStudioTemplate, mode, edit string) string {
 		b.WriteString("\n")
 	}
 	out := strings.TrimSpace(b.String())
-	if len(out) > 4000 {
-		return out[:4000]
+	maxChars := 4000
+	switch mode {
+	case model.AdStudioModeTextToVideo, model.AdStudioModeImageToVideo, model.AdStudioModeReferenceToVideo:
+		maxChars = ai.KieVideoPromptMaxChars
+	}
+	if utf8.RuneCountInString(out) > maxChars {
+		return string([]rune(out)[:maxChars])
 	}
 	return out
 }

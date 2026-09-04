@@ -68,6 +68,8 @@ export const REFERENCE_VIDEO_MAX_SECONDS = 15;
 /** MP4/ffprobe often reports slightly over nominal length (e.g. 15.04s for a 15s clip). */
 export const REFERENCE_VIDEO_DURATION_TOLERANCE = 0.5;
 export const REFERENCE_VIDEO_MAX_BYTES = 50 * 1024 * 1024;
+/** Official MiniMax H3 / KIE prompt limit. */
+export const KIE_VIDEO_PROMPT_MAX_CHARS = 7000;
 
 /** KIE MiniMax H3 accepts these containers without transcode. */
 export function isKieNativeReferenceVideo(
