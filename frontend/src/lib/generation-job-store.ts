@@ -23,6 +23,7 @@ type GenerationJobState = {
   completionSeq: number;
   pollSerial: number;
   toasts: GenerationCompleteToast[];
+  markStarting: () => void;
   beginJob: (job: GenerationJob, startedAt: number) => void;
   patchJob: (job: GenerationJob) => void;
   completeJob: (input: {
@@ -60,6 +61,19 @@ export const useGenerationJobStore = create<GenerationJobState>((set, get) => ({
   pollSerial: 0,
   toasts: [],
 
+  markStarting: () =>
+    set((s) => {
+      if (s.running) return s;
+      return {
+        ...initialRun,
+        running: true,
+        startedAt: Date.now(),
+        pollSerial: s.pollSerial + 1,
+        completionSeq: s.completionSeq,
+        toasts: s.toasts,
+      };
+    }),
+
   beginJob: (job, startedAt) =>
     set((s) => ({
       ...initialRun,
@@ -76,7 +90,9 @@ export const useGenerationJobStore = create<GenerationJobState>((set, get) => ({
     set((s) => (s.running && s.jobId === job.id ? { job } : {})),
 
   completeJob: ({ job, creditsRemaining, startedAt, showToast }) => {
-    if (!get().running) return;
+    const current = get();
+    if (!current.running) return;
+    if (current.jobId && current.jobId !== job.id) return;
 
     const generation = job.generation;
     const durationMs = Date.now() - startedAt;

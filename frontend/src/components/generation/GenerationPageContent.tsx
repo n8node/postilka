@@ -242,9 +242,11 @@ export function GenerationPageContent() {
   };
 
   const generate = async () => {
+    const store = useGenerationJobStore.getState();
+    if (store.running) return;
     if (!canGenerate) return;
-
-    clearError();
+    store.markStarting();
+    const startedAt = useGenerationJobStore.getState().startedAt ?? Date.now();
     try {
       const body = {
         mode,
@@ -257,7 +259,8 @@ export function GenerationPageContent() {
       };
 
       const { job: started } = await startGeneration(body);
-      beginJob(started, Date.now());
+      if (!useGenerationJobStore.getState().running) return;
+      beginJob(started, startedAt);
     } catch (err) {
       useGenerationJobStore.getState().failJob(
         err instanceof ApiError

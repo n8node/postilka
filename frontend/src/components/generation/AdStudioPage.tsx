@@ -546,8 +546,14 @@ export function AdStudioPage() {
 
   const recreate = async () => {
     if (!selected || !canGenerate) return;
-    clearImageError();
-    clearVideoError();
+    if (isVideo) {
+      if (useVideoGenerationJobStore.getState().running) return;
+      useVideoGenerationJobStore.getState().markStarting();
+    } else {
+      if (useGenerationJobStore.getState().running) return;
+      useGenerationJobStore.getState().markStarting();
+    }
+    const startedAt = Date.now();
     try {
       const { job, media_kind } = await generateFromAdStudioTemplate(selected.id, {
         product_upload_id: product?.uploadId,
@@ -555,9 +561,11 @@ export function AdStudioPage() {
         edit: edit.trim(),
       });
       if (media_kind === "video") {
-        beginVideoJob(job as VideoGenerationJob, Date.now());
+        if (!useVideoGenerationJobStore.getState().running) return;
+        beginVideoJob(job as VideoGenerationJob, startedAt);
       } else {
-        beginImageJob(job, Date.now());
+        if (!useGenerationJobStore.getState().running) return;
+        beginImageJob(job, startedAt);
       }
     } catch (err) {
       const msg =

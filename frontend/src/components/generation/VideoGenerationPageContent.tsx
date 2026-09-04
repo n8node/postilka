@@ -305,8 +305,11 @@ export function VideoGenerationPageContent() {
   };
 
   const generate = async () => {
+    const store = useVideoGenerationJobStore.getState();
+    if (store.running) return;
     if (!canGenerate) return;
-    clearError();
+    store.markStarting();
+    const startedAt = useVideoGenerationJobStore.getState().startedAt ?? Date.now();
     try {
       const body = {
         mode,
@@ -324,7 +327,8 @@ export function VideoGenerationPageContent() {
         reference_audio_upload_ids: referenceAudios.map((p) => p.uploadId),
       };
       const { job: started } = await startVideoGeneration(body);
-      beginJob(started, Date.now());
+      if (!useVideoGenerationJobStore.getState().running) return;
+      beginJob(started, startedAt);
     } catch (err) {
       useVideoGenerationJobStore.getState().failJob(
         err instanceof ApiError

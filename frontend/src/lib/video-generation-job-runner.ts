@@ -7,19 +7,34 @@ import {
 import { pollVideoGenerationJob } from "@/lib/video-generation-api";
 import { ApiError } from "@/lib/api";
 
-let pollInFlight = false;
+let pollInFlightSerial: number | null = null;
 
 export function resumeVideoGenerationPoll() {
   const state = useVideoGenerationJobStore.getState();
-  if (!state.running || !state.jobId || pollInFlight) return;
+  if (!state.running || !state.jobId) return;
+  if (pollInFlightSerial === state.pollSerial) return;
 
   const serial = state.pollSerial;
-  pollInFlight = true;
+  const jobId = state.jobId;
+  pollInFlightSerial = serial;
 
-  void pollVideoGenerationJob(state.jobId, (job) => {
-    if (useVideoGenerationJobStore.getState().pollSerial !== serial) return;
-    useVideoGenerationJobStore.getState().patchJob(job);
-  })
+  void pollVideoGenerationJob(
+    jobId,
+    (job) => {
+      if (useVideoGenerationJobStore.getState().pollSerial !== serial) return;
+      useVideoGenerationJobStore.getState().patchJob(job);
+    },
+    {
+      shouldContinue: () => {
+        const current = useVideoGenerationJobStore.getState();
+        return (
+          current.pollSerial === serial &&
+          current.running &&
+          current.jobId === jobId
+        );
+      },
+    },
+  )
     .then((job) => {
       if (useVideoGenerationJobStore.getState().pollSerial !== serial) return;
       const startedAt =
@@ -38,6 +53,7 @@ export function resumeVideoGenerationPoll() {
     })
     .catch((err) => {
       if (useVideoGenerationJobStore.getState().pollSerial !== serial) return;
+      if (err instanceof Error && err.name === "AbortError") return;
       const message =
         err instanceof ApiError
           ? err.message
@@ -47,7 +63,9 @@ export function resumeVideoGenerationPoll() {
       useVideoGenerationJobStore.getState().failJob(message);
     })
     .finally(() => {
-      pollInFlight = false;
+      if (pollInFlightSerial === serial) {
+        pollInFlightSerial = null;
+      }
     });
 }
 

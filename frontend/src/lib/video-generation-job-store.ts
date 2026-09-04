@@ -23,6 +23,7 @@ type VideoGenerationJobState = {
   completionSeq: number;
   pollSerial: number;
   toasts: VideoGenerationCompleteToast[];
+  markStarting: () => void;
   beginJob: (job: VideoGenerationJob, startedAt: number) => void;
   patchJob: (job: VideoGenerationJob) => void;
   completeJob: (input: {
@@ -61,6 +62,19 @@ export const useVideoGenerationJobStore = create<VideoGenerationJobState>(
     pollSerial: 0,
     toasts: [],
 
+    markStarting: () =>
+      set((s) => {
+        if (s.running) return s;
+        return {
+          ...initialRun,
+          running: true,
+          startedAt: Date.now(),
+          pollSerial: s.pollSerial + 1,
+          completionSeq: s.completionSeq,
+          toasts: s.toasts,
+        };
+      }),
+
     beginJob: (job, startedAt) =>
       set((s) => ({
         ...initialRun,
@@ -77,7 +91,9 @@ export const useVideoGenerationJobStore = create<VideoGenerationJobState>(
       set((s) => (s.running && s.jobId === job.id ? { job } : {})),
 
     completeJob: ({ job, creditsRemaining, startedAt, showToast }) => {
-      if (!get().running) return;
+      const current = get();
+      if (!current.running) return;
+      if (current.jobId && current.jobId !== job.id) return;
 
       const generation = job.generation;
       const durationMs = Date.now() - startedAt;

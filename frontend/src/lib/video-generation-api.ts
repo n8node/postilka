@@ -260,13 +260,22 @@ export async function deleteVideoGenerationHistory(ids: string[]) {
 export async function pollVideoGenerationJob(
   jobId: string,
   onUpdate: (job: VideoGenerationJob) => void,
-  opts?: { intervalMs?: number; maxMs?: number },
+  opts?: {
+    intervalMs?: number;
+    maxMs?: number;
+    shouldContinue?: () => boolean;
+  },
 ): Promise<VideoGenerationJob> {
   const intervalMs = opts?.intervalMs ?? 3000;
   const maxMs = opts?.maxMs ?? 30 * 60 * 1000;
   const started = Date.now();
 
   for (;;) {
+    if (opts?.shouldContinue && !opts.shouldContinue()) {
+      const abort = new Error("poll superseded");
+      abort.name = "AbortError";
+      throw abort;
+    }
     const res = await fetchVideoGenerationJob(jobId);
     onUpdate(res.job);
     if (res.credits_remaining !== undefined) {
