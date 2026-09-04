@@ -31,6 +31,10 @@ type SourcePhotosPanelProps = {
   ) => void | Promise<void>;
 };
 
+function firstEmptySlotIndex(photos: (GenerationUpload | null)[]): number {
+  return photos.findIndex((photo) => photo == null);
+}
+
 function SlotLoadingRing() {
   return (
     <span
@@ -78,10 +82,18 @@ function PhotoUploadSlot({
     event.dataTransfer.dropEffect = "copy";
   };
 
+  const handleDrop = (event: React.DragEvent) => {
+    if (!event.dataTransfer.types.includes(GENERATION_HISTORY_DRAG_MIME)) {
+      return;
+    }
+    event.stopPropagation();
+    onHistoryDrop(event);
+  };
+
   return (
     <div
       onDragOver={handleDragOver}
-      onDrop={onHistoryDrop}
+      onDrop={handleDrop}
       className={cn(shake && "generation-slot-shake", "rounded-lg")}
     >
       <button
@@ -180,6 +192,43 @@ export function SourcePhotosPanel({
       }
     };
 
+  const handleAreaDragOver = (event: React.DragEvent) => {
+    if (!event.dataTransfer.types.includes(GENERATION_HISTORY_DRAG_MIME)) {
+      return;
+    }
+    event.preventDefault();
+    const canAccept =
+      mode === "image-to-image"
+        ? true
+        : firstEmptySlotIndex(combinePhotos) >= 0;
+    event.dataTransfer.dropEffect = canAccept ? "copy" : "none";
+  };
+
+  const handleAreaDrop = async (event: React.DragEvent) => {
+    event.preventDefault();
+    const item = parseHistoryDragItem(
+      event.dataTransfer.getData(GENERATION_HISTORY_DRAG_MIME),
+    );
+    if (!item) return;
+
+    if (mode === "image-to-image") {
+      await handleSlotDrop("single")(event);
+      return;
+    }
+
+    const empty = firstEmptySlotIndex(combinePhotos);
+    if (empty < 0) {
+      setError(`Все ${COMBINE_PHOTO_SLOTS} слотов заняты`);
+      return;
+    }
+    await handleSlotDrop(empty)(event);
+  };
+
+  const dropZoneProps = {
+    onDragOver: handleAreaDragOver,
+    onDrop: (event: React.DragEvent) => void handleAreaDrop(event),
+  };
+
   const uploadFile = async (file: File, slot: number | "single") => {
     setUploadingSlot(slot);
     setError(null);
@@ -220,34 +269,37 @@ export function SourcePhotosPanel({
 
   if (mode === "image-to-image") {
     return (
-      <Card hover className={dropZoneClass}>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          className="hidden"
-          onChange={handleFileChange}
-        />
-        <StepHeader step={2} title="Исходное фото" />
-        <PhotoUploadSlot
-          label="Загрузить"
-          photo={sourcePhoto}
-          loading={isSlotLoading("single")}
-          shake={historyDragActive}
-          onPick={() => openPicker("single")}
-          onClear={() => onSourcePhotoChange(null)}
-          onHistoryDrop={(e) => void handleSlotDrop("single")(e)}
-        />
-        <p className="mt-3 text-[11px] text-zinc-400">
-          JPEG, PNG или WebP · можно перетащить из истории
-        </p>
-        {error && <p className="mt-2 text-[12px] text-red-600">{error}</p>}
-      </Card>
+      <div {...dropZoneProps}>
+        <Card hover className={dropZoneClass}>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            className="hidden"
+            onChange={handleFileChange}
+          />
+          <StepHeader step={2} title="Исходное фото" />
+          <PhotoUploadSlot
+            label="Загрузить"
+            photo={sourcePhoto}
+            loading={isSlotLoading("single")}
+            shake={historyDragActive}
+            onPick={() => openPicker("single")}
+            onClear={() => onSourcePhotoChange(null)}
+            onHistoryDrop={(e) => void handleSlotDrop("single")(e)}
+          />
+          <p className="mt-3 text-[11px] text-zinc-400">
+            JPEG, PNG или WebP · можно перетащить из истории
+          </p>
+          {error && <p className="mt-2 text-[12px] text-red-600">{error}</p>}
+        </Card>
+      </div>
     );
   }
 
   return (
-    <Card hover className={dropZoneClass}>
+    <div {...dropZoneProps}>
+      <Card hover className={dropZoneClass}>
       <input
         ref={fileInputRef}
         type="file"
@@ -276,5 +328,6 @@ export function SourcePhotosPanel({
       </p>
       {error && <p className="mt-2 text-[12px] text-red-600">{error}</p>}
     </Card>
+    </div>
   );
 }

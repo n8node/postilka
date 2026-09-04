@@ -80,6 +80,10 @@ type SourceModalTarget =
   | { kind: "ref-image"; slot: number }
   | { kind: "ref-video"; slot: number };
 
+function firstEmptySlotIndex(items: (VideoGenerationUpload | null)[]): number {
+  return items.findIndex((item) => item == null);
+}
+
 function mediaKindFromFile(file: File): VideoMediaKind | null {
   if (file.type.startsWith("image/")) return "image";
   if (file.type.startsWith("video/")) return "video";
@@ -213,10 +217,14 @@ function ReferenceFixedSlot({
 
   const handleDrop = (event: React.DragEvent) => {
     if (acceptVideoHistoryDrag && event.dataTransfer.types.includes(VIDEO_HISTORY_DRAG_MIME)) {
+      event.preventDefault();
+      event.stopPropagation();
       onVideoHistoryDrop?.(event);
       return;
     }
     if (acceptPhotoHistoryDrag && event.dataTransfer.types.includes(GENERATION_HISTORY_DRAG_MIME)) {
+      event.preventDefault();
+      event.stopPropagation();
       onPhotoHistoryDrop?.(event);
     }
   };
@@ -757,10 +765,83 @@ export function VideoSourcePhotosPanel({
       }
     };
 
+  const handleAreaDragOver = (event: React.DragEvent) => {
+    if (mode !== "reference-to-video") return;
+    const types = event.dataTransfer.types;
+    const isPhoto = types.includes(GENERATION_HISTORY_DRAG_MIME);
+    const isVideo = types.includes(VIDEO_HISTORY_DRAG_MIME);
+    if (!isPhoto && !isVideo) return;
+
+    event.preventDefault();
+    if (isVideo) {
+      const empty = firstEmptySlotIndex(referenceVideos);
+      if (empty < 0) {
+        event.dataTransfer.dropEffect = "none";
+        return;
+      }
+      event.dataTransfer.dropEffect = "copy";
+      handleVideoDragOver(empty);
+      return;
+    }
+
+    event.dataTransfer.dropEffect =
+      firstEmptySlotIndex(referenceImages) >= 0 ? "copy" : "none";
+  };
+
+  const handleAreaDragLeave = (event: React.DragEvent) => {
+    if (mode !== "reference-to-video") return;
+    const next = event.relatedTarget;
+    if (next instanceof Node && event.currentTarget.contains(next)) return;
+    setVideoDragSlot(null);
+    setVideoDragInvalid(null);
+  };
+
+  const handleAreaDrop = async (event: React.DragEvent) => {
+    if (mode !== "reference-to-video") return;
+    const types = event.dataTransfer.types;
+    const isPhoto = types.includes(GENERATION_HISTORY_DRAG_MIME);
+    const isVideo = types.includes(VIDEO_HISTORY_DRAG_MIME);
+    if (!isPhoto && !isVideo) return;
+
+    event.preventDefault();
+
+    if (isVideo) {
+      const empty = firstEmptySlotIndex(referenceVideos);
+      if (empty < 0) {
+        setError(`Все ${REFERENCE_VIDEO_MAX} слотов референс-видео заняты`);
+        setVideoDragSlot(null);
+        setVideoDragInvalid(null);
+        return;
+      }
+      await handleVideoHistoryDrop(empty)(event);
+      return;
+    }
+
+    const empty = firstEmptySlotIndex(referenceImages);
+    if (empty < 0) {
+      setError(`Все ${REFERENCE_IMAGE_MAX} слотов референс-фото заняты`);
+      return;
+    }
+    await handlePhotoHistoryDrop({ kind: "ref-image", slot: empty })(event);
+  };
+
   const imageCount = filledReferenceCount(referenceImages);
   const videoCount = filledReferenceCount(referenceVideos);
 
   return (
+    <div
+      onDragOver={
+        mode === "reference-to-video" ? handleAreaDragOver : undefined
+      }
+      onDragLeave={
+        mode === "reference-to-video" ? handleAreaDragLeave : undefined
+      }
+      onDrop={
+        mode === "reference-to-video"
+          ? (event) => void handleAreaDrop(event)
+          : undefined
+      }
+    >
     <Card hover className={dropZoneClass}>
       <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.04em] text-muted">
         2 · Исходники
@@ -974,5 +1055,6 @@ export function VideoSourcePhotosPanel({
         onSelect={(file) => void handleWorkspaceFile(file)}
       />
     </Card>
+    </div>
   );
 }
