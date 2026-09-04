@@ -300,22 +300,31 @@ func (s *AdStudioService) UploadPreview(ctx context.Context, id string, file mul
 	}
 	contentType = strings.Split(contentType, ";")[0]
 
-	if isKieReferenceVideoContentType(contentType) {
+	filename := ""
+	if header != nil {
+		filename = header.Filename
+	}
+	if isKieReferenceVideoContentType(contentType, filename) {
 		if current.MediaKind != model.AdStudioMediaVideo {
 			return model.AdStudioTemplateAdminView{}, ErrAdStudioPreviewInvalid
 		}
-		if _, err := validateKieReferenceVideoUpload(contentType, data); err != nil {
+		prepared, err := prepareKieReferenceVideo(data, contentType, filename, true)
+		if err != nil {
 			if errors.Is(err, ErrReferenceVideoDuration) {
+				return model.AdStudioTemplateAdminView{}, err
+			}
+			if errors.Is(err, ErrKieReferenceVideoConvert) {
 				return model.AdStudioTemplateAdminView{}, err
 			}
 			return model.AdStudioTemplateAdminView{}, ErrAdStudioPreviewInvalid
 		}
+		data = prepared.Data
+		contentType = prepared.ContentType
 		thumb, err := extractVideoPosterWebP(data)
 		if err != nil || len(thumb) == 0 {
 			return model.AdStudioTemplateAdminView{}, ErrAdStudioPreviewProcess
 		}
-		ext := adStudioVideoExt(contentType)
-		masterKey := fmt.Sprintf("postilka/ad-studio/previews/%s%s", uuid.NewString(), ext)
+		masterKey := fmt.Sprintf("postilka/ad-studio/previews/%s%s", uuid.NewString(), prepared.FilenameExt)
 		thumbKey := fmt.Sprintf("postilka/ad-studio/previews/%s.webp", uuid.NewString())
 		if err := s.objectStore.PutObjectWithCacheControl(ctx, masterKey, contentType, adStudioMasterObjectCacheControl, data); err != nil {
 			return model.AdStudioTemplateAdminView{}, err

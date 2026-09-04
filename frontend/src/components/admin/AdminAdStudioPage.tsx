@@ -566,7 +566,7 @@ export function AdminAdStudioPage({
               )}
               <p className="mb-2 text-xs text-slate-500">
                 {form.media_kind === "video"
-                  ? "Фото или MP4/MOV/WebM · 2–15 сек · до 50 МБ для видео"
+                  ? "Фото или видео (MP4/MOV/WebM) · конвертируем в MP4 · 2–15 сек · до 50 МБ"
                   : "JPEG, PNG или WebP · до 15 МБ"}
               </p>
               <input

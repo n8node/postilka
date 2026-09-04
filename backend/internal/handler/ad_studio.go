@@ -295,7 +295,9 @@ func (h *AdStudioHandler) mapError(w http.ResponseWriter, err error) {
 	case errors.Is(err, service.ErrAdStudioPromptRequired):
 		writeErrorWithCode(w, http.StatusBadRequest, "invalid_prompt", "Укажите системный промпт")
 	case errors.Is(err, service.ErrAdStudioPreviewInvalid):
-		writeErrorWithCode(w, http.StatusBadRequest, "preview_invalid", "Загрузите фото или видео превью (MP4/MOV/WebM, 2–15 сек, до 50 МБ для видео)")
+		writeErrorWithCode(w, http.StatusBadRequest, "preview_invalid", "Загрузите фото или видео превью (MP4/MOV/WebM, 2–15 сек, до 50 МБ для видео). WebM и другие форматы конвертируем в MP4.")
+	case errors.Is(err, service.ErrKieReferenceVideoConvert):
+		writeErrorWithCode(w, http.StatusBadRequest, "preview_convert_failed", "Не удалось подготовить видео-превью. Загрузите ролик 2–15 сек — мы конвертируем его в MP4.")
 	case errors.Is(err, service.ErrReferenceVideoDuration):
 		writeErrorWithCode(w, http.StatusBadRequest, "reference_video_duration", service.ReferenceVideoDurationHTTPMessage(err))
 	case errors.Is(err, service.ErrAdStudioPreviewProcess):

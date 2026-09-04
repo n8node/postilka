@@ -90,41 +90,8 @@ func cwebpEncode(png []byte, quality int) ([]byte, error) {
 	return os.ReadFile(outPath)
 }
 
-func isKieReferenceVideoContentType(contentType string) bool {
-	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(contentType)), "video/")
-}
-
-func validateKieReferenceVideoUpload(contentType string, data []byte) (float64, error) {
-	contentType = strings.Split(strings.TrimSpace(contentType), ";")[0]
-	if !isKieReferenceVideoContentType(contentType) {
-		return 0, fmt.Errorf("unsupported video type %q", contentType)
-	}
-	maxSize := kieUploadMaxBytes(contentType)
-	if maxSize <= 0 || int64(len(data)) > maxSize {
-		return 0, fmt.Errorf("video too large")
-	}
-	dur, err := probeVideoDurationSeconds(data)
-	if err != nil {
-		return 0, err
-	}
-	if err := validateReferenceVideoDuration(dur); err != nil {
-		return 0, err
-	}
-	return dur, nil
-}
-
-func adStudioVideoExt(contentType string) string {
-	ct := strings.ToLower(strings.TrimSpace(contentType))
-	switch {
-	case strings.Contains(ct, "quicktime"):
-		return ".mov"
-	case strings.Contains(ct, "webm"):
-		return ".webm"
-	case strings.Contains(ct, "matroska"), strings.Contains(ct, "mkv"):
-		return ".mkv"
-	default:
-		return ".mp4"
-	}
+func isKieReferenceVideoContentType(contentType, filename string) bool {
+	return isProbablyVideo(contentType, filename)
 }
 
 func extractVideoPosterWebP(videoData []byte) ([]byte, error) {

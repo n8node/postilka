@@ -422,7 +422,7 @@ export function validateAdStudioPreviewFile(
     }
     return null;
   }
-  return "Поддерживаются фото (JPEG, PNG, WebP) или видео (MP4, MOV, WebM)";
+  return "Поддерживаются фото (JPEG, PNG, WebP) или видео (MP4, MOV, WebM — конвертируем в MP4)";
 }
 
 export async function probeAdStudioVideoDuration(file: File): Promise<number | null> {

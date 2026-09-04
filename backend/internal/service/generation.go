@@ -526,14 +526,14 @@ func (s *GenerationService) ImportVideoSourceFromObject(ctx context.Context, use
 	if detected != "" {
 		contentType = strings.Split(detected, ";")[0]
 	}
-	dur, err := validateKieReferenceVideoUpload(contentType, data)
+	filename := path.Base(srcKey)
+	prepared, err := prepareKieReferenceVideo(data, contentType, filename, false)
 	if err != nil {
 		return model.GenerationSourceUploadView{}, err
 	}
 
-	ext := adStudioVideoExt(contentType)
-	key := fmt.Sprintf("postilka/generation-sources/%s/%s%s", ws.ID, uuid.NewString(), ext)
-	if err := s.objectStore.PutObject(ctx, key, contentType, data); err != nil {
+	key := fmt.Sprintf("postilka/generation-sources/%s/%s%s", ws.ID, uuid.NewString(), prepared.FilenameExt)
+	if err := s.objectStore.PutObject(ctx, key, prepared.ContentType, prepared.Data); err != nil {
 		return model.GenerationSourceUploadView{}, err
 	}
 
@@ -541,13 +541,13 @@ func (s *GenerationService) ImportVideoSourceFromObject(ctx context.Context, use
 		UserID:      userID,
 		WorkspaceID: ws.ID,
 		S3Key:       key,
-		ContentType: contentType,
+		ContentType: prepared.ContentType,
 	})
 	if err != nil {
 		_ = s.objectStore.DeleteObject(ctx, key)
 		return model.GenerationSourceUploadView{}, err
 	}
-	return upload.ToViewWithDuration(dur), nil
+	return upload.ToViewWithDuration(prepared.DurationSec), nil
 }
 
 func (s *GenerationService) UploadVideoGenerationSource(ctx context.Context, userID string, r *http.Request, file multipart.File, header *multipart.FileHeader) (model.GenerationSourceUploadView, error) {
@@ -574,23 +574,27 @@ func (s *GenerationService) UploadVideoGenerationSource(ctx context.Context, use
 		contentType = http.DetectContentType(data)
 	}
 	contentType = strings.Split(contentType, ";")[0]
-	maxSize := kieUploadMaxBytes(contentType)
+	filename := header.Filename
+	maxSize := kieMediaMaxBytes(contentType, filename)
 	if maxSize <= 0 || int64(len(data)) > maxSize {
 		return model.GenerationSourceUploadView{}, ErrGenerationUploadInvalid
 	}
 	var probedVideoDuration float64
-	if strings.HasPrefix(contentType, "video/") {
-		dur, err := probeVideoDurationSeconds(data)
+	if isProbablyVideo(contentType, filename) {
+		prepared, err := prepareKieReferenceVideo(data, contentType, filename, false)
 		if err != nil {
-			return model.GenerationSourceUploadView{}, ErrGenerationUploadInvalid
-		}
-		if err := validateReferenceVideoDuration(dur); err != nil {
 			return model.GenerationSourceUploadView{}, err
 		}
-		probedVideoDuration = dur
+		data = prepared.Data
+		contentType = prepared.ContentType
+		filename = "source" + prepared.FilenameExt
+		probedVideoDuration = prepared.DurationSec
 	}
 
-	ext := path.Ext(header.Filename)
+	ext := path.Ext(filename)
+	if ext == "" {
+		ext = path.Ext(header.Filename)
+	}
 	if ext == "" {
 		switch {
 		case strings.HasPrefix(contentType, "video/"):
@@ -648,7 +652,7 @@ func (s *GenerationService) UploadGenerationSourceFromWorkspaceFile(
 	contentType := strings.Split(strings.TrimSpace(wf.MimeType), ";")[0]
 	var maxSize int64
 	if forVideo {
-		maxSize = kieUploadMaxBytes(contentType)
+		maxSize = kieMediaMaxBytes(contentType, wf.Name)
 		if maxSize <= 0 {
 			return model.GenerationSourceUploadView{}, ErrGenerationUploadInvalid
 		}
@@ -661,11 +665,15 @@ func (s *GenerationService) UploadGenerationSourceFromWorkspaceFile(
 	if wf.Size <= 0 || wf.Size > maxSize {
 		return model.GenerationSourceUploadView{}, ErrGenerationUploadInvalid
 	}
+
 	var probedVideoDuration float64
-	if forVideo && strings.HasPrefix(contentType, "video/") {
+	if forVideo && isProbablyVideo(contentType, wf.Name) {
+		if !isKieNativeReferenceVideo(contentType, wf.Name) {
+			return s.storePreparedWorkspaceVideo(ctx, userID, ws.ID, wf, contentType)
+		}
 		dur, err := s.referenceVideoDurationForWorkspaceFile(ctx, wf)
 		if err != nil {
-			return model.GenerationSourceUploadView{}, err
+			return model.GenerationSourceUploadView{}, ErrGenerationUploadInvalid
 		}
 		if err := validateReferenceVideoDuration(dur); err != nil {
 			return model.GenerationSourceUploadView{}, err
@@ -707,6 +715,43 @@ func (s *GenerationService) UploadGenerationSourceFromWorkspaceFile(
 		return upload.ToViewWithDuration(probedVideoDuration), nil
 	}
 	return upload.ToView(), nil
+}
+
+func (s *GenerationService) storePreparedWorkspaceVideo(
+	ctx context.Context,
+	userID, workspaceID string,
+	wf *model.WorkspaceFile,
+	contentType string,
+) (model.GenerationSourceUploadView, error) {
+	body, _, err := s.objectStore.GetObject(ctx, wf.S3Key)
+	if err != nil {
+		return model.GenerationSourceUploadView{}, fmt.Errorf("%w: %v", ErrGenerationSourceRead, err)
+	}
+	const readLimit = (50 << 20) + 1
+	data, err := io.ReadAll(io.LimitReader(body, readLimit))
+	_ = body.Close()
+	if err != nil {
+		return model.GenerationSourceUploadView{}, fmt.Errorf("%w: %v", ErrGenerationSourceRead, err)
+	}
+	prepared, err := prepareKieReferenceVideo(data, contentType, wf.Name, false)
+	if err != nil {
+		return model.GenerationSourceUploadView{}, err
+	}
+	newKey := fmt.Sprintf("postilka/generation-sources/%s/%s%s", workspaceID, uuid.NewString(), prepared.FilenameExt)
+	if err := s.objectStore.PutObject(ctx, newKey, prepared.ContentType, prepared.Data); err != nil {
+		return model.GenerationSourceUploadView{}, err
+	}
+	upload, err := s.uploadRepo.Create(ctx, model.GenerationSourceUpload{
+		UserID:      userID,
+		WorkspaceID: workspaceID,
+		S3Key:       newKey,
+		ContentType: prepared.ContentType,
+	})
+	if err != nil {
+		_ = s.objectStore.DeleteObject(ctx, newKey)
+		return model.GenerationSourceUploadView{}, err
+	}
+	return upload.ToViewWithDuration(prepared.DurationSec), nil
 }
 
 func (s *GenerationService) referenceVideoDurationForWorkspaceFile(ctx context.Context, wf *model.WorkspaceFile) (float64, error) {

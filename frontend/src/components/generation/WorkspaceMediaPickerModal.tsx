@@ -13,6 +13,7 @@ import {
 } from "@/lib/files-api";
 import { isAudioMime, isVideoMime } from "@/lib/file-media";
 import {
+  isKieNativeReferenceVideo,
   isReferenceVideoDurationValid,
   REFERENCE_VIDEO_MAX_BYTES,
   type VideoMediaKind,
@@ -38,6 +39,7 @@ function matchesKind(file: WorkspaceFile, kind: VideoMediaKind): boolean {
 }
 
 function passesReferenceVideoFilter(file: WorkspaceFile): boolean {
+  if (!isKieNativeReferenceVideo(file.mime_type, file.name)) return false;
   if (file.size > REFERENCE_VIDEO_MAX_BYTES) return false;
   const duration = file.media_metadata?.duration_seconds;
   if (duration == null || !Number.isFinite(duration)) {
@@ -189,7 +191,7 @@ export function WorkspaceMediaPickerModal({
         : "Выберите аудио с диска";
 
   const subtitle = referenceVideoFilter
-    ? "MP4, MOV · до 50 МБ · длительность проверится при выборе"
+    ? "MP4 или MOV с телефона · до 50 МБ · длительность проверится при выборе"
     : "Файлы workspace с превью";
 
   const panel = (
@@ -310,7 +312,7 @@ export function WorkspaceMediaPickerModal({
         {!loading && !error && files.length === 0 ? (
           <p className="py-10 text-center text-[13px] text-muted">
             {referenceVideoFilter
-              ? "Нет видео MP4/MOV до 50 МБ"
+              ? "Нет видео MP4 или MOV до 50 МБ"
               : "Подходящих файлов пока нет"}
           </p>
         ) : null}

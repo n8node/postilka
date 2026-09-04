@@ -19,6 +19,7 @@ import {
   REFERENCE_IMAGE_MAX,
   REFERENCE_VIDEO_MAX,
   filledReferenceCount,
+  isKieNativeReferenceVideo,
   type VideoGenerationModeId,
   type VideoGenerationUpload,
   type VideoGenerationHistoryItem,
@@ -478,7 +479,10 @@ export function VideoSourcePhotosPanel({
     ) {
       return null;
     }
-    if (target.kind === "ref-video" && mediaKind !== "video") return null;
+    if (target.kind === "ref-video") {
+      if (mediaKind !== "video") return null;
+      if (!isKieNativeReferenceVideo(file.type, file.name)) return null;
+    }
     if (target.kind === "ref-audio" && mediaKind !== "audio") return null;
     return mediaKind;
   };
@@ -487,7 +491,11 @@ export function VideoSourcePhotosPanel({
     if (!file || !pending) return;
     const mediaKind = validateFileKind(file, pending);
     if (!mediaKind) {
-      setError("Выбран неподходящий тип файла");
+      setError(
+        pending.kind === "ref-video"
+          ? "Нужен MP4 или MOV с телефона, 2–15 сек, до 50 МБ"
+          : "Выбран неподходящий тип файла",
+      );
       return;
     }
 
@@ -559,9 +567,11 @@ export function VideoSourcePhotosPanel({
       setError("Для кадров и референс-фото нужен файл изображения");
       return;
     }
-    if (target.kind === "ref-video" && mediaKind !== "video") {
-      setError("Нужен видеофайл MP4 или MOV до 50 МБ");
-      return;
+    if (target.kind === "ref-video") {
+      if (mediaKind !== "video" || !isKieNativeReferenceVideo(file.mime_type, file.name)) {
+        setError("Нужен MP4 или MOV с телефона, 2–15 сек, до 50 МБ");
+        return;
+      }
     }
     let workspaceVideoDuration: number | undefined;
     if (target.kind === "ref-video") {
@@ -632,7 +642,7 @@ export function VideoSourcePhotosPanel({
 
   const sourceModalSubtitle = (target: SourceModalTarget): string | undefined => {
     if (target.kind === "ref-video") {
-      return "MP4, MOV · до 50 МБ · длительность проверится при выборе";
+      return "MP4 или MOV с телефона · до 50 МБ · длительность проверится при выборе";
     }
     if (target.kind === "ref-image" || target.kind === "first" || target.kind === "last") {
       return "JPG, PNG, WEBP";
@@ -946,7 +956,7 @@ export function VideoSourcePhotosPanel({
                   Референс-видео
                 </p>
                 <p className="text-[10px] text-zinc-400">
-                  MP4, MOV · 2–15 сек · до 50 МБ · до {REFERENCE_VIDEO_MAX} шт.
+                  MP4 или MOV с телефона · 2–15 сек · до 50 МБ · до {REFERENCE_VIDEO_MAX} шт.
                   · можно перетащить из истории
                 </p>
               </div>

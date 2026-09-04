@@ -203,6 +203,8 @@ func (h *VideoGenerationHandler) mapError(w http.ResponseWriter, err error) {
 		writeErrorWithCode(w, http.StatusServiceUnavailable, "video_generation_not_configured", "Сервис генерации видео временно недоступен")
 	case errors.Is(err, service.ErrReferenceVideoDuration):
 		writeErrorWithCode(w, http.StatusBadRequest, "reference_video_duration", service.ReferenceVideoDurationHTTPMessage(err))
+	case errors.Is(err, service.ErrKieReferenceVideoConvert):
+		writeErrorWithCode(w, http.StatusBadRequest, "reference_video_convert", "Не удалось подготовить видео. Нужен MP4 или MOV с телефона, 2–15 сек.")
 	case errors.Is(err, service.ErrGenerationUploadInvalid):
 		writeErrorWithCode(w, http.StatusBadRequest, "upload_invalid", "Неподдерживаемый или слишком большой файл")
 	case errors.Is(err, service.ErrGenerationUploadNotFound):

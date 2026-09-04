@@ -69,6 +69,28 @@ export const REFERENCE_VIDEO_MAX_SECONDS = 15;
 export const REFERENCE_VIDEO_DURATION_TOLERANCE = 0.5;
 export const REFERENCE_VIDEO_MAX_BYTES = 50 * 1024 * 1024;
 
+/** KIE MiniMax H3 accepts these containers without transcode. */
+export function isKieNativeReferenceVideo(
+  mime?: string | null,
+  name?: string | null,
+): boolean {
+  const ct = (mime ?? "").toLowerCase().split(";")[0].trim();
+  const ext = (name ?? "").split(".").pop()?.toLowerCase() ?? "";
+  if (
+    ext === "webm" ||
+    ext === "mkv" ||
+    ext === "avi" ||
+    ct.includes("webm") ||
+    ct.includes("matroska")
+  ) {
+    return false;
+  }
+  if (ext === "mp4" || ext === "m4v" || ext === "mov") {
+    return true;
+  }
+  return ct === "video/mp4" || ct.includes("mp4") || ct === "video/quicktime";
+}
+
 export function referenceVideoMaxAllowedSeconds(): number {
   return REFERENCE_VIDEO_MAX_SECONDS + REFERENCE_VIDEO_DURATION_TOLERANCE;
 }
