@@ -80,6 +80,24 @@
       labels: {},
     };
     var videoIo = null;
+    var abortCtrl = null;
+
+    function restoreAnchor(anchorTop) {
+      if (typeof anchorTop !== "number") {
+        gridEl.style.minHeight = "";
+        return;
+      }
+      requestAnimationFrame(function () {
+        requestAnimationFrame(function () {
+          var nextTop = root.getBoundingClientRect().top;
+          var delta = nextTop - anchorTop;
+          if (Math.abs(delta) > 1) {
+            window.scrollBy(0, delta);
+          }
+          gridEl.style.minHeight = "";
+        });
+      });
+    }
 
     function setStatus(text, isError) {
       if (!statusEl) return;
@@ -97,24 +115,47 @@
     function renderFilters() {
       if (!filtersEl) return;
       var cats = [{ id: "all", label: "Все" }].concat(state.categories);
+      var existing = filtersEl.querySelectorAll(".pse-filter");
+      var canReuse =
+        existing.length === cats.length &&
+        Array.prototype.every.call(existing, function (btn, i) {
+          return btn.getAttribute("data-id") === cats[i].id;
+        });
+
+      if (canReuse) {
+        existing.forEach(function (btn) {
+          var active = btn.getAttribute("data-id") === state.category;
+          btn.classList.toggle("is-active", active);
+          btn.setAttribute("aria-selected", active ? "true" : "false");
+        });
+        return;
+      }
+
       filtersEl.replaceChildren();
       cats.forEach(function (cat) {
         var btn = document.createElement("button");
         btn.type = "button";
         btn.className = "pse-filter" + (state.category === cat.id ? " is-active" : "");
+        btn.setAttribute("data-id", cat.id);
         btn.setAttribute("role", "tab");
         btn.setAttribute("aria-selected", state.category === cat.id ? "true" : "false");
         btn.textContent = cat.label;
-        btn.addEventListener("click", function () {
-          if (state.category === cat.id || state.loading) return;
+        btn.addEventListener("click", function (event) {
+          event.preventDefault();
+          event.stopPropagation();
+          if (state.category === cat.id) return;
+          var anchorTop = root.getBoundingClientRect().top;
+          if (abortCtrl) abortCtrl.abort();
           state.category = cat.id;
           state.offset = 0;
           state.hasMore = true;
           state.items = [];
-          gridEl.replaceChildren();
+          state.loading = false;
           renderFilters();
-          setStatus("Загрузка примеров…");
-          loadMore();
+          if (gridEl.offsetHeight) {
+            gridEl.style.minHeight = gridEl.offsetHeight + "px";
+          }
+          loadMore(anchorTop);
         });
         filtersEl.appendChild(btn);
       });
@@ -220,7 +261,7 @@
       });
     }
 
-    function loadMore() {
+    function loadMore(anchorTop) {
       if (state.loading || !state.hasMore) return;
       state.loading = true;
       if (sentinelEl) sentinelEl.hidden = true;
@@ -232,9 +273,11 @@
         params.set("category", state.category);
       }
 
-      fetch(apiBase.replace(/\/$/, "") + "/public/ad-studio/templates?" + params.toString(), {
-        credentials: "same-origin",
-      })
+      abortCtrl = typeof AbortController === "function" ? new AbortController() : null;
+      var fetchOpts = { credentials: "same-origin" };
+      if (abortCtrl) fetchOpts.signal = abortCtrl.signal;
+
+      fetch(apiBase.replace(/\/$/, "") + "/public/ad-studio/templates?" + params.toString(), fetchOpts)
         .then(function (res) {
           if (!res.ok) throw new Error("catalog");
           return res.json();
@@ -258,12 +301,16 @@
           renderGrid();
           observeVideos();
           if (sentinelEl) sentinelEl.hidden = !state.hasMore;
+          restoreAnchor(anchorTop);
         })
-        .catch(function () {
+        .catch(function (err) {
+          if (err && err.name === "AbortError") return;
           setStatus("Не удалось загрузить примеры студии.", true);
           if (sentinelEl) sentinelEl.hidden = true;
+          restoreAnchor(anchorTop);
         })
         .finally(function () {
+          if (fetchOpts.signal && fetchOpts.signal.aborted) return;
           state.loading = false;
           if (state.hasMore && sentinelEl && !sentinelEl.hidden) {
             var rect = sentinelEl.getBoundingClientRect();

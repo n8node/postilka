@@ -6,6 +6,7 @@
   max-width: 100%;
   color: #111;
   font-family: inherit;
+  overflow-anchor: none;
 }
 
 .pse-root *,
@@ -73,6 +74,7 @@
   align-items: flex-start;
   gap: var(--pse-gap);
   width: 100%;
+  overflow-anchor: none;
 }
 
 .pse-col {

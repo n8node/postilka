@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Postilka Studio Examples
  * Description: Masonry gallery of Ad Studio examples for Elementor. Shortcode: [postilka_studio_examples]
- * Version: 1.0.0
+ * Version: 1.0.1
  * Author: Postilka
  * Text Domain: postilka-studio-examples
  */
@@ -12,7 +12,7 @@ if (!defined('ABSPATH')) {
 }
 
 final class Postilka_Studio_Examples {
-    private const VERSION = '1.0.0';
+    private const VERSION = '1.0.1';
     private static bool $shortcode_used = false;
 
     public static function init(): void {
