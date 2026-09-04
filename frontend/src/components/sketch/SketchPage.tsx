@@ -12,9 +12,7 @@ import { ApiError } from "@/lib/api";
 import type { AspectRatioId } from "@/lib/generation-data";
 import {
   fetchGenerationPricing,
-  pollGenerationJob,
   uploadGenerationMedia,
-  type GenerationJob,
   type GenerationPricing,
 } from "@/lib/generation-api";
 import {
@@ -22,12 +20,8 @@ import {
   useGenerationCreditsStore,
   useMediaCreditsRemaining,
 } from "@/lib/generation-credits-store";
-import { useGenerationJobStore } from "@/lib/generation-job-store";
-import { useVideoGenerationJobStore } from "@/lib/video-generation-job-store";
 import {
   fetchVideoGenerationPricing,
-  pollVideoGenerationJob,
-  type VideoGenerationJob,
   type VideoGenerationPricing,
 } from "@/lib/video-generation-api";
 import {
@@ -35,10 +29,8 @@ import {
   type SketchBrushId,
 } from "@/lib/harmony-brushes";
 import { fetchSketchStyles, generateFromSketch, type SketchStyle } from "@/lib/sketch-api";
-import { refreshBillingBalances } from "@/lib/billing-balances-store";
-import { mediaUrl } from "@/lib/media-display";
+import { useSketchJobStore } from "@/lib/sketch-job-store";
 import {
-  addSketchGeneration,
   deleteSketchSave,
   listSketchSaves,
   removeSketchGeneration,
@@ -70,13 +62,14 @@ export function SketchPage() {
   const [canUndo, setCanUndo] = useState(false);
   const [backgroundImage, setBackgroundImage] = useState<HTMLImageElement | null>(null);
   const [backgroundOpacity, setBackgroundOpacity] = useState(0.35);
-  const [localGenerating, setLocalGenerating] = useState(false);
-  const [generateError, setGenerateError] = useState<string | null>(null);
   const [imagePricing, setImagePricing] = useState<GenerationPricing | null>(null);
   const [videoPricing, setVideoPricing] = useState<VideoGenerationPricing | null>(null);
-  const [resultUrl, setResultUrl] = useState<string | null>(null);
-  const [resultIsVideo, setResultIsVideo] = useState(false);
-  const [resultGenerationId, setResultGenerationId] = useState<string | null>(null);
+  const generating = useSketchJobStore((s) => s.running);
+  const generateError = useSketchJobStore((s) => s.error);
+  const resultUrl = useSketchJobStore((s) => s.resultUrl);
+  const resultIsVideo = useSketchJobStore((s) => s.resultIsVideo);
+  const resultGenerationId = useSketchJobStore((s) => s.resultGenerationId);
+  const completionSeq = useSketchJobStore((s) => s.completionSeq);
   const [savedSketches, setSavedSketches] = useState<SavedSketch[]>([]);
   const [selectedSaveId, setSelectedSaveId] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -173,7 +166,7 @@ export function SketchPage() {
 
   useEffect(() => {
     reloadSavedSketches();
-  }, [reloadSavedSketches]);
+  }, [reloadSavedSketches, completionSeq]);
 
   useEffect(() => {
     if (!pendingLoadRef.current || !canvasRef.current) return;
@@ -193,18 +186,20 @@ export function SketchPage() {
   }, [workspaceId, aspectRatio, selectedSaveId, reloadSavedSketches]);
 
   const handleGenerate = async () => {
-    setGenerateError(null);
+    const store = useSketchJobStore.getState();
+    if (store.running) return;
+    store.setError(null);
     if (!selectedStyleId) {
-      setGenerateError("Выберите стиль");
+      store.setError("Выберите стиль");
       return;
     }
     if (!canvasRef.current?.hasContent()) {
-      setGenerateError("Нарисуйте набросок на холсте");
+      store.setError("Нарисуйте набросок на холсте");
       return;
     }
 
     if (!hasMediaCredits(creditsRemaining)) {
-      setGenerateError("Недостаточно кредитов. Пополните квоту или кошелёк.");
+      store.setError("Недостаточно кредитов. Пополните квоту или кошелёк.");
       return;
     }
 
@@ -223,26 +218,14 @@ export function SketchPage() {
       setPrompt("");
     }
 
-    setLocalGenerating(true);
-    setResultUrl(null);
-    setResultGenerationId(null);
-
-    const rememberGeneration = (item: SketchGenerationItem) => {
-      setResultUrl(item.url);
-      setResultIsVideo(item.isVideo);
-      setResultGenerationId(item.id);
-      if (workspaceId && sketchId) {
-        addSketchGeneration(workspaceId, sketchId, item);
-        reloadSavedSketches();
-      }
-    };
+    store.markStarting();
+    const startedAt = useSketchJobStore.getState().startedAt ?? Date.now();
 
     try {
       const blob = await canvasRef.current.exportPNG();
       const file = new File([blob], "sketch.png", { type: "image/png" });
       const upload = await uploadGenerationMedia(file);
 
-      const startedAt = Date.now();
       const { job, media_kind } = await generateFromSketch({
         style_id: selectedStyleId,
         source_upload_id: upload.id,
@@ -253,53 +236,18 @@ export function SketchPage() {
         duration: output === "video" ? duration : undefined,
       });
 
-      if (media_kind === "video") {
-        const videoJob = job as VideoGenerationJob;
-        useVideoGenerationJobStore.getState().beginJob(videoJob, startedAt);
-        const finalJob = await pollVideoGenerationJob(videoJob.id, (updated) => {
-          useVideoGenerationJobStore.getState().patchJob(updated);
-        });
-        if (finalJob.status === "failed") {
-          throw new Error(finalJob.fail_message || "Ошибка генерации видео");
-        }
-        const gen = finalJob.generation;
-        if (gen?.video_url || gen?.image_url) {
-          rememberGeneration({
-            id: gen.id,
-            url: mediaUrl(gen.video_url || gen.image_url),
-            thumbUrl: gen.thumb_url ? mediaUrl(gen.thumb_url) : undefined,
-            isVideo: true,
-            createdAt: gen.created_at || new Date().toISOString(),
-          });
-        }
-      } else {
-        const imageJob = job as GenerationJob;
-        useGenerationJobStore.getState().beginJob(imageJob, startedAt);
-        const res = await pollGenerationJob(imageJob.id, (updated) => {
-          useGenerationJobStore.getState().patchJob(updated);
-        });
-        if (res.job.status === "failed") {
-          throw new Error(res.job.fail_message || "Ошибка генерации");
-        }
-        const gen = res.job.generation;
-        if (gen?.image_url) {
-          rememberGeneration({
-            id: gen.id,
-            url: mediaUrl(gen.image_url),
-            thumbUrl: gen.thumb_url ? mediaUrl(gen.thumb_url) : undefined,
-            isVideo: false,
-            createdAt: gen.created_at || new Date().toISOString(),
-          });
-        }
-        if (res.credits_remaining !== undefined) {
-          setCreditsRemaining(res.credits_remaining);
-        }
-      }
-      void refreshBillingBalances().catch(() => undefined);
+      if (!useSketchJobStore.getState().running) return;
+      useSketchJobStore.getState().beginJob({
+        jobId: job.id,
+        mediaKind: media_kind === "video" ? "video" : "image",
+        startedAt,
+        sketchId,
+        workspaceId,
+      });
     } catch (err) {
-      setGenerateError(err instanceof ApiError ? err.message : "Не удалось сгенерировать");
-    } finally {
-      setLocalGenerating(false);
+      useSketchJobStore.getState().failJob(
+        err instanceof ApiError ? err.message : "Не удалось сгенерировать",
+      );
     }
   };
 
@@ -328,8 +276,7 @@ export function SketchPage() {
       reloadSavedSketches();
     }
     if (resultGenerationId === generationId) {
-      setResultUrl(null);
-      setResultGenerationId(null);
+      useSketchJobStore.getState().clearResult();
     }
     setPreviewItem(null);
   };
@@ -356,8 +303,7 @@ export function SketchPage() {
     deleteSketchSave(workspaceId, selectedSaveId);
     setSelectedSaveId(null);
     setPreviewItem(null);
-    setResultUrl(null);
-    setResultGenerationId(null);
+    useSketchJobStore.getState().clearResult();
     reloadSavedSketches();
   };
 
@@ -597,7 +543,7 @@ export function SketchPage() {
           brushSize={brushSize}
           onBrushSizeChange={setBrushSize}
           onGenerate={() => void handleGenerate()}
-          generating={localGenerating}
+          generating={generating}
           generateError={generateError}
           imagePricing={imagePricing}
           videoPricing={videoPricing}

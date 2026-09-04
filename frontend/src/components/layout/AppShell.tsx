@@ -32,6 +32,7 @@ import { GenerationNavBlock } from "@/components/layout/GenerationNavBlock";
 import { GenerationCompleteToast } from "@/components/generation/GenerationCompleteToast";
 import { GenerationJobSync } from "@/components/generation/GenerationJobSync";
 import { VideoGenerationJobSync } from "@/components/generation/VideoGenerationJobSync";
+import { SketchJobSync } from "@/components/sketch/SketchJobSync";
 import { cn } from "@/lib/utils";
 import { userAvatarSrc } from "@/lib/user-avatar";
 
@@ -106,6 +107,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen bg-bg text-text">
       <GenerationJobSync />
       <VideoGenerationJobSync />
+      <SketchJobSync />
       <GenerationCompleteToast />
       <aside
         className={cn(

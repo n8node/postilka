@@ -33,6 +33,10 @@ export function AiContentHub() {
           : "studio",
   );
 
+  const [sketchReady, setSketchReady] = useState(
+    tabParam === "sketch",
+  );
+
   useEffect(() => {
     setTab(
       tabParam === "video"
@@ -43,6 +47,9 @@ export function AiContentHub() {
             ? "sketch"
             : "studio",
     );
+    if (tabParam === "sketch") {
+      setSketchReady(true);
+    }
   }, [tabParam]);
 
   return (
@@ -76,9 +83,13 @@ export function AiContentHub() {
         <GenerationPageContent />
       ) : tab === "video" ? (
         <VideoGenerationPageContent />
-      ) : (
-        <SketchPage />
-      )}
+      ) : null}
+
+      {sketchReady ? (
+        <div className={cn(tab !== "sketch" && "hidden")}>
+          <SketchPage />
+        </div>
+      ) : null}
     </div>
   );
 }
