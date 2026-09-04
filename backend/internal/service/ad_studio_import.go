@@ -47,6 +47,7 @@ type trendsImageImportItem struct {
 	ratio       string
 	prompt      string
 	previewPath string
+	sortOrder   int
 }
 
 func (s *AdStudioService) ImportUnpublishedImageTrends(ctx context.Context, dir string, dryRun bool) (TrendsImageImportResult, error) {
@@ -135,7 +136,11 @@ func (s *AdStudioService) ImportUnpublishedImageTrends(ctx context.Context, dir 
 		published := false
 		requiresProduct := false
 		requiresAvatar := false
-		order := nextOrder
+		order := item.sortOrder
+		if order <= 0 {
+			order = nextOrder
+			nextOrder += 10
+		}
 		created, err := s.CreateAdmin(ctx, model.AdStudioTemplateWriteRequest{
 			Title:           item.title,
 			Catalog:         model.AdStudioCatalogTrends,
@@ -153,7 +158,6 @@ func (s *AdStudioService) ImportUnpublishedImageTrends(ctx context.Context, dir 
 			out.Errors = append(out.Errors, fmt.Sprintf("%s: create: %s", item.jsonName, err.Error()))
 			continue
 		}
-		nextOrder += 10
 		byTitle[strings.ToLower(item.title)] = model.AdStudioTemplate{ID: created.ID, Title: created.Title}
 		if err := s.uploadTrendsImportPreview(ctx, created.ID, item.previewPath); err != nil {
 			out.Failed++

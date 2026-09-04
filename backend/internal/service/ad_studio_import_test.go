@@ -40,13 +40,22 @@ func TestUniqueTrendsImportTitle(t *testing.T) {
 }
 
 func TestTrendsCategoryFromSyntx(t *testing.T) {
-	got := trendsCategoryFromSyntx(syntxTrendImageMeta{
+	got, err := trendsCategoryFromSyntx(syntxTrendImageMeta{
 		Categories: []syntxTrendCategory{{Slug: "realistic"}, {Slug: "unknown"}},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	if got != "realistic" {
 		t.Fatalf("category = %q", got)
 	}
-	if trendsCategoryFromSyntx(syntxTrendImageMeta{}) != "formats" {
-		t.Fatal("empty categories should fall back to formats")
+	if _, err := trendsCategoryFromSyntx(syntxTrendImageMeta{}); err == nil {
+		t.Fatal("empty categories should fail")
+	}
+}
+
+func TestTrendsImportSortOrder(t *testing.T) {
+	if got := trendsImportSortOrder("061_climbing_01a0156b.json"); got != 61 {
+		t.Fatalf("sort = %d", got)
 	}
 }
