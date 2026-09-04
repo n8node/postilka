@@ -3,7 +3,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ImagePlus, Loader2, Save, Trash2, Undo2 } from "lucide-react";
+import { ProtectedMediaImage } from "@/components/media/ProtectedMediaImage";
 import { SketchCanvas, type SketchCanvasHandle } from "@/components/sketch/SketchCanvas";
+import { SketchGenerationModal } from "@/components/sketch/SketchGenerationModal";
 import { SketchInspector } from "@/components/sketch/SketchInspector";
 import { useAuth } from "@/context/AuthContext";
 import { ApiError } from "@/lib/api";
@@ -36,10 +38,13 @@ import { fetchSketchStyles, generateFromSketch, type SketchStyle } from "@/lib/s
 import { refreshBillingBalances } from "@/lib/billing-balances-store";
 import { mediaUrl } from "@/lib/media-display";
 import {
+  addSketchGeneration,
   deleteSketchSave,
   listSketchSaves,
+  removeSketchGeneration,
   saveSketch,
   type SavedSketch,
+  type SketchGenerationItem,
 } from "@/lib/sketch-saves";
 import { cn } from "@/lib/utils";
 
@@ -77,12 +82,28 @@ export function SketchPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [hasCanvasContent, setHasCanvasContent] = useState(false);
   const [sketchDirty, setSketchDirty] = useState(false);
+  const [previewItem, setPreviewItem] = useState<SketchGenerationItem | null>(null);
   const skipDirtyRef = useRef(false);
 
   const creditsRemaining = useMediaCreditsRemaining();
   const setCreditsRemaining = useGenerationCreditsStore((s) => s.setCreditsRemaining);
 
   const canvasSize = useMemo(() => aspectRatioToSize(aspectRatio, 768), [aspectRatio]);
+
+  const currentResultItem = useMemo<SketchGenerationItem | null>(() => {
+    if (!resultUrl || !resultGenerationId) return null;
+    return {
+      id: resultGenerationId,
+      url: resultUrl,
+      isVideo: resultIsVideo,
+      createdAt: new Date().toISOString(),
+    };
+  }, [resultUrl, resultGenerationId, resultIsVideo]);
+
+  const selectedSketchGenerations = useMemo(() => {
+    const selected = savedSketches.find((item) => item.id === selectedSaveId);
+    return selected?.generations ?? [];
+  }, [savedSketches, selectedSaveId]);
 
   const selectedStyle = styles.find((s) => s.id === selectedStyleId);
 
@@ -164,12 +185,12 @@ export function SketchPage() {
   const persistCurrentSketch = useCallback(async (): Promise<SavedSketch | null> => {
     if (!workspaceId || !canvasRef.current?.hasContent()) return null;
     const dataUrl = await canvasRef.current.exportDataUrl();
-    const saved = saveSketch(workspaceId, aspectRatio, dataUrl);
+    const saved = saveSketch(workspaceId, aspectRatio, dataUrl, selectedSaveId);
     setSelectedSaveId(saved.id);
     setSketchDirty(false);
     reloadSavedSketches();
     return saved;
-  }, [workspaceId, aspectRatio, reloadSavedSketches]);
+  }, [workspaceId, aspectRatio, selectedSaveId, reloadSavedSketches]);
 
   const handleGenerate = async () => {
     setGenerateError(null);
@@ -187,9 +208,11 @@ export function SketchPage() {
       return;
     }
 
+    let sketchId = selectedSaveId;
     if (workspaceId && (sketchDirty || !selectedSaveId)) {
       try {
-        await persistCurrentSketch();
+        const saved = await persistCurrentSketch();
+        if (saved) sketchId = saved.id;
       } catch {
         /* generation must continue even if local save fails */
       }
@@ -203,6 +226,16 @@ export function SketchPage() {
     setLocalGenerating(true);
     setResultUrl(null);
     setResultGenerationId(null);
+
+    const rememberGeneration = (item: SketchGenerationItem) => {
+      setResultUrl(item.url);
+      setResultIsVideo(item.isVideo);
+      setResultGenerationId(item.id);
+      if (workspaceId && sketchId) {
+        addSketchGeneration(workspaceId, sketchId, item);
+        reloadSavedSketches();
+      }
+    };
 
     try {
       const blob = await canvasRef.current.exportPNG();
@@ -231,9 +264,13 @@ export function SketchPage() {
         }
         const gen = finalJob.generation;
         if (gen?.video_url || gen?.image_url) {
-          setResultUrl(mediaUrl(gen.video_url || gen.image_url));
-          setResultIsVideo(true);
-          setResultGenerationId(gen.id);
+          rememberGeneration({
+            id: gen.id,
+            url: mediaUrl(gen.video_url || gen.image_url),
+            thumbUrl: gen.thumb_url ? mediaUrl(gen.thumb_url) : undefined,
+            isVideo: true,
+            createdAt: gen.created_at || new Date().toISOString(),
+          });
         }
       } else {
         const imageJob = job as GenerationJob;
@@ -246,9 +283,13 @@ export function SketchPage() {
         }
         const gen = res.job.generation;
         if (gen?.image_url) {
-          setResultUrl(mediaUrl(gen.image_url));
-          setResultIsVideo(false);
-          setResultGenerationId(gen.id);
+          rememberGeneration({
+            id: gen.id,
+            url: mediaUrl(gen.image_url),
+            thumbUrl: gen.thumb_url ? mediaUrl(gen.thumb_url) : undefined,
+            isVideo: false,
+            createdAt: gen.created_at || new Date().toISOString(),
+          });
         }
         if (res.credits_remaining !== undefined) {
           setCreditsRemaining(res.credits_remaining);
@@ -269,16 +310,28 @@ export function SketchPage() {
     img.src = URL.createObjectURL(file);
   };
 
-  const handleUseInPost = () => {
-    if (resultGenerationId) {
-      router.push(`/posts/new?generation=${encodeURIComponent(resultGenerationId)}`);
-    }
+  const handleUseInPost = (generationId: string) => {
+    router.push(`/posts/new?generation=${encodeURIComponent(generationId)}`);
   };
 
-  const handleAnimate = () => {
-    if (resultGenerationId) {
-      router.push(`/ai?tab=video&source=${encodeURIComponent(resultGenerationId)}`);
+  const handleAnimate = (generationId: string) => {
+    router.push(`/ai?tab=video&source=${encodeURIComponent(generationId)}`);
+  };
+
+  const openGeneration = (item: SketchGenerationItem) => {
+    setPreviewItem(item);
+  };
+
+  const handleRemoveGenerationFromHistory = (generationId: string) => {
+    if (workspaceId && selectedSaveId) {
+      removeSketchGeneration(workspaceId, selectedSaveId, generationId);
+      reloadSavedSketches();
     }
+    if (resultGenerationId === generationId) {
+      setResultUrl(null);
+      setResultGenerationId(null);
+    }
+    setPreviewItem(null);
   };
 
   const handleSaveSketch = async () => {
@@ -302,6 +355,9 @@ export function SketchPage() {
     if (!workspaceId || !selectedSaveId) return;
     deleteSketchSave(workspaceId, selectedSaveId);
     setSelectedSaveId(null);
+    setPreviewItem(null);
+    setResultUrl(null);
+    setResultGenerationId(null);
     reloadSavedSketches();
   };
 
@@ -311,6 +367,7 @@ export function SketchPage() {
     setSketchDirty(false);
     setSaveError(null);
     setPrompt("");
+    setPreviewItem(null);
     if (item.aspectRatio !== aspectRatio) {
       pendingLoadRef.current = item.dataUrl;
       setAspectRatio(item.aspectRatio);
@@ -483,6 +540,39 @@ export function SketchPage() {
                 </p>
               )}
             </div>
+
+            {/* Generations for the selected sketch — vertical strip right of canvas */}
+            <div
+              className="flex w-16 shrink-0 flex-col gap-2 overflow-y-auto py-1"
+              style={{ maxHeight: "calc(100vh - 24rem)" }}
+            >
+              {selectedSketchGenerations.length === 0 ? (
+                <>
+                  {[0, 1, 2].map((i) => (
+                    <div
+                      key={i}
+                      className="h-16 w-16 shrink-0 rounded-lg border border-dashed border-zinc-200 bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900/40"
+                    />
+                  ))}
+                </>
+              ) : (
+                selectedSketchGenerations.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => openGeneration(item)}
+                    className="h-16 w-16 shrink-0 overflow-hidden rounded-lg border border-zinc-200 bg-white transition hover:border-indigo-400 dark:border-zinc-700"
+                    title={new Date(item.createdAt).toLocaleString("ru-RU")}
+                  >
+                    <ProtectedMediaImage
+                      url={item.thumbUrl || item.url}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+                  </button>
+                ))
+              )}
+            </div>
           </div>
         </div>
 
@@ -514,14 +604,21 @@ export function SketchPage() {
           creditsRemaining={creditsRemaining}
           resultUrl={resultUrl}
           resultIsVideo={resultIsVideo}
-          onUseInPost={handleUseInPost}
-          onAnimate={handleAnimate}
-          onClearResult={() => {
-            setResultUrl(null);
-            setResultGenerationId(null);
+          onOpenResult={() => {
+            if (currentResultItem) openGeneration(currentResultItem);
           }}
         />
       </div>
+
+      {previewItem && (
+        <SketchGenerationModal
+          item={previewItem}
+          onClose={() => setPreviewItem(null)}
+          onUseInPost={() => handleUseInPost(previewItem.id)}
+          onAnimate={() => handleAnimate(previewItem.id)}
+          onDelete={() => handleRemoveGenerationFromHistory(previewItem.id)}
+        />
+      )}
 
       <input
         ref={bgInputRef}

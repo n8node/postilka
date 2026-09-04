@@ -1,12 +1,10 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React from "react";
 import {
   Loader2,
   Paintbrush,
-  RotateCcw,
   Sparkles,
-  X,
 } from "lucide-react";
 import { ProtectedMediaImage } from "@/components/media/ProtectedMediaImage";
 import { AspectRatioPicker } from "@/components/generation/AspectRatioPicker";
@@ -50,9 +48,7 @@ type SketchInspectorProps = {
   creditsRemaining: number | null;
   resultUrl: string | null;
   resultIsVideo: boolean;
-  onUseInPost: () => void;
-  onAnimate: () => void;
-  onClearResult: () => void;
+  onOpenResult: () => void;
 };
 
 export function SketchInspector({
@@ -83,28 +79,13 @@ export function SketchInspector({
   creditsRemaining,
   resultUrl,
   resultIsVideo,
-  onUseInPost,
-  onAnimate,
-  onClearResult,
+  onOpenResult,
 }: SketchInspectorProps) {
   const imageCost = imagePricing?.image_to_image ?? 1;
   const videoCost = videoPricing?.image_to_video ?? 2;
   const cost = output === "video" ? videoCost * Math.max(1, duration / 5) : imageCost;
   const costLabel = formatMediaCreditCost(Math.ceil(cost));
-  const [resultPreviewOpen, setResultPreviewOpen] = useState(false);
-
-  useEffect(() => {
-    setResultPreviewOpen(false);
-  }, [resultUrl]);
-
-  useEffect(() => {
-    if (!resultPreviewOpen) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setResultPreviewOpen(false);
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [resultPreviewOpen]);
+  const showJob = generating || Boolean(generateError) || Boolean(resultUrl);
 
   return (
     <aside
@@ -127,6 +108,44 @@ export function SketchInspector({
       </div>
 
       <div className="flex-1 min-h-0 space-y-4 overflow-y-auto p-3 text-xs xl:p-4">
+        {showJob && (
+          <div className="space-y-2">
+            {generating && (
+              <div className="flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50/70 px-3 py-2 text-[11px] text-indigo-800 dark:border-indigo-900/60 dark:bg-indigo-950/40 dark:text-indigo-300">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                Генерация…
+              </div>
+            )}
+            {generateError && (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[11px] text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
+                {generateError}
+              </div>
+            )}
+            {resultUrl && !generating && (
+              <button
+                type="button"
+                onClick={onOpenResult}
+                className="block w-full space-y-2 rounded-xl border border-emerald-200 bg-emerald-50/80 p-3 text-left dark:border-emerald-900/60 dark:bg-emerald-950/30"
+              >
+                <p className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-300">
+                  Готово
+                </p>
+                <div className="overflow-hidden rounded-lg border border-emerald-200/80 bg-white">
+                  {resultIsVideo ? (
+                    <video src={resultUrl} className="max-h-40 w-full object-contain" />
+                  ) : (
+                    <ProtectedMediaImage
+                      url={resultUrl}
+                      alt="Результат генерации"
+                      className="max-h-40 w-full object-contain"
+                    />
+                  )}
+                </div>
+              </button>
+            )}
+          </div>
+        )}
+
         <div>
           <div className="mb-1 flex items-center justify-between">
             <label className="font-medium text-zinc-700 dark:text-zinc-300">
@@ -310,70 +329,6 @@ export function SketchInspector({
             </div>
           )}
         </div>
-
-        {generating && (
-          <div className="flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50/70 px-3 py-2 text-[11px] text-indigo-800 dark:border-indigo-900/60 dark:bg-indigo-950/40 dark:text-indigo-300">
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            Генерация…
-          </div>
-        )}
-
-        {generateError && (
-          <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[11px] text-red-800 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
-            {generateError}
-          </div>
-        )}
-
-        {resultUrl && !generating && (
-          <div className="space-y-2 rounded-xl border border-emerald-200 bg-emerald-50/80 p-3 dark:border-emerald-900/60 dark:bg-emerald-950/30">
-            <p className="text-[11px] font-semibold text-emerald-800 dark:text-emerald-300">
-              Готово
-            </p>
-            <div className="overflow-hidden rounded-lg border border-emerald-200/80 bg-white">
-              {resultIsVideo ? (
-                <video src={resultUrl} controls className="max-h-40 w-full object-contain" />
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setResultPreviewOpen(true)}
-                  className="block w-full cursor-zoom-in transition hover:opacity-95"
-                  aria-label="Открыть фото в полном размере"
-                >
-                  <ProtectedMediaImage
-                    url={resultUrl}
-                    alt="Результат генерации"
-                    className="max-h-40 w-full object-contain"
-                  />
-                </button>
-              )}
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={onUseInPost}
-                className="rounded-lg bg-zinc-900 px-3 py-1.5 text-[11px] font-semibold text-white dark:bg-zinc-100 dark:text-zinc-900"
-              >
-                В пост
-              </button>
-              {!resultIsVideo && (
-                <button
-                  type="button"
-                  onClick={onAnimate}
-                  className="rounded-lg border border-zinc-200 px-3 py-1.5 text-[11px] font-medium dark:border-zinc-700"
-                >
-                  Оживить
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={onClearResult}
-                className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 px-2 py-1.5 text-[11px] dark:border-zinc-700"
-              >
-                <RotateCcw className="h-3 w-3" />
-              </button>
-            </div>
-          </div>
-        )}
       </div>
 
       <div className="shrink-0 border-t border-zinc-100 dark:border-zinc-800 p-3">
@@ -395,35 +350,6 @@ export function SketchInspector({
           {generating ? "Генерация…" : "Сгенерировать"}
         </button>
       </div>
-
-      {resultPreviewOpen && resultUrl && !resultIsVideo && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Просмотр результата"
-          onClick={() => setResultPreviewOpen(false)}
-        >
-          <button
-            type="button"
-            onClick={() => setResultPreviewOpen(false)}
-            className="absolute right-4 top-4 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white transition hover:bg-black/70"
-            aria-label="Закрыть"
-          >
-            <X className="h-5 w-5" />
-          </button>
-          <div
-            className="max-h-[90vh] max-w-[min(96vw,1200px)] overflow-hidden rounded-xl bg-white shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <ProtectedMediaImage
-              url={resultUrl}
-              alt="Результат генерации"
-              className="max-h-[90vh] w-full object-contain"
-            />
-          </div>
-        </div>
-      )}
     </aside>
   );
 }
