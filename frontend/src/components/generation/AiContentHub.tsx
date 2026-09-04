@@ -45,14 +45,6 @@ export function AiContentHub() {
     );
   }, [tabParam]);
 
-  if (tab === "sketch") {
-    return (
-      <div className="-mx-4 -mt-6 sm:-mx-6 sm:-mt-6 lg:-mx-8 lg:-mt-8">
-        <SketchPage />
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col gap-4">
       <div className="inline-flex w-fit shrink-0 rounded-lg border border-border bg-bg p-1">
@@ -82,8 +74,10 @@ export function AiContentHub() {
         <AdStudioPage />
       ) : tab === "photo" ? (
         <GenerationPageContent />
-      ) : (
+      ) : tab === "video" ? (
         <VideoGenerationPageContent />
+      ) : (
+        <SketchPage />
       )}
     </div>
   );

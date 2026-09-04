@@ -1,9 +1,8 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, ImagePlus, Loader2, Save, Trash2, Undo2 } from "lucide-react";
+import { ImagePlus, Loader2, Save, Trash2, Undo2 } from "lucide-react";
 import { SketchCanvas, type SketchCanvasHandle } from "@/components/sketch/SketchCanvas";
 import { SketchInspector } from "@/components/sketch/SketchInspector";
 import { useAuth } from "@/context/AuthContext";
@@ -343,36 +342,21 @@ export function SketchPage() {
 
   if (stylesLoading) {
     return (
-      <div className="flex h-[calc(100vh-3.5rem)] items-center justify-center">
+      <div className="flex h-[calc(100vh-18rem)] min-h-[28rem] items-center justify-center rounded-2xl border border-border bg-zinc-50 dark:bg-zinc-950">
         <Loader2 className="h-6 w-6 animate-spin text-muted" />
       </div>
     );
   }
 
   return (
-    <div className="relative flex h-[calc(100vh-3.5rem)] min-h-[480px] w-full flex-col overflow-hidden bg-zinc-50 dark:bg-zinc-950">
-      <header className="z-20 flex h-14 shrink-0 items-center border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 px-4">
-        <div className="flex items-center gap-3">
-          <Link
-            href="/ai"
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
-          >
-            <ArrowLeft className="h-4 w-4" />
-          </Link>
-          <div>
-            <h1 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">Набросок</h1>
-            <p className="text-[10px] text-zinc-500">Рисунок → стиль → AI фото или видео</p>
-          </div>
-        </div>
-      </header>
-
+    <div className="relative flex h-[calc(100vh-18rem)] min-h-[28rem] w-full flex-col overflow-hidden rounded-2xl border border-border bg-zinc-50 dark:bg-zinc-950">
       <div className="relative flex flex-1 min-h-0">
         <div className="relative flex flex-1 min-w-0 items-center justify-center overflow-auto p-4 pr-0 sm:pr-[432px]">
           <div className="flex items-start gap-3">
             {/* Saved sketches — vertical strip left of canvas */}
             <div
               className="flex w-16 shrink-0 flex-col gap-2 overflow-y-auto py-1"
-              style={{ maxHeight: "calc(100vh - 12rem)" }}
+              style={{ maxHeight: "calc(100vh - 24rem)" }}
             >
               {savedSketches.length === 0 ? (
                 <>
@@ -470,7 +454,7 @@ export function SketchPage() {
                 backgroundImage={backgroundImage}
                 backgroundOpacity={backgroundOpacity}
                 onHistoryChange={refreshUndo}
-                maxHeight="calc(100vh - 14rem)"
+                maxHeight="calc(100vh - 24rem)"
               />
 
               <div className="mt-2 flex items-center justify-end gap-2">
