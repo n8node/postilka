@@ -11,10 +11,12 @@ import { GenerationProgressPanel } from "@/components/generation/GenerationProgr
 import { MediaSourcePickerModal } from "@/components/generation/MediaSourcePickerModal";
 import { ApiError } from "@/lib/api";
 import {
+  adStudioAspectClass,
   adStudioCategoryLabel,
   adStudioModeLabel,
   adStudioModeNeedsProduct,
   adStudioModeUsesTemplateInput,
+  adStudioPreviewBoxSize,
   fetchAdStudioTemplates,
   generateFromAdStudioTemplate,
   resolveAdStudioMode,
@@ -51,33 +53,6 @@ import { useVideoGenerationJobStore } from "@/lib/video-generation-job-store";
 import { cn } from "@/lib/utils";
 
 type FilterId = string;
-
-function aspectClass(ratio: string): string {
-  switch (ratio) {
-    case "9:16":
-      return "aspect-[9/16]";
-    case "4:5":
-      return "aspect-[4/5]";
-    case "16:9":
-      return "aspect-video";
-    default:
-      return "aspect-square";
-  }
-}
-
-function previewBoxSize(ratio: string, height: number): { width: number; height: number } {
-  const h = Math.max(0, height);
-  switch (ratio) {
-    case "9:16":
-      return { width: (h * 9) / 16, height: h };
-    case "4:5":
-      return { width: (h * 4) / 5, height: h };
-    case "16:9":
-      return { width: Math.min((h * 16) / 9, 512), height: h };
-    default:
-      return { width: h, height: h };
-  }
-}
 
 function useMasonryColumnCount(): number {
   const [count, setCount] = useState(2);
@@ -246,7 +221,7 @@ function TemplateCard({
         active ? "border-accent ring-2 ring-accent/20" : "border-border hover:border-zinc-300",
       )}
     >
-      <div className={cn("relative bg-zinc-100", aspectClass(item.aspect_ratio))}>
+      <div className={cn("relative bg-zinc-100", adStudioAspectClass(item.aspect_ratio))}>
         {item.preview_kind === "video" && item.preview_source_url ? (
           <ProtectedMediaVideo
             url={item.preview_source_url}
@@ -616,10 +591,10 @@ export function AdStudioPage({ catalog = "studio" }: { catalog?: AdStudioCatalog
           <div
             className={cn(
               "relative mx-auto shrink-0 overflow-hidden rounded-2xl border border-border bg-zinc-100 shadow-sm sm:mx-0",
-              formHeight <= 0 && cn("h-60 w-auto", aspectClass(selected.aspect_ratio)),
+              formHeight <= 0 && cn("h-60 w-auto", adStudioAspectClass(selected.aspect_ratio)),
             )}
             style={
-              formHeight > 0 ? previewBoxSize(selected.aspect_ratio, formHeight) : undefined
+              formHeight > 0 ? adStudioPreviewBoxSize(selected.aspect_ratio, formHeight) : undefined
             }
           >
             {generating || (!resultUrl && activeJob) ? (

@@ -24,6 +24,15 @@ export const TRENDS_CATEGORIES = [
   { id: "seasonal", label: "Сезонное" },
   { id: "news", label: "Новости" },
   { id: "formats", label: "Форматы" },
+  { id: "popular", label: "Популярное" },
+  { id: "featuring-you", label: "С Вами" },
+  { id: "realistic", label: "Реализм" },
+  { id: "fashion", label: "Мода" },
+  { id: "products", label: "Продукты" },
+  { id: "movies", label: "Кино" },
+  { id: "fantasy", label: "Фантастика" },
+  { id: "anime", label: "Аниме" },
+  { id: "cartoons", label: "Мультфильмы" },
 ] as const;
 
 export type AdStudioCatalog = "studio" | "trends";
@@ -178,6 +187,53 @@ export function resolveAdStudioMode(item: {
   const mode = AD_STUDIO_GENERATION_MODES.find((m) => m.id === item.generation_mode)?.id;
   if (mode) return mode;
   return item.media_kind === "video" ? "reference-to-video" : "combine";
+}
+
+export const AD_STUDIO_IMAGE_RATIOS = [
+  "1:1",
+  "4:5",
+  "3:4",
+  "2:3",
+  "9:16",
+  "16:9",
+  "4:3",
+  "3:2",
+];
+
+export function adStudioAspectClass(ratio: string): string {
+  switch (ratio) {
+    case "9:16":
+      return "aspect-[9/16]";
+    case "4:5":
+      return "aspect-[4/5]";
+    case "3:4":
+      return "aspect-[3/4]";
+    case "2:3":
+      return "aspect-[2/3]";
+    case "16:9":
+      return "aspect-video";
+    case "4:3":
+      return "aspect-[4/3]";
+    case "3:2":
+      return "aspect-[3/2]";
+    default:
+      return "aspect-square";
+  }
+}
+
+export function adStudioPreviewBoxSize(
+  ratio: string,
+  height: number,
+): { width: number; height: number } {
+  const h = Math.max(0, height);
+  const [aw, ah] = ratio.split(":").map(Number);
+  const w = aw > 0 && ah > 0 ? aw : 1;
+  const rh = aw > 0 && ah > 0 ? ah : 1;
+  let width = (h * w) / rh;
+  if (ratio === "16:9") {
+    width = Math.min(width, 512);
+  }
+  return { width, height: h };
 }
 
 export function defaultAdStudioRatio(

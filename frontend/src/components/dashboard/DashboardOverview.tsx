@@ -20,6 +20,7 @@ import { ProtectedMediaImage } from "@/components/media/ProtectedMediaImage";
 import { ProtectedMediaVideo } from "@/components/media/ProtectedMediaVideo";
 import { fetchChannels, type ChannelListItem } from "@/lib/api";
 import {
+  adStudioAspectClass,
   adStudioCategoryLabel,
   fetchAdStudioTemplates,
   type AdStudioTemplate,
@@ -52,13 +53,6 @@ function formatDate(value?: string) {
   }).format(new Date(value));
 }
 
-function templateAspectClass(ratio: string) {
-  if (ratio === "9:16") return "aspect-[9/16]";
-  if (ratio === "4:5") return "aspect-[4/5]";
-  if (ratio === "16:9") return "aspect-video";
-  return "aspect-square";
-}
-
 const STUDIO_VIDEO_ROWS = 2;
 const STUDIO_VIDEO_COLUMNS = 6;
 
@@ -70,7 +64,7 @@ function StudioVideoCard({ template }: { template: AdStudioTemplate }) {
       href={`/ai?template=${encodeURIComponent(template.id)}`}
       className="group relative min-w-0 overflow-hidden rounded-2xl bg-zinc-100 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
     >
-      <div className={cn("relative overflow-hidden", templateAspectClass(template.aspect_ratio))}>
+      <div className={cn("relative overflow-hidden", adStudioAspectClass(template.aspect_ratio))}>
         {hasVideoPreview ? (
           <ProtectedMediaVideo
             url={template.preview_source_url!}

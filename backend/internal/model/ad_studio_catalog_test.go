@@ -55,6 +55,17 @@ func TestVisibleTrendsCategoriesSkipsHidden(t *testing.T) {
 	}
 }
 
+func TestIsAdTrendsCategoryIncludesSyntxSections(t *testing.T) {
+	for _, id := range []string{"popular", "featuring-you", "realistic", "fashion", "products", "movies", "fantasy", "anime", "cartoons"} {
+		if !IsAdTrendsCategory(id) {
+			t.Fatalf("expected trends category %q", id)
+		}
+		if IsAdStudioCategory(id) {
+			t.Fatalf("syntx section %q leaked into studio", id)
+		}
+	}
+}
+
 func TestNormalizeAdStudioCatalog(t *testing.T) {
 	if NormalizeAdStudioCatalog("") != AdStudioCatalogStudio {
 		t.Fatal("empty catalog should default to studio")

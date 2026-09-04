@@ -23,8 +23,14 @@ wordpress/uploads/
 backups/
 artifacts/
 certbot-webroot/
+trends-import/*
+!trends-import/.gitkeep
 
 .DS_Store
 Thumbs.db
 *.log
 *.tsbuildinfo
+
+Картинки/
+Видео/
+_imports/

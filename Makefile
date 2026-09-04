@@ -1,4 +1,4 @@
-.PHONY: up down prod prod-backend prod-backend-nocache prod-frontend prod-nginx verify-release migrate test lint logs logs-prod logs-prod-backend setup restore-latest psql wp-cli status create-superadmin
+.PHONY: up down prod prod-backend prod-backend-nocache prod-frontend prod-nginx verify-release migrate test lint logs logs-prod logs-prod-backend setup restore-latest psql wp-cli status create-superadmin import-trends
 
 COMPOSE := docker compose --env-file .env
 COMPOSE_PROD := $(COMPOSE) -f docker-compose.yml -f docker-compose.prod.yml
@@ -43,6 +43,12 @@ migrate:
 create-superadmin:
 	@test -n "$(EMAIL)" || (echo "EMAIL is required"; exit 1)
 	$(COMPOSE_PROD) exec -T backend /app/create-superadmin -email "$(EMAIL)" -password "$(PASSWORD)" -name "$(NAME)"
+
+# Copy Syntx image JSON + postilka-preview/ into ./trends-import (same layout as Картинки/), then:
+# make import-trends
+TRENDS_IMPORT_DIR ?= /data/trends-import
+import-trends:
+	$(COMPOSE_PROD) exec -T backend /app/import-trends -dir "$(TRENDS_IMPORT_DIR)"
 
 test:
 	cd backend && go test ./...

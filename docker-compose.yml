@@ -21,6 +21,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    volumes:
+      - ./trends-import:/data/trends-import:ro
     restart: unless-stopped
 
   worker:

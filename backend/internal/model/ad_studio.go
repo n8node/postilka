@@ -16,12 +16,21 @@ const (
 	AdStudioCategoryPosters     = "posters"
 	AdStudioCategoryMarketplace = "marketplace"
 
-	AdTrendsCategoryViral      = "viral"
-	AdTrendsCategoryMemes      = "memes"
-	AdTrendsCategoryChallenges = "challenges"
-	AdTrendsCategorySeasonal   = "seasonal"
-	AdTrendsCategoryNews       = "news"
-	AdTrendsCategoryFormats    = "formats"
+	AdTrendsCategoryViral        = "viral"
+	AdTrendsCategoryMemes        = "memes"
+	AdTrendsCategoryChallenges   = "challenges"
+	AdTrendsCategorySeasonal     = "seasonal"
+	AdTrendsCategoryNews         = "news"
+	AdTrendsCategoryFormats      = "formats"
+	AdTrendsCategoryPopular      = "popular"
+	AdTrendsCategoryFeaturingYou = "featuring-you"
+	AdTrendsCategoryRealistic    = "realistic"
+	AdTrendsCategoryFashion      = "fashion"
+	AdTrendsCategoryProducts     = "products"
+	AdTrendsCategoryMovies       = "movies"
+	AdTrendsCategoryFantasy      = "fantasy"
+	AdTrendsCategoryAnime        = "anime"
+	AdTrendsCategoryCartoons     = "cartoons"
 
 	AdStudioMediaImage = "image"
 	AdStudioMediaVideo = "video"
@@ -123,6 +132,15 @@ var AdTrendsCategories = []AdStudioCategoryView{
 	{ID: AdTrendsCategorySeasonal, Label: "Сезонное"},
 	{ID: AdTrendsCategoryNews, Label: "Новости"},
 	{ID: AdTrendsCategoryFormats, Label: "Форматы"},
+	{ID: AdTrendsCategoryPopular, Label: "Популярное"},
+	{ID: AdTrendsCategoryFeaturingYou, Label: "С Вами"},
+	{ID: AdTrendsCategoryRealistic, Label: "Реализм"},
+	{ID: AdTrendsCategoryFashion, Label: "Мода"},
+	{ID: AdTrendsCategoryProducts, Label: "Продукты"},
+	{ID: AdTrendsCategoryMovies, Label: "Кино"},
+	{ID: AdTrendsCategoryFantasy, Label: "Фантастика"},
+	{ID: AdTrendsCategoryAnime, Label: "Аниме"},
+	{ID: AdTrendsCategoryCartoons, Label: "Мультфильмы"},
 }
 
 func CategoriesForCatalog(catalog string) []AdStudioCategoryView {

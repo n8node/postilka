@@ -7,6 +7,7 @@ import { ProtectedMediaVideo } from "@/components/media/ProtectedMediaVideo";
 import { ApiError } from "@/lib/api";
 import {
   AD_STUDIO_GENERATION_MODES,
+  AD_STUDIO_IMAGE_RATIOS,
   adminAdStudioPreviewSourceUrl,
   adminAdStudioPreviewUrl,
   backfillAdminAdStudioPreviews,
@@ -34,7 +35,6 @@ import {
   type CatalogCategoryId,
 } from "@/lib/ad-studio";
 
-const IMAGE_RATIOS = ["1:1", "4:5", "9:16", "16:9"];
 const VIDEO_RATIOS = ["9:16", "16:9", "1:1"];
 
 const emptyForm = (
@@ -287,7 +287,11 @@ export function AdminAdStudioPage({
     }
   }
 
-  const ratios = form.media_kind === "video" ? VIDEO_RATIOS : IMAGE_RATIOS;
+  const baseRatios = form.media_kind === "video" ? VIDEO_RATIOS : AD_STUDIO_IMAGE_RATIOS;
+  const ratios =
+    form.aspect_ratio && !baseRatios.includes(form.aspect_ratio)
+      ? [form.aspect_ratio, ...baseRatios]
+      : baseRatios;
 
   return (
     <div className={embedded ? "space-y-4" : "mx-auto max-w-5xl space-y-4 p-6"}>
@@ -296,7 +300,7 @@ export function AdminAdStudioPage({
       ) : null}
       <p className="text-sm text-slate-600">
         {isTrends
-          ? "Каталог трендовых фото и видео для кабинета. Пользователь выбирает шаблон и генерирует свой кадр. Разделы: вирусное, мемы, челленджи, сезонное, новости, форматы."
+          ? "Каталог трендовых фото и видео для кабинета. Пользователь выбирает шаблон и генерирует свой кадр. Разделы: вирусное, мемы, челленджи, сезонное, новости, форматы, популярное, с вами, реализм, мода, продукты, кино, фантастика, аниме, мультфильмы."
           : "Готовые медиа-решения для кабинета. Пользователь выбирает шаблон, подставляет товар и генерирует свой кадр. Режимы: съёмка товара, движение, UGC, реклама, постеры, маркетплейс."}
       </p>
 

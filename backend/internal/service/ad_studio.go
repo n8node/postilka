@@ -9,6 +9,8 @@ import (
 	"math/rand/v2"
 	"mime/multipart"
 	"net/http"
+	"net/textproto"
+	"path/filepath"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -379,6 +381,42 @@ func (s *AdStudioService) UploadPreview(ctx context.Context, id string, file mul
 	}
 	s.deletePreviewObjects(ctx, current)
 	return updated.ToAdminView(), nil
+}
+
+type previewUploadFile struct {
+	*bytes.Reader
+}
+
+func (previewUploadFile) Close() error { return nil }
+
+func (s *AdStudioService) UploadPreviewFromBytes(ctx context.Context, id string, data []byte, filename, contentType string) (model.AdStudioTemplateAdminView, error) {
+	if len(data) == 0 {
+		return model.AdStudioTemplateAdminView{}, ErrAdStudioPreviewInvalid
+	}
+	if strings.TrimSpace(contentType) == "" {
+		contentType = previewContentType(filename, data)
+	}
+	header := &multipart.FileHeader{
+		Filename: filename,
+		Size:     int64(len(data)),
+		Header:   textproto.MIMEHeader{"Content-Type": []string{contentType}},
+	}
+	return s.UploadPreview(ctx, id, previewUploadFile{Reader: bytes.NewReader(data)}, header)
+}
+
+func previewContentType(filename string, data []byte) string {
+	switch strings.ToLower(filepath.Ext(filename)) {
+	case ".webp":
+		return "image/webp"
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".png":
+		return "image/png"
+	}
+	if len(data) > 0 {
+		return http.DetectContentType(data)
+	}
+	return "application/octet-stream"
 }
 
 const (
@@ -802,16 +840,12 @@ func templateFromWrite(base model.AdStudioTemplate, req model.AdStudioTemplateWr
 	if title == "" {
 		return model.AdStudioTemplate{}, ErrAdStudioTitleRequired
 	}
-	if len(title) > 200 {
-		title = title[:200]
-	}
+	title = truncateRunes(title, 200)
 	prompt := strings.TrimSpace(req.SystemPrompt)
 	if prompt == "" {
 		return model.AdStudioTemplate{}, ErrAdStudioPromptRequired
 	}
-	if len(prompt) > 8000 {
-		prompt = prompt[:8000]
-	}
+	prompt = truncateRunes(prompt, adStudioPromptMaxRunes)
 	catalog := model.NormalizeAdStudioCatalog(req.Catalog)
 	if !creating && strings.TrimSpace(base.Catalog) != "" {
 		catalog = model.NormalizeAdStudioCatalog(base.Catalog)
@@ -945,9 +979,18 @@ func defaultAdStudioRatio(category, kind string) string {
 	}
 }
 
+const adStudioPromptMaxRunes = 16000
+
+func truncateRunes(s string, max int) string {
+	if max <= 0 || utf8.RuneCountInString(s) <= max {
+		return s
+	}
+	return string([]rune(s)[:max])
+}
+
 func normalizeAdStudioImageRatio(ratio string) string {
 	switch strings.TrimSpace(ratio) {
-	case "1:1", "4:5", "9:16", "16:9":
+	case "1:1", "4:5", "3:4", "2:3", "9:16", "16:9", "4:3", "3:2":
 		return ratio
 	default:
 		return "1:1"
