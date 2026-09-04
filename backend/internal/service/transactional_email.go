@@ -287,6 +287,26 @@ func notificationNoticeEmail(name string, in NotificationInput, appURL string) (
 			CTALabel:    "Открыть обсуждение",
 			CTAURL:      ctaURL,
 		}
+	case model.NotifyAIImageDone:
+		content := emailGreetingRow(displayName) +
+			emailParagraphRow("Картинка готова") +
+			emailNoteRow("Файл сохранён в папке «AI контент».")
+		return "Postilka — Картинка готова", EmailBody{
+			Preheader:   "Картинка готова",
+			ContentHTML: content,
+			CTALabel:    "Открыть файл",
+			CTAURL:      ctaURL,
+		}
+	case model.NotifyAIVideoDone:
+		content := emailGreetingRow(displayName) +
+			emailParagraphRow("Видео готово") +
+			emailNoteRow("Файл сохранён в папке «AI контент».")
+		return "Postilka — Видео готово", EmailBody{
+			Preheader:   "Видео готово",
+			ContentHTML: content,
+			CTALabel:    "Открыть файл",
+			CTAURL:      ctaURL,
+		}
 	default:
 		content := emailGreetingRow(displayName) +
 			emailParagraphRow(html.EscapeString(title))

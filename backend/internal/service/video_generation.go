@@ -580,11 +580,13 @@ func (s *GenerationService) finalizeVideoJob(ctx context.Context, jobID string) 
 		return err
 	}
 
+	var registeredFile *model.WorkspaceFile
 	if s.fileStorage != nil {
 		wf, regErr := s.fileStorage.RegisterAIGenerationFile(ctx, job.WorkspaceID, job.UserID, record, int64(len(data)))
 		if regErr != nil {
 			slog.Warn("register ai video generation file", "generation_id", record.ID, "err", regErr)
 		} else if wf != nil {
+			registeredFile = wf
 			_ = s.genRepo.SetWorkspaceFileID(ctx, record.ID, wf.ID)
 		}
 	}
@@ -600,7 +602,7 @@ func (s *GenerationService) finalizeVideoJob(ctx context.Context, jobID string) 
 	if s.notify != nil {
 		gid := record.ID
 		job.GenerationID = &gid
-		s.notify.NotifyAIDone(ctx, job)
+		s.notify.NotifyAIDone(ctx, job, registeredFile)
 		s.notify.MaybeUsageWarnings(ctx, job.WorkspaceID)
 		s.notify.MaybeWalletLow(ctx, job.UserID)
 	}

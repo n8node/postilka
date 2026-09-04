@@ -1,6 +1,7 @@
 package service
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/postilka/postilka/internal/model"
@@ -45,5 +46,34 @@ func TestNotificationHasDedicatedEmail(t *testing.T) {
 	}
 	if notificationHasDedicatedEmail(model.NotifyApprovalComment) {
 		t.Fatal("comment should go through notification email")
+	}
+}
+
+func TestNotificationNoticeEmail_AIDoneHasFileButtonNotPrompt(t *testing.T) {
+	subject, body := notificationNoticeEmail("Erman", NotificationInput{
+		Type:  model.NotifyAIImageDone,
+		Title: "Картинка готова",
+		Body:  "Файл сохранён в папке «AI контент».",
+		Href:  "/files?folder=folder-1&file=file-1",
+	}, "https://postilka.ru/app/files?folder=folder-1&file=file-1")
+	if subject != "Postilka — Картинка готова" {
+		t.Fatalf("subject: %s", subject)
+	}
+	if strings.Contains(body.ContentHTML, "watercolor") || strings.Contains(body.ContentHTML, "промпт") {
+		t.Fatal("email must not include generation prompt")
+	}
+	if body.CTALabel != "Открыть файл" {
+		t.Fatalf("cta: %s", body.CTALabel)
+	}
+	if !strings.Contains(body.CTAURL, "file=file-1") || !strings.Contains(body.CTAURL, "folder=folder-1") {
+		t.Fatalf("cta url: %s", body.CTAURL)
+	}
+
+	_, videoBody := notificationNoticeEmail("Erman", NotificationInput{
+		Type: model.NotifyAIVideoDone,
+		Href: "/files?file=vid-1",
+	}, "https://postilka.ru/app/files?file=vid-1")
+	if videoBody.CTALabel != "Открыть файл" {
+		t.Fatalf("video cta: %s", videoBody.CTALabel)
 	}
 }

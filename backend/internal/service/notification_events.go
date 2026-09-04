@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -210,7 +211,7 @@ func (s *NotificationService) MaybeWalletLow(ctx context.Context, userID string)
 	}
 }
 
-func (s *NotificationService) NotifyAIDone(ctx context.Context, job model.AIGenerationJob) {
+func (s *NotificationService) NotifyAIDone(ctx context.Context, job model.AIGenerationJob, file *model.WorkspaceFile) {
 	isVideo := model.IsVideoGenerationMode(job.Mode)
 	typ := model.NotifyAIImageDone
 	title := "Картинка готова"
@@ -218,16 +219,35 @@ func (s *NotificationService) NotifyAIDone(ctx context.Context, job model.AIGene
 		typ = model.NotifyAIVideoDone
 		title = "Видео готово"
 	}
+	payload := map[string]any{"job_id": job.ID, "generation_id": valueOrEmpty(job.GenerationID)}
+	if file != nil {
+		payload["workspace_file_id"] = file.ID
+		if file.FolderID != nil && *file.FolderID != "" {
+			payload["folder_id"] = *file.FolderID
+		}
+	}
 	s.Create(ctx, NotificationInput{
 		UserID:      job.UserID,
 		WorkspaceID: ptrString(job.WorkspaceID),
 		Type:        typ,
 		Category:    model.NotificationSuccess,
 		Title:       title,
-		Body:        clipText(job.Prompt, 120),
-		Payload:     map[string]any{"job_id": job.ID, "generation_id": valueOrEmpty(job.GenerationID)},
-		Href:        "/ai",
+		Body:        "Файл сохранён в папке «AI контент».",
+		Payload:     payload,
+		Href:        aiDoneFilesHref(file),
 	})
+}
+
+func aiDoneFilesHref(file *model.WorkspaceFile) string {
+	if file == nil || strings.TrimSpace(file.ID) == "" {
+		return "/files"
+	}
+	q := url.Values{}
+	if file.FolderID != nil && strings.TrimSpace(*file.FolderID) != "" {
+		q.Set("folder", strings.TrimSpace(*file.FolderID))
+	}
+	q.Set("file", strings.TrimSpace(file.ID))
+	return "/files?" + q.Encode()
 }
 
 func (s *NotificationService) NotifyAIFailed(ctx context.Context, job model.AIGenerationJob, message string) {

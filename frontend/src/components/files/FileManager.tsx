@@ -108,6 +108,8 @@ export function FileManager({
 }) {
   const { active_workspace } = useAuth();
   const deepLinkFileIdRef = useRef(initialFileId);
+  const workspaceId = active_workspace?.id ?? "";
+  const prevWorkspaceIdRef = useRef(workspaceId);
   const canEdit = useMemo(() => {
     const role = active_workspace?.role ?? "owner";
     return role === "owner" || role === "admin" || role === "editor";
@@ -202,12 +204,20 @@ export function FileManager({
   }, [refresh]);
 
   useEffect(() => {
+    if (!prevWorkspaceIdRef.current) {
+      prevWorkspaceIdRef.current = workspaceId;
+      return;
+    }
+    if (prevWorkspaceIdRef.current === workspaceId) {
+      return;
+    }
+    prevWorkspaceIdRef.current = workspaceId;
     setFolderId(null);
     setFolderTrail([]);
     setSelected(new Set());
     setSelectedKinds(new Map());
     setPreviewFileId(null);
-  }, [active_workspace?.id]);
+  }, [workspaceId]);
 
   useEffect(() => {
     if (section !== "my-files" || !folderId) {
