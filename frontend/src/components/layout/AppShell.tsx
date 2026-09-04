@@ -277,6 +277,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                   isActive(pathname, "/settings") ||
                   isActive(pathname, "/ai") ||
                   isActive(pathname, "/team") ||
+                  isActive(pathname, "/channels") ||
                   isActive(pathname, "/support")
                 ? "max-w-none px-4 py-6 sm:px-6 lg:px-8"
                 : "max-w-7xl px-4 py-6 sm:px-6 lg:px-8",
