@@ -351,7 +351,7 @@ export function SketchPage() {
   return (
     <div className="relative flex h-[calc(100vh-18rem)] min-h-[28rem] w-full flex-col overflow-hidden rounded-2xl border border-border bg-zinc-50 dark:bg-zinc-950">
       <div className="relative flex flex-1 min-h-0">
-        <div className="relative flex flex-1 min-w-0 items-center justify-center overflow-auto p-4 pr-0 sm:pr-[432px]">
+        <div className="relative flex flex-1 min-w-0 items-center justify-center overflow-auto p-4 pr-[272px] xl:pr-[432px]">
           <div className="flex items-start gap-3">
             {/* Saved sketches — vertical strip left of canvas */}
             <div
@@ -394,8 +394,8 @@ export function SketchPage() {
 
             {/* Canvas workspace column — width follows canvas */}
             <div className="inline-flex min-w-0 max-w-full flex-col">
-              <div className="mb-1.5 flex items-center justify-between gap-2">
-                <div className="flex min-w-0 items-center gap-2 text-[11px] text-zinc-500">
+              <div className="mb-1.5 flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5">
+                <div className="flex min-w-0 flex-1 items-center gap-2 text-[11px] text-zinc-500">
                   <span className="shrink-0">Подложка: прозрачность</span>
                   <input
                     type="range"
@@ -403,7 +403,7 @@ export function SketchPage() {
                     max={100}
                     value={Math.round(backgroundOpacity * 100)}
                     onChange={(e) => setBackgroundOpacity(Number(e.target.value) / 100)}
-                    className="w-20 accent-indigo-600 sm:w-28"
+                    className="min-w-12 max-w-28 flex-1 accent-indigo-600"
                   />
                   {backgroundImage && (
                     <button

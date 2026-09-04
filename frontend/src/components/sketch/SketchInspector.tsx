@@ -110,9 +110,9 @@ export function SketchInspector({
     <aside
       onWheel={(e) => e.stopPropagation()}
       data-panel="sketch-inspector"
-      className="absolute right-3 top-3 bottom-3 z-30 flex w-96 sm:w-[420px] max-h-[calc(100%-1.5rem)] flex-col rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-900/95 shadow-2xl backdrop-blur-md"
+      className="absolute right-3 top-3 bottom-3 z-30 flex w-64 xl:w-[420px] max-h-[calc(100%-1.5rem)] flex-col rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white/95 dark:bg-zinc-900/95 shadow-2xl backdrop-blur-md"
     >
-      <div className="flex shrink-0 items-center justify-between border-b border-zinc-100 dark:border-zinc-800 px-4 py-3">
+      <div className="flex shrink-0 items-center justify-between border-b border-zinc-100 dark:border-zinc-800 px-3 py-2.5 xl:px-4 xl:py-3">
         <div className="flex items-center gap-2">
           <div className="flex h-6 w-6 items-center justify-center rounded-md bg-indigo-600 text-white text-xs shadow-sm">
             <Paintbrush className="h-3.5 w-3.5" />
@@ -126,7 +126,7 @@ export function SketchInspector({
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 space-y-4 overflow-y-auto p-4 text-xs">
+      <div className="flex-1 min-h-0 space-y-4 overflow-y-auto p-3 text-xs xl:p-4">
         <div>
           <div className="mb-1 flex items-center justify-between">
             <label className="font-medium text-zinc-700 dark:text-zinc-300">
@@ -148,7 +148,11 @@ export function SketchInspector({
           <label className="mb-1.5 block font-medium text-zinc-700 dark:text-zinc-300">
             Формат
           </label>
-          <AspectRatioPicker value={aspectRatio} onChange={onAspectRatioChange} />
+          <AspectRatioPicker
+            value={aspectRatio}
+            onChange={onAspectRatioChange}
+            columnsClassName="grid-cols-2 xl:grid-cols-4"
+          />
         </div>
 
         {/* Brushes toolbar */}
@@ -156,7 +160,7 @@ export function SketchInspector({
           <label className="mb-1.5 block font-medium text-zinc-700 dark:text-zinc-300">
             Кисть
           </label>
-          <div className="grid grid-cols-4 gap-1.5">
+          <div className="grid grid-cols-2 gap-1.5 xl:grid-cols-4">
             {SKETCH_BRUSHES.map((b) => (
               <button
                 key={b.id}
@@ -176,7 +180,7 @@ export function SketchInspector({
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
           <div>
             <label className="mb-1 block text-[10px] text-zinc-500">Толщина</label>
             <input
@@ -213,7 +217,7 @@ export function SketchInspector({
           <label className="mb-1.5 block font-medium text-zinc-700 dark:text-zinc-300">
             Стиль
           </label>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2 xl:grid-cols-3">
             {styles.map((style) => {
               const active = style.id === selectedStyleId;
               return (

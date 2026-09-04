@@ -19,7 +19,7 @@ import {
   PanelLeft,
   LogOut,
 } from "lucide-react";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { logout, isPlaceholderLoginEmail } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { WorkspaceSwitcher } from "@/components/layout/WorkspaceSwitcher";
@@ -75,6 +75,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const sync = () => setCollapsed(!mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
 
   async function handleLogout() {
     await logout();
