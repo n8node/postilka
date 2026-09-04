@@ -78,15 +78,7 @@ export function GenerationNavBlock({ collapsed }: { collapsed: boolean }) {
 
     return (
       <div className="mb-1 rounded-lg border border-border bg-zinc-50/80 p-1 shadow-sm">
-        <Link
-          href={studioHref}
-          title={title}
-          aria-label={title}
-          className="mb-1 flex h-6 items-center justify-center rounded-md text-muted hover:bg-white hover:text-text"
-        >
-          <Sparkles className="h-3.5 w-3.5" />
-        </Link>
-        <div className="grid grid-cols-2 gap-1">
+        <div className="flex flex-col gap-1">
           {preview.map((item) => {
             const active = plateIsActive(pathname, search, item.href);
             return (
