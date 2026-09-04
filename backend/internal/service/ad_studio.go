@@ -981,13 +981,6 @@ func defaultAdStudioRatio(category, kind string) string {
 
 const adStudioPromptMaxRunes = 16000
 
-func truncateRunes(s string, max int) string {
-	if max <= 0 || utf8.RuneCountInString(s) <= max {
-		return s
-	}
-	return string([]rune(s)[:max])
-}
-
 func normalizeAdStudioImageRatio(ratio string) string {
 	switch strings.TrimSpace(ratio) {
 	case "1:1", "4:5", "3:4", "2:3", "9:16", "16:9", "4:3", "3:2":
