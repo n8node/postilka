@@ -59,19 +59,72 @@ export function GenerationNavBlock({ collapsed }: { collapsed: boolean }) {
   const title = settings?.title || "Генерация";
 
   if (collapsed) {
+    if (!nav || items.length === 0) {
+      return (
+        <Link
+          href={studioHref}
+          title={title}
+          className={cn(
+            "flex items-center justify-center rounded-md px-2 py-2 text-sm transition-colors",
+            plateIsActive(pathname, search, studioHref)
+              ? "bg-zinc-100 font-medium text-text"
+              : "text-muted hover:bg-zinc-50 hover:text-text",
+          )}
+        >
+          <Sparkles className="h-4 w-4 shrink-0" />
+        </Link>
+      );
+    }
+
     return (
-      <Link
-        href={studioHref}
-        title={title}
-        className={cn(
-          "flex items-center justify-center rounded-md px-2 py-2 text-sm transition-colors",
-          plateIsActive(pathname, search, studioHref)
-            ? "bg-zinc-100 font-medium text-text"
-            : "text-muted hover:bg-zinc-50 hover:text-text",
-        )}
-      >
-        <Sparkles className="h-4 w-4 shrink-0" />
-      </Link>
+      <div className="mb-1 rounded-lg border border-border bg-zinc-50/80 p-1 shadow-sm">
+        <Link
+          href={studioHref}
+          title={title}
+          aria-label={title}
+          className="mb-1 flex h-6 items-center justify-center rounded-md text-muted hover:bg-white hover:text-text"
+        >
+          <Sparkles className="h-3.5 w-3.5" />
+        </Link>
+        <div className="grid grid-cols-2 gap-1">
+          {preview.map((item) => {
+            const active = plateIsActive(pathname, search, item.href);
+            return (
+              <Link
+                key={item.id}
+                href={item.href}
+                title={item.subtitle ? `${item.title} — ${item.subtitle}` : item.title}
+                aria-label={item.title}
+                className={cn(
+                  "flex h-8 items-center justify-center rounded-md transition-colors",
+                  item.featured
+                    ? "bg-accent text-white hover:bg-accent/90"
+                    : active
+                      ? "bg-white text-text shadow-sm ring-1 ring-border"
+                      : "bg-white/80 text-muted hover:bg-white hover:text-text",
+                )}
+              >
+                <GenerationNavIcon
+                  item={item}
+                  className={
+                    item.featured ? "text-white" : active ? "text-text" : "text-muted"
+                  }
+                />
+              </Link>
+            );
+          })}
+        </div>
+        {moreCount > 0 ? (
+          <Link
+            href={moreHref}
+            title={`Все инструменты · ещё ${moreCount}`}
+            aria-label={`Все инструменты, ещё ${moreCount}`}
+            className="mt-1 flex h-7 items-center justify-center rounded-md text-muted hover:bg-white hover:text-text"
+          >
+            <LayoutGrid className="h-3.5 w-3.5" />
+          </Link>
+        ) : null}
+      </div>
     );
   }
 
