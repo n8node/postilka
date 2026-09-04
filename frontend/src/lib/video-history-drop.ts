@@ -1,6 +1,6 @@
 import { ApiError } from "@/lib/api";
 import { probeMediaDuration } from "@/lib/file-media";
-import { mediaUrl } from "@/lib/media-display";
+import { fetchProtectedMedia, mediaUrl } from "@/lib/media-display";
 import {
   uploadVideoGenerationMedia,
 } from "@/lib/video-generation-api";
@@ -132,10 +132,15 @@ export function validateReferenceVideoHistoryDrop(
 export async function fetchVideoContentLength(
   generationId: string,
 ): Promise<number | null> {
-  const res = await fetch(
-    mediaUrl(`/media/ai-generations/${encodeURIComponent(generationId)}`),
-    { method: "HEAD", credentials: "include" },
-  );
+  let res: Response;
+  try {
+    res = await fetchProtectedMedia(
+      mediaUrl(`/media/ai-generations/${encodeURIComponent(generationId)}`),
+      { method: "HEAD" },
+    );
+  } catch {
+    return null;
+  }
   if (!res.ok) return null;
   const header = res.headers.get("content-length");
   if (!header) return null;
@@ -146,10 +151,14 @@ export async function fetchVideoContentLength(
 export async function fetchVideoGenerationBlob(
   generationId: string,
 ): Promise<Blob> {
-  const res = await fetch(
-    mediaUrl(`/media/ai-generations/${encodeURIComponent(generationId)}`),
-    { credentials: "include" },
-  );
+  let res: Response;
+  try {
+    res = await fetchProtectedMedia(
+      mediaUrl(`/media/ai-generations/${encodeURIComponent(generationId)}`),
+    );
+  } catch {
+    throw new ApiError(0, "Не удалось загрузить видео из истории");
+  }
   if (!res.ok) {
     throw new ApiError(res.status, "Не удалось загрузить видео из истории");
   }

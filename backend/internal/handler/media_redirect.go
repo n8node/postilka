@@ -13,6 +13,10 @@ func redirectPresignedObject(w http.ResponseWriter, r *http.Request, presignedUR
 		return
 	}
 	w.Header().Set("Cache-Control", presignedRedirectCacheControl)
+	if r.URL.Query().Get("format") == "json" {
+		writeJSON(w, http.StatusOK, map[string]any{"url": presignedURL})
+		return
+	}
 	http.Redirect(w, r, presignedURL, http.StatusTemporaryRedirect)
 }
 

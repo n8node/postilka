@@ -1,6 +1,6 @@
 import { ApiError, apiFetch, fetchBillingOverview, type BillingOverview } from "@/lib/api";
 import type { GenerationModeId } from "@/lib/generation-data";
-import { mediaUrl } from "@/lib/media-display";
+import { fetchProtectedMedia, mediaUrl } from "@/lib/media-display";
 
 export type GenerationItem = {
   id: string;
@@ -307,10 +307,14 @@ export async function uploadGenerationMediaFromWorkspace(
 
 /** Downloads a generated image (auth via cookie) for attaching to sources. */
 export async function fetchGenerationImageBlob(generationId: string): Promise<Blob> {
-  const res = await fetch(
-    mediaUrl(`/media/ai-generations/${encodeURIComponent(generationId)}`),
-    { credentials: "include" },
-  );
+  let res: Response;
+  try {
+    res = await fetchProtectedMedia(
+      mediaUrl(`/media/ai-generations/${encodeURIComponent(generationId)}`),
+    );
+  } catch {
+    throw new ApiError(0, "Не удалось загрузить сгенерированное фото");
+  }
   if (!res.ok) {
     throw new ApiError(res.status, "Не удалось загрузить сгенерированное фото");
   }
