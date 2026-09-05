@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strings"
 
@@ -141,6 +142,7 @@ func (h *AdStudioHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	}
 	result, mediaKind, err := h.svc.Generate(r.Context(), userID, r, chi.URLParam(r, "id"), req)
 	if err != nil {
+		slog.Error("ad studio generation request failed", "template_id", chi.URLParam(r, "id"), "user_id", userID, "error", err)
 		h.mapError(w, err)
 		return
 	}
