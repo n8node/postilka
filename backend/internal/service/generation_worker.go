@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -52,6 +53,7 @@ func (g *kiePollGate) Wait(ctx context.Context) error {
 func (s *GenerationService) StartGenerationWorker(ctx context.Context) {
 	pollGate := newKiePollGate()
 	finalSem := make(chan struct{}, 4)
+	workerOwner := generationWorkerOwner()
 
 	go func() {
 		ticker := time.NewTicker(500 * time.Millisecond)
@@ -61,7 +63,7 @@ func (s *GenerationService) StartGenerationWorker(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				s.pollDueJobs(ctx, pollGate, s.createGate, finalSem)
+				s.pollDueJobs(ctx, workerOwner, pollGate, s.createGate, finalSem)
 			}
 		}
 	}()
@@ -72,8 +74,16 @@ func (s *GenerationService) StartGenerationWorker(ctx context.Context) {
 	)
 }
 
-func (s *GenerationService) pollDueJobs(ctx context.Context, pollGate *kiePollGate, createGate *kieCreateGate, finalSem chan struct{}) {
-	ids, err := s.jobRepo.ListDueForPoll(ctx, 40)
+func generationWorkerOwner() string {
+	host, err := os.Hostname()
+	if err != nil || strings.TrimSpace(host) == "" {
+		host = "unknown"
+	}
+	return fmt.Sprintf("%s-%d", host, os.Getpid())
+}
+
+func (s *GenerationService) pollDueJobs(ctx context.Context, owner string, pollGate *kiePollGate, createGate *kieCreateGate, finalSem chan struct{}) {
+	ids, err := s.jobRepo.ClaimDueJobs(ctx, owner, 40, 2*time.Minute)
 	if err != nil {
 		slog.Error("list generation jobs", "err", err)
 		return
@@ -84,6 +94,7 @@ func (s *GenerationService) pollDueJobs(ctx context.Context, pollGate *kiePollGa
 		}
 		job, err := s.jobRepo.GetByIDInternal(ctx, id)
 		if err != nil {
+			_ = s.jobRepo.ReleaseLease(ctx, id, owner)
 			continue
 		}
 		if job.Status == model.GenJobStatusPreparing && strings.TrimSpace(job.KieTaskID) == "" {
@@ -95,7 +106,9 @@ func (s *GenerationService) pollDueJobs(ctx context.Context, pollGate *kiePollGa
 			}
 			if err != nil {
 				slog.Warn("submit generation job", "job_id", id, "err", err)
+				_ = s.jobRepo.SetLeaseError(ctx, id, owner, err.Error())
 			}
+			_ = s.jobRepo.ReleaseLease(ctx, id, owner)
 			continue
 		}
 		if err := pollGate.Wait(ctx); err != nil {
@@ -103,6 +116,7 @@ func (s *GenerationService) pollDueJobs(ctx context.Context, pollGate *kiePollGa
 		}
 		job, err = s.jobRepo.GetByIDInternal(ctx, id)
 		if err != nil {
+			_ = s.jobRepo.ReleaseLease(ctx, id, owner)
 			continue
 		}
 		if job.Status == model.GenJobStatusPreparing {
@@ -111,25 +125,31 @@ func (s *GenerationService) pollDueJobs(ctx context.Context, pollGate *kiePollGa
 				_ = s.jobRepo.UpdateProgress(ctx, id, job.Status, job.KieState, p, "",
 					time.Now().Add(2*time.Second))
 			}
+			_ = s.jobRepo.ReleaseLease(ctx, id, owner)
 			continue
 		}
 		if job.KieTaskID == "" {
+			_ = s.jobRepo.ReleaseLease(ctx, id, owner)
 			continue
 		}
 		if job.Status == model.GenJobStatusSucceeded || job.Status == model.GenJobStatusFailed {
+			_ = s.jobRepo.ReleaseLease(ctx, id, owner)
 			continue
 		}
 
 		got429, terminal, err := s.pollGenerationJob(ctx, job)
 		if err != nil {
 			slog.Warn("poll kie job", "job_id", id, "err", err)
+			_ = s.jobRepo.SetLeaseError(ctx, id, owner, err.Error())
 			if got429 {
 				_ = s.jobRepo.UpdateProgress(ctx, id, job.Status, job.KieState, job.Progress, "",
 					ai.NextPollAfter(job.CreatedAt, true))
 			}
+			_ = s.jobRepo.ReleaseLease(ctx, id, owner)
 			continue
 		}
 		if !terminal {
+			_ = s.jobRepo.ReleaseLease(ctx, id, owner)
 			continue
 		}
 
@@ -139,11 +159,14 @@ func (s *GenerationService) pollDueJobs(ctx context.Context, pollGate *kiePollGa
 				defer func() { <-finalSem }()
 				if err := s.finalizeGenerationJob(context.Background(), jobID); err != nil {
 					slog.Error("finalize generation job", "job_id", jobID, "err", err)
+					_ = s.jobRepo.SetLeaseError(context.Background(), jobID, owner, err.Error())
 				}
+				_ = s.jobRepo.ReleaseLease(context.Background(), jobID, owner)
 			}(id)
 		default:
 			_ = s.jobRepo.UpdateProgress(ctx, id, job.Status, job.KieState, job.Progress, "",
 				time.Now().Add(2*time.Second))
+			_ = s.jobRepo.ReleaseLease(ctx, id, owner)
 		}
 	}
 }

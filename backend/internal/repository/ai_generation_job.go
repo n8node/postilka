@@ -81,7 +81,7 @@ func (r *AIGenerationJobRepository) scanJob(row pgx.Row) (model.AIGenerationJob,
 		&job.ID, &job.UserID, &job.WorkspaceID, &job.KieTaskID, &job.Status, &job.KieState, &job.Progress, &job.FailMessage,
 		&job.Mode, &job.Prompt, &job.Model, &job.AspectRatio, &job.SourceUploadID, &job.LastFrameUploadID, &combineRaw,
 		&job.VideoDurationSeconds, &refRaw, &refVideoRaw, &refAudioRaw,
-		&job.CreditCost, &job.QuotaCreditsUsed, &job.WalletCentsCharged, &job.DurationMs, &genID, &job.PollAfter, &job.LastPolledAt, &job.CreatedAt, &job.UpdatedAt,
+		&job.CreditCost, &job.QuotaCreditsUsed, &job.WalletCentsCharged, &job.DurationMs, &genID, &job.PollAfter, &job.LastPolledAt, &job.LeaseOwner, &job.LeaseUntil, &job.Attempts, &job.LastError, &job.CreatedAt, &job.UpdatedAt,
 	)
 	if err != nil {
 		return model.AIGenerationJob{}, err
@@ -99,7 +99,7 @@ func (r *AIGenerationJobRepository) GetByID(ctx context.Context, id, userID stri
 		SELECT id, user_id, workspace_id, kie_task_id, status, kie_state, progress, fail_message,
 			mode, prompt, model, aspect_ratio, source_upload_id, last_frame_upload_id, combine_upload_ids,
 			video_duration_seconds, reference_upload_ids, reference_video_upload_ids, reference_audio_upload_ids,
-			credit_cost, quota_credits_used, wallet_cents_charged, duration_ms, generation_id, poll_after, last_polled_at, created_at, updated_at
+			credit_cost, quota_credits_used, wallet_cents_charged, duration_ms, generation_id, poll_after, last_polled_at, lease_owner, lease_until, attempts, last_error, created_at, updated_at
 		FROM ai_generation_jobs
 		WHERE id = $1 AND user_id = $2
 	`, id, userID))
@@ -117,7 +117,7 @@ func (r *AIGenerationJobRepository) GetByIDInternal(ctx context.Context, id stri
 		SELECT id, user_id, workspace_id, kie_task_id, status, kie_state, progress, fail_message,
 			mode, prompt, model, aspect_ratio, source_upload_id, last_frame_upload_id, combine_upload_ids,
 			video_duration_seconds, reference_upload_ids, reference_video_upload_ids, reference_audio_upload_ids,
-			credit_cost, quota_credits_used, wallet_cents_charged, duration_ms, generation_id, poll_after, last_polled_at, created_at, updated_at
+			credit_cost, quota_credits_used, wallet_cents_charged, duration_ms, generation_id, poll_after, last_polled_at, lease_owner, lease_until, attempts, last_error, created_at, updated_at
 		FROM ai_generation_jobs
 		WHERE id = $1
 	`, id))
@@ -207,6 +207,69 @@ func (r *AIGenerationJobRepository) ReleaseKieSubmitClaim(ctx context.Context, i
 		  AND COALESCE(TRIM(kie_task_id), '') = ''
 		  AND kie_state = 'submitting'
 	`, id)
+	return err
+}
+
+// ClaimDueJobs atomically leases due generation jobs for one worker instance.
+// SKIP LOCKED lets multiple workers take different jobs without waiting.
+func (r *AIGenerationJobRepository) ClaimDueJobs(ctx context.Context, owner string, limit int, lease time.Duration) ([]string, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 50
+	}
+	if lease <= 0 {
+		lease = 2 * time.Minute
+	}
+	rows, err := r.pool.Query(ctx, `
+		WITH due AS (
+			SELECT id
+			FROM ai_generation_jobs
+			WHERE status IN ('preparing', 'waiting', 'queuing', 'generating')
+			  AND poll_after <= now()
+			  AND (lease_until IS NULL OR lease_until <= now())
+			ORDER BY poll_after ASC, created_at ASC, id
+			FOR UPDATE SKIP LOCKED
+			LIMIT $2
+		)
+		UPDATE ai_generation_jobs j
+		SET lease_owner = $1,
+			lease_until = now() + ($3 * interval '1 second'),
+			attempts = j.attempts + 1,
+			last_error = '',
+			updated_at = now()
+		FROM due
+		WHERE j.id = due.id
+		RETURNING j.id
+	`, owner, limit, lease.Seconds())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	ids := make([]string, 0, limit)
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+func (r *AIGenerationJobRepository) ReleaseLease(ctx context.Context, id, owner string) error {
+	_, err := r.pool.Exec(ctx, `
+		UPDATE ai_generation_jobs
+		SET lease_owner = '', lease_until = NULL, updated_at = now()
+		WHERE id = $1 AND lease_owner = $2
+	`, id, owner)
+	return err
+}
+
+func (r *AIGenerationJobRepository) SetLeaseError(ctx context.Context, id, owner string, message string) error {
+	_, err := r.pool.Exec(ctx, `
+		UPDATE ai_generation_jobs
+		SET last_error = $3, updated_at = now()
+		WHERE id = $1 AND lease_owner = $2
+	`, id, owner, message)
 	return err
 }
 
