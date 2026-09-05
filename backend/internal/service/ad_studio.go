@@ -1059,8 +1059,8 @@ func (s *AdStudioService) GetSystemPromptForGeneration(ctx context.Context, mode
 }
 
 func normalizeAdStudioImageRatio(ratio string) string {
-
-	switch strings.TrimSpace(ratio) {
+	ratio = strings.TrimSpace(ratio)
+	switch ratio {
 	case "1:1", "4:5", "3:4", "2:3", "9:16", "16:9", "4:3", "3:2":
 		return ratio
 	default:

@@ -22,11 +22,11 @@ func (s *PublicationService) publishWordPress(
 	content model.PostContent,
 	appPassword string,
 ) (string, error) {
-	if s.wordpress == nil {
-		return "", fmt.Errorf("интеграция WordPress недоступна")
-	}
 	if strings.TrimSpace(target.ProviderPostID) != "" {
 		return target.ProviderPostID, nil
+	}
+	if s.wordpress == nil {
+		return "", fmt.Errorf("интеграция WordPress недоступна")
 	}
 
 	siteURL, username, err := wordpressPublishAuth(channel)
