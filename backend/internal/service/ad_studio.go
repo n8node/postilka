@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"math/rand/v2"
 	"mime/multipart"
 	"net/http"
@@ -796,37 +797,29 @@ func composeAdStudioPrompt(t model.AdStudioTemplate, mode, edit string) string {
 	var b strings.Builder
 	switch mode {
 	case model.AdStudioModeCombine:
-		b.WriteString("You are given reference images in this exact order.\n")
-		b.WriteString("Image 1 is the TEMPLATE. Recreate its exact scene: background, setting, camera angle, lighting, composition, typography placement, graphic shapes, and mood.\n")
+		b.WriteString("TEMPLATE is image 1. Recreate its exact scene: background, setting, camera angle, lighting, composition, typography, and mood. ")
 		switch {
 		case t.RequiresProduct && t.RequiresAvatar:
-			b.WriteString("Image 2 is the PRODUCT reference and image 3 is the MODEL reference. Replace the corresponding product and person in the template with these references. Preserve the product's real shape, materials, labels, colors, and proportions, and preserve the model's recognizable appearance.\n")
-			b.WriteString("Keep all other elements of the template unchanged. Do not invent a new layout or return any reference image unchanged.\n")
+			b.WriteString("PRODUCT is image 2, MODEL is image 3. Replace product and person in the template with these references. Preserve real shapes, materials, labels, colors, and model appearance. Keep all other elements unchanged.")
 		case t.RequiresProduct:
-			b.WriteString("Image 2 is the PRODUCT reference. Replace only the original product from the template with this product. Keep the product's real shape, materials, labels, colors, and proportions.\n")
-			b.WriteString("Keep the person and all other elements of the template unchanged. Do not invent a new layout or return image 2 unchanged.\n")
+			b.WriteString("PRODUCT is image 2. Replace only the product in the template with this reference. Preserve real shape, materials, labels, colors. Keep person and all other elements unchanged.")
 		case t.RequiresAvatar:
-			b.WriteString("Image 2 is the MODEL reference. Replace only the person in the template with this model. Preserve the model's recognizable appearance and keep the product, background, composition, and all other elements unchanged.\n")
-			b.WriteString("Do not require, invent, or replace a product reference. Do not return image 2 unchanged.\n")
+			b.WriteString("MODEL is image 2. Replace only the person in the template with this model. Preserve recognizable appearance. Keep product, background, composition unchanged. Do not add or replace any product.")
 		default:
-			b.WriteString("There are no additional product or model references. Preserve the template scene and apply only the template notes and user changes. Do not invent a product or model replacement.\n")
+			b.WriteString("No additional references. Recreate the template scene exactly. Do not invent products or models.")
 		}
 	case model.AdStudioModeReferenceToVideo:
 		if model.AdStudioPreviewIsVideo(t.PreviewContentType) {
-			b.WriteString("You are given reference media in this exact order.\n")
-			b.WriteString("Video 1 is the advertising TEMPLATE. Recreate that exact scene: background, setting, camera angle, lighting, composition, motion, typography placement, graphic shapes, and mood.\n")
-			b.WriteString("Image 2 is the NEW PRODUCT photo. Replace only the original product from video 1 with this product. Keep the new product's real shape, materials, labels, colors, and proportions.\n")
-			b.WriteString("Do not keep the original product from the template. Do not return image 2 unchanged. The result must look like video 1 after a product swap.\n")
+			b.WriteString("TEMPLATE video is reference 1. Recreate that exact scene: background, setting, camera angle, lighting, composition, motion, typography, and mood. ")
+			b.WriteString("PRODUCT is image 2. Replace only the original product from the template with this product. Keep real shape, materials, labels, colors, proportions.")
 		} else {
-			b.WriteString("You are given reference images in this exact order.\n")
-			b.WriteString("Image 1 is the advertising TEMPLATE. Recreate that exact scene: background, setting, camera angle, lighting, composition, typography placement, graphic shapes, and mood.\n")
-			b.WriteString("Image 2 is the NEW PRODUCT photo. Replace only the original product from image 1 with this product. Keep the new product's real shape, materials, labels, colors, and proportions.\n")
-			b.WriteString("Do not keep the original product from the template. Do not return image 2 unchanged. Do not invent a marketplace card or a new layout. The result must look like image 1 after a product swap.\n")
+			b.WriteString("TEMPLATE is image 1. Recreate that exact scene: background, setting, camera angle, lighting, composition, typography, and mood. ")
+			b.WriteString("PRODUCT is image 2. Replace only the original product from the template with this product. Keep real shape, materials, labels, colors, proportions.")
 		}
 	case model.AdStudioModeImageToImage, model.AdStudioModeImageToVideo:
-		b.WriteString("Edit the uploaded product photo according to the template notes. Keep the product identity, labels, and shape.\n")
+		b.WriteString("Edit the uploaded product photo according to the template notes. Keep product identity, labels, and shape.")
 	default:
-		b.WriteString("Create advertising content from the template notes.\n")
+		b.WriteString("Create advertising content from the template notes.")
 	}
 	if strings.TrimSpace(t.SystemPrompt) != "" {
 		b.WriteString("\nTemplate notes:\n")
@@ -839,12 +832,15 @@ func composeAdStudioPrompt(t model.AdStudioTemplate, mode, edit string) string {
 		b.WriteString("\n")
 	}
 	out := strings.TrimSpace(b.String())
-	maxChars := 4000
+	maxChars := 1500
 	switch mode {
 	case model.AdStudioModeTextToVideo, model.AdStudioModeImageToVideo, model.AdStudioModeReferenceToVideo:
 		maxChars = ai.KieVideoPromptMaxChars
 	}
-	if utf8.RuneCountInString(out) > maxChars {
+	length := utf8.RuneCountInString(out)
+	slog.Debug("ad studio prompt composed", "mode", mode, "length", length, "max", maxChars)
+	if length > maxChars {
+		slog.Warn("ad studio prompt truncated", "mode", mode, "original_length", length, "max", maxChars)
 		return string([]rune(out)[:maxChars])
 	}
 	return out
