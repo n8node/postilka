@@ -161,6 +161,7 @@ func main() {
 
 	workerCtx, workerCancel := context.WithCancel(ctx)
 	defer workerCancel()
+	generationSvc.StartGenerationWorker(workerCtx)
 	workerMetrics := appmetrics.New()
 	appmetrics.StartPoolCollector(workerCtx, workerMetrics, db, 10*time.Second)
 	workerMetrics.SetGauge("worker_up", 1)
