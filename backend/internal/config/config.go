@@ -25,20 +25,21 @@ type Config struct {
 	Domain       string `env:"DOMAIN" envDefault:"localhost"`
 	LinkBaseURL  string `env:"LINK_BASE_URL" envDefault:"https://postilka.ru/go"`
 
-	WorkerPublishConcurrency   int `env:"WORKER_PUBLISH_CONCURRENCY" envDefault:"3"`
-	WorkerPublishIntervalSec   int `env:"WORKER_PUBLISH_INTERVAL_SEC" envDefault:"30"`
-	DatabaseMaxConns           int `env:"DATABASE_MAX_CONNS" envDefault:"10"`
+	WorkerPublishConcurrency int    `env:"WORKER_PUBLISH_CONCURRENCY" envDefault:"3"`
+	WorkerPublishIntervalSec int    `env:"WORKER_PUBLISH_INTERVAL_SEC" envDefault:"30"`
+	WorkerMetricsPort        string `env:"WORKER_METRICS_PORT"`
+	DatabaseMaxConns         int    `env:"DATABASE_MAX_CONNS" envDefault:"10"`
 
 	// Optional local hop for Telegram Bot API (Docker: host.docker.internal:8889 → gost → upstream).
 	TelegramLocalProxy string `env:"TELEGRAM_LOCAL_PROXY"`
 	// Optional local hop for YouTube / Google APIs (Docker: host.docker.internal:8890 → gost → upstream).
 	YouTubeLocalProxy string `env:"YOUTUBE_LOCAL_PROXY"`
 
-	YandexGPTAPIKey   string `env:"YANDEX_GPT_API_KEY"`
-	YandexGPTFolderID string `env:"YANDEX_GPT_FOLDER_ID"`
-	YandexGPTBaseURL  string `env:"YANDEX_GPT_BASE_URL" envDefault:"https://llm.api.cloud.yandex.net/v1"`
-	KIEAPIKey         string `env:"KIE_API_KEY"`
-	KIEVideoAPIKey    string `env:"KIE_VIDEO_API_KEY"`
+	YandexGPTAPIKey           string `env:"YANDEX_GPT_API_KEY"`
+	YandexGPTFolderID         string `env:"YANDEX_GPT_FOLDER_ID"`
+	YandexGPTBaseURL          string `env:"YANDEX_GPT_BASE_URL" envDefault:"https://llm.api.cloud.yandex.net/v1"`
+	KIEAPIKey                 string `env:"KIE_API_KEY"`
+	KIEVideoAPIKey            string `env:"KIE_VIDEO_API_KEY"`
 	YandexMetrikaClientID     string `env:"YANDEX_METRIKA_CLIENT_ID"`
 	YandexMetrikaClientSecret string `env:"YANDEX_METRIKA_CLIENT_SECRET"`
 

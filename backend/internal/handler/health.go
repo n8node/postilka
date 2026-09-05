@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"time"
@@ -29,7 +30,9 @@ type healthResponse struct {
 
 func (h *HealthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	postgresStatus := "ok"
-	if err := h.db.Ping(r.Context()); err != nil {
+	pingCtx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+	defer cancel()
+	if err := h.db.Ping(pingCtx); err != nil {
 		postgresStatus = "error"
 	}
 

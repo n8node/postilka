@@ -48,3 +48,11 @@ func (p *Postgres) Close() {
 func (p *Postgres) Ping(ctx context.Context) error {
 	return p.Pool.Ping(ctx)
 }
+
+func (p *Postgres) PoolStats() (total, acquired, idle, max int32) {
+	if p == nil || p.Pool == nil {
+		return 0, 0, 0, 0
+	}
+	stat := p.Pool.Stat()
+	return stat.TotalConns(), stat.AcquiredConns(), stat.IdleConns(), stat.MaxConns()
+}

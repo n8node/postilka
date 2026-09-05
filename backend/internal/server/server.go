@@ -11,6 +11,7 @@ import (
 	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/postilka/postilka/internal/config"
 	"github.com/postilka/postilka/internal/handler"
+	appmetrics "github.com/postilka/postilka/internal/metrics"
 	"github.com/postilka/postilka/internal/middleware"
 	oauthclient "github.com/postilka/postilka/internal/oauth"
 	"github.com/postilka/postilka/internal/photochka"
@@ -25,10 +26,13 @@ type Server struct {
 
 func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Server {
 	r := chi.NewRouter()
+	metricsRegistry := appmetrics.New()
+	appmetrics.StartPoolCollector(context.Background(), metricsRegistry, db, 10*time.Second)
 	r.Use(chimw.RequestID)
 	r.Use(chimw.RealIP)
 	r.Use(chimw.Recoverer)
 	r.Use(chimw.Logger)
+	r.Use(middleware.Metrics(metricsRegistry))
 
 	authMW := middleware.NewAuth(cfg.JWTSecret)
 	authLimiter := middleware.NewRateLimiter()
@@ -145,6 +149,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	billingSvc := service.NewBillingService(planRepo, wsRepo, walletRepo, planCheckoutRepo, tokenPackageCheckoutRepo, tokenPackageRepo, paymentSettingsSvc, quotaSvc, subscriptionSvc, wsSvc, tokenBalanceSvc, kieSettingsRepo)
 
 	health := handler.NewHealthHandler(cfg, db)
+	metricsHandler := handler.NewMetricsHandler(metricsRegistry)
 	status := handler.NewStatusHandler(cfg)
 	authHandler := handler.NewAuthHandler(authSvc, wsSvc, authMW, cfg)
 	userHandler := handler.NewUserHandler(authSvc, userAvatarSvc)
@@ -291,10 +296,12 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	adminSupportHandler := handler.NewAdminSupportHandler(supportTicketSvc, supportSettingsSvc)
 
 	r.Get("/health", health.ServeHTTP)
+	r.Get("/metrics", metricsHandler.ServeHTTP)
 	r.Get("/go/{code}", linkRedirectHandler.Redirect)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/health", health.ServeHTTP)
+		r.Get("/metrics", metricsHandler.ServeHTTP)
 		r.Get("/status", status.ServeHTTP)
 
 		r.Route("/auth", func(r chi.Router) {

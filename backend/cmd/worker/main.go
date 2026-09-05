@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/signal"
 	"strings"
@@ -11,6 +12,8 @@ import (
 	"time"
 
 	"github.com/postilka/postilka/internal/config"
+	"github.com/postilka/postilka/internal/handler"
+	appmetrics "github.com/postilka/postilka/internal/metrics"
 	oauthclient "github.com/postilka/postilka/internal/oauth"
 	"github.com/postilka/postilka/internal/photochka"
 	"github.com/postilka/postilka/internal/repository"
@@ -158,6 +161,21 @@ func main() {
 
 	workerCtx, workerCancel := context.WithCancel(ctx)
 	defer workerCancel()
+	workerMetrics := appmetrics.New()
+	appmetrics.StartPoolCollector(workerCtx, workerMetrics, db, 10*time.Second)
+	workerMetrics.SetGauge("worker_up", 1)
+	if cfg.WorkerMetricsPort != "" {
+		runtimeHealth := handler.NewRuntimeHealthHandler(workerMetrics, db)
+		mux := http.NewServeMux()
+		mux.HandleFunc("/health", runtimeHealth.Health)
+		mux.HandleFunc("/metrics", runtimeHealth.Metrics)
+		go func() {
+			logger.Info("worker metrics server starting", "addr", cfg.WorkerMetricsPort)
+			if err := http.ListenAndServe(cfg.WorkerMetricsPort, mux); err != nil {
+				logger.Error("worker metrics server stopped", "error", err)
+			}
+		}()
+	}
 	go runPublishLoop(workerCtx, logger, loadMonitorSvc, publicationSvc, db)
 
 	ticker := time.NewTicker(30 * time.Second)
@@ -171,6 +189,7 @@ func main() {
 	for {
 		select {
 		case <-ticker.C:
+			workerMetrics.Inc("worker_ticks")
 			if err := db.Ping(ctx); err != nil {
 				logger.Warn("worker db ping failed", "error", err)
 				continue
