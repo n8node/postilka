@@ -278,6 +278,63 @@ func (h *AdStudioHandler) AdminBackfillPreviews(w http.ResponseWriter, r *http.R
 	})
 }
 
+// Admin System Prompts handlers
+
+func (h *AdStudioHandler) AdminListSystemPrompts(w http.ResponseWriter, r *http.Request) {
+	items, err := h.svc.ListSystemPromptsAdmin(r.Context())
+	if err != nil {
+		h.mapError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (h *AdStudioHandler) AdminCreateSystemPrompt(w http.ResponseWriter, r *http.Request) {
+	var req model.AdStudioSystemPromptWriteRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Некорректное тело запроса")
+		return
+	}
+	item, err := h.svc.CreateSystemPromptAdmin(r.Context(), req)
+	if err != nil {
+		h.mapError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"item": item})
+}
+
+func (h *AdStudioHandler) AdminUpdateSystemPrompt(w http.ResponseWriter, r *http.Request) {
+	id := parseIntDefault(chi.URLParam(r, "id"), 0)
+	if id <= 0 {
+		writeError(w, http.StatusBadRequest, "Некорректный ID")
+		return
+	}
+	var req model.AdStudioSystemPromptWriteRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Некорректное тело запроса")
+		return
+	}
+	item, err := h.svc.UpdateSystemPromptAdmin(r.Context(), id, req)
+	if err != nil {
+		h.mapError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"item": item})
+}
+
+func (h *AdStudioHandler) AdminDeleteSystemPrompt(w http.ResponseWriter, r *http.Request) {
+	id := parseIntDefault(chi.URLParam(r, "id"), 0)
+	if id <= 0 {
+		writeError(w, http.StatusBadRequest, "Некорректный ID")
+		return
+	}
+	if err := h.svc.DeleteSystemPromptAdmin(r.Context(), id); err != nil {
+		h.mapError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
 func (h *AdStudioHandler) mapError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, service.ErrAdStudioProductRequired):

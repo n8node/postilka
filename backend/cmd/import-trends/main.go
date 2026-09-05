@@ -38,7 +38,7 @@ func main() {
 	objectStorage := service.NewObjectStorage(storageSettingsSvc)
 	adStudioRepo := repository.NewAdStudioRepository(db.Pool)
 	settingsRepo := repository.NewSettingsRepository(db.Pool)
-	adStudioSvc := service.NewAdStudioService(adStudioRepo, settingsRepo, nil, objectStorage)
+	adStudioSvc := service.NewAdStudioService(adStudioRepo, nil, settingsRepo, nil, objectStorage)
 
 	result, err := adStudioSvc.ImportUnpublishedImageTrends(ctx, *dir, *dryRun)
 	if err != nil {

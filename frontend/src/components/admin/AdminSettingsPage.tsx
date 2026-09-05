@@ -19,6 +19,7 @@ import { AdminTelegramPage } from "@/components/admin/AdminTelegramPage";
 import { AdminMetrikaPage } from "@/components/admin/AdminMetrikaPage";
 import { AdminYandexGptPage } from "@/components/admin/AdminYandexGptPage";
 import { AdminAdStudioPage } from "@/components/admin/AdminAdStudioPage";
+import { AdminAdStudioPromptsPage } from "@/components/admin/AdminAdStudioPromptsPage";
 import { AdminSketchStylesPage } from "@/components/admin/AdminSketchStylesPage";
 import { AdminGenerationNavPage } from "@/components/admin/AdminGenerationNavPage";
 import { AdminBackupSettingsPage } from "@/components/admin/AdminBackupSettingsPage";
@@ -38,6 +39,7 @@ type SettingsKey =
   | "ai-kie-video"
   | "ai-ad-studio"
   | "ai-ad-trends"
+  | "ai-ad-prompts"
   | "ai-sketch-styles"
   | "generation-nav"
   | "analytics-metrika";
@@ -99,10 +101,15 @@ const SETTINGS_MENU: { key: SettingsKey; label: string; description: string }[] 
     label: "AI — Студия рекламы",
     description: "Шаблоны: товар, движение, UGC, реклама",
   },
-  {
+    {
     key: "ai-ad-trends",
     label: "AI — Тренды",
     description: "Шаблоны: вирусное, мемы, челленджи, форматы",
+  },
+  {
+    key: "ai-ad-prompts",
+    label: "AI — промпты Studio",
+    description: "Системные промпты генерации",
   },
   {
     key: "ai-sketch-styles",
@@ -283,8 +290,11 @@ function SettingsSectionContent({
   if (selected === "ai-ad-studio") {
     return <AdminAdStudioPage embedded catalog="studio" />;
   }
-  if (selected === "ai-ad-trends") {
+    if (selected === "ai-ad-trends") {
     return <AdminAdStudioPage embedded catalog="trends" />;
+  }
+  if (selected === "ai-ad-prompts") {
+    return <AdminAdStudioPromptsPage />;
   }
   if (selected === "ai-sketch-styles") {
     return <AdminSketchStylesPage embedded />;

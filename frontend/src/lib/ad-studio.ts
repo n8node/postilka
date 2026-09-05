@@ -36,6 +36,14 @@ export const TRENDS_CATEGORIES = [
 ] as const;
 
 export type AdStudioCatalog = "studio" | "trends";
+
+export type AdStudioSystemPrompt = {
+  id: number;
+  mode: AdStudioGenerationMode;
+  scenario: "default" | "product_only" | "avatar_only" | "both" | "none";
+  prompt_text: string;
+  is_active: boolean;
+};
 export type AdStudioCategoryId = (typeof AD_STUDIO_CATEGORIES)[number]["id"];
 export type TrendsCategoryId = (typeof TRENDS_CATEGORIES)[number]["id"];
 export type CatalogCategoryId = AdStudioCategoryId | TrendsCategoryId;
@@ -350,6 +358,17 @@ export function fetchAdStudioTemplates(category?: string, catalog: AdStudioCatal
   return apiFetch<{ items: AdStudioTemplate[]; hidden_categories?: string[] }>(
     `/ad-studio/templates${catalogQuery(catalog, category)}`,
   );
+}
+
+export function fetchAdminAdStudioSystemPrompts() {
+  return apiFetch<{ items: AdStudioSystemPrompt[] }>("/admin/ad-studio/system-prompts");
+}
+
+export function updateAdminAdStudioSystemPrompt(id: number, payload: Partial<AdStudioSystemPrompt>) {
+  return apiFetch<{ item: AdStudioSystemPrompt }>(`/admin/ad-studio/system-prompts/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
 }
 
 export function fetchAdminAdStudioCategories(catalog: AdStudioCatalog = "studio") {

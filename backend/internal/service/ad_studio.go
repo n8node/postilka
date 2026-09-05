@@ -38,6 +38,7 @@ var (
 
 type AdStudioService struct {
 	repo        *repository.AdStudioRepository
+	promptsRepo *repository.AdStudioSystemPromptRepository
 	settings    *repository.SettingsRepository
 	generation  *GenerationService
 	objectStore *ObjectStorage
@@ -45,11 +46,12 @@ type AdStudioService struct {
 
 func NewAdStudioService(
 	repo *repository.AdStudioRepository,
+	promptsRepo *repository.AdStudioSystemPromptRepository,
 	settings *repository.SettingsRepository,
 	generation *GenerationService,
 	objectStore *ObjectStorage,
 ) *AdStudioService {
-	return &AdStudioService{repo: repo, settings: settings, generation: generation, objectStore: objectStore}
+	return &AdStudioService{repo: repo, promptsRepo: promptsRepo, settings: settings, generation: generation, objectStore: objectStore}
 }
 
 const (
@@ -715,7 +717,25 @@ func (s *AdStudioService) Generate(
 		}
 	}
 
+	scenario := "default"
+	if mode == model.AdStudioModeCombine {
+		switch {
+		case t.RequiresProduct && t.RequiresAvatar:
+			scenario = "both"
+		case t.RequiresProduct:
+			scenario = "product_only"
+		case t.RequiresAvatar:
+			scenario = "avatar_only"
+		default:
+			scenario = "none"
+		}
+	}
 	prompt := composeAdStudioPrompt(t, mode, req.Edit)
+	if configured, promptErr := s.GetSystemPromptForGeneration(ctx, mode, scenario); promptErr != nil {
+		return StartGenerateResult{}, "", promptErr
+	} else if strings.TrimSpace(configured) != "" {
+		prompt = composeAdStudioPromptWithBase(t, mode, req.Edit, configured)
+	}
 	kind := model.AdStudioMediaKindForMode(mode)
 
 	switch mode {
@@ -794,6 +814,10 @@ func (s *AdStudioService) Generate(
 }
 
 func composeAdStudioPrompt(t model.AdStudioTemplate, mode, edit string) string {
+	return composeAdStudioPromptWithBase(t, mode, edit, "")
+}
+
+func composeAdStudioPromptWithBase(t model.AdStudioTemplate, mode, edit, base string) string {
 	var b strings.Builder
 	switch mode {
 	case model.AdStudioModeCombine:
@@ -821,8 +845,10 @@ func composeAdStudioPrompt(t model.AdStudioTemplate, mode, edit string) string {
 	default:
 		b.WriteString("Create advertising content from the template notes.")
 	}
-	// Note: t.SystemPrompt is intentionally NOT sent to KIE.ai to avoid exceeding prompt limits.
-	// Template authors should use the dedicated system prompt configuration instead.
+	if custom := strings.TrimSpace(base); custom != "" {
+		b.Reset()
+		b.WriteString(custom)
+	}
 	if extra := strings.TrimSpace(edit); extra != "" {
 		b.WriteString("\nUser changes:\n")
 		b.WriteString(extra)
@@ -849,11 +875,7 @@ func templateFromWrite(base model.AdStudioTemplate, req model.AdStudioTemplateWr
 		return model.AdStudioTemplate{}, ErrAdStudioTitleRequired
 	}
 	title = truncateRunes(title, 200)
-	prompt := strings.TrimSpace(req.SystemPrompt)
-	if prompt == "" {
-		return model.AdStudioTemplate{}, ErrAdStudioPromptRequired
-	}
-	prompt = truncateRunes(prompt, adStudioPromptMaxRunes)
+	prompt := truncateRunes(strings.TrimSpace(req.SystemPrompt), adStudioPromptMaxRunes)
 	catalog := model.NormalizeAdStudioCatalog(req.Catalog)
 	if !creating && strings.TrimSpace(base.Catalog) != "" {
 		catalog = model.NormalizeAdStudioCatalog(base.Catalog)
@@ -989,7 +1011,55 @@ func defaultAdStudioRatio(category, kind string) string {
 
 const adStudioPromptMaxRunes = 16000
 
+func (s *AdStudioService) ListSystemPromptsAdmin(ctx context.Context) ([]model.AdStudioSystemPrompt, error) {
+	return s.promptsRepo.List(ctx)
+}
+
+func (s *AdStudioService) CreateSystemPromptAdmin(ctx context.Context, req model.AdStudioSystemPromptWriteRequest) (model.AdStudioSystemPrompt, error) {
+	if strings.TrimSpace(req.Mode) == "" || strings.TrimSpace(req.Scenario) == "" || strings.TrimSpace(req.PromptText) == "" {
+		return model.AdStudioSystemPrompt{}, errors.New("mode, scenario and prompt_text are required")
+	}
+	active := true
+	if req.IsActive != nil {
+		active = *req.IsActive
+	}
+	return s.promptsRepo.Create(ctx, model.AdStudioSystemPrompt{Mode: req.Mode, Scenario: req.Scenario, PromptText: strings.TrimSpace(req.PromptText), IsActive: active})
+}
+
+func (s *AdStudioService) UpdateSystemPromptAdmin(ctx context.Context, id int, req model.AdStudioSystemPromptWriteRequest) (model.AdStudioSystemPrompt, error) {
+	p, err := s.promptsRepo.GetByID(ctx, id)
+	if err != nil {
+		return p, err
+	}
+	if strings.TrimSpace(req.PromptText) != "" {
+		p.PromptText = strings.TrimSpace(req.PromptText)
+	}
+	if req.IsActive != nil {
+		p.IsActive = *req.IsActive
+	}
+	return s.promptsRepo.Update(ctx, p)
+}
+
+func (s *AdStudioService) DeleteSystemPromptAdmin(ctx context.Context, id int) error {
+	return s.promptsRepo.Delete(ctx, id)
+}
+
+func (s *AdStudioService) GetSystemPromptForGeneration(ctx context.Context, mode, scenario string) (string, error) {
+	if s.promptsRepo == nil {
+		return "", nil
+	}
+	p, err := s.promptsRepo.GetByModeAndScenario(ctx, mode, scenario)
+	if errors.Is(err, repository.ErrNotFound) {
+		return "", nil
+	}
+	if err != nil || !p.IsActive {
+		return "", err
+	}
+	return p.PromptText, nil
+}
+
 func normalizeAdStudioImageRatio(ratio string) string {
+
 	switch strings.TrimSpace(ratio) {
 	case "1:1", "4:5", "3:4", "2:3", "9:16", "16:9", "4:3", "3:2":
 		return ratio
