@@ -144,7 +144,7 @@ func main() {
 	genJobRepo := repository.NewAIGenerationJobRepository(db.Pool)
 	genUploadRepo := repository.NewGenerationSourceUploadRepository(db.Pool)
 	generationSvc := service.NewGenerationService(
-		nil, nil, genRepo, genJobRepo, genUploadRepo, aiBillingSvc, objectStorage, fileStorageSvc, wsSvc, yandexGptConfigSvc, quotaSvc,
+		kieConfigSvc, kieVideoConfigSvc, genRepo, genJobRepo, genUploadRepo, aiBillingSvc, objectStorage, fileStorageSvc, wsSvc, yandexGptConfigSvc, quotaSvc,
 	)
 	workflowSvc := service.NewWorkflowService(
 		workflowRepo, channelRepo, postSvc, generationSvc, aiBillingSvc, yandexGptConfigSvc, wsSvc, fileStorageSvc, planRepo, quotaSvc, notificationSvc, logger,
