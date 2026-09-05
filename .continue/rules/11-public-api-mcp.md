@@ -1,0 +1,19 @@
+﻿---
+name: 11-public-api-mcp
+description: Public API v1, webhooks — Go handlers
+globs: "backend/**/*{api,webhook,public}*.go"
+alwaysApply: false
+---
+
+# Public API и автоматизация
+
+- UI, Public API, webhooks — **same Go services**; no duplicate publish logic.
+- Base (prod): `https://postilka.ru/app/api/v1`; version breaking changes explicitly.
+- Auth: org-scoped API keys; key valid ≠ resource access — check ownership.
+- Never return provider tokens or cross-org data.
+- Idempotent create/schedule/delete where safe to retry.
+- Pagination, rate limits, payload caps.
+- Webhooks: verify signatures, idempotent handlers, delivery logs.
+- Update OpenAPI/docs with behavior changes.
+- MCP-сервер — **later**: те же Go services, что UI, встроенный агент и Public API. Внешний агент (ГигаАгент, Cloud.ru, OpenClaw) вызывает инструменты Postilka; публикация, approval, квоты и `origin` поста остаются в Postilka.
+- Запрещено отдавать в MCP/API shell, произвольный REPL и токены провайдеров.

@@ -1,0 +1,19 @@
+﻿---
+name: 08-billing-russia
+description: Billing РФ — Go services, Robokassa/YooKassa
+globs: "backend/**/*{billing,payment,subscription,robokassa,yookassa}*.go"
+alwaysApply: false
+---
+
+# Биллинг (РФ)
+
+Платежные провайдеры. Модель подписки / квот / кошелька: **`18-subscriptions-tokens-wallet.md`**. План фич: `19`.
+
+- **BillingProvider** interface in Go; implementations Robokassa, YooKassa.
+- Same payment finalize path for UI, webhooks; idempotent `pending → succeeded`.
+- Два типа платежей: **subscribe (plan)** и **wallet top-up** — разные entities, общий provider switch.
+- Webhooks: `/app/api/v1/webhooks/...`; signature verify; amount check (Robokassa Result).
+- WP Result URL pattern (Erman): WP may OK unknown InvId; app webhooks separate.
+- Server-side quota enforcement (channels, posts, AI); wallet debit for overage (`18`).
+- Amounts in ₽ (store kopecks); legal links to WordPress pages.
+- Tests: checkout, top-up, webhook replay, quota block, plan change, spend priority.

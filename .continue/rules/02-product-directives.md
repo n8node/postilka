@@ -1,0 +1,43 @@
+﻿---
+name: 02-product-directives
+description: Продуктовые приоритеты и замороженный scope Postilka
+alwaysApply: true
+---
+
+# Продуктовые директивы
+
+## Обязательно
+
+- Онбординг, композер, календарь, каналы, настройки, биллинг, ошибки — **на русском**.
+- Планирование публикаций: статус, retry, reconnect errors.
+- Каналы РФ: **VK, Telegram, OK, MAX, Rutube, Дзен** — при официальном API.
+- Глобальные каналы — по мере готовности провайдеров + outbound proxy.
+- Public API + webhooks; MCP/CLI — later, та же business logic что UI и встроенный агент.
+- Биллинг РФ — `08-billing-russia.md`.
+- Подписки, квоты, кошелёк токенов — `18-subscriptions-tokens-wallet.md` (эталон DOC).
+- Полный план функционала — `19-product-feature-plan.md`.
+- Roadmap и волны разработки — `21-multi-agent-roadmap.md`.
+- AI: Yandex GPT (text), KIE.ai (media) — `12`, `16`.
+- Медиа — S3-compatible — `13`.
+- Outbound proxy — `14`.
+- WordPress на корне, app на **`/app`** — `17`.
+- Каждый провайдер: capabilities, limits, tests, docs.
+
+## Заморожено
+
+- **Go + chi + pgx + goose** — backend.
+- **Next.js 15 App Router** — frontend, `basePath: '/app'`.
+- **PostgreSQL** — primary DB; **MySQL** — только WordPress.
+- **Nginx** — единая точка входа в Docker.
+- **Async/schedule:** worker process + PostgreSQL (`due_at`) + **NATS JetStream** в prod (паттерн Erman AI). **Не Temporal.**
+- **Cache prod:** DragonflyDB. **Не Redis** как отдельный frozen choice — Dragonfly совместим, dev может быть упрощён.
+- OAuth/API — подключение каналов по умолчанию.
+- **Один домен** `postilka.ru`: WordPress на `/`, приложение на `/app`; отдельные поддомены для продукта не используются.
+
+## Отложено
+
+- Native mobile apps.
+- Ad marketplace / ads manager.
+- Social listening beyond connected accounts.
+- Full design system rewrite.
+- Unofficial APIs for feature parity.

@@ -1,0 +1,19 @@
+﻿---
+name: 10-ai-privacy
+description: AI adapters, privacy, usage — Go services
+globs: "backend/**/*{ai,llm,prompt,generation,kie,yandex}*.go"
+alwaysApply: false
+---
+
+# AI и приватность
+
+- AI только через **`internal/service/` adapters** (`TextLlmService`, `MediaGenerationService`); не HTTP SDK в handlers.
+- Text — **Yandex GPT** (`16`); media — **KIE.ai** (`12`).
+- Admin credentials + env fallback; quota before paid call.
+- Minimize PII in prompts; no OAuth secrets to models.
+- No logging prompts, drafts, keys, raw responses with user content.
+- Sanitized `usage_log`: org, feature, provider, model, units, latency, outcome.
+- Structured output — validate in Go before persist.
+- Generated content — untrusted; user approval before publish.
+- KIE results → S3 (`13`); long jobs → worker (`05`).
+- Document cross-border transfer for RU prod.

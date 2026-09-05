@@ -1,0 +1,20 @@
+﻿---
+name: 13-s3-media-storage
+description: S3 media storage — Go backend, Erman/Photochka admin pattern
+globs: "backend/**/*{storage,s3,upload,media}*.go"
+alwaysApply: false
+---
+
+# S3-хранилище медиа
+
+- User media + KIE output → **S3-compatible**; RU prod: Beget, Yandex OS, Selectel, etc.
+- **StorageService** in Go; single upload path for composer, API, workers.
+- Admin `/app/admin/config/storage`: endpoint, bucket, region, keys, TestConnection (HeadBucket).
+- Reference: Photochka `storage_config.go`, Erman MinIO prod setup.
+- AWS SDK Go v2 or minio client; path-style for compatible providers.
+- Keys: `orgs/{orgId}/uploads|posts|generated/...` — server-generated.
+- Flow: presign PUT → client upload → `HeadObject` verify on complete.
+- Private bucket + presigned GET or media proxy handler; check org ownership.
+- Limits endpoint + server enforcement.
+- Prod: no VPS disk as source of truth multi-replica.
+- Forbidden: browser long-lived creds; secrets in logs/responses.

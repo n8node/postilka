@@ -1,0 +1,40 @@
+﻿---
+name: 12-admin-llm-providers
+description: Platform admin — Yandex GPT и KIE.ai (Go + Next.js admin UI)
+globs: "{backend,frontend}/**/*{admin,llm,kie,yandex,config}*.{go,ts,tsx}"
+alwaysApply: false
+---
+
+# Админка: LLM-провайдеры
+
+| Домен | Провайдер |
+|-------|-----------|
+| Текст | **Yandex GPT** |
+| Media | **KIE.ai** |
+
+Separate config: `yandex_gpt_config`, `kie_config` tables/services — not one blob.
+
+## Reference
+
+Photochka/Erman AI admin pattern: singleton row, Get/Update/TestConnection, encrypt secrets, env fallback, patch api_key semantics.
+
+## Go backend
+
+- Handlers: `GET/PUT /api/v1/admin/config/yandex-gpt`, `POST .../test`; same for kie.
+- Services in `internal/service/`; HTTP to providers in dedicated client packages.
+- DTO: `api_key_set`, never return secrets.
+- Env: `YANDEX_GPT_API_KEY`, `YANDEX_GPT_FOLDER_ID`, `KIE_API_KEY`.
+- Yandex: `https://ai.api.cloud.yandex.net/v1`; KIE: `https://api.kie.ai`.
+- Per-task models; usage_log + audit without content.
+
+## Frontend
+
+- `/app/admin/config/...`; Russian forms; test-before-select models.
+
+## Runtime
+
+- Quota check before call; KIE async via worker (`05`).
+
+## Запрещено
+
+- Hardcoded keys; direct KIE/Yandex calls from handlers; leaking secrets in JSON.

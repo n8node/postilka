@@ -1,0 +1,18 @@
+﻿---
+name: 14-outbound-proxy-providers
+description: Outbound HTTP proxy — Go (Erman http_proxy pattern)
+globs: "backend/**/*{proxy,http,telegram,social,provider}*.go"
+alwaysApply: false
+---
+
+# Исходящий прокси
+
+- Reference implementation: **Erman AI** `http_proxy.go`, `telegram_api.go`, admin proxy fields.
+- **`OutboundProxyService`** in Go; all outbound social/API HTTP through it.
+- `http://` proxies only; manual CONNECT + TLS; HTTP/2 off via proxy.
+- Routes: RU-native direct; Telegram/Meta/X/global → proxy (configurable in admin).
+- Yandex GPT → direct.
+- Admin `/app/admin/config/outbound-proxy`; encrypt credentials; failover list.
+- OAuth browser flow direct; token exchange + API calls from backend via proxy route.
+- Telegram: long polling + proxy for Bot API (Erman pattern).
+- Forbidden: scraping; per-provider duplicate proxy code; secrets in API responses.

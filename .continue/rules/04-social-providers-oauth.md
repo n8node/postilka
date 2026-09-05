@@ -1,0 +1,20 @@
+﻿---
+name: 04-social-providers-oauth
+description: Соцпровайдеры и OAuth — Go backend Postilka
+globs: "backend/**/*{provider,integration,oauth,social}*.go"
+alwaysApply: false
+---
+
+# Соцпровайдеры и OAuth
+
+- Канал = **`SocialProvider` interface** в `backend/internal/` + entry in **registry**.
+- Handlers не вызывают platform HTTP напрямую — только через provider service + **OutboundProxyService** (`14`).
+- Покрытие провайдера: OAuth, refresh, settings schema, publish, preview, analytics (where API allows).
+- Tokens server-only, encrypted at rest; never browser/logs.
+- Refresh concurrency-safe; revoked → `needs_reconnect` + русское сообщение в UI.
+- Explicit capabilities; no claimed features without API support.
+- Rate limits, bounded concurrency, retry/backoff.
+- Publish idempotent; store provider post IDs.
+- OAuth callbacks: `https://postilka.ru/app/api/v1/...` (или path зарегистрированный в nginx).
+- Tests: success, expired token, revoked, quota, bad media, timeout, duplicate.
+- Document setup, scopes, limits per provider.
