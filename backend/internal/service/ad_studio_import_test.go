@@ -75,22 +75,22 @@ func TestComposeAdStudioPromptUsesSelectedReferences(t *testing.T) {
 		mustNotContain string
 	}{
 		{
-			name:        "product only",
-			template:    func() model.AdStudioTemplate { base.RequiresProduct = true; return base }(),
-			mustContain: "Image 2 is the PRODUCT reference",
-			mustNotContain: "MODEL reference",
+			name:           "product only",
+			template:       func() model.AdStudioTemplate { base.RequiresProduct = true; return base }(),
+			mustContain:    "PRODUCT is image 2",
+			mustNotContain: "MODEL is",
 		},
 		{
-			name:        "model only",
-			template:    func() model.AdStudioTemplate { base.RequiresProduct = false; base.RequiresAvatar = true; return base }(),
-			mustContain: "Image 2 is the MODEL reference",
-			mustNotContain: "PRODUCT reference",
+			name:           "model only",
+			template:       func() model.AdStudioTemplate { base.RequiresProduct = false; base.RequiresAvatar = true; return base }(),
+			mustContain:    "MODEL is image 2",
+			mustNotContain: "PRODUCT is",
 		},
 		{
-			name:        "product and model",
-			template:    func() model.AdStudioTemplate { base.RequiresProduct = true; base.RequiresAvatar = true; return base }(),
-			mustContain: "image 3 is the MODEL reference",
-			mustNotContain: "There are no additional",
+			name:           "product and model",
+			template:       func() model.AdStudioTemplate { base.RequiresProduct = true; base.RequiresAvatar = true; return base }(),
+			mustContain:    "MODEL is image 3",
+			mustNotContain: "No additional",
 		},
 	}
 
@@ -100,11 +100,9 @@ func TestComposeAdStudioPromptUsesSelectedReferences(t *testing.T) {
 			if !strings.Contains(got, tc.mustContain) {
 				t.Fatalf("prompt does not contain %q: %s", tc.mustContain, got)
 			}
-						if strings.Contains(got, tc.mustNotContain) {
+			if strings.Contains(got, tc.mustNotContain) {
 				t.Fatalf("prompt unexpectedly contains %q: %s", tc.mustNotContain, got)
 			}
 		})
 	}
 }
-
-

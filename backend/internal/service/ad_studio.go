@@ -821,11 +821,8 @@ func composeAdStudioPrompt(t model.AdStudioTemplate, mode, edit string) string {
 	default:
 		b.WriteString("Create advertising content from the template notes.")
 	}
-	if strings.TrimSpace(t.SystemPrompt) != "" {
-		b.WriteString("\nTemplate notes:\n")
-		b.WriteString(strings.TrimSpace(t.SystemPrompt))
-		b.WriteString("\n")
-	}
+	// Note: t.SystemPrompt is intentionally NOT sent to KIE.ai to avoid exceeding prompt limits.
+	// Template authors should use the dedicated system prompt configuration instead.
 	if extra := strings.TrimSpace(edit); extra != "" {
 		b.WriteString("\nUser changes:\n")
 		b.WriteString(extra)
