@@ -510,9 +510,14 @@ export function AdStudioPage({ catalog = "studio" }: { catalog?: AdStudioCatalog
     return generationWalletRubForMode(imagePricing, "text-to-image");
   }, [selected, selectedMode, isVideo, imagePricing]);
 
+      // `combine` is configurable: it may use only the template, only a model,
+  // only a product, or both. Other image/video modes have an intrinsic product input.
   const needsProduct = Boolean(
-    selected && (selected.requires_product || (selectedMode && adStudioModeNeedsProduct(selectedMode))),
+    selected &&
+      (selected.requires_product ||
+        (selectedMode && selectedMode !== "combine" && adStudioModeNeedsProduct(selectedMode))),
   );
+  const needsAvatar = Boolean(selected?.requires_avatar);
   const needsTemplateInput = Boolean(selectedMode && adStudioModeUsesTemplateInput(selectedMode));
   const canGenerate = Boolean(
     selected &&
@@ -521,7 +526,7 @@ export function AdStudioPage({ catalog = "studio" }: { catalog?: AdStudioCatalog
       !generating &&
       !uploading &&
       (!needsProduct || product) &&
-      (!selected.requires_avatar || avatar) &&
+      (!needsAvatar || avatar) &&
       hasMediaCredits(creditsRemaining),
   );
 
@@ -664,17 +669,37 @@ export function AdStudioPage({ catalog = "studio" }: { catalog?: AdStudioCatalog
               </p>
               {needsTemplateInput && !selected.preview_url ? (
                 <p className="mt-2 text-[12px] text-red-700">
-                  Для этого режима нужно превью сцены. Загрузите его в админке.
+                                    Для этого режима нужно превью сцены. Загрузите его в админке.
                 </p>
               ) : needsTemplateInput ? (
                 <p className="mt-2 text-[12px] text-muted">
                   {selected.preview_kind === "video"
-                    ? "В модель уйдут видео шаблона и ваше фото товара."
-                    : "В модель уйдут превью шаблона и ваше фото товара."}
+                    ? needsProduct && needsAvatar
+                      ? "В модель уйдут видео шаблона, фото товара и фото модели."
+                      : needsProduct
+                        ? "В модель уйдут видео шаблона и ваше фото товара."
+                        : needsAvatar
+                          ? "В модель уйдут видео шаблона и ваше фото модели."
+                          : "В модель уйдёт только видео шаблона."
+                    : needsProduct && needsAvatar
+                      ? "В модель уйдут превью шаблона, фото товара и фото модели."
+                      : needsProduct
+                        ? "В модель уйдут превью шаблона и ваше фото товара."
+                        : needsAvatar
+                          ? "В модель уйдут превью шаблона и ваше фото модели."
+                          : "В модель уйдёт только превью шаблона."}
+                </p>
+              ) : needsProduct && needsAvatar ? (
+                <p className="mt-2 text-[12px] text-muted">
+                  В модель уйдут ваше фото товара и фото модели.
                 </p>
               ) : needsProduct ? (
                 <p className="mt-2 text-[12px] text-muted">
                   В модель уйдёт ваше фото товара. Превью шаблона только задаёт стиль в промпте.
+                </p>
+              ) : needsAvatar ? (
+                <p className="mt-2 text-[12px] text-muted">
+                  В модель уйдёт ваше фото модели. Превью шаблона только задаёт стиль в промпте.
                 </p>
               ) : (
                 <p className="mt-2 text-[12px] text-muted">
@@ -690,11 +715,11 @@ export function AdStudioPage({ catalog = "studio" }: { catalog?: AdStudioCatalog
                 photo={product}
                 disabled={generating || uploading === "product"}
                 onOpen={() => openPicker("product")}
-                onClear={() => setProduct(null)}
+                                onClear={() => setProduct(null)}
               />
             ) : null}
 
-            {selected.requires_avatar ? (
+            {needsAvatar ? (
               <UploadSlot
                 label="Модель"
                 hint="Загрузить модель"

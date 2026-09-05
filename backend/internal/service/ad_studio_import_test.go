@@ -1,6 +1,11 @@
 package service
 
-import "testing"
+import (
+	"strings"
+	"testing"
+
+	"github.com/postilka/postilka/internal/model"
+)
 
 func TestNormalizeAdStudioImageRatio(t *testing.T) {
 	cases := map[string]string{
@@ -59,3 +64,47 @@ func TestTrendsImportSortOrder(t *testing.T) {
 		t.Fatalf("sort = %d", got)
 	}
 }
+
+func TestComposeAdStudioPromptUsesSelectedReferences(t *testing.T) {
+	base := model.AdStudioTemplate{GenerationMode: model.AdStudioModeCombine}
+
+	cases := []struct {
+		name           string
+		template       model.AdStudioTemplate
+		mustContain    string
+		mustNotContain string
+	}{
+		{
+			name:        "product only",
+			template:    func() model.AdStudioTemplate { base.RequiresProduct = true; return base }(),
+			mustContain: "Image 2 is the PRODUCT reference",
+			mustNotContain: "MODEL reference",
+		},
+		{
+			name:        "model only",
+			template:    func() model.AdStudioTemplate { base.RequiresProduct = false; base.RequiresAvatar = true; return base }(),
+			mustContain: "Image 2 is the MODEL reference",
+			mustNotContain: "PRODUCT reference",
+		},
+		{
+			name:        "product and model",
+			template:    func() model.AdStudioTemplate { base.RequiresProduct = true; base.RequiresAvatar = true; return base }(),
+			mustContain: "image 3 is the MODEL reference",
+			mustNotContain: "There are no additional",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := composeAdStudioPrompt(tc.template, model.AdStudioModeCombine, "")
+			if !strings.Contains(got, tc.mustContain) {
+				t.Fatalf("prompt does not contain %q: %s", tc.mustContain, got)
+			}
+						if strings.Contains(got, tc.mustNotContain) {
+				t.Fatalf("prompt unexpectedly contains %q: %s", tc.mustNotContain, got)
+			}
+		})
+	}
+}
+
+

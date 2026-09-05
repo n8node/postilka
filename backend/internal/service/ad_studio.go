@@ -678,9 +678,13 @@ func (s *AdStudioService) Generate(
 		}
 	}
 
+		
 	productID := strings.TrimSpace(req.ProductUploadID)
 	avatarID := strings.TrimSpace(req.AvatarUploadID)
-	needsProduct := t.RequiresProduct || model.AdStudioModeNeedsProduct(mode)
+	// The combine mode is configurable: a template may require a product,
+	// a model, both references, or neither. Other product-based modes keep
+	// their intrinsic product requirement.
+	needsProduct := t.RequiresProduct || (mode != model.AdStudioModeCombine && model.AdStudioModeNeedsProduct(mode))
 	if needsProduct && productID == "" {
 		return StartGenerateResult{}, "", ErrAdStudioProductRequired
 	}
@@ -770,12 +774,13 @@ func (s *AdStudioService) Generate(
 			SourceUploadID: productID,
 		})
 		return result, kind, err
+			
 	default:
 		refs := []string{templateID}
-		if productID != "" {
+		if t.RequiresProduct && productID != "" {
 			refs = append(refs, productID)
 		}
-		if avatarID != "" {
+		if t.RequiresAvatar && avatarID != "" {
 			refs = append(refs, avatarID)
 		}
 		result, err := s.generation.StartGenerate(ctx, userID, r, GenerateImageInput{
@@ -793,9 +798,20 @@ func composeAdStudioPrompt(t model.AdStudioTemplate, mode, edit string) string {
 	switch mode {
 	case model.AdStudioModeCombine:
 		b.WriteString("You are given reference images in this exact order.\n")
-		b.WriteString("Image 1 is the advertising TEMPLATE. Recreate that exact scene: background, setting, camera angle, lighting, composition, typography placement, graphic shapes, and mood.\n")
-		b.WriteString("Image 2 is the NEW PRODUCT photo. Replace only the original product from image 1 with this product. Keep the new product's real shape, materials, labels, colors, and proportions.\n")
-		b.WriteString("Do not keep the original product from the template. Do not return image 2 unchanged. Do not invent a marketplace card or a new layout. The result must look like image 1 after a product swap.\n")
+		b.WriteString("Image 1 is the TEMPLATE. Recreate its exact scene: background, setting, camera angle, lighting, composition, typography placement, graphic shapes, and mood.\n")
+		switch {
+		case t.RequiresProduct && t.RequiresAvatar:
+			b.WriteString("Image 2 is the PRODUCT reference and image 3 is the MODEL reference. Replace the corresponding product and person in the template with these references. Preserve the product's real shape, materials, labels, colors, and proportions, and preserve the model's recognizable appearance.\n")
+			b.WriteString("Keep all other elements of the template unchanged. Do not invent a new layout or return any reference image unchanged.\n")
+		case t.RequiresProduct:
+			b.WriteString("Image 2 is the PRODUCT reference. Replace only the original product from the template with this product. Keep the product's real shape, materials, labels, colors, and proportions.\n")
+			b.WriteString("Keep the person and all other elements of the template unchanged. Do not invent a new layout or return image 2 unchanged.\n")
+		case t.RequiresAvatar:
+			b.WriteString("Image 2 is the MODEL reference. Replace only the person in the template with this model. Preserve the model's recognizable appearance and keep the product, background, composition, and all other elements unchanged.\n")
+			b.WriteString("Do not require, invent, or replace a product reference. Do not return image 2 unchanged.\n")
+		default:
+			b.WriteString("There are no additional product or model references. Preserve the template scene and apply only the template notes and user changes. Do not invent a product or model replacement.\n")
+		}
 	case model.AdStudioModeReferenceToVideo:
 		if model.AdStudioPreviewIsVideo(t.PreviewContentType) {
 			b.WriteString("You are given reference media in this exact order.\n")
