@@ -678,7 +678,6 @@ func (s *AdStudioService) Generate(
 		}
 	}
 
-		
 	productID := strings.TrimSpace(req.ProductUploadID)
 	avatarID := strings.TrimSpace(req.AvatarUploadID)
 	// The combine mode is configurable: a template may require a product,
@@ -774,7 +773,7 @@ func (s *AdStudioService) Generate(
 			SourceUploadID: productID,
 		})
 		return result, kind, err
-			
+
 	default:
 		refs := []string{templateID}
 		if t.RequiresProduct && productID != "" {

@@ -8,13 +8,25 @@ alwaysApply: true
 
 Один агент = одна зона; зависимости строго по волнам. Shell: git commit/push по запросу разрешены; docker/деплой — текст команд (`20-no-shell.md`).
 
+## Зафиксированное состояние проекта
+
+**Дата фиксации:** текущий репозиторный срез.
+
+**Текущая стадия:** поздняя Волна 8–9 по функциональному охвату + развитые AI/missions/workflows, но ещё не подтверждённый production-ready MVP. Функциональная ширина высокая, следующий приоритет — не новые крупные модули, а стабилизация core publishing, production acceptance и закрытая beta.
+
+**Что уже есть в коде:** 86 goose-миграций, auth/workspace, каналы и OAuth, посты/композер/планирование, worker-публикация, медиа и object storage, billing/wallet/quota, Yandex GPT/KIE, missions, visual workflows, approval, analytics/Metrika, notifications, support, backups и load monitor.
+
+**Ключевое ограничение оценки:** наличие handler/service/page не считается production-ready интеграцией. Для каналов и платежей нужна отдельная реальная приемка. Production deploy и smoke-тесты не считаются подтверждёнными только по наличию конфигурации в репозитории.
+
+**Beta scope:** сначала Telegram и VK; остальные провайдеры включать только после capability matrix и реального publish/reconnect/retry теста.
+
 ## Волна 0 — текущий scaffold ✅
 
 - Docker compose: nginx, backend, worker, frontend, wordpress, postgres, mysql
 - Health API, landing `/app`, routing WP + `/app`, goose migration `schema_meta`
 - Правила продукта `18`, `19`
 
-## Волна 1 — первый деплой на сервер (MUST)
+## Волна 1 — первый деплой на сервер (код готов, acceptance не подтверждён)
 
 **Цель:** `https://postilka.ru/` → WP, `https://postilka.ru/app` → UI, API health, HTTPS, миграции, prod env.
 
@@ -29,14 +41,14 @@ alwaysApply: true
 
 **Не входит:** auth, каналы, посты, биллинг, AI.
 
-## Волна 2 — Auth + workspace ✅ (in progress / shipped)
+## Волна 2 — Auth + workspace ✅ (реализовано, нужна regression-проверка)
 
 | Агент | Deliverables |
 |-------|--------------|
 | **2-Backend** | users, workspaces, JWT cookie auth, register/login/logout/me |
 | **3-Frontend** | `/app/auth/*`, `/app/dashboard`, AppShell, middleware |
 
-## Волна 3 — Каналы (Telegram + VK)
+## Волна 3 — Каналы (Telegram + VK) ✅ (реализовано частично; beta-приоритет)
 
 | Агент | Deliverables |
 |-------|--------------|
@@ -45,7 +57,7 @@ alwaysApply: true
 | **3-Frontend** | страница каналов, статусы, reconnect |
 | **2-Backend** | encrypted tokens storage, channel CRUD |
 
-## Волна 4 — Композер + посты (MVP)
+## Волна 4 — Композер + посты ✅ (реализовано; нужен end-to-end acceptance)
 
 | Агент | Deliverables |
 |-------|--------------|
@@ -54,7 +66,7 @@ alwaysApply: true
 | **6-Media** | S3 presign upload (MinIO dev), media table |
 | **7-Worker** | publish job: due posts → provider API, statuses, retry idempotent |
 
-## Волна 5 — Календарь + планирование
+## Волна 5 — Календарь + планирование ✅ (реализовано; нужна проверка worker/retry/idempotency)
 
 | Агент | Deliverables |
 |-------|--------------|
@@ -62,7 +74,7 @@ alwaysApply: true
 | **2-Backend** | schedule API, timezone, cancel/reschedule |
 | **7-Worker** | poll `due_at`, concurrency from env |
 
-## Волна 6 — Подписка + кошелёк
+## Волна 6 — Подписка + кошелёк ✅ (реализовано; требуется финансовая и security-проверка)
 
 | Агент | Deliverables |
 |-------|--------------|
@@ -71,7 +83,7 @@ alwaysApply: true
 | **3-Frontend** | `/app/plans`, balance widget, quota display |
 | **2-Backend** | usage ledger, spend priority plan → wallet |
 
-## Волна 7 — AI
+## Волна 7 — AI ✅ (реализовано и расширено; стабилизация вместо расширения scope)
 
 | Агент | Deliverables |
 |-------|--------------|
@@ -79,14 +91,14 @@ alwaysApply: true
 | **9-AI** | KIE media async + worker poll (`12`) |
 | **8-Billing** | AI debit: quota then wallet, prefail |
 
-## Волна 8 — Команда + approval
+## Волна 8 — Команда + approval ✅ (реализовано; нужна проверка изоляции workspace и audit)
 
 | Агент | Deliverables |
 |-------|--------------|
 | **2-Backend** | invites, roles, post approval workflow |
 | **3-Frontend** | team settings, approve/reject UI |
 
-## Волна 9 — Аналитика + API
+## Волна 9 — Аналитика + API ⚠️ (analytics реализована, полноценный Public API ещё не зафиксирован как готовый)
 
 | Агент | Deliverables |
 |-------|--------------|
@@ -94,9 +106,48 @@ alwaysApply: true
 | **3-Frontend** | dashboard charts MVP |
 | **10-Integrations** | Public API keys, webhooks (`11`) |
 
-## Волна 10+ — later
+## Текущий рабочий этап — Core stabilization → production acceptance → закрытая beta
 
-Inbox, bulk, RSS, Zapier, глобальные сети + proxy, NATS/Dragonfly prod overlay, mobile.
+### Приоритет 0. Зафиксировать release baseline
+
+- Обновить матрицу `implemented / production / beta / experimental / not verified`.
+- Зафиксировать beta scope: Telegram + VK.
+- Описать release checklist, rollback plan и acceptance criteria.
+
+### Приоритет 1. Проверить главный пользовательский путь
+
+`register → workspace → connect channel → create draft → upload media → preview → publish/schedule → worker → published/failed → retry/reconnect → notification → analytics`.
+
+Проверить duplicate requests, provider timeout/rate limit, restart worker, partial failure по нескольким каналам и понятность ошибок на русском.
+
+### Приоритет 2. Безопасность и данные
+
+- Не использовать JWT secret как долгосрочную замену encryption key; не игнорировать ошибки SecretCipher.
+- Проверить workspace isolation на всех repository/service/handler путях.
+- Проверить OAuth/token encryption, webhook signatures, replay protection, SSRF, upload MIME/size/path traversal, admin/download authorization.
+- Добавить 152-ФЗ flow: удаление и экспорт данных, минимизация логирования пользовательского контента.
+
+### Приоритет 3. Billing correctness
+
+Проверить idempotent payment finalize/webhooks, signature и amount validation, concurrent wallet debit, `plan quota → wallet`, negative balance, expiry/auto-renew, duplicate top-up, refunds и reconciliation.
+
+### Приоритет 4. Provider acceptance
+
+Для каждого провайдера зафиксировать connect, publish text/photo/video, limits, schedule, retry, reconnect, analytics, tests и production status. Дополнительные сети не считать готовыми по одному наличию handler.
+
+### Приоритет 5. Тесты и наблюдаемость
+
+Добавить integration tests для auth/workspace isolation, post state machine, publish idempotency/retry, quota/wallet concurrency, payment webhook, file authorization, workflow DAG и webhook signing. Довести metrics/alerts для публикаций, worker heartbeat, AI jobs, payments, backups и provider errors.
+
+### Приоритет 6. После стабильного core
+
+- Public API: keys/scopes, idempotency, rate limits, versioning, signed webhooks и OpenAPI.
+- Missions/workflows — production beta после единого job/billing/error model.
+- NATS/Dragonfly — только после подтверждённых bottleneck, не как самоцель.
+
+## Волна 10+ — later / не текущий приоритет
+
+Inbox, bulk, RSS/Zapier expansion, новые сети без acceptance matrix, полноценный MCP, native mobile, полный design-system rewrite и горизонтальное масштабирование.
 
 ## Параллельность внутри волны
 
