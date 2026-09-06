@@ -395,7 +395,14 @@ func (s *GenerationService) DeleteGenerations(ctx context.Context, userID string
 
 	for _, record := range owned {
 		if strings.TrimSpace(record.ResultS3Key) != "" {
-			_ = s.objectStore.DeleteObject(ctx, record.ResultS3Key)
+			if deleteErr := s.objectStore.DeleteObject(ctx, record.ResultS3Key); deleteErr != nil {
+				return DeleteGenerationsResult{}, fmt.Errorf("delete generation object: %w", deleteErr)
+			}
+		}
+		if strings.TrimSpace(record.PreviewS3Key) != "" {
+			if deleteErr := s.objectStore.DeleteObject(ctx, record.PreviewS3Key); deleteErr != nil {
+				return DeleteGenerationsResult{}, fmt.Errorf("delete generation preview: %w", deleteErr)
+			}
 		}
 	}
 	if err := s.genRepo.DeleteByIDs(ctx, ws.ID, ids); err != nil {

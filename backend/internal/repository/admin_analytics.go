@@ -45,7 +45,7 @@ func (r *AdminAnalyticsRepository) Overview(ctx context.Context, from, to time.T
 		&out.FilesTotal, &out.StorageBytes, &out.TrashBytes,
 	)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("admin analytics overview totals: %w", err)
 	}
 
 	if err := r.pool.QueryRow(ctx, `

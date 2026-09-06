@@ -13,7 +13,8 @@ WHERE g.id = d.id AND d.rn > 1;
 
 DROP INDEX IF EXISTS ai_generations_source_job_uidx;
 CREATE UNIQUE INDEX IF NOT EXISTS ai_generations_source_job_uidx
-    ON ai_generations (source_job_id);
+    ON ai_generations (source_job_id)
+    WHERE source_job_id IS NOT NULL;
 
 WITH duplicates AS (
     SELECT id, ROW_NUMBER() OVER (PARTITION BY workspace_id, s3_key ORDER BY created_at, id) AS rn
