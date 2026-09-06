@@ -16,14 +16,14 @@ prod:
 # Deploy only the services affected by a release; each target checks the public edge.
 prod-backend:
 	$(COMPOSE_PROD) up --build -d outbound-proxy backend worker
-	$(COMPOSE_PROD) exec -T backend goose -dir ./migrations postgres "$$DATABASE_URL" up
+	$(COMPOSE_PROD) exec -T backend sh -c 'goose -dir ./migrations postgres "$$DATABASE_URL" up'
 	$(COMPOSE_PROD) up -d --force-recreate telegram-proxy youtube-proxy
 	bash scripts/verify-release.sh
 
 prod-backend-nocache:
 	$(COMPOSE_PROD) build --no-cache backend worker
 	$(COMPOSE_PROD) up -d outbound-proxy telegram-proxy youtube-proxy backend worker
-	$(COMPOSE_PROD) exec -T backend goose -dir ./migrations postgres "$$DATABASE_URL" up
+	$(COMPOSE_PROD) exec -T backend sh -c 'goose -dir ./migrations postgres "$$DATABASE_URL" up'
 	bash scripts/verify-release.sh
 
 prod-frontend:
