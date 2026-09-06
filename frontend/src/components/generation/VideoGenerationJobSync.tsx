@@ -13,6 +13,10 @@ export function VideoGenerationJobSync() {
   const pollSerial = useVideoGenerationJobStore((s) => s.pollSerial);
 
   useEffect(() => {
+    useVideoGenerationJobStore.getState().restoreActiveJob();
+  }, []);
+
+  useEffect(() => {
     if (running && jobId) {
       resumeVideoGenerationPoll();
     }

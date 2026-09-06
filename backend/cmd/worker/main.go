@@ -146,6 +146,7 @@ func main() {
 	generationSvc := service.NewGenerationService(
 		kieConfigSvc, kieVideoConfigSvc, genRepo, genJobRepo, genUploadRepo, aiBillingSvc, objectStorage, fileStorageSvc, wsSvc, yandexGptConfigSvc, quotaSvc,
 	)
+	generationSvc.SetNotifier(notificationSvc)
 	workflowSvc := service.NewWorkflowService(
 		workflowRepo, channelRepo, postSvc, generationSvc, aiBillingSvc, yandexGptConfigSvc, wsSvc, fileStorageSvc, planRepo, quotaSvc, notificationSvc, logger,
 	)

@@ -38,7 +38,10 @@ type VideoGenerationJobState = {
   clearResult: () => void;
   dismissToast: (id: string) => void;
   reset: () => void;
+  restoreActiveJob: () => void;
 };
+
+const videoGenerationJobStorageKey = "postilka:active-video-generation-job";
 
 const initialRun = {
   jobId: null as string | null,
@@ -76,7 +79,11 @@ export const useVideoGenerationJobStore = create<VideoGenerationJobState>(
       }),
 
     beginJob: (job, startedAt) =>
-      set((s) => ({
+      set((s) => {
+        if (typeof window !== "undefined") {
+          window.localStorage.setItem(videoGenerationJobStorageKey, JSON.stringify({ jobId: job.id, startedAt }));
+        }
+        return {
         ...initialRun,
         jobId: job.id,
         job,
@@ -85,7 +92,8 @@ export const useVideoGenerationJobStore = create<VideoGenerationJobState>(
         pollSerial: s.pollSerial + 1,
         completionSeq: s.completionSeq,
         toasts: s.toasts,
-      })),
+        };
+      }),
 
     patchJob: (job) =>
       set((s) => (s.running && s.jobId === job.id ? { job } : {})),
@@ -116,6 +124,10 @@ export const useVideoGenerationJobStore = create<VideoGenerationJobState>(
       }
       void refreshBillingBalances().catch(() => undefined);
 
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem(videoGenerationJobStorageKey);
+      }
+
       set((s) => ({
         jobId: job.id,
         job,
@@ -135,6 +147,9 @@ export const useVideoGenerationJobStore = create<VideoGenerationJobState>(
 
     failJob: (message) => {
       if (!get().running && !get().jobId) return;
+      if (typeof window !== "undefined") {
+        window.localStorage.removeItem(videoGenerationJobStorageKey);
+      }
       set({
         running: false,
         startedAt: null,
@@ -165,5 +180,18 @@ export const useVideoGenerationJobStore = create<VideoGenerationJobState>(
         pollSerial: s.pollSerial + 1,
         toasts: [],
       })),
+
+    restoreActiveJob: () => {
+      if (typeof window === "undefined") return;
+      try {
+        const raw = window.localStorage.getItem(videoGenerationJobStorageKey);
+        if (!raw) return;
+        const saved = JSON.parse(raw) as { jobId?: string; startedAt?: number };
+        if (!saved.jobId || !saved.startedAt) return;
+        set((s) => ({ jobId: saved.jobId!, running: true, startedAt: saved.startedAt!, pollSerial: s.pollSerial + 1 }));
+      } catch {
+        window.localStorage.removeItem(videoGenerationJobStorageKey);
+      }
+    },
   }),
 );

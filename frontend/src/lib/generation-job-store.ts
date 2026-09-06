@@ -38,7 +38,10 @@ type GenerationJobState = {
   clearResult: () => void;
   dismissToast: (id: string) => void;
   reset: () => void;
+  restoreActiveJob: () => void;
 };
+
+const generationJobStorageKey = "postilka:active-generation-job";
 
 const initialRun = {
   jobId: null as string | null,
@@ -75,16 +78,24 @@ export const useGenerationJobStore = create<GenerationJobState>((set, get) => ({
     }),
 
   beginJob: (job, startedAt) =>
-    set((s) => ({
-      ...initialRun,
-      jobId: job.id,
-      job,
-      running: true,
-      startedAt,
-      pollSerial: s.pollSerial + 1,
-      completionSeq: s.completionSeq,
-      toasts: s.toasts,
-    })),
+    set((s) => {
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(
+          generationJobStorageKey,
+          JSON.stringify({ jobId: job.id, startedAt }),
+        );
+      }
+      return {
+        ...initialRun,
+        jobId: job.id,
+        job,
+        running: true,
+        startedAt,
+        pollSerial: s.pollSerial + 1,
+        completionSeq: s.completionSeq,
+        toasts: s.toasts,
+      };
+    }),
 
   patchJob: (job) =>
     set((s) => (s.running && s.jobId === job.id ? { job } : {})),
@@ -111,6 +122,10 @@ export const useGenerationJobStore = create<GenerationJobState>((set, get) => ({
     }
     void refreshBillingBalances().catch(() => undefined);
 
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(generationJobStorageKey);
+    }
+
     set((s) => ({
       jobId: job.id,
       job,
@@ -130,6 +145,9 @@ export const useGenerationJobStore = create<GenerationJobState>((set, get) => ({
 
   failJob: (message) => {
     if (!get().running && !get().jobId) return;
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem(generationJobStorageKey);
+    }
     set({
       running: false,
       startedAt: null,
@@ -160,4 +178,22 @@ export const useGenerationJobStore = create<GenerationJobState>((set, get) => ({
       pollSerial: s.pollSerial + 1,
       toasts: [],
     })),
+
+  restoreActiveJob: () => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem(generationJobStorageKey);
+      if (!raw) return;
+      const saved = JSON.parse(raw) as { jobId?: string; startedAt?: number };
+      if (!saved.jobId || !saved.startedAt) return;
+      set((s) => ({
+        jobId: saved.jobId!,
+        running: true,
+        startedAt: saved.startedAt!,
+        pollSerial: s.pollSerial + 1,
+      }));
+    } catch {
+      window.localStorage.removeItem(generationJobStorageKey);
+    }
+  },
 }));

@@ -14,6 +14,10 @@ export function GenerationJobSync() {
   const pollSerial = useGenerationJobStore((s) => s.pollSerial);
 
   useEffect(() => {
+    useGenerationJobStore.getState().restoreActiveJob();
+  }, []);
+
+  useEffect(() => {
     if (running && jobId) {
       resumeGenerationPoll();
     }
