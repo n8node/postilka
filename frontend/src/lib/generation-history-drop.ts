@@ -4,10 +4,7 @@ import type {
   GenerationUpload,
 } from "@/lib/generation-data";
 import { formatGenerationTime } from "@/lib/generation-data";
-import {
-  fetchGenerationImageBlob,
-  uploadGenerationMedia,
-} from "@/lib/generation-api";
+import { uploadGenerationMediaFromGeneration } from "@/lib/generation-api";
 
 export const GENERATION_HISTORY_DRAG_MIME =
   "application/x-postilka-generation";
@@ -67,16 +64,10 @@ export async function historyItemToUpload(
     return { uploadId, previewUrl: item.imageUrl };
   }
 
-  const blob = await fetchGenerationImageBlob(item.id);
-  const previewUrl = URL.createObjectURL(blob);
-  const type = blob.type || "image/jpeg";
-  const ext =
-    type === "image/png" ? "png" : type === "image/webp" ? "webp" : "jpg";
-  const file = new File([blob], `generation-${item.id}.${ext}`, { type });
-  const res = await uploadGenerationMedia(file);
+  const res = await uploadGenerationMediaFromGeneration(item.id);
   return {
     uploadId: res.id,
-    previewUrl,
+    previewUrl: item.imageUrl,
   };
 }
 

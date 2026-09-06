@@ -329,6 +329,14 @@ export async function uploadVideoGenerationMediaFromWorkspace(fileId: string) {
   };
 }
 
+export async function uploadVideoGenerationMediaFromGeneration(generationId: string) {
+  const res = await apiFetch<{ upload: { id: string; content_type: string; duration_seconds?: number } }>(
+    "/generation/video/upload/from-generation",
+    { method: "POST", body: JSON.stringify({ generation_id: generationId }) },
+  );
+  return { id: res.upload.id, content_type: res.upload.content_type, duration_seconds: res.upload.duration_seconds };
+}
+
 export type VideoGenerationItem = {
   id: string;
   mode: string;

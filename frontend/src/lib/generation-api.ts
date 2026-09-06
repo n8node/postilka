@@ -305,6 +305,13 @@ export async function uploadGenerationMediaFromWorkspace(
   };
 }
 
+export async function uploadGenerationMediaFromGeneration(generationId: string) {
+  return apiFetch<GenerationUploadResult>("/generation/upload/from-generation", {
+    method: "POST",
+    body: JSON.stringify({ generation_id: generationId }),
+  });
+}
+
 /** Downloads a generated image (auth via cookie) for attaching to sources. */
 export async function fetchGenerationImageBlob(generationId: string): Promise<Blob> {
   let res: Response;

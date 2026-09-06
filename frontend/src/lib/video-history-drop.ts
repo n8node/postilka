@@ -1,8 +1,7 @@
 import { ApiError } from "@/lib/api";
-import { probeMediaDuration } from "@/lib/file-media";
 import { fetchProtectedMedia, mediaUrl } from "@/lib/media-display";
 import {
-  uploadVideoGenerationMedia,
+  uploadVideoGenerationMediaFromGeneration,
 } from "@/lib/video-generation-api";
 import type {
   VideoGenerationHistoryItem,
@@ -168,32 +167,18 @@ export async function fetchVideoGenerationBlob(
 export async function historyVideoItemToUpload(
   item: VideoGenerationHistoryItem,
 ): Promise<VideoGenerationUpload> {
-  const blob = await fetchVideoGenerationBlob(item.id);
-  const sizeError = referenceVideoSizeError(blob.size);
-  if (sizeError) {
-    throw new Error(sizeError);
-  }
-
-  const previewUrl = URL.createObjectURL(blob);
-  const type = blob.type || "video/mp4";
-  const ext = type.includes("quicktime") ? "mov" : "mp4";
-  const file = new File([blob], `video-${item.id}.${ext}`, { type });
-
-  const duration = await probeMediaDuration(file, type);
+  const duration = item.videoDurationSeconds;
   const durationError = referenceVideoDurationError(duration);
   if (durationError) {
-    URL.revokeObjectURL(previewUrl);
     throw new Error(durationError);
   }
-
-  const upload = await uploadVideoGenerationMedia(file);
+  const upload = await uploadVideoGenerationMediaFromGeneration(item.id);
   return {
     uploadId: upload.id,
-    previewUrl,
+    previewUrl: item.videoUrl,
     mediaKind: "video",
-    fileName: file.name,
-    mimeType: upload.content_type || type,
-    durationSeconds: duration ?? item.videoDurationSeconds,
+    mimeType: upload.content_type || "video/mp4",
+    durationSeconds: duration,
   };
 }
 

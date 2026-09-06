@@ -219,6 +219,27 @@ func (h *GenerationHandler) UploadSourceFromFile(w http.ResponseWriter, r *http.
 	writeJSON(w, http.StatusOK, map[string]any{"upload": upload})
 }
 
+func (h *GenerationHandler) UploadSourceFromGeneration(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
+		return
+	}
+	var req struct {
+		GenerationID string `json:"generation_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Некорректное тело запроса")
+		return
+	}
+	upload, err := h.generation.UploadGenerationSourceFromGeneration(r.Context(), userID, r, req.GenerationID, false)
+	if err != nil {
+		h.mapError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"upload": upload})
+}
+
 type improvePromptRequest struct {
 	Prompt string `json:"prompt"`
 	Mode   string `json:"mode"`

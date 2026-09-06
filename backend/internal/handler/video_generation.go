@@ -195,6 +195,25 @@ func (h *VideoGenerationHandler) UploadSourceFromFile(w http.ResponseWriter, r *
 	writeJSON(w, http.StatusOK, map[string]any{"upload": upload})
 }
 
+func (h *VideoGenerationHandler) UploadSourceFromGeneration(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
+		return
+	}
+	var req uploadVideoSourceFromFileRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Некорректное тело запроса")
+		return
+	}
+	upload, err := h.generation.UploadGenerationSourceFromGeneration(r.Context(), userID, r, req.FileID, true)
+	if err != nil {
+		h.mapError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"upload": upload})
+}
+
 func (h *VideoGenerationHandler) mapError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, service.ErrInsufficientAICredits):

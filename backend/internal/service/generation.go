@@ -730,6 +730,52 @@ func (s *GenerationService) UploadGenerationSourceFromWorkspaceFile(
 	return upload.ToView(), nil
 }
 
+// UploadGenerationSourceFromGeneration creates a source reference to an
+// existing generated object without copying it in object storage.
+func (s *GenerationService) UploadGenerationSourceFromGeneration(
+	ctx context.Context,
+	userID string,
+	r *http.Request,
+	generationID string,
+	forVideo bool,
+) (model.GenerationSourceUploadView, error) {
+	ws, err := s.resolveWorkspace(ctx, userID, r)
+	if err != nil {
+		return model.GenerationSourceUploadView{}, err
+	}
+	gen, err := s.genRepo.GetByID(ctx, strings.TrimSpace(generationID), userID)
+	if errors.Is(err, repository.ErrNotFound) || (err == nil && gen.WorkspaceID != ws.ID) {
+		return model.GenerationSourceUploadView{}, ErrGenerationUploadNotFound
+	}
+	if err != nil {
+		return model.GenerationSourceUploadView{}, err
+	}
+	contentType := strings.Split(strings.TrimSpace(gen.ResultContentType), ";")[0]
+	if forVideo {
+		if !strings.HasPrefix(contentType, "video/") {
+			return model.GenerationSourceUploadView{}, ErrGenerationUploadInvalid
+		}
+		if err := validateReferenceVideoDuration(float64(gen.VideoDurationSeconds)); err != nil {
+			return model.GenerationSourceUploadView{}, err
+		}
+	} else if !strings.HasPrefix(contentType, "image/") {
+		return model.GenerationSourceUploadView{}, ErrGenerationUploadInvalid
+	}
+	if strings.TrimSpace(gen.ResultS3Key) == "" {
+		return model.GenerationSourceUploadView{}, ErrGenerationSourceRead
+	}
+	upload, err := s.uploadRepo.Create(ctx, model.GenerationSourceUpload{
+		UserID: userID, WorkspaceID: ws.ID, S3Key: gen.ResultS3Key, ContentType: contentType,
+	})
+	if err != nil {
+		return model.GenerationSourceUploadView{}, err
+	}
+	if forVideo && gen.VideoDurationSeconds > 0 {
+		return upload.ToViewWithDuration(float64(gen.VideoDurationSeconds)), nil
+	}
+	return upload.ToView(), nil
+}
+
 func (s *GenerationService) storePreparedWorkspaceVideo(
 	ctx context.Context,
 	userID, workspaceID string,
