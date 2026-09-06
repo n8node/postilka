@@ -71,6 +71,20 @@ func (r *WorkspaceFileRepository) GetByS3Key(ctx context.Context, workspaceID, s
 	return f, err
 }
 
+func (r *WorkspaceFileRepository) FindRecentUpload(ctx context.Context, workspaceID string, folderID *string, name string, size int64) (*model.WorkspaceFile, error) {
+	var row pgx.Row
+	if folderID == nil || *folderID == "" {
+		row = r.pool.QueryRow(ctx, `SELECT `+fileColumns+` FROM workspace_files WHERE workspace_id = $1 AND folder_id IS NULL AND name = $2 AND size = $3 AND deleted_at IS NULL AND created_at > now() - interval '10 minutes' ORDER BY created_at DESC LIMIT 1`, workspaceID, name, size)
+	} else {
+		row = r.pool.QueryRow(ctx, `SELECT `+fileColumns+` FROM workspace_files WHERE workspace_id = $1 AND folder_id = $2 AND name = $3 AND size = $4 AND deleted_at IS NULL AND created_at > now() - interval '10 minutes' ORDER BY created_at DESC LIMIT 1`, workspaceID, *folderID, name, size)
+	}
+	f, err := scanFile(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	return f, err
+}
+
 type ListFilesFilter struct {
 	WorkspaceID string
 	FolderID    *string

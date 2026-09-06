@@ -184,6 +184,9 @@ func (s *FileStorageService) UploadInit(ctx context.Context, userID string, r *h
 	if quota != nil && used+req.Size > *quota {
 		return nil, ErrStorageQuota
 	}
+	if existing, err := s.files.FindRecentUpload(ctx, ws.ID, req.FolderID, name, req.Size); err == nil {
+		return &model.FileUploadInitResponse{ExistingFile: existing}, nil
+	}
 	s3Key := BuildWorkspaceS3Key(ws.ID, name, req.FolderID)
 	token, err := s.sessions.Create(UploadSessionClaims{
 		WorkspaceID:          ws.ID,

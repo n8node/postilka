@@ -57,6 +57,7 @@ type FileUploadInitResponse struct {
 	UploadURL          string            `json:"upload_url"`
 	UploadHeaders      map[string]string `json:"upload_headers"`
 	UploadSessionToken string            `json:"upload_session_token"`
+	ExistingFile       *WorkspaceFile    `json:"existing_file,omitempty"`
 }
 
 type FileUploadCompleteRequest struct {

@@ -338,6 +338,7 @@ class UploadQueueManager {
           upload_url: string;
           upload_headers: Record<string, string>;
           upload_session_token: string;
+          existing_file?: WorkspaceFile;
         }>("/files/upload/init", {
           method: "POST",
           body: JSON.stringify({
@@ -349,6 +350,11 @@ class UploadQueueManager {
             media_duration_seconds: mediaDurationSeconds ?? undefined,
           }),
         });
+    if (init.existing_file) {
+      await dbDelete(job.id);
+      for (const fn of this.completeListeners) fn(init.existing_file);
+      return;
+    }
         sessionToken = init.upload_session_token;
         uploadUrl = init.upload_url;
         uploadHeaders = init.upload_headers;
