@@ -77,7 +77,7 @@ func (r *TelegramNotificationQueueRepository) ClaimPending(
 		FROM picked
 		WHERE n.id = picked.id
 		RETURNING n.id, n.kind, n.payload, n.message_text, n.status, n.attempt_count, n.next_attempt_at,
-		          n.last_error, n.last_attempt_at, n.sent_at, n.created_at, n.updated_at
+			       COALESCE(n.last_error, ''), n.last_attempt_at, n.sent_at, n.created_at, n.updated_at
 	`
 	rows, err := r.pool.Query(ctx, q, limit, staleProcessingBefore)
 	if err != nil {

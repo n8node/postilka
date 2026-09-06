@@ -422,7 +422,7 @@ func replacePostRelations(
 		}
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO post_targets (workspace_id, post_id, channel_id, settings, idempotency_key)
-			VALUES ($1, $2, $3, $4, $2::text || ':' || $3::text)
+			VALUES ($1, $2, $3, $4, CONCAT($2::uuid::text, ':', $3::uuid::text))
 		`, workspaceID, postID, target.ChannelID, normalizeJSON(target.Settings)); err != nil {
 			return err
 		}
@@ -767,7 +767,7 @@ func (r *PostRepository) CloneForRecurrence(
 	for _, target := range source.Targets {
 		if _, err := tx.Exec(ctx, `
 			INSERT INTO post_targets (workspace_id, post_id, channel_id, settings, idempotency_key)
-			VALUES ($1, $2, $3, $4, $2::text || ':' || $3::text)
+			VALUES ($1, $2, $3, $4, CONCAT($2::uuid::text, ':', $3::uuid::text))
 		`, source.WorkspaceID, postID, target.ChannelID, normalizeJSON(target.Settings)); err != nil {
 			return nil, err
 		}
