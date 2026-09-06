@@ -235,6 +235,12 @@ func newS3Client(st model.StorageSettings) (*s3.Client, error) {
 	return s3.NewFromConfig(awsCfg, func(o *s3.Options) {
 		o.BaseEndpoint = aws.String(endpoint)
 		o.UsePathStyle = st.PathStyle
+		// Beget/other S3-compatible storage rejects the optional SDK checksum
+		// headers/trailers on multipart UploadPart with
+		// XAmzContentSHA256Mismatch. Calculate checksums only when the service
+		// explicitly requires one, which preserves AWS compatibility while
+		// avoiding unsupported optional checksum negotiation.
+		o.RequestChecksumCalculation = aws.RequestChecksumCalculationWhenRequired
 	}), nil
 }
 
