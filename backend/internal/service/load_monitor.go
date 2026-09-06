@@ -132,6 +132,14 @@ func (s *LoadMonitorService) GetEffectiveRuntimeTuning(ctx context.Context, pool
 	return resolveRuntimeTuning(s.env, cfg, poolMaxConns)
 }
 
+func (s *LoadMonitorService) GetStreamingSettings(ctx context.Context) model.StreamingSettings {
+	cfg, err := s.GetSettings(ctx)
+	if err != nil {
+		return defaultLoadMonitorSettings().Streaming
+	}
+	return cfg.Streaming
+}
+
 func (s *LoadMonitorService) UpdateSettings(ctx context.Context, in model.LoadMonitorSettings) (model.LoadMonitorSettings, error) {
 	if s.settings == nil {
 		return model.LoadMonitorSettings{}, errors.New("settings unavailable")
@@ -304,6 +312,14 @@ func defaultLoadMonitorSettings() model.LoadMonitorSettings {
 		ReportEnabled: true,
 		ReportHour:    loadMonitorDefaultReportHr,
 		ServerRAMGB:   6,
+		Streaming: model.StreamingSettings{
+			ImageMaxMB:             50,
+			VideoMaxMB:             500,
+			ImageUploadConcurrency: 4,
+			VideoUploadConcurrency: 2,
+			MemoryBudgetMB:         256,
+			MultipartPartMB:        8,
+		},
 	}
 }
 
@@ -321,6 +337,42 @@ func normalizeLoadMonitorSettings(cfg *model.LoadMonitorSettings) {
 		cfg.ServerRAMGB = 512
 	}
 	normalizeRuntimeTuningSettings(&cfg.RuntimeTuning)
+	if cfg.Streaming.ImageMaxMB <= 0 {
+		cfg.Streaming.ImageMaxMB = 50
+	}
+	if cfg.Streaming.ImageMaxMB > 200 {
+		cfg.Streaming.ImageMaxMB = 200
+	}
+	if cfg.Streaming.VideoMaxMB <= 0 {
+		cfg.Streaming.VideoMaxMB = 500
+	}
+	if cfg.Streaming.VideoMaxMB > 2048 {
+		cfg.Streaming.VideoMaxMB = 2048
+	}
+	if cfg.Streaming.ImageUploadConcurrency <= 0 {
+		cfg.Streaming.ImageUploadConcurrency = 4
+	}
+	if cfg.Streaming.ImageUploadConcurrency > 32 {
+		cfg.Streaming.ImageUploadConcurrency = 32
+	}
+	if cfg.Streaming.VideoUploadConcurrency <= 0 {
+		cfg.Streaming.VideoUploadConcurrency = 2
+	}
+	if cfg.Streaming.VideoUploadConcurrency > 16 {
+		cfg.Streaming.VideoUploadConcurrency = 16
+	}
+	if cfg.Streaming.MemoryBudgetMB <= 0 {
+		cfg.Streaming.MemoryBudgetMB = 256
+	}
+	if cfg.Streaming.MemoryBudgetMB > 4096 {
+		cfg.Streaming.MemoryBudgetMB = 4096
+	}
+	if cfg.Streaming.MultipartPartMB < 5 {
+		cfg.Streaming.MultipartPartMB = 8
+	}
+	if cfg.Streaming.MultipartPartMB > 64 {
+		cfg.Streaming.MultipartPartMB = 64
+	}
 }
 
 func assessLoadTrend(history []model.LoadDailyAggregate, serverRAMGB int) model.LoadTrendAssessment {

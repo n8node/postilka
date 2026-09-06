@@ -12,6 +12,7 @@ import {
   type LoadMonitorDashboard,
   type LoadMonitorSettings,
   type RuntimeTuningSettings,
+  type StreamingSettings,
   type LoadTrendLevel,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -48,12 +49,24 @@ function defaultRuntimeTuning(): RuntimeTuningSettings {
   return { publish_concurrency: 0, publish_interval_sec: 0, database_max_conns: 0 };
 }
 
+function defaultStreaming(): StreamingSettings {
+  return {
+    image_max_mb: 50,
+    video_max_mb: 500,
+    image_upload_concurrency: 4,
+    video_upload_concurrency: 2,
+    memory_budget_mb: 256,
+    multipart_part_mb: 8,
+  };
+}
+
 function defaultFormSettings(): LoadMonitorSettings {
   return {
     report_enabled: true,
     report_hour: 9,
     server_ram_gb: 6,
     runtime_tuning: defaultRuntimeTuning(),
+    streaming: defaultStreaming(),
   };
 }
 
@@ -79,6 +92,7 @@ export function AdminLoadMonitorPage() {
           ...defaultRuntimeTuning(),
           ...res.settings?.runtime_tuning,
         },
+        streaming: { ...defaultStreaming(), ...res.settings?.streaming },
       });
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Не удалось загрузить мониторинг");
@@ -408,6 +422,38 @@ export function AdminLoadMonitorPage() {
               className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2"
             />
           </label>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-violet-200 bg-violet-50/40 p-5 shadow-sm">
+        <h2 className="text-lg font-semibold text-slate-900">Потоковая обработка AI-файлов</h2>
+        <p className="mt-1 text-sm text-slate-600">
+          Эти лимиты защищают RAM, сеть и S3 при больших изображениях и видео. Изменения применяются новым worker-операциям.
+        </p>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {([
+            ["image_max_mb", "Максимум изображения (МБ)", "Файл больше лимита будет отклонён до загрузки в S3."],
+            ["video_max_mb", "Максимум видео (МБ)", "Жёсткий предел размера видео; защищает диск, сеть и S3."],
+            ["image_upload_concurrency", "Параллельные изображения", "Сколько изображений одновременно скачивается и загружается в S3."],
+            ["video_upload_concurrency", "Параллельные видео", "Видео тяжелее изображений, поэтому обычно держите значение ниже."],
+            ["memory_budget_mb", "Бюджет памяти (МБ)", "Мягкий общий бюджет финализаторов; при нехватке новые операции ждут."],
+            ["multipart_part_mb", "Размер multipart-части (МБ)", "Размер одной части S3 upload. Больше — меньше частей, но больше буфер."],
+          ] as const).map(([key, label, hint]) => (
+            <label key={key} className="block text-sm">
+              <span className="font-medium text-slate-700">{label}</span>
+              <span className="mt-1 block text-xs text-slate-500">{hint}</span>
+              <input
+                type="number"
+                min={1}
+                value={form.streaming?.[key] ?? defaultStreaming()[key]}
+                onChange={(e) => setForm({
+                  ...form,
+                  streaming: { ...defaultStreaming(), ...form.streaming, [key]: Number(e.target.value) },
+                })}
+                className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2"
+              />
+            </label>
+          ))}
         </div>
       </div>
 

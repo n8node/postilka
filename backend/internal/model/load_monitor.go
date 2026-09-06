@@ -9,6 +9,15 @@ type RuntimeTuningSettings struct {
 	DatabaseMaxConns   int `json:"database_max_conns"`
 }
 
+type StreamingSettings struct {
+	ImageMaxMB             int `json:"image_max_mb"`
+	VideoMaxMB             int `json:"video_max_mb"`
+	ImageUploadConcurrency int `json:"image_upload_concurrency"`
+	VideoUploadConcurrency int `json:"video_upload_concurrency"`
+	MemoryBudgetMB         int `json:"memory_budget_mb"`
+	MultipartPartMB        int `json:"multipart_part_mb"`
+}
+
 type RuntimeTuningEffective struct {
 	PublishConcurrency              int  `json:"publish_concurrency"`
 	PublishIntervalSec              int  `json:"publish_interval_sec"`
@@ -33,6 +42,7 @@ type LoadMonitorSettings struct {
 	ReportHour    int                   `json:"report_hour"`
 	ServerRAMGB   int                   `json:"server_ram_gb"`
 	RuntimeTuning RuntimeTuningSettings `json:"runtime_tuning"`
+	Streaming     StreamingSettings     `json:"streaming"`
 }
 
 type LoadSnapshot struct {
@@ -48,12 +58,12 @@ type LoadSnapshot struct {
 }
 
 type LoadDailyAggregate struct {
-	Day              time.Time `json:"day"`
-	AvgPublishBacklog float64  `json:"avg_publish_backlog"`
-	MaxPublishBacklog int      `json:"max_publish_backlog"`
-	AvgGenJobsActive  float64  `json:"avg_gen_jobs_active"`
-	MaxGenJobsActive  int      `json:"max_gen_jobs_active"`
-	AvgDBPoolUtil     float64  `json:"avg_db_pool_util"`
+	Day               time.Time `json:"day"`
+	AvgPublishBacklog float64   `json:"avg_publish_backlog"`
+	MaxPublishBacklog int       `json:"max_publish_backlog"`
+	AvgGenJobsActive  float64   `json:"avg_gen_jobs_active"`
+	MaxGenJobsActive  int       `json:"max_gen_jobs_active"`
+	AvgDBPoolUtil     float64   `json:"avg_db_pool_util"`
 }
 
 type LoadTrendLevel string
@@ -65,10 +75,10 @@ const (
 )
 
 type LoadTrendAssessment struct {
-	Level       LoadTrendLevel `json:"level"`
-	Summary     string         `json:"summary"`
-	RAMAdvice   string         `json:"ram_advice"`
-	Signals     []string       `json:"signals"`
+	Level     LoadTrendLevel `json:"level"`
+	Summary   string         `json:"summary"`
+	RAMAdvice string         `json:"ram_advice"`
+	Signals   []string       `json:"signals"`
 }
 
 type LoadMonitorDashboard struct {

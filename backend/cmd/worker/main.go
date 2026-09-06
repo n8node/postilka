@@ -154,6 +154,7 @@ func main() {
 		kieConfigSvc, kieVideoConfigSvc, genRepo, genJobRepo, genUploadRepo, aiBillingSvc, objectStorage, fileStorageSvc, wsSvc, yandexGptConfigSvc, quotaSvc,
 	)
 	generationSvc.SetNotifier(notificationSvc)
+	generationSvc.SetStreamingSettingsProvider(loadMonitorSvc.GetStreamingSettings)
 	workflowSvc := service.NewWorkflowService(
 		workflowRepo, channelRepo, postSvc, generationSvc, aiBillingSvc, yandexGptConfigSvc, wsSvc, fileStorageSvc, planRepo, quotaSvc, notificationSvc, logger,
 	)

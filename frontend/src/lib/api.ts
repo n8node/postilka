@@ -3235,6 +3235,15 @@ export type RuntimeTuningSettings = {
   database_max_conns: number;
 };
 
+export type StreamingSettings = {
+  image_max_mb: number;
+  video_max_mb: number;
+  image_upload_concurrency: number;
+  video_upload_concurrency: number;
+  memory_budget_mb: number;
+  multipart_part_mb: number;
+};
+
 export type RuntimeTuningEffective = {
   publish_concurrency: number;
   publish_interval_sec: number;
@@ -3259,6 +3268,7 @@ export type LoadMonitorSettings = {
   report_hour: number;
   server_ram_gb: number;
   runtime_tuning: RuntimeTuningSettings;
+  streaming: StreamingSettings;
 };
 
 export type LoadSnapshot = {

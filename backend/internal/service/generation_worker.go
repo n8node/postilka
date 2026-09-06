@@ -262,10 +262,17 @@ func (s *GenerationService) finalizeJob(ctx context.Context, jobID string) error
 
 	_ = s.jobRepo.SetDuration(ctx, job.ID, int(time.Since(job.CreatedAt).Milliseconds()))
 
-	contentType, data, err := downloadGenerationImage(ctx, detail.ResultURL)
+	streaming := s.StreamingSettings(ctx)
+	reservationMB := streaming.MultipartPartMB * 2
+	if err := s.streamingLimiter.acquire(ctx, streaming.ImageUploadConcurrency, streaming.MemoryBudgetMB, reservationMB); err != nil {
+		return err
+	}
+	defer s.streamingLimiter.release(reservationMB)
+	resultPath, contentType, resultSize, err := downloadToTempFile(ctx, detail.ResultURL, int64(streaming.ImageMaxMB)<<20)
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrGenerationFailed, err)
 	}
+	defer os.Remove(resultPath)
 
 	ext := ".jpg"
 	switch contentType {
@@ -276,7 +283,7 @@ func (s *GenerationService) finalizeJob(ctx context.Context, jobID string) error
 	}
 
 	key := generationResultS3Key(job.WorkspaceID, job.Mode, ext)
-	if err := s.objectStore.PutObject(ctx, key, contentType, data); err != nil {
+	if err := s.objectStore.PutObjectFromFile(ctx, key, contentType, resultPath); err != nil {
 		return fmt.Errorf("%w: %v", ErrGenerationFailed, err)
 	}
 
@@ -297,7 +304,7 @@ func (s *GenerationService) finalizeJob(ctx context.Context, jobID string) error
 
 	var registeredFile *model.WorkspaceFile
 	if s.fileStorage != nil {
-		wf, regErr := s.fileStorage.RegisterAIGenerationFile(ctx, job.WorkspaceID, job.UserID, record, int64(len(data)))
+		wf, regErr := s.fileStorage.RegisterAIGenerationFile(ctx, job.WorkspaceID, job.UserID, record, resultSize)
 		if regErr != nil {
 			slog.Warn("register ai generation file", "generation_id", record.ID, "err", regErr)
 		} else if wf != nil {

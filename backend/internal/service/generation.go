@@ -35,19 +35,21 @@ var (
 const generationModeFilter = "filter"
 
 type GenerationService struct {
-	kieConfig      *KieConfigService
-	kieVideoConfig *KieVideoConfigService
-	genRepo        *repository.AIGenerationRepository
-	jobRepo        *repository.AIGenerationJobRepository
-	uploadRepo     *repository.GenerationSourceUploadRepository
-	aiBilling      *AIBillingService
-	objectStore    *ObjectStorage
-	fileStorage    *FileStorageService
-	wsSvc          *WorkspaceService
-	yandexGPT      *YandexGptConfigService
-	quota          *QuotaService
-	createGate     *kieCreateGate
-	notify         *NotificationService
+	kieConfig        *KieConfigService
+	kieVideoConfig   *KieVideoConfigService
+	genRepo          *repository.AIGenerationRepository
+	jobRepo          *repository.AIGenerationJobRepository
+	uploadRepo       *repository.GenerationSourceUploadRepository
+	aiBilling        *AIBillingService
+	objectStore      *ObjectStorage
+	fileStorage      *FileStorageService
+	wsSvc            *WorkspaceService
+	yandexGPT        *YandexGptConfigService
+	quota            *QuotaService
+	streaming        func(context.Context) model.StreamingSettings
+	streamingLimiter streamingLimiter
+	createGate       *kieCreateGate
+	notify           *NotificationService
 }
 
 func NewGenerationService(
@@ -67,20 +69,31 @@ func NewGenerationService(
 		kieConfig:      kieConfig,
 		kieVideoConfig: kieVideoConfig,
 		genRepo:        genRepo,
-		jobRepo:     jobRepo,
-		uploadRepo:  uploadRepo,
-		aiBilling:   aiBilling,
-		objectStore: objectStore,
-		fileStorage: fileStorage,
-		wsSvc:       wsSvc,
-		yandexGPT:   yandexGPT,
-		quota:       quota,
-		createGate:  newKieCreateGate(),
+		jobRepo:        jobRepo,
+		uploadRepo:     uploadRepo,
+		aiBilling:      aiBilling,
+		objectStore:    objectStore,
+		fileStorage:    fileStorage,
+		wsSvc:          wsSvc,
+		yandexGPT:      yandexGPT,
+		quota:          quota,
+		createGate:     newKieCreateGate(),
 	}
 }
 
 func (s *GenerationService) SetNotifier(n *NotificationService) {
 	s.notify = n
+}
+
+func (s *GenerationService) SetStreamingSettingsProvider(fn func(context.Context) model.StreamingSettings) {
+	s.streaming = fn
+}
+
+func (s *GenerationService) StreamingSettings(ctx context.Context) model.StreamingSettings {
+	if s.streaming != nil {
+		return s.streaming(ctx)
+	}
+	return model.StreamingSettings{ImageMaxMB: 50, VideoMaxMB: 500, ImageUploadConcurrency: 4, VideoUploadConcurrency: 2, MemoryBudgetMB: 256, MultipartPartMB: 8}
 }
 
 func (s *GenerationService) markJobFailed(ctx context.Context, jobID, msg string) {
@@ -108,8 +121,8 @@ type StartGenerateResult struct {
 }
 
 type GetGenerationJobResult struct {
-	Job      model.AIGenerationJobView
-	Credits  *model.MediaCreditsRemainingView
+	Job     model.AIGenerationJobView
+	Credits *model.MediaCreditsRemainingView
 }
 
 func (s *GenerationService) resolveWorkspace(ctx context.Context, userID string, r *http.Request) (*model.Workspace, error) {
@@ -1233,6 +1246,62 @@ func downloadGenerationImage(ctx context.Context, rawURL string) (contentType st
 	}
 	ct = strings.Split(ct, ";")[0]
 	return ct, raw, nil
+}
+
+func downloadToTempFile(ctx context.Context, rawURL string, maxBytes int64) (path string, contentType string, size int64, err error) {
+	u, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
+		return "", "", 0, fmt.Errorf("invalid download url")
+	}
+	if maxBytes <= 0 {
+		return "", "", 0, fmt.Errorf("invalid download limit")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		return "", "", 0, err
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", "", 0, err
+	}
+	defer res.Body.Close()
+	if res.StatusCode >= 400 {
+		return "", "", 0, fmt.Errorf("download failed with status %d", res.StatusCode)
+	}
+	if res.ContentLength > maxBytes {
+		return "", "", 0, fmt.Errorf("result exceeds configured limit")
+	}
+	f, err := os.CreateTemp("", "postilka-generation-*")
+	if err != nil {
+		return "", "", 0, err
+	}
+	path = f.Name()
+	cleanup := true
+	defer func() {
+		if cleanup {
+			_ = f.Close()
+			_ = os.Remove(path)
+		}
+	}()
+	size, err = io.Copy(f, io.LimitReader(res.Body, maxBytes+1))
+	if err != nil || size > maxBytes {
+		return "", "", 0, fmt.Errorf("result exceeds configured limit")
+	}
+	if _, err := f.Seek(0, 0); err != nil {
+		return "", "", 0, err
+	}
+	buf := make([]byte, 512)
+	n, _ := f.Read(buf)
+	ct := strings.TrimSpace(res.Header.Get("Content-Type"))
+	if ct == "" {
+		ct = http.DetectContentType(buf[:n])
+	}
+	ct = strings.Split(ct, ";")[0]
+	if err := f.Close(); err != nil {
+		return "", "", 0, err
+	}
+	cleanup = false
+	return path, ct, size, nil
 }
 
 func generationResultS3Key(workspaceID, mode, ext string) string {

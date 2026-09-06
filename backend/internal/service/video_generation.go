@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -542,10 +543,17 @@ func (s *GenerationService) finalizeVideoJob(ctx context.Context, jobID string) 
 
 	_ = s.jobRepo.SetDuration(ctx, job.ID, int(time.Since(job.CreatedAt).Milliseconds()))
 
-	contentType, data, err := downloadRemoteFile(ctx, detail.ResultURL, 200<<20)
+	streaming := s.StreamingSettings(ctx)
+	reservationMB := streaming.MultipartPartMB * 2
+	if err := s.streamingLimiter.acquire(ctx, streaming.VideoUploadConcurrency, streaming.MemoryBudgetMB, reservationMB); err != nil {
+		return err
+	}
+	defer s.streamingLimiter.release(reservationMB)
+	videoPath, contentType, videoSize, err := downloadToTempFile(ctx, detail.ResultURL, int64(streaming.VideoMaxMB)<<20)
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrGenerationFailed, err)
 	}
+	defer os.Remove(videoPath)
 
 	ext := ".mp4"
 	if strings.Contains(contentType, "webm") {
@@ -553,12 +561,12 @@ func (s *GenerationService) finalizeVideoJob(ctx context.Context, jobID string) 
 	}
 
 	key := videoGenerationResultS3Key(job.WorkspaceID, ext)
-	if err := s.objectStore.PutObject(ctx, key, contentType, data); err != nil {
+	if err := s.objectStore.PutObjectFromFile(ctx, key, contentType, videoPath); err != nil {
 		return fmt.Errorf("%w: %v", ErrGenerationFailed, err)
 	}
 
 	previewKey := ""
-	if previewData, err := extractVideoPreviewJPEG(data); err != nil {
+	if previewData, err := extractVideoPreviewFromPath(videoPath); err != nil {
 		slog.Warn("video preview extract failed", "job_id", job.ID, "err", err)
 	} else if len(previewData) > 0 {
 		previewKey = videoGenerationPreviewS3Key(job.WorkspaceID)
@@ -593,7 +601,7 @@ func (s *GenerationService) finalizeVideoJob(ctx context.Context, jobID string) 
 
 	var registeredFile *model.WorkspaceFile
 	if s.fileStorage != nil {
-		wf, regErr := s.fileStorage.RegisterAIGenerationFile(ctx, job.WorkspaceID, job.UserID, record, int64(len(data)))
+		wf, regErr := s.fileStorage.RegisterAIGenerationFile(ctx, job.WorkspaceID, job.UserID, record, videoSize)
 		if regErr != nil {
 			slog.Warn("register ai video generation file", "generation_id", record.ID, "err", regErr)
 		} else if wf != nil {
