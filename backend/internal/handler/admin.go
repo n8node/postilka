@@ -25,7 +25,42 @@ type AdminHandler struct {
 	folders       *repository.WorkspaceFolderRepository
 	posts         *repository.PostRepository
 	analytics     *repository.AdminAnalyticsRepository
+	genJobs       *repository.AIGenerationJobRepository
 	objectStorage *service.ObjectStorage
+}
+
+func (h *AdminHandler) SetGenerationJobs(repo *repository.AIGenerationJobRepository) {
+	h.genJobs = repo
+}
+
+func (h *AdminHandler) ListActiveGenerations(w http.ResponseWriter, r *http.Request) {
+	if h.genJobs == nil {
+		writeError(w, http.StatusInternalServerError, "Мониторинг генераций не настроен")
+		return
+	}
+	items, err := h.genJobs.ListActiveForAdmin(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось загрузить текущие генерации")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+}
+
+func (h *AdminHandler) ResetGeneration(w http.ResponseWriter, r *http.Request) {
+	if h.genJobs == nil {
+		writeError(w, http.StatusInternalServerError, "Мониторинг генераций не настроен")
+		return
+	}
+	ok, err := h.genJobs.ResetActiveForAdmin(r.Context(), chi.URLParam(r, "jobID"))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось сбросить генерацию")
+		return
+	}
+	if !ok {
+		writeError(w, http.StatusConflict, "Генерация уже завершена или не найдена")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "reset"})
 }
 
 func NewAdminHandler(

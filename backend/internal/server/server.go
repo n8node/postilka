@@ -240,6 +240,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 
 	genRepo := repository.NewAIGenerationRepository(db.Pool)
 	genJobRepo := repository.NewAIGenerationJobRepository(db.Pool)
+	adminHandler.SetGenerationJobs(genJobRepo)
 	genUploadRepo := repository.NewGenerationSourceUploadRepository(db.Pool)
 	aiBillingSvc := service.NewAIBillingService(quotaSvc, usageRepo, walletRepo, kieSettingsRepo)
 	generationSvc := service.NewGenerationService(
@@ -739,6 +740,8 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Get("/posts/{postID}", adminHandler.GetPost)
 
 				r.Get("/analytics", adminHandler.Analytics)
+				r.Get("/generations/active", adminHandler.ListActiveGenerations)
+				r.Post("/generations/{jobID}/reset", adminHandler.ResetGeneration)
 
 				r.Get("/load-monitor", loadMonitorHandler.GetDashboard)
 				r.Put("/load-monitor/settings", loadMonitorHandler.UpdateSettings)

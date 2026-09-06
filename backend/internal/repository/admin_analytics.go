@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -47,7 +48,7 @@ func (r *AdminAnalyticsRepository) Overview(ctx context.Context, from, to time.T
 		return nil, err
 	}
 
-	_ = r.pool.QueryRow(ctx, `
+	if err := r.pool.QueryRow(ctx, `
 		SELECT
 			COUNT(*),
 			COUNT(*) FILTER (WHERE status = 'succeeded'),
@@ -59,21 +60,27 @@ func (r *AdminAnalyticsRepository) Overview(ctx context.Context, from, to time.T
 	`, from, to).Scan(
 		&out.AIGenerationsTotal, &out.AIGenerationsSucceeded, &out.AIGenerationsFailed,
 		&out.AICreditsSpent, &out.AIWalletCentsSpent,
-	)
+	); err != nil {
+		return nil, fmt.Errorf("admin analytics ai totals: %w", err)
+	}
 
-	_ = r.pool.QueryRow(ctx, `
+	if err := r.pool.QueryRow(ctx, `
 		SELECT COALESCE(SUM(amount_cents), 0)
 		FROM wallet_topups
 		WHERE status = 'paid' AND paid_at >= $1 AND paid_at <= $2
-	`, from, to).Scan(&out.TopupsCents)
+	`, from, to).Scan(&out.TopupsCents); err != nil {
+		return nil, fmt.Errorf("admin analytics topups: %w", err)
+	}
 
-	_ = r.pool.QueryRow(ctx, `
+	if err := r.pool.QueryRow(ctx, `
 		SELECT COALESCE(SUM(amount_cents), 0)
 		FROM plan_checkouts
 		WHERE status = 'paid' AND paid_at >= $1 AND paid_at <= $2
-	`, from, to).Scan(&out.CheckoutsCents)
+	`, from, to).Scan(&out.CheckoutsCents); err != nil {
+		return nil, fmt.Errorf("admin analytics checkouts: %w", err)
+	}
 
-	out.DailyRegistrations, _ = r.dailyCounts(ctx, `
+	if out.DailyRegistrations, err = r.dailyCounts(ctx, `
 		SELECT to_char(d::date, 'YYYY-MM-DD'), COALESCE(c.cnt, 0)
 		FROM generate_series($1::date, $2::date, '1 day') d
 		LEFT JOIN (
@@ -82,11 +89,15 @@ func (r *AdminAnalyticsRepository) Overview(ctx context.Context, from, to time.T
 			GROUP BY 1
 		) c ON c.day = d::date
 		ORDER BY d
-	`, from, to)
+	`, from, to); err != nil {
+		return nil, fmt.Errorf("admin analytics daily registrations: %w", err)
+	}
 
-	out.DailyAIGenerations, _ = r.dailyAI(ctx, from, to)
+	if out.DailyAIGenerations, err = r.dailyAI(ctx, from, to); err != nil {
+		return nil, fmt.Errorf("admin analytics daily ai: %w", err)
+	}
 
-	out.DailyTopups, _ = r.dailyMoney(ctx, `
+	if out.DailyTopups, err = r.dailyMoney(ctx, `
 		SELECT to_char(d::date, 'YYYY-MM-DD'), COALESCE(t.amount, 0), COALESCE(t.cnt, 0)
 		FROM generate_series($1::date, $2::date, '1 day') d
 		LEFT JOIN (
@@ -97,9 +108,11 @@ func (r *AdminAnalyticsRepository) Overview(ctx context.Context, from, to time.T
 			GROUP BY 1
 		) t ON t.day = d::date
 		ORDER BY d
-	`, from, to)
+	`, from, to); err != nil {
+		return nil, fmt.Errorf("admin analytics daily topups: %w", err)
+	}
 
-	out.DailyCheckouts, _ = r.dailyMoney(ctx, `
+	if out.DailyCheckouts, err = r.dailyMoney(ctx, `
 		SELECT to_char(d::date, 'YYYY-MM-DD'), COALESCE(t.amount, 0), COALESCE(t.cnt, 0)
 		FROM generate_series($1::date, $2::date, '1 day') d
 		LEFT JOIN (
@@ -110,9 +123,11 @@ func (r *AdminAnalyticsRepository) Overview(ctx context.Context, from, to time.T
 			GROUP BY 1
 		) t ON t.day = d::date
 		ORDER BY d
-	`, from, to)
+	`, from, to); err != nil {
+		return nil, fmt.Errorf("admin analytics daily checkouts: %w", err)
+	}
 
-	out.DailyNewFiles, _ = r.dailyCounts(ctx, `
+	if out.DailyNewFiles, err = r.dailyCounts(ctx, `
 		SELECT to_char(d::date, 'YYYY-MM-DD'), COALESCE(c.cnt, 0)
 		FROM generate_series($1::date, $2::date, '1 day') d
 		LEFT JOIN (
@@ -121,19 +136,27 @@ func (r *AdminAnalyticsRepository) Overview(ctx context.Context, from, to time.T
 			GROUP BY 1
 		) c ON c.day = d::date
 		ORDER BY d
-	`, from, to)
+	`, from, to); err != nil {
+		return nil, fmt.Errorf("admin analytics daily files: %w", err)
+	}
 
-	out.AIByMode, _ = r.breakdown(ctx, `
+	if out.AIByMode, err = r.breakdown(ctx, `
 		SELECT mode, COUNT(*)::int FROM ai_generation_jobs
 		WHERE status = 'succeeded' AND created_at >= $1 AND created_at <= $2
 		GROUP BY mode ORDER BY COUNT(*) DESC
-	`, from, to)
+	`, from, to); err != nil {
+		return nil, fmt.Errorf("admin analytics ai modes: %w", err)
+	}
 
-	out.ChannelsByProvider, _ = r.breakdownStatic(ctx, `
+	if out.ChannelsByProvider, err = r.breakdownStatic(ctx, `
 		SELECT provider, COUNT(*)::int FROM channels GROUP BY provider ORDER BY COUNT(*) DESC
-	`)
+	`); err != nil {
+		return nil, fmt.Errorf("admin analytics channels: %w", err)
+	}
 
-	out.FilesByType, _ = r.filesByType(ctx)
+	if out.FilesByType, err = r.filesByType(ctx); err != nil {
+		return nil, fmt.Errorf("admin analytics file types: %w", err)
+	}
 
 	return out, nil
 }

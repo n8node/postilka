@@ -61,6 +61,33 @@ type AIGenerationJobView struct {
 	VideoDurationSeconds int               `json:"video_duration_seconds,omitempty"`
 }
 
+type AdminAIGenerationJob struct {
+	ID            string     `json:"id"`
+	UserID        string     `json:"user_id"`
+	UserEmail     string     `json:"user_email"`
+	WorkspaceID   string     `json:"workspace_id"`
+	WorkspaceName string     `json:"workspace_name"`
+	Status        string     `json:"status"`
+	KieState      string     `json:"kie_state"`
+	KieTaskID     string     `json:"kie_task_id"`
+	Progress      int        `json:"progress"`
+	Mode          string     `json:"mode"`
+	Model         string     `json:"model"`
+	Prompt        string     `json:"prompt"`
+	Attempts      int        `json:"attempts"`
+	LastError     string     `json:"last_error"`
+	FailMessage   string     `json:"fail_message"`
+	GenerationID  *string    `json:"generation_id,omitempty"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
+	LastPolledAt  *time.Time `json:"last_polled_at,omitempty"`
+	PollAfter     time.Time  `json:"poll_after"`
+	LeaseOwner    string     `json:"lease_owner"`
+	LeaseUntil    *time.Time `json:"lease_until,omitempty"`
+	Stale         bool       `json:"stale"`
+	StaleReason   string     `json:"stale_reason,omitempty"`
+}
+
 type VideoGenerationPricingView struct {
 	TextToVideo                   int     `json:"text_to_video"`
 	ImageToVideo                  int     `json:"image_to_video"`

@@ -130,6 +130,67 @@ func (r *AIGenerationJobRepository) GetByIDInternal(ctx context.Context, id stri
 	return job, nil
 }
 
+func (r *AIGenerationJobRepository) ListActiveForAdmin(ctx context.Context) ([]model.AdminAIGenerationJob, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT j.id, j.user_id, COALESCE(u.email, ''), j.workspace_id, COALESCE(w.name, ''),
+			j.status, COALESCE(j.kie_state, ''), COALESCE(j.kie_task_id, ''), j.progress,
+			COALESCE(j.mode, ''), COALESCE(j.model, ''), COALESCE(j.prompt, ''), j.attempts,
+			COALESCE(j.last_error, ''), COALESCE(j.fail_message, ''), j.generation_id,
+			j.created_at, j.updated_at, j.last_polled_at, j.poll_after, COALESCE(j.lease_owner, ''), j.lease_until
+		FROM ai_generation_jobs j
+		LEFT JOIN users u ON u.id = j.user_id
+		LEFT JOIN workspaces w ON w.id = j.workspace_id
+		WHERE j.status IN ('preparing', 'waiting', 'queuing', 'generating')
+		ORDER BY j.created_at ASC, j.id
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]model.AdminAIGenerationJob, 0)
+	for rows.Next() {
+		var item model.AdminAIGenerationJob
+		if err := rows.Scan(&item.ID, &item.UserID, &item.UserEmail, &item.WorkspaceID, &item.WorkspaceName,
+			&item.Status, &item.KieState, &item.KieTaskID, &item.Progress, &item.Mode, &item.Model, &item.Prompt,
+			&item.Attempts, &item.LastError, &item.FailMessage, &item.GenerationID, &item.CreatedAt, &item.UpdatedAt,
+			&item.LastPolledAt, &item.PollAfter, &item.LeaseOwner, &item.LeaseUntil); err != nil {
+			return nil, err
+		}
+		item.Stale, item.StaleReason = adminGenerationStaleness(item)
+		out = append(out, item)
+	}
+	return out, rows.Err()
+}
+
+func (r *AIGenerationJobRepository) ResetActiveForAdmin(ctx context.Context, id string) (bool, error) {
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE ai_generation_jobs
+		SET lease_owner = '', lease_until = NULL, last_error = '',
+			poll_after = now(), updated_at = now(),
+			status = CASE WHEN COALESCE(TRIM(kie_task_id), '') = '' THEN 'preparing' ELSE status END,
+			kie_state = CASE WHEN COALESCE(TRIM(kie_task_id), '') = '' THEN '' ELSE kie_state END
+		WHERE id = $1 AND status IN ('preparing', 'waiting', 'queuing', 'generating')
+	`, id)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() == 1, nil
+}
+
+func adminGenerationStaleness(job model.AdminAIGenerationJob) (bool, string) {
+	now := time.Now()
+	if job.LeaseUntil != nil && job.LeaseUntil.Before(now) {
+		return true, "lease_expired"
+	}
+	if job.PollAfter.Before(now) && now.Sub(job.UpdatedAt) > 5*time.Minute {
+		return true, "poll_overdue"
+	}
+	if now.Sub(job.UpdatedAt) > 30*time.Minute {
+		return true, "worker_not_progressing"
+	}
+	return false, ""
+}
+
 func (r *AIGenerationJobRepository) UpdateProgress(
 	ctx context.Context,
 	id string,

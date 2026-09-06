@@ -237,6 +237,44 @@ export function fetchAdminAnalytics(query?: { from?: string; to?: string }) {
   );
 }
 
+export type AdminActiveGeneration = {
+  id: string;
+  user_id: string;
+  user_email: string;
+  workspace_id: string;
+  workspace_name: string;
+  status: string;
+  kie_state: string;
+  kie_task_id: string;
+  progress: number;
+  mode: string;
+  model: string;
+  prompt: string;
+  attempts: number;
+  last_error: string;
+  fail_message: string;
+  generation_id?: string;
+  created_at: string;
+  updated_at: string;
+  last_polled_at?: string;
+  poll_after: string;
+  lease_owner: string;
+  lease_until?: string;
+  stale: boolean;
+  stale_reason?: string;
+};
+
+export function fetchAdminActiveGenerations() {
+  return apiFetch<{ items: AdminActiveGeneration[] }>("/admin/generations/active");
+}
+
+export function resetAdminGeneration(jobId: string) {
+  return apiFetch<{ status: string }>(
+    `/admin/generations/${encodeURIComponent(jobId)}/reset`,
+    { method: "POST" },
+  );
+}
+
 export type AdminFolderListItem = {
   id: string;
   name: string;
