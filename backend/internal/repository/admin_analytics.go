@@ -210,6 +210,7 @@ func (r *AdminAnalyticsRepository) dailyAI(ctx context.Context, from, to time.Ti
 			SELECT date_trunc('day', created_at)::date AS day,
 				COUNT(*)::int AS total,
 				COUNT(*) FILTER (WHERE status = 'succeeded' OR generation_id IS NOT NULL)::int AS succeeded,
+				COUNT(*) FILTER (WHERE status = 'failed')::int AS failed,
 				COALESCE(SUM(credit_cost) FILTER (WHERE status = 'succeeded' OR generation_id IS NOT NULL), 0)::int AS credits,
 				COALESCE(SUM(quota_credits_used) FILTER (WHERE status = 'succeeded' OR generation_id IS NOT NULL), 0)::int AS quota,
 				COALESCE(SUM(wallet_cents_charged) FILTER (WHERE status = 'succeeded' OR generation_id IS NOT NULL), 0)::int AS wallet

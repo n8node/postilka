@@ -352,6 +352,16 @@ class UploadQueueManager {
         });
     if (init.existing_file) {
       await dbDelete(job.id);
+      const idx = this.jobs.findIndex((j) => j.id === job.id);
+      if (idx >= 0) {
+        this.jobs[idx] = {
+          ...this.jobs[idx],
+          status: "completed",
+          progress: 100,
+          resultFile: init.existing_file,
+        };
+        this.emit();
+      }
       for (const fn of this.completeListeners) fn(init.existing_file);
       return;
     }
