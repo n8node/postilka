@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -14,13 +16,13 @@ import (
 )
 
 var (
-	ErrFileNotFound       = errors.New("file not found")
-	ErrFolderNotFound     = errors.New("folder not found")
-	ErrStorageQuota       = errors.New("storage quota exceeded")
-	ErrFileTooLarge       = errors.New("file too large")
-	ErrEmptyFile          = errors.New("empty file not allowed")
-	ErrInvalidTransfer    = errors.New("invalid transfer")
-	ErrTrashNotEnabled    = errors.New("trash not enabled")
+	ErrFileNotFound    = errors.New("file not found")
+	ErrFolderNotFound  = errors.New("folder not found")
+	ErrStorageQuota    = errors.New("storage quota exceeded")
+	ErrFileTooLarge    = errors.New("file too large")
+	ErrEmptyFile       = errors.New("empty file not allowed")
+	ErrInvalidTransfer = errors.New("invalid transfer")
+	ErrTrashNotEnabled = errors.New("trash not enabled")
 )
 
 type FileStorageService struct {
@@ -183,10 +185,6 @@ func (s *FileStorageService) UploadInit(ctx context.Context, userID string, r *h
 		return nil, ErrStorageQuota
 	}
 	s3Key := BuildWorkspaceS3Key(ws.ID, name, req.FolderID)
-	presigned, err := s.storage.PresignPut(ctx, s3Key, req.MimeType, 15*time.Minute)
-	if err != nil {
-		return nil, err
-	}
 	token, err := s.sessions.Create(UploadSessionClaims{
 		WorkspaceID:          ws.ID,
 		UserID:               userID,
@@ -203,10 +201,32 @@ func (s *FileStorageService) UploadInit(ctx context.Context, userID string, r *h
 		return nil, err
 	}
 	return &model.FileUploadInitResponse{
-		UploadURL:          presigned.URL,
-		UploadHeaders:      presigned.Headers,
+		UploadURL:          "/app/api/v1/files/upload/relay?token=" + url.QueryEscape(token),
+		UploadHeaders:      map[string]string{"Content-Type": req.MimeType},
 		UploadSessionToken: token,
 	}, nil
+}
+
+func (s *FileStorageService) UploadRelay(ctx context.Context, userID string, r *http.Request, token string) error {
+	ws, err := s.resolveWorkspace(ctx, userID, r, model.RoleEditor)
+	if err != nil {
+		return err
+	}
+	claims, err := s.sessions.Verify(token)
+	if err != nil || claims.WorkspaceID != ws.ID || claims.UserID != userID {
+		return ErrForbidden
+	}
+	if r.ContentLength > claims.Size {
+		return ErrFileTooLarge
+	}
+	data, err := io.ReadAll(io.LimitReader(r.Body, claims.Size+1))
+	if err != nil {
+		return err
+	}
+	if int64(len(data)) != claims.Size {
+		return fmt.Errorf("upload size mismatch")
+	}
+	return s.storage.UploadBytes(ctx, claims.S3Key, claims.MimeType, data)
 }
 
 func (s *FileStorageService) UploadComplete(ctx context.Context, userID string, r *http.Request, token string) (*model.WorkspaceFile, error) {

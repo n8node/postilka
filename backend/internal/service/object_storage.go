@@ -72,6 +72,21 @@ func (o *ObjectStorage) PresignPut(ctx context.Context, s3Key, contentType strin
 	return &PresignedUpload{URL: out.URL, Headers: headers}, nil
 }
 
+func (o *ObjectStorage) UploadBytes(ctx context.Context, s3Key, contentType string, data []byte) error {
+	client, st, err := o.client(ctx)
+	if err != nil {
+		return err
+	}
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	_, err = client.PutObject(ctx, &s3.PutObjectInput{
+		Bucket: aws.String(st.Bucket), Key: aws.String(s3Key),
+		ContentType: aws.String(contentType), Body: bytes.NewReader(data),
+	})
+	return err
+}
+
 func (o *ObjectStorage) PresignGet(ctx context.Context, s3Key string, expires time.Duration, filename string) (string, error) {
 	return o.PresignGetWithOptions(ctx, s3Key, PresignGetOptions{
 		Expires:  expires,

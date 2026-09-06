@@ -24,7 +24,7 @@ func (h *AdminHandler) Analytics(w http.ResponseWriter, r *http.Request) {
 
 func parseAnalyticsRange(r *http.Request) (from, to time.Time) {
 	now := time.Now().UTC()
-	to = time.Date(now.Year(), now.Month(), now.Day(), 23, 59, 59, int(time.Second-time.Nanosecond), time.UTC)
+	to = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC).AddDate(0, 0, 1)
 	from = to.AddDate(0, 0, -29)
 	from = time.Date(from.Year(), from.Month(), from.Day(), 0, 0, 0, 0, time.UTC)
 
@@ -34,8 +34,8 @@ func parseAnalyticsRange(r *http.Request) (from, to time.Time) {
 		}
 	}
 	if raw := strings.TrimSpace(r.URL.Query().Get("to")); raw != "" {
-		if t, ok := parseOptionalDateEnd(raw); ok {
-			to = *t
+		if t, ok := parseOptionalDate(raw); ok {
+			to = t.AddDate(0, 0, 1)
 		}
 	}
 	if from.After(to) {

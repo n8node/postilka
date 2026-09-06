@@ -501,6 +501,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Get("/storage", fileStorageHandler.GetStorage)
 			r.Get("/storage/limits", fileStorageHandler.GetUploadLimits)
 			r.Post("/files/upload/init", fileStorageHandler.UploadInit)
+			r.Put("/files/upload/relay", fileStorageHandler.UploadRelay)
 			r.Post("/files/upload/complete", fileStorageHandler.UploadComplete)
 			r.Get("/files", fileStorageHandler.ListFiles)
 			r.Post("/files/bulk", fileStorageHandler.BulkFiles)

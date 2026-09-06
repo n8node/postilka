@@ -160,7 +160,9 @@ func (s *GenerationService) pollDueJobs(ctx context.Context, owner string, pollG
 				defer func() { <-finalSem }()
 				if err := s.finalizeGenerationJob(context.Background(), jobID); err != nil {
 					slog.Error("finalize generation job", "job_id", jobID, "err", err)
-					_ = s.jobRepo.SetLeaseError(context.Background(), jobID, owner, err.Error())
+					if leaseErr := s.jobRepo.SetFinalizationError(context.Background(), jobID, err.Error()); leaseErr != nil {
+						slog.Error("record generation finalization error", "job_id", jobID, "err", leaseErr)
+					}
 				}
 				_ = s.jobRepo.ReleaseLease(context.Background(), jobID, owner)
 			}(id)

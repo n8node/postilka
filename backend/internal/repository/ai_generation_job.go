@@ -348,9 +348,18 @@ func (r *AIGenerationJobRepository) ReleaseLease(ctx context.Context, id, owner 
 func (r *AIGenerationJobRepository) SetLeaseError(ctx context.Context, id, owner string, message string) error {
 	_, err := r.pool.Exec(ctx, `
 		UPDATE ai_generation_jobs
-		SET last_error = $3, updated_at = now()
+		SET last_error = $3, poll_after = now() + interval '30 seconds', updated_at = now()
 		WHERE id = $1 AND lease_owner = $2
 	`, id, owner, message)
+	return err
+}
+
+func (r *AIGenerationJobRepository) SetFinalizationError(ctx context.Context, id, message string) error {
+	_, err := r.pool.Exec(ctx, `
+		UPDATE ai_generation_jobs
+		SET last_error = $2, poll_after = now() + interval '30 seconds', updated_at = now()
+		WHERE id = $1 AND status IN ('preparing', 'waiting', 'queuing', 'generating')
+	`, id, message)
 	return err
 }
 

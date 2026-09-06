@@ -85,6 +85,19 @@ func (h *FileStorageHandler) UploadComplete(w http.ResponseWriter, r *http.Reque
 	writeJSON(w, http.StatusOK, file)
 }
 
+func (h *FileStorageHandler) UploadRelay(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
+		return
+	}
+	if err := h.files.UploadRelay(r.Context(), userID, r, r.URL.Query().Get("token")); err != nil {
+		writeFileStorageError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "uploaded"})
+}
+
 func (h *FileStorageHandler) ListFiles(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
