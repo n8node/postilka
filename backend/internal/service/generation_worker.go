@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -246,60 +247,72 @@ func (s *GenerationService) finalizeJob(ctx context.Context, jobID string) error
 	if job.Status == model.GenJobStatusFailed {
 		return nil
 	}
-
-	baseURL, apiKey, err := s.kieConfig.ResolveCredentials(ctx)
-	if err != nil {
-		return err
-	}
-	client := ai.NewKieClient(baseURL, apiKey)
-	detail, err := client.GetTask(ctx, job.KieTaskID)
-	if err != nil {
-		return err
-	}
-	if detail.State != "success" || detail.ResultURL == "" {
-		return fmt.Errorf("%w: no result", ErrGenerationFailed)
+	// The result record can be created before a worker restart or a billing
+	// failure. Reuse it instead of downloading and creating a second record.
+	var existing *model.AIGeneration
+	if job.GenerationID == nil {
+		if record, lookupErr := s.genRepo.GetBySourceJobID(ctx, job.ID); lookupErr == nil {
+			existing = &record
+		}
 	}
 
-	_ = s.jobRepo.SetDuration(ctx, job.ID, int(time.Since(job.CreatedAt).Milliseconds()))
+	var record model.AIGeneration
+	var resultSize int64
+	if existing != nil {
+		record = *existing
+	} else {
+		baseURL, apiKey, err := s.kieConfig.ResolveCredentials(ctx)
+		if err != nil {
+			return err
+		}
+		client := ai.NewKieClient(baseURL, apiKey)
+		detail, err := client.GetTask(ctx, job.KieTaskID)
+		if err != nil {
+			return err
+		}
+		if detail.State != "success" || detail.ResultURL == "" {
+			return fmt.Errorf("%w: no result", ErrGenerationFailed)
+		}
 
-	streaming := s.StreamingSettings(ctx)
-	reservationMB := streaming.MultipartPartMB * 2
-	if err := s.streamingLimiter.acquire(ctx, streaming.ImageUploadConcurrency, streaming.MemoryBudgetMB, reservationMB); err != nil {
-		return err
-	}
-	defer s.streamingLimiter.release(reservationMB)
-	resultPath, contentType, resultSize, err := downloadToTempFile(ctx, detail.ResultURL, int64(streaming.ImageMaxMB)<<20)
-	if err != nil {
-		return fmt.Errorf("%w: %v", ErrGenerationFailed, err)
-	}
-	defer os.Remove(resultPath)
+		_ = s.jobRepo.SetDuration(ctx, job.ID, int(time.Since(job.CreatedAt).Milliseconds()))
+		streaming := s.StreamingSettings(ctx)
+		reservationMB := streaming.MultipartPartMB * 2
+		if err := s.streamingLimiter.acquire(ctx, streaming.ImageUploadConcurrency, streaming.MemoryBudgetMB, reservationMB); err != nil {
+			return err
+		}
+		defer s.streamingLimiter.release(reservationMB)
+		resultPath, contentType, size, err := downloadToTempFile(ctx, detail.ResultURL, int64(streaming.ImageMaxMB)<<20)
+		if err != nil {
+			return fmt.Errorf("%w: %v", ErrGenerationFailed, err)
+		}
+		defer os.Remove(resultPath)
+		resultSize = size
 
-	ext := ".jpg"
-	switch contentType {
-	case "image/png":
-		ext = ".png"
-	case "image/webp":
-		ext = ".webp"
-	}
-
-	key := generationResultS3Key(job.WorkspaceID, job.Mode, ext)
-	if err := s.objectStore.PutObjectFromFile(ctx, key, contentType, resultPath); err != nil {
-		return fmt.Errorf("%w: %v", ErrGenerationFailed, err)
-	}
-
-	record, err := s.genRepo.Create(ctx, model.AIGeneration{
-		SourceJobID:       &job.ID,
-		UserID:            job.UserID,
-		WorkspaceID:       job.WorkspaceID,
-		Mode:              job.Mode,
-		Prompt:            job.Prompt,
-		Model:             job.Model,
-		AspectRatio:       job.AspectRatio,
-		ResultS3Key:       key,
-		ResultContentType: contentType,
-	})
-	if err != nil {
-		return err
+		ext := ".jpg"
+		switch contentType {
+		case "image/png":
+			ext = ".png"
+		case "image/webp":
+			ext = ".webp"
+		}
+		key := generationResultS3Key(job.WorkspaceID, job.Mode, ext)
+		if err := s.objectStore.PutObjectFromFile(ctx, key, contentType, resultPath); err != nil {
+			return fmt.Errorf("%w: %v", ErrGenerationFailed, err)
+		}
+		record, err = s.genRepo.Create(ctx, model.AIGeneration{
+			SourceJobID:       &job.ID,
+			UserID:            job.UserID,
+			WorkspaceID:       job.WorkspaceID,
+			Mode:              job.Mode,
+			Prompt:            job.Prompt,
+			Model:             job.Model,
+			AspectRatio:       job.AspectRatio,
+			ResultS3Key:       key,
+			ResultContentType: contentType,
+		})
+		if err != nil {
+			return err
+		}
 	}
 
 	var registeredFile *model.WorkspaceFile
@@ -313,6 +326,9 @@ func (s *GenerationService) finalizeJob(ctx context.Context, jobID string) error
 		}
 	}
 
+	if s.aiBilling == nil {
+		return errors.New("ai billing service is not configured")
+	}
 	debit, err := s.aiBilling.DebitAfterSuccess(ctx, job.WorkspaceID, job.UserID, record.ID, job.CreditCost)
 	if err != nil {
 		return err

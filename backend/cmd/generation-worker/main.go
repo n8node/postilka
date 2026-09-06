@@ -56,23 +56,57 @@ func main() {
 	genRepo := repository.NewAIGenerationRepository(db.Pool)
 	genJobRepo := repository.NewAIGenerationJobRepository(db.Pool)
 	genUploadRepo := repository.NewGenerationSourceUploadRepository(db.Pool)
-	aiBillingSvc := service.NewAIBillingService(nil, nil, nil, kieSettingsRepo)
+	userRepo := repository.NewUserRepository(db.Pool)
+	workspaceRepo := repository.NewWorkspaceRepository(db.Pool)
+	planRepo := repository.NewPlanRepository(db.Pool)
+	subscriptionRepo := repository.NewSubscriptionRepository(db.Pool)
+	usageRepo := repository.NewUsageRepository(db.Pool)
+	walletRepo := repository.NewWalletRepository(db.Pool)
+	channelRepo := repository.NewChannelRepository(db.Pool)
+	workflowRepo := repository.NewWorkflowRepository(db.Pool)
+	quotaSvc := service.NewQuotaService(planRepo, workspaceRepo, subscriptionRepo, usageRepo, channelRepo, workflowRepo)
+	aiBillingSvc := service.NewAIBillingService(quotaSvc, usageRepo, walletRepo, kieSettingsRepo)
 	fileStorageRepo := repository.NewWorkspaceFileRepository(db.Pool)
 	folderStorageRepo := repository.NewWorkspaceFolderRepository(db.Pool)
-	wsRepo := repository.NewWorkspaceRepository(db.Pool)
-	planRepo := repository.NewPlanRepository(db.Pool)
-	wsSvc := service.NewWorkspaceService(wsRepo, planRepo)
+	wsSvc := service.NewWorkspaceService(workspaceRepo, planRepo)
 	uploadFileSettingsRepo := repository.NewUploadFileSettingsRepository(db.Pool)
 	uploadFileSettingsSvc := service.NewUploadFileSettingsService(uploadFileSettingsRepo)
 	uploadSessions := service.NewUploadSessionService(cfg.JWTSecret)
 	fileStorageSvc := service.NewFileStorageService(
-		fileStorageRepo, folderStorageRepo, wsRepo, planRepo, wsSvc, objectStorage, uploadSessions, uploadFileSettingsSvc,
+		fileStorageRepo, folderStorageRepo, workspaceRepo, planRepo, wsSvc, objectStorage, uploadSessions, uploadFileSettingsSvc,
 	)
+
+	// Уведомления должны работать в отдельном generation-worker так же, как в API.
+	notificationRepo := repository.NewNotificationRepository(db.Pool)
+	notificationSvc := service.NewNotificationService(
+		notificationRepo, workspaceRepo, quotaSvc, planRepo, channelRepo, subscriptionRepo,
+		fileStorageRepo, folderStorageRepo, walletRepo, logger,
+	)
+	settingsRepo := repository.NewSettingsRepository(db.Pool)
+	identityRepo := repository.NewUserLoginIdentityRepository(db.Pool)
+	oauthSettingsRepo := repository.NewOAuthSettingsRepository(settingsRepo)
+	telegramProviderSettingsRepo := repository.NewTelegramProviderSettingsRepository(db.Pool)
+	telegramProviderSettingsSvc := service.NewTelegramProviderSettingsService(telegramProviderSettingsRepo)
+	telegramSettingsRepo := repository.NewTelegramSettingsRepository(db.Pool)
+	telegramSettingsSvc := service.NewTelegramSettingsService(telegramSettingsRepo)
+	telegramBotClient := service.NewTelegramBotClient(telegramProviderSettingsSvc, cfg.TelegramLocalProxy)
+	userMessenger := service.NewUserMessengerService(
+		identityRepo, oauthSettingsRepo, telegramSettingsSvc, telegramBotClient, nil, logger,
+	)
+	mailSettingsRepo := repository.NewSMTPSettingsRepository(db.Pool)
+	mailSettingsSvc := service.NewSMTPSettingsService(mailSettingsRepo)
+	mailSvc := service.NewMailService(mailSettingsSvc)
+	emailTemplateRepo := repository.NewEmailTemplateSettingsRepository(db.Pool)
+	emailTemplateSvc := service.NewEmailTemplateSettingsService(emailTemplateRepo)
+	emailSvc := service.NewEmailService(mailSvc, emailTemplateSvc, service.NewEmailRenderer())
+	txEmailSvc := service.NewTransactionalEmailService(emailSvc, userRepo, planRepo, workspaceRepo, cfg, logger)
+	notificationSvc.BindOutbound(userRepo, txEmailSvc, userMessenger, cfg)
 
 	// Сервис генерации
 	generationSvc := service.NewGenerationService(
-		kieConfigSvc, kieVideoConfigSvc, genRepo, genJobRepo, genUploadRepo, aiBillingSvc, objectStorage, fileStorageSvc, wsSvc, yandexGptConfigSvc, nil,
+		kieConfigSvc, kieVideoConfigSvc, genRepo, genJobRepo, genUploadRepo, aiBillingSvc, objectStorage, fileStorageSvc, wsSvc, yandexGptConfigSvc, quotaSvc,
 	)
+	generationSvc.SetNotifier(notificationSvc)
 
 	logger.Info("generation worker started",
 		"version", config.Version,
