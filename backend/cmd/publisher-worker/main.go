@@ -50,9 +50,6 @@ func main() {
 	// Сервисы для тестирования каналов
 	telegramProviderSettingsRepo := repository.NewTelegramProviderSettingsRepository(db.Pool)
 	telegramProviderSettingsSvc := service.NewTelegramProviderSettingsService(telegramProviderSettingsRepo)
-	telegramSettingsRepo := repository.NewTelegramSettingsRepository(db.Pool)
-	telegramSettingsSvc := service.NewTelegramSettingsService(telegramSettingsRepo)
-	telegramQueueRepo := repository.NewTelegramNotificationQueueRepository(db.Pool)
 	telegramBotClient := service.NewTelegramBotClient(telegramProviderSettingsSvc, cfg.TelegramLocalProxy)
 
 	// Сервисы для публикации
@@ -84,7 +81,7 @@ func main() {
 	defer workerCancel()
 
 	// Запуск публикационного цикла
-	go runPublishLoop(workerCtx, logger, publicationSvc, db)
+	go runPublishLoop(workerCtx, logger, publicationSvc, db, cfg.WorkerPublishConcurrency)
 
 	// Запуск метрик если нужно
 	workerMetrics := appmetrics.New()
@@ -110,7 +107,7 @@ func main() {
 	logger.Info("publisher worker stopped")
 }
 
-func runPublishLoop(ctx context.Context, logger *slog.Logger, publicationSvc *service.PublicationService, db *repository.Postgres) {
+func runPublishLoop(ctx context.Context, logger *slog.Logger, publicationSvc *service.PublicationService, db *repository.Postgres, concurrency int) {
 	ticker := time.NewTicker(time.Duration(10) * time.Second)
 	defer ticker.Stop()
 
@@ -123,7 +120,7 @@ func runPublishLoop(ctx context.Context, logger *slog.Logger, publicationSvc *se
 			}
 
 			// Выполняем публикацию по расписанию
-			if err := publicationSvc.ProcessScheduled(ctx); err != nil {
+			if _, err := publicationSvc.ProcessDue(ctx, concurrency); err != nil {
 				logger.Warn("publisher worker scheduled publish failed", "error", err)
 			}
 		case <-ctx.Done():

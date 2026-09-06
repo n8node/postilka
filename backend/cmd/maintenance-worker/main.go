@@ -91,10 +91,6 @@ func main() {
 	workflowSvc.SetWorkflowConfig(cfg)
 
 	// Сервисы для тестирования каналов
-	channelTestSvc := service.NewChannelTestService(
-		channelRepo, nil, nil, nil, nil, wsSvc, nil, nil,
-	)
-
 	logger.Info("maintenance worker started",
 		"version", config.Version,
 	)
@@ -125,16 +121,6 @@ func main() {
 				// Обработка due задач
 				if err := opsDigestSvc.ProcessDue(ctx); err != nil {
 					logger.Warn("ops digest tick failed", "error", err)
-				}
-
-				// Обработка snapshot нагрузки
-				if err := opsDigestSvc.ProcessSnapshotIfDue(ctx); err != nil {
-					logger.Warn("load monitor snapshot failed", "error", err)
-				}
-
-				// Обработка ежедневных отчетов
-				if err := opsDigestSvc.ProcessDailyReport(ctx); err != nil {
-					logger.Warn("load monitor report failed", "error", err)
 				}
 
 				// Обработка бэкапов

@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	"github.com/postilka/postilka/internal/config"
@@ -17,27 +18,53 @@ func main() {
 		"version", config.Version,
 	)
 
-	// Запуск всех новых worker'ов
+	// В production рядом с supervisor находятся готовые worker-бинарники.
+	// Fallback на go run оставлен для запуска из исходников в development.
 	workers := []struct {
-		name string
-		path string
+		name   string
+		binary string
+		source string
 	}{
-		{"generation-worker", "generation-worker"},
-		{"publisher-worker", "publisher-worker"},
-		{"notification-worker", "notification-worker"},
-		{"maintenance-worker", "maintenance-worker"},
-		{"backup-worker", "backup-worker"},
+		{"generation-worker", "generation-worker", "generation-worker"},
+		{"publisher-worker", "publisher-worker", "publisher-worker"},
+		{"notification-worker", "notification-worker", "notification-worker"},
+		{"maintenance-worker", "maintenance-worker", "maintenance-worker"},
+		{"backup-worker", "backup-worker", "backup-worker"},
 	}
 
 	workerProcesses := make([]*exec.Cmd, len(workers))
 
-	// Запуск всех worker'ов
+	baseDir, err := os.Executable()
+	if err != nil {
+		logger.Error("resolve worker directory", "error", err)
+		os.Exit(1)
+	}
+	baseDir = filepath.Dir(baseDir)
+	workingDir, err := os.Getwd()
+	if err != nil {
+		logger.Error("resolve working directory", "error", err)
+		os.Exit(1)
+	}
+	if _, err := os.Stat(filepath.Join(workingDir, "go.mod")); err != nil {
+		if _, backendErr := os.Stat(filepath.Join(workingDir, "backend", "go.mod")); backendErr == nil {
+			workingDir = filepath.Join(workingDir, "backend")
+		}
+	}
+
 	for i, worker := range workers {
-		cmd := exec.Command("go", "run", "./cmd/"+worker.path+"/main.go")
-		cmd.Dir = "."
+		binaryPath := filepath.Join(baseDir, worker.binary)
+		var cmd *exec.Cmd
+		if _, err := os.Stat(binaryPath); err == nil {
+			cmd = exec.Command(binaryPath)
+		} else {
+			cmd = exec.Command("go", "run", "./cmd/"+worker.source+"/main.go")
+			cmd.Dir = workingDir
+		}
 
 		// Передаем переменные окружения
 		cmd.Env = append(os.Environ(), "GOMAXPROCS=1")
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
 
 		if err := cmd.Start(); err != nil {
 			logger.Error("failed to start "+worker.name, "error", err)

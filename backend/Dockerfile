@@ -16,6 +16,11 @@ RUN go mod download
 COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /server ./cmd/server
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /worker ./cmd/worker
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /generation-worker ./cmd/generation-worker
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /publisher-worker ./cmd/publisher-worker
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /notification-worker ./cmd/notification-worker
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /maintenance-worker ./cmd/maintenance-worker
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /backup-worker ./cmd/backup-worker
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /create-superadmin ./cmd/create-superadmin
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /import-trends ./cmd/import-trends
 RUN CGO_ENABLED=0 GOOS=linux GOBIN=/go/bin go install github.com/pressly/goose/v3/cmd/goose@v3.24.1
@@ -34,6 +39,11 @@ RUN sed -i "s|https://dl-cdn.alpinelinux.org/alpine|${ALPINE_MIRROR}|g" /etc/apk
 WORKDIR /app
 COPY --from=builder /server /app/server
 COPY --from=builder /worker /app/worker
+COPY --from=builder /generation-worker /app/generation-worker
+COPY --from=builder /publisher-worker /app/publisher-worker
+COPY --from=builder /notification-worker /app/notification-worker
+COPY --from=builder /maintenance-worker /app/maintenance-worker
+COPY --from=builder /backup-worker /app/backup-worker
 COPY --from=builder /create-superadmin /app/create-superadmin
 COPY --from=builder /import-trends /app/import-trends
 COPY --from=builder /go/bin/goose /usr/local/bin/goose

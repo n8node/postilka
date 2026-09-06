@@ -30,17 +30,27 @@ func main() {
 	defer db.Close()
 
 	// Инициализация необходимых репозиториев и сервисов для генерации
+	encKey := cfg.EncryptionKey
+	if encKey == "" {
+		encKey = cfg.JWTSecret
+	}
+	secretCipher, err := service.NewSecretCipher(encKey)
+	if err != nil {
+		logger.Error("initialize encryption", "error", err)
+		os.Exit(1)
+	}
+
 	storageSettingsRepo := repository.NewStorageSettingsRepository(db.Pool)
 	storageSettingsSvc := service.NewStorageSettingsService(storageSettingsRepo, cfg)
 	objectStorage := service.NewObjectStorage(storageSettingsSvc)
 
 	// Сервисы для AI-генерации
 	kieSettingsRepo := repository.NewKieSettingsRepository(db.Pool)
-	kieConfigSvc := service.NewKieConfigService(kieSettingsRepo, cfg, nil)
+	kieConfigSvc := service.NewKieConfigService(kieSettingsRepo, cfg, secretCipher)
 	kieVideoSettingsRepo := repository.NewKieVideoSettingsRepository(db.Pool)
-	kieVideoConfigSvc := service.NewKieVideoConfigService(kieVideoSettingsRepo, cfg, nil)
+	kieVideoConfigSvc := service.NewKieVideoConfigService(kieVideoSettingsRepo, cfg, secretCipher)
 	yandexGptConfigRepo := repository.NewYandexGptConfigRepository(db.Pool)
-	yandexGptConfigSvc := service.NewYandexGptConfigService(yandexGptConfigRepo, cfg, nil)
+	yandexGptConfigSvc := service.NewYandexGptConfigService(yandexGptConfigRepo, cfg, secretCipher)
 
 	// Сервисы для работы с генерацией
 	genRepo := repository.NewAIGenerationRepository(db.Pool)

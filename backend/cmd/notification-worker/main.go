@@ -42,7 +42,6 @@ func main() {
 	workflowRepo := repository.NewWorkflowRepository(db.Pool)
 
 	// Сервисы для уведомлений
-	wsSvc := service.NewWorkspaceService(workspaceRepo, planRepo)
 	quotaSvc := service.NewQuotaService(planRepo, workspaceRepo, subscriptionRepo, usageRepo, channelRepo, workflowRepo)
 
 	// Сервисы для email
@@ -59,13 +58,12 @@ func main() {
 	telegramProviderSettingsSvc := service.NewTelegramProviderSettingsService(telegramProviderSettingsRepo)
 	telegramSettingsRepo := repository.NewTelegramSettingsRepository(db.Pool)
 	telegramSettingsSvc := service.NewTelegramSettingsService(telegramSettingsRepo)
-	telegramQueueRepo := repository.NewTelegramNotificationQueueRepository(db.Pool)
 	telegramBotClient := service.NewTelegramBotClient(telegramProviderSettingsSvc, cfg.TelegramLocalProxy)
 
 	// Основной сервис уведомлений
 	notificationSvc := service.NewNotificationService(
 		notificationRepo, workspaceRepo, quotaSvc, planRepo, channelRepo, subscriptionRepo,
-		nil, nil, nil, nil, logger,
+		nil, nil, nil, logger,
 	)
 
 	// Сервисы для транзакционных email
