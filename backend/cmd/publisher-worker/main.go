@@ -53,15 +53,39 @@ func main() {
 	// Сервисы для публикации
 	workspaceRepo := repository.NewWorkspaceRepository(db.Pool)
 	planRepo := repository.NewPlanRepository(db.Pool)
+	notificationRepo := repository.NewNotificationRepository(db.Pool)
+	userRepo := repository.NewUserRepository(db.Pool)
+	settingsRepo := repository.NewSettingsRepository(db.Pool)
+	identityRepo := repository.NewUserLoginIdentityRepository(db.Pool)
+	oauthSettingsRepo := repository.NewOAuthSettingsRepository(settingsRepo)
+	telegramSettingsRepo := repository.NewTelegramSettingsRepository(db.Pool)
+	telegramSettingsSvc := service.NewTelegramSettingsService(telegramSettingsRepo)
+	telegramProviderSettingsRepo := repository.NewTelegramProviderSettingsRepository(db.Pool)
+	telegramProviderSettingsSvc := service.NewTelegramProviderSettingsService(telegramProviderSettingsRepo)
+	telegramBotClient := service.NewTelegramBotClient(telegramProviderSettingsSvc, cfg.TelegramLocalProxy)
+	userMessenger := service.NewUserMessengerService(
+		identityRepo, oauthSettingsRepo, telegramSettingsSvc, telegramBotClient, oauth.NewMAXBotClient(), logger,
+	)
+	mailSettingsRepo := repository.NewSMTPSettingsRepository(db.Pool)
+	mailSettingsSvc := service.NewSMTPSettingsService(mailSettingsRepo)
+	mailSvc := service.NewMailService(mailSettingsSvc)
+	emailTemplateSettingsRepo := repository.NewEmailTemplateSettingsRepository(db.Pool)
+	emailTemplateSettingsSvc := service.NewEmailTemplateSettingsService(emailTemplateSettingsRepo)
+	emailRenderer := service.NewEmailRenderer()
+	emailSvc := service.NewEmailService(mailSvc, emailTemplateSettingsSvc, emailRenderer)
+	txEmailSvc := service.NewTransactionalEmailService(emailSvc, userRepo, planRepo, workspaceRepo, cfg, logger)
+	quotaSvc := service.NewQuotaService(planRepo, workspaceRepo, repository.NewSubscriptionRepository(db.Pool), repository.NewUsageRepository(db.Pool), channelRepo, workflowRepo)
+	notificationSvc := service.NewNotificationService(
+		notificationRepo, workspaceRepo, quotaSvc, planRepo, channelRepo, repository.NewSubscriptionRepository(db.Pool),
+		fileStorageRepo, repository.NewWorkspaceFolderRepository(db.Pool), repository.NewWalletRepository(db.Pool), logger,
+	)
+	notificationSvc.BindOutbound(userRepo, txEmailSvc, userMessenger, cfg)
 	wsSvc := service.NewWorkspaceService(workspaceRepo, planRepo)
 	storageSettingsRepo := repository.NewStorageSettingsRepository(db.Pool)
 	storageSettingsSvc := service.NewStorageSettingsService(storageSettingsRepo, cfg)
 	objectStorage := service.NewObjectStorage(storageSettingsSvc)
 
 	// Сервисы для тестирования каналов
-	telegramProviderSettingsRepo := repository.NewTelegramProviderSettingsRepository(db.Pool)
-	telegramProviderSettingsSvc := service.NewTelegramProviderSettingsService(telegramProviderSettingsRepo)
-	telegramBotClient := service.NewTelegramBotClient(telegramProviderSettingsSvc, cfg.TelegramLocalProxy)
 	socialProviderSettingsRepo := repository.NewSocialProviderSettingsRepository(db.Pool)
 	socialProviderSettingsSvc := service.NewSocialProviderSettingsService(socialProviderSettingsRepo)
 	photochkaClient := photochka.NewClient(cfg.PhotochkaAPIBaseURL)
@@ -74,6 +98,7 @@ func main() {
 	publicationSvc := service.NewPublicationService(
 		postRepo, channelRepo, fileStorageRepo, objectStorage, channelTestSvc, telegramBotClient, oauth.NewMAXBotClient(), photochkaClient, nil, nil,
 	)
+	attachPublicationNotifier(publicationSvc, notificationSvc)
 
 	// Сервисы для работы с workflow
 	approvalRepo := repository.NewPostApprovalRepository(db.Pool)
@@ -119,6 +144,14 @@ func main() {
 
 	<-quit
 	logger.Info("publisher worker stopped")
+}
+
+func attachPublicationNotifier(publicationSvc *service.PublicationService, notificationSvc *service.NotificationService) bool {
+	if publicationSvc == nil || notificationSvc == nil {
+		return false
+	}
+	publicationSvc.SetNotifier(notificationSvc)
+	return true
 }
 
 func runPublishLoop(ctx context.Context, logger *slog.Logger, publicationSvc *service.PublicationService, db *repository.Postgres, concurrency int) {
