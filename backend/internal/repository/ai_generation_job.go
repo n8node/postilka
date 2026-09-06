@@ -179,6 +179,9 @@ func (r *AIGenerationJobRepository) ResetActiveForAdmin(ctx context.Context, id 
 
 func adminGenerationStaleness(job model.AdminAIGenerationJob) (bool, string) {
 	now := time.Now()
+	if job.KieState == "success" && job.Status != model.GenJobStatusSucceeded && job.GenerationID == nil {
+		return true, "finalization_pending"
+	}
 	if job.LeaseUntil != nil && job.LeaseUntil.Before(now) {
 		return true, "lease_expired"
 	}

@@ -168,10 +168,6 @@ export async function historyVideoItemToUpload(
   item: VideoGenerationHistoryItem,
 ): Promise<VideoGenerationUpload> {
   const duration = item.videoDurationSeconds;
-  const durationError = referenceVideoDurationError(duration);
-  if (durationError) {
-    throw new Error(durationError);
-  }
   const upload = await uploadVideoGenerationMediaFromGeneration(item.id);
   return {
     uploadId: upload.id,

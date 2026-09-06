@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -10,7 +11,8 @@ func (h *AdminHandler) Analytics(w http.ResponseWriter, r *http.Request) {
 	from, to := parseAnalyticsRange(r)
 	overview, err := h.analytics.Overview(r.Context(), from, to)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Не удалось загрузить аналитику")
+		slog.Error("admin analytics overview failed", "from", from, "to", to, "error", err)
+		writeError(w, http.StatusInternalServerError, "Не удалось загрузить аналитику: проверьте логи backend")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{

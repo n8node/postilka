@@ -527,76 +527,94 @@ func (s *GenerationService) finalizeVideoJob(ctx context.Context, jobID string) 
 	if s.kieVideoConfig == nil {
 		return ErrVideoGenerationNotConfigured
 	}
-
-	baseURL, apiKey, err := s.kieVideoConfig.ResolveCredentials(ctx)
-	if err != nil {
-		return err
-	}
-	client := ai.NewKieClient(baseURL, apiKey)
-	detail, err := client.GetTask(ctx, job.KieTaskID)
-	if err != nil {
-		return err
-	}
-	if detail.State != "success" || detail.ResultURL == "" {
-		return fmt.Errorf("%w: no result", ErrGenerationFailed)
+	// A previous attempt may have created the generation record and then failed
+	// during file registration or billing. Reuse it instead of inserting a
+	// second row, which violates the source_job_id idempotency constraint.
+	var existing *model.AIGeneration
+	if record, lookupErr := s.genRepo.GetBySourceJobID(ctx, job.ID); lookupErr == nil {
+		existing = &record
 	}
 
-	_ = s.jobRepo.SetDuration(ctx, job.ID, int(time.Since(job.CreatedAt).Milliseconds()))
-
-	streaming := s.StreamingSettings(ctx)
-	reservationMB := streaming.MultipartPartMB * 2
-	if err := s.streamingLimiter.acquire(ctx, streaming.VideoUploadConcurrency, streaming.MemoryBudgetMB, reservationMB); err != nil {
-		return err
-	}
-	defer s.streamingLimiter.release(reservationMB)
-	videoPath, contentType, videoSize, err := downloadToTempFile(ctx, detail.ResultURL, int64(streaming.VideoMaxMB)<<20)
-	if err != nil {
-		return fmt.Errorf("%w: %v", ErrGenerationFailed, err)
-	}
-	defer os.Remove(videoPath)
-
-	ext := ".mp4"
-	if strings.Contains(contentType, "webm") {
-		ext = ".webm"
-	}
-
-	key := videoGenerationResultS3Key(job.WorkspaceID, ext)
-	if err := s.objectStore.PutObjectFromFile(ctx, key, contentType, videoPath); err != nil {
-		return fmt.Errorf("%w: %v", ErrGenerationFailed, err)
-	}
-
-	previewKey := ""
-	if previewData, err := extractVideoPreviewFromPath(videoPath); err != nil {
-		slog.Warn("video preview extract failed", "job_id", job.ID, "err", err)
-	} else if len(previewData) > 0 {
-		previewKey = videoGenerationPreviewS3Key(job.WorkspaceID)
-		if err := s.objectStore.PutObject(ctx, previewKey, "image/jpeg", previewData); err != nil {
-			slog.Warn("video preview upload failed", "job_id", job.ID, "err", err)
-			previewKey = ""
-		}
-	}
-
+	var record model.AIGeneration
+	var videoSize int64
 	settings, _ := s.kieVideoConfig.GetSettings(ctx)
 	kopecks := 5000
 	if settings.KopecksPerMediaCredit > 0 {
 		kopecks = settings.KopecksPerMediaCredit
 	}
+	if existing != nil {
+		record = *existing
+	} else {
 
-	record, err := s.genRepo.Create(ctx, model.AIGeneration{
-		SourceJobID:          &job.ID,
-		UserID:               job.UserID,
-		WorkspaceID:          job.WorkspaceID,
-		Mode:                 job.Mode,
-		Prompt:               job.Prompt,
-		Model:                job.Model,
-		AspectRatio:          job.AspectRatio,
-		ResultS3Key:          key,
-		ResultContentType:    contentType,
-		PreviewS3Key:         previewKey,
-		VideoDurationSeconds: job.VideoDurationSeconds,
-	})
-	if err != nil {
-		return err
+		baseURL, apiKey, err := s.kieVideoConfig.ResolveCredentials(ctx)
+		if err != nil {
+			return err
+		}
+		client := ai.NewKieClient(baseURL, apiKey)
+		detail, err := client.GetTask(ctx, job.KieTaskID)
+		if err != nil {
+			return err
+		}
+		if detail.State != "success" || detail.ResultURL == "" {
+			return fmt.Errorf("%w: no result", ErrGenerationFailed)
+		}
+
+		_ = s.jobRepo.SetDuration(ctx, job.ID, int(time.Since(job.CreatedAt).Milliseconds()))
+
+		streaming := s.StreamingSettings(ctx)
+		reservationMB := streaming.MultipartPartMB * 2
+		if err := s.streamingLimiter.acquire(ctx, streaming.VideoUploadConcurrency, streaming.MemoryBudgetMB, reservationMB); err != nil {
+			return err
+		}
+		defer s.streamingLimiter.release(reservationMB)
+		videoPath, contentType, downloadedSize, err := downloadToTempFile(ctx, detail.ResultURL, int64(streaming.VideoMaxMB)<<20)
+		if err != nil {
+			return fmt.Errorf("%w: %v", ErrGenerationFailed, err)
+		}
+		defer os.Remove(videoPath)
+		videoSize = downloadedSize
+
+		ext := ".mp4"
+		if strings.Contains(contentType, "webm") {
+			ext = ".webm"
+		}
+
+		key := videoGenerationResultS3Key(job.WorkspaceID, ext)
+		if err := s.objectStore.PutObjectFromFile(ctx, key, contentType, videoPath); err != nil {
+			return fmt.Errorf("%w: %v", ErrGenerationFailed, err)
+		}
+
+		previewKey := ""
+		if previewData, err := extractVideoPreviewFromPath(videoPath); err != nil {
+			slog.Warn("video preview extract failed", "job_id", job.ID, "err", err)
+		} else if len(previewData) > 0 {
+			previewKey = videoGenerationPreviewS3Key(job.WorkspaceID)
+			if err := s.objectStore.PutObject(ctx, previewKey, "image/jpeg", previewData); err != nil {
+				slog.Warn("video preview upload failed", "job_id", job.ID, "err", err)
+				previewKey = ""
+			}
+		}
+
+		record, err = s.genRepo.Create(ctx, model.AIGeneration{
+			SourceJobID:          &job.ID,
+			UserID:               job.UserID,
+			WorkspaceID:          job.WorkspaceID,
+			Mode:                 job.Mode,
+			Prompt:               job.Prompt,
+			Model:                job.Model,
+			AspectRatio:          job.AspectRatio,
+			ResultS3Key:          key,
+			ResultContentType:    normalizedGeneratedContentType(contentType, true),
+			PreviewS3Key:         previewKey,
+			VideoDurationSeconds: job.VideoDurationSeconds,
+		})
+		if err != nil {
+			if recovered, lookupErr := s.genRepo.GetBySourceJobID(ctx, job.ID); lookupErr == nil {
+				record = recovered
+			} else {
+				return err
+			}
+		}
 	}
 
 	var registeredFile *model.WorkspaceFile
@@ -626,6 +644,20 @@ func (s *GenerationService) finalizeVideoJob(ctx context.Context, jobID string) 
 		s.notify.MaybeWalletLow(ctx, job.UserID)
 	}
 	return nil
+}
+
+func normalizedGeneratedContentType(contentType string, video bool) string {
+	contentType = strings.ToLower(strings.TrimSpace(strings.Split(contentType, ";")[0]))
+	if video {
+		if strings.HasPrefix(contentType, "video/") {
+			return contentType
+		}
+		return "video/mp4"
+	}
+	if strings.HasPrefix(contentType, "image/") {
+		return contentType
+	}
+	return "image/jpeg"
 }
 
 func videoGenerationResultS3Key(workspaceID, ext string) string {

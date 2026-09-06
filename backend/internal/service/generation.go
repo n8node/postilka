@@ -751,12 +751,15 @@ func (s *GenerationService) UploadGenerationSourceFromGeneration(
 		return model.GenerationSourceUploadView{}, err
 	}
 	contentType := strings.Split(strings.TrimSpace(gen.ResultContentType), ";")[0]
+	contentType = normalizedGeneratedContentTypeFromKey(contentType, gen.ResultS3Key, forVideo)
 	if forVideo {
 		if !strings.HasPrefix(contentType, "video/") {
 			return model.GenerationSourceUploadView{}, ErrGenerationUploadInvalid
 		}
-		if err := validateReferenceVideoDuration(float64(gen.VideoDurationSeconds)); err != nil {
-			return model.GenerationSourceUploadView{}, err
+		if gen.VideoDurationSeconds > 0 {
+			if err := validateReferenceVideoDuration(float64(gen.VideoDurationSeconds)); err != nil {
+				return model.GenerationSourceUploadView{}, err
+			}
 		}
 	} else if !strings.HasPrefix(contentType, "image/") {
 		return model.GenerationSourceUploadView{}, ErrGenerationUploadInvalid
@@ -774,6 +777,28 @@ func (s *GenerationService) UploadGenerationSourceFromGeneration(
 		return upload.ToViewWithDuration(float64(gen.VideoDurationSeconds)), nil
 	}
 	return upload.ToView(), nil
+}
+
+func normalizedGeneratedContentTypeFromKey(contentType, key string, forVideo bool) string {
+	contentType = strings.ToLower(strings.TrimSpace(strings.Split(contentType, ";")[0]))
+	if (forVideo && strings.HasPrefix(contentType, "video/")) || (!forVideo && strings.HasPrefix(contentType, "image/")) {
+		return contentType
+	}
+	lowerKey := strings.ToLower(key)
+	if forVideo {
+		if strings.HasSuffix(lowerKey, ".webm") {
+			return "video/webm"
+		}
+		return "video/mp4"
+	}
+	switch {
+	case strings.HasSuffix(lowerKey, ".png"):
+		return "image/png"
+	case strings.HasSuffix(lowerKey, ".webp"):
+		return "image/webp"
+	default:
+		return "image/jpeg"
+	}
 }
 
 func (s *GenerationService) storePreparedWorkspaceVideo(
