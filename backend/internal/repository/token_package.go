@@ -294,3 +294,42 @@ func (r *WalletRepository) DeductPurchasedCredits(ctx context.Context, userID st
 	}
 	return nil
 }
+
+func (r *WalletRepository) DeductPurchasedCreditsOnce(ctx context.Context, userID, generationID string, amount int) error {
+	if amount <= 0 {
+		return nil
+	}
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	inserted, err := tx.Exec(ctx, `
+		INSERT INTO ai_generation_purchased_debits (generation_id, user_id, credits)
+		VALUES ($1, $2, $3) ON CONFLICT (generation_id) DO NOTHING
+	`, generationID, userID, amount)
+	if err != nil {
+		return err
+	}
+	if inserted.RowsAffected() == 0 {
+		return tx.Commit(ctx)
+	}
+	tag, err := tx.Exec(ctx, `
+		UPDATE users SET purchased_media_credits_remaining = purchased_media_credits_remaining - $2, updated_at = now()
+		WHERE id = $1 AND purchased_media_credits_remaining >= $2
+	`, userID, amount)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() != 1 {
+		return ErrNotFound
+	}
+	var remaining int
+	if err := tx.QueryRow(ctx, `SELECT purchased_media_credits_remaining FROM users WHERE id = $1`, userID).Scan(&remaining); err != nil {
+		return err
+	}
+	if remaining < 0 {
+		return ErrNotFound
+	}
+	return tx.Commit(ctx)
+}

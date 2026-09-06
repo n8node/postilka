@@ -281,6 +281,7 @@ func (s *GenerationService) finalizeJob(ctx context.Context, jobID string) error
 	}
 
 	record, err := s.genRepo.Create(ctx, model.AIGeneration{
+		SourceJobID:       &job.ID,
 		UserID:            job.UserID,
 		WorkspaceID:       job.WorkspaceID,
 		Mode:              job.Mode,

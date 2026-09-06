@@ -25,11 +25,16 @@ func (r *AIGenerationRepository) Create(ctx context.Context, g model.AIGeneratio
 		g.ID = uuid.NewString()
 	}
 	cols, argCount, includePreview := r.generationInsertSpec(ctx)
+	conflict := ""
+	if r.columns.sourceJobID {
+		conflict = " ON CONFLICT (source_job_id) WHERE source_job_id IS NOT NULL DO UPDATE SET source_job_id = EXCLUDED.source_job_id"
+	}
 	query := fmt.Sprintf(`
 		INSERT INTO ai_generations (%s)
 		VALUES (%s)
-		RETURNING created_at
-	`, cols, generationInsertPlaceholders(argCount))
+		%s
+		RETURNING id, created_at
+	`, cols, generationInsertPlaceholders(argCount), conflict)
 
 	args := []any{
 		g.ID, g.UserID, g.WorkspaceID, g.Mode, g.Prompt, g.Model, g.AspectRatio,
@@ -41,8 +46,27 @@ func (r *AIGenerationRepository) Create(ctx context.Context, g model.AIGeneratio
 	if includePreview {
 		args = append(args, emptyStringToNull(g.PreviewS3Key))
 	}
+	if r.columns.sourceJobID {
+		args = append(args, g.SourceJobID)
+	}
 
-	err := r.pool.QueryRow(ctx, query, args...).Scan(&g.CreatedAt)
+	err := r.pool.QueryRow(ctx, query, args...).Scan(&g.ID, &g.CreatedAt)
+	return g, err
+}
+
+func (r *AIGenerationRepository) GetBySourceJobID(ctx context.Context, jobID string) (model.AIGeneration, error) {
+	var g model.AIGeneration
+	err := r.pool.QueryRow(ctx, fmt.Sprintf(`
+		SELECT %s, source_job_id
+		FROM ai_generations
+		WHERE source_job_id = $1
+	`, r.generationSelectColumns(ctx)), jobID).Scan(
+		&g.ID, &g.UserID, &g.WorkspaceID, &g.Mode, &g.Prompt, &g.Model, &g.AspectRatio,
+		&g.ResultS3Key, &g.ResultContentType, &g.VideoDurationSeconds, &g.PreviewS3Key, &g.CreatedAt, &g.SourceJobID,
+	)
+	if err == pgx.ErrNoRows {
+		return model.AIGeneration{}, ErrNotFound
+	}
 	return g, err
 }
 

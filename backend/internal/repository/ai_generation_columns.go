@@ -12,12 +12,14 @@ type aiGenerationColumnFlags struct {
 	once          sync.Once
 	videoDuration bool
 	previewS3Key  bool
+	sourceJobID   bool
 }
 
 func (f *aiGenerationColumnFlags) load(ctx context.Context, pool *pgxpool.Pool) {
 	f.once.Do(func() {
 		f.videoDuration = pgColumnExists(ctx, pool, "ai_generations", "video_duration_seconds")
 		f.previewS3Key = pgColumnExists(ctx, pool, "ai_generations", "preview_s3_key")
+		f.sourceJobID = pgColumnExists(ctx, pool, "ai_generations", "source_job_id")
 	})
 }
 
@@ -63,6 +65,10 @@ func (r *AIGenerationRepository) generationInsertSpec(ctx context.Context) (cols
 	includePreview = r.columns.previewS3Key
 	if includePreview {
 		cols += `, preview_s3_key`
+		argCount++
+	}
+	if r.columns.sourceJobID {
+		cols += `, source_job_id`
 		argCount++
 	}
 	cols += `, created_at`

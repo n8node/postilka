@@ -204,6 +204,49 @@ func (r *WalletRepository) Debit(ctx context.Context, userID string, amountCents
 	return tx.Commit(ctx)
 }
 
+func (r *WalletRepository) DebitOnce(ctx context.Context, userID string, amountCents int64, entryType, refType, refID, description string) error {
+	if amountCents <= 0 {
+		return nil
+	}
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	var balance int64
+	if err := tx.QueryRow(ctx, `SELECT wallet_balance_cents FROM users WHERE id = $1 FOR UPDATE`, userID).Scan(&balance); err != nil {
+		return err
+	}
+	var exists bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM wallet_ledger WHERE reference_type = $1 AND reference_id = $2::uuid AND entry_type = $3)`, refType, refID, entryType).Scan(&exists); err != nil {
+		return err
+	}
+	if exists {
+		return tx.Commit(ctx)
+	}
+	if balance < amountCents {
+		return ErrInsufficientWallet
+	}
+	if _, err := tx.Exec(ctx, `UPDATE users SET wallet_balance_cents = wallet_balance_cents - $2, updated_at = NOW() WHERE id = $1`, userID, amountCents); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO wallet_ledger (user_id, amount_cents, entry_type, reference_type, reference_id, description) VALUES ($1, $2, $3, NULLIF($4, ''), NULLIF($5, '')::uuid, $6) ON CONFLICT (reference_type, reference_id, entry_type) WHERE reference_type = 'ai_generation' AND reference_id IS NOT NULL DO NOTHING`, userID, -amountCents, entryType, refType, refID, description); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (r *WalletRepository) HasLedgerReference(ctx context.Context, refType, refID, entryType string) (bool, error) {
+	var exists bool
+	err := r.pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM wallet_ledger
+			WHERE reference_type = $1 AND reference_id = $2::uuid AND entry_type = $3
+		)
+	`, refType, refID, entryType).Scan(&exists)
+	return exists, err
+}
+
 func (r *WalletRepository) ListLedger(ctx context.Context, userID string, limit int) ([]model.WalletLedgerEntry, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20

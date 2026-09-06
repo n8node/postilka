@@ -14,10 +14,10 @@ var (
 )
 
 type AIBillingService struct {
-	quota    *QuotaService
-	usage    *repository.UsageRepository
-	wallet   *repository.WalletRepository
-	kie      *repository.KieSettingsRepository
+	quota  *QuotaService
+	usage  *repository.UsageRepository
+	wallet *repository.WalletRepository
+	kie    *repository.KieSettingsRepository
 }
 
 func NewAIBillingService(
@@ -36,9 +36,9 @@ type aiDebitResult struct {
 }
 
 type AIDebitOutcome struct {
-	WalletCentsCharged     int
-	QuotaCreditsUsed       int
-	PurchasedCreditsUsed   int
+	WalletCentsCharged   int
+	QuotaCreditsUsed     int
+	PurchasedCreditsUsed int
 }
 
 func (s *AIBillingService) kopecksPerCredit(ctx context.Context) (int, error) {
@@ -164,12 +164,12 @@ func (s *AIBillingService) debitWithKopecks(ctx context.Context, workspaceID, us
 	periodStart := s.quota.periodStartForWorkspace(ctx, workspaceID, assignedAt)
 
 	if quotaUsed > 0 {
-		if err := s.usage.Record(ctx, workspaceID, "ai_media_credits", quotaUsed, periodStart); err != nil {
+		if err := s.usage.RecordAIGeneration(ctx, workspaceID, generationID, "ai_media_credits", quotaUsed, periodStart); err != nil {
 			return aiDebitResult{}, err
 		}
 	}
 	if purchasedUsed > 0 {
-		if err := s.wallet.DeductPurchasedCredits(ctx, userID, purchasedUsed); err != nil {
+		if err := s.wallet.DeductPurchasedCreditsOnce(ctx, userID, generationID, purchasedUsed); err != nil {
 			return aiDebitResult{}, err
 		}
 	}
@@ -192,7 +192,7 @@ func (s *AIBillingService) debitWithKopecks(ctx context.Context, workspaceID, us
 		if kopecks%100 != 0 {
 			desc = fmt.Sprintf("AI-генерация (%d кред. × %.2f ₽)", walletCredits, float64(kopecks)/100)
 		}
-		if err := s.wallet.Debit(ctx, userID, walletCents, "ai_media_overage", "ai_generation", generationID, desc); err != nil {
+		if err := s.wallet.DebitOnce(ctx, userID, walletCents, "ai_media_overage", "ai_generation", generationID, desc); err != nil {
 			return aiDebitResult{}, err
 		}
 	}

@@ -6,13 +6,14 @@ import (
 )
 
 type AIGeneration struct {
-	ID                string
-	UserID            string
-	WorkspaceID       string
-	Mode              string
-	Prompt            string
-	Model             string
-	AspectRatio       string
+	ID                   string
+	SourceJobID          *string
+	UserID               string
+	WorkspaceID          string
+	Mode                 string
+	Prompt               string
+	Model                string
+	AspectRatio          string
 	ResultS3Key          string
 	ResultContentType    string
 	PreviewS3Key         string
@@ -22,11 +23,11 @@ type AIGeneration struct {
 }
 
 type AIGenerationView struct {
-	ID          string `json:"id"`
-	Mode        string `json:"mode"`
-	Prompt      string `json:"prompt"`
-	Model       string `json:"model"`
-	AspectRatio string `json:"aspect_ratio,omitempty"`
+	ID                   string `json:"id"`
+	Mode                 string `json:"mode"`
+	Prompt               string `json:"prompt"`
+	Model                string `json:"model"`
+	AspectRatio          string `json:"aspect_ratio,omitempty"`
 	ImageURL             string `json:"image_url"`
 	VideoURL             string `json:"video_url,omitempty"`
 	ThumbURL             string `json:"thumb_url,omitempty"`

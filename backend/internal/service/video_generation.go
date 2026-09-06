@@ -223,12 +223,12 @@ func (s *GenerationService) GetVideoPricing(ctx context.Context, userID string, 
 		CreditsPerExtraReferenceImage: settings.CreditsPerExtraReferenceImage,
 		FreeReferenceImages:           model.KieVideoFreeReferenceImages,
 		DefaultDurationText:           settings.DefaultDurationForMode(model.KieVideoModeTextToVideo),
-		DefaultDurationImage:      settings.DefaultDurationForMode(model.KieVideoModeImageToVideo),
-		DefaultDurationReference:  settings.DefaultDurationForMode(model.KieVideoModeReferenceToVideo),
-		MediaCreditPriceRub:       priceRub,
-		TextToVideo:               settings.CreditCostForVideo(model.KieVideoModeTextToVideo, settings.DefaultDurationForMode(model.KieVideoModeTextToVideo)),
-		ImageToVideo:              settings.CreditCostForVideo(model.KieVideoModeImageToVideo, settings.DefaultDurationForMode(model.KieVideoModeImageToVideo)),
-		ReferenceToVideo:          settings.CreditCostForVideo(model.KieVideoModeReferenceToVideo, settings.DefaultDurationForMode(model.KieVideoModeReferenceToVideo)),
+		DefaultDurationImage:          settings.DefaultDurationForMode(model.KieVideoModeImageToVideo),
+		DefaultDurationReference:      settings.DefaultDurationForMode(model.KieVideoModeReferenceToVideo),
+		MediaCreditPriceRub:           priceRub,
+		TextToVideo:                   settings.CreditCostForVideo(model.KieVideoModeTextToVideo, settings.DefaultDurationForMode(model.KieVideoModeTextToVideo)),
+		ImageToVideo:                  settings.CreditCostForVideo(model.KieVideoModeImageToVideo, settings.DefaultDurationForMode(model.KieVideoModeImageToVideo)),
+		ReferenceToVideo:              settings.CreditCostForVideo(model.KieVideoModeReferenceToVideo, settings.DefaultDurationForMode(model.KieVideoModeReferenceToVideo)),
 	}
 	credits, err := s.aiBilling.GetMediaCreditsRemaining(ctx, ws.ID, userID)
 	if err == nil {
@@ -575,6 +575,7 @@ func (s *GenerationService) finalizeVideoJob(ctx context.Context, jobID string) 
 	}
 
 	record, err := s.genRepo.Create(ctx, model.AIGeneration{
+		SourceJobID:          &job.ID,
 		UserID:               job.UserID,
 		WorkspaceID:          job.WorkspaceID,
 		Mode:                 job.Mode,
