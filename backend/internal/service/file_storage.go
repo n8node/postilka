@@ -187,7 +187,11 @@ func (s *FileStorageService) UploadInit(ctx context.Context, userID string, r *h
 	if existing, err := s.files.FindRecentUpload(ctx, ws.ID, req.FolderID, name, req.Size); err == nil {
 		return &model.FileUploadInitResponse{ExistingFile: existing}, nil
 	}
+	clientUploadID := strings.TrimSpace(req.ClientUploadID)
 	s3Key := BuildWorkspaceS3Key(ws.ID, name, req.FolderID)
+	if clientUploadID != "" {
+		s3Key = BuildWorkspaceUploadS3Key(ws.ID, name, clientUploadID, req.FolderID)
+	}
 	token, err := s.sessions.Create(UploadSessionClaims{
 		WorkspaceID:          ws.ID,
 		UserID:               userID,

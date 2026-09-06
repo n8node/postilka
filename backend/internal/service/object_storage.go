@@ -298,6 +298,18 @@ func BuildWorkspaceS3Key(workspaceID, fileName string, folderID *string) string 
 	return fmt.Sprintf("workspaces/%s/files/%d-%s", workspaceID, ts, safe)
 }
 
+func BuildWorkspaceUploadS3Key(workspaceID, fileName, clientUploadID string, folderID *string) string {
+	safe := buildSafeFileName(fileName)
+	id := buildSafeFileName(clientUploadID)
+	if id == "" {
+		return BuildWorkspaceS3Key(workspaceID, fileName, folderID)
+	}
+	if folderID != nil && *folderID != "" {
+		return fmt.Sprintf("workspaces/%s/files/%s/upload-%s-%s", workspaceID, *folderID, id, safe)
+	}
+	return fmt.Sprintf("workspaces/%s/files/upload-%s-%s", workspaceID, id, safe)
+}
+
 func buildSafeFileName(fileName string) string {
 	ext := ""
 	if i := strings.LastIndex(fileName, "."); i > 0 && i < len(fileName)-1 {
