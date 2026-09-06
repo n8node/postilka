@@ -215,7 +215,9 @@ func (r *PostRepository) GetByID(ctx context.Context, postID string) (*model.Pos
 func (r *PostRepository) loadRelations(ctx context.Context, post *model.Post) error {
 	targetRows, err := r.pool.Query(ctx, `
 		SELECT id, channel_id, status, settings, COALESCE(provider_post_id, ''),
-		       COALESCE(last_error, ''), attempts, last_attempt_at, next_attempt_at, published_at
+		       COALESCE(provider_request_id, ''), COALESCE(idempotency_key, post_id::text || ':' || channel_id::text),
+		       COALESCE(last_error, ''), attempts, last_attempt_at, next_attempt_at, published_at,
+		       started_at, finished_at
 		FROM post_targets WHERE post_id = $1 ORDER BY created_at, id
 	`, post.ID)
 	if err != nil {
@@ -225,7 +227,8 @@ func (r *PostRepository) loadRelations(ctx context.Context, post *model.Post) er
 		var target model.PostTarget
 		if err := targetRows.Scan(
 			&target.ID, &target.ChannelID, &target.Status, &target.Settings, &target.ProviderPostID,
-			&target.LastError, &target.Attempts, &target.LastAttemptAt, &target.NextAttemptAt, &target.PublishedAt,
+			&target.ProviderRequestID, &target.IdempotencyKey, &target.LastError, &target.Attempts,
+			&target.LastAttemptAt, &target.NextAttemptAt, &target.PublishedAt, &target.StartedAt, &target.FinishedAt,
 		); err != nil {
 			targetRows.Close()
 			return err
@@ -418,8 +421,8 @@ func replacePostRelations(
 			continue
 		}
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO post_targets (workspace_id, post_id, channel_id, settings)
-			VALUES ($1, $2, $3, $4)
+			INSERT INTO post_targets (workspace_id, post_id, channel_id, settings, idempotency_key)
+			VALUES ($1, $2, $3, $4, $2::text || ':' || $3::text)
 		`, workspaceID, postID, target.ChannelID, normalizeJSON(target.Settings)); err != nil {
 			return err
 		}
@@ -533,7 +536,8 @@ func (r *PostRepository) StartTarget(ctx context.Context, targetID string) (bool
 	tag, err := r.pool.Exec(ctx, `
 		UPDATE post_targets
 		SET status = 'publishing', attempts = attempts + 1, last_attempt_at = NOW(),
-		    next_attempt_at = NULL, last_error = NULL, updated_at = NOW()
+		    next_attempt_at = NULL, last_error = NULL, started_at = NOW(), finished_at = NULL,
+		    idempotency_key = post_id::text || ':' || channel_id::text, updated_at = NOW()
 		WHERE id = $1 AND status IN ('pending', 'failed') AND attempts < 5
 		  AND (next_attempt_at IS NULL OR next_attempt_at <= NOW())
 	`, targetID)
@@ -544,16 +548,26 @@ func (r *PostRepository) CompleteTarget(ctx context.Context, targetID, providerP
 	_, err := r.pool.Exec(ctx, `
 		UPDATE post_targets
 		SET status = 'published', provider_post_id = NULLIF($2, ''), published_at = NOW(),
-		    last_error = NULL, next_attempt_at = NULL, updated_at = NOW()
+		    finished_at = NOW(), last_error = NULL, next_attempt_at = NULL, updated_at = NOW()
 		WHERE id = $1 AND status = 'publishing'
 	`, targetID, providerPostID)
+	return err
+}
+
+func (r *PostRepository) MarkDeliveryUnknown(ctx context.Context, targetID, message string) error {
+	_, err := r.pool.Exec(ctx, `
+		UPDATE post_targets
+		SET status = 'delivery_unknown', last_error = $2, finished_at = NOW(),
+		    next_attempt_at = NULL, updated_at = NOW()
+		WHERE id = $1 AND status = 'publishing'
+	`, targetID, message)
 	return err
 }
 
 func (r *PostRepository) FailTarget(ctx context.Context, targetID, message string, retryAt *time.Time) error {
 	_, err := r.pool.Exec(ctx, `
 		UPDATE post_targets
-		SET status = 'failed', last_error = $2, next_attempt_at = $3, updated_at = NOW()
+		SET status = 'failed', last_error = $2, next_attempt_at = $3, finished_at = NOW(), updated_at = NOW()
 		WHERE id = $1 AND status = 'publishing'
 	`, targetID, message, retryAt)
 	return err
@@ -566,7 +580,7 @@ func (r *PostRepository) FinalizePublication(ctx context.Context, postID string,
 	err := r.pool.QueryRow(ctx, `
 		SELECT
 			COUNT(*) FILTER (WHERE status IN ('pending', 'publishing')),
-			COUNT(*) FILTER (WHERE status = 'failed'),
+			COUNT(*) FILTER (WHERE status IN ('failed', 'delivery_unknown')),
 			COUNT(*) FILTER (WHERE status = 'published'),
 			COALESCE(MAX(last_error) FILTER (WHERE status = 'failed'), ''),
 			MIN(next_attempt_at) FILTER (WHERE status = 'failed' AND attempts < 5)
@@ -650,8 +664,8 @@ func (r *PostRepository) CountPublishBacklog(ctx context.Context) (int, error) {
 func (r *PostRepository) ResetStaleTargets(ctx context.Context, postID string) error {
 	_, err := r.pool.Exec(ctx, `
 		UPDATE post_targets
-		SET status = 'failed', last_error = 'Предыдущая попытка публикации была прервана',
-		    next_attempt_at = NOW(), updated_at = NOW()
+		SET status = 'delivery_unknown', last_error = 'Процесс завершился после возможной доставки; требуется проверка у провайдера',
+		    next_attempt_at = NULL, finished_at = NOW(), updated_at = NOW()
 		WHERE post_id = $1 AND status = 'publishing'
 		  AND last_attempt_at < NOW() - INTERVAL '5 minutes'
 	`, postID)
@@ -752,8 +766,8 @@ func (r *PostRepository) CloneForRecurrence(
 
 	for _, target := range source.Targets {
 		if _, err := tx.Exec(ctx, `
-			INSERT INTO post_targets (workspace_id, post_id, channel_id, settings)
-			VALUES ($1, $2, $3, $4)
+			INSERT INTO post_targets (workspace_id, post_id, channel_id, settings, idempotency_key)
+			VALUES ($1, $2, $3, $4, $2::text || ':' || $3::text)
 		`, source.WorkspaceID, postID, target.ChannelID, normalizeJSON(target.Settings)); err != nil {
 			return nil, err
 		}

@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	"github.com/postilka/postilka/internal/config"
+	oauthclient "github.com/postilka/postilka/internal/oauth"
 	"github.com/postilka/postilka/internal/repository"
 	"github.com/postilka/postilka/internal/service"
 )
@@ -91,7 +92,7 @@ func main() {
 	telegramSettingsSvc := service.NewTelegramSettingsService(telegramSettingsRepo)
 	telegramBotClient := service.NewTelegramBotClient(telegramProviderSettingsSvc, cfg.TelegramLocalProxy)
 	userMessenger := service.NewUserMessengerService(
-		identityRepo, oauthSettingsRepo, telegramSettingsSvc, telegramBotClient, nil, logger,
+		identityRepo, oauthSettingsRepo, telegramSettingsSvc, telegramBotClient, oauthclient.NewMAXBotClient(), logger,
 	)
 	mailSettingsRepo := repository.NewSMTPSettingsRepository(db.Pool)
 	mailSettingsSvc := service.NewSMTPSettingsService(mailSettingsRepo)

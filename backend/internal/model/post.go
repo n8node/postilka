@@ -28,11 +28,12 @@ const (
 type PostTargetStatus string
 
 const (
-	PostTargetPending    PostTargetStatus = "pending"
-	PostTargetPublishing PostTargetStatus = "publishing"
-	PostTargetPublished  PostTargetStatus = "published"
-	PostTargetFailed     PostTargetStatus = "failed"
-	PostTargetCanceled   PostTargetStatus = "canceled"
+	PostTargetPending         PostTargetStatus = "pending"
+	PostTargetPublishing      PostTargetStatus = "publishing"
+	PostTargetPublished       PostTargetStatus = "published"
+	PostTargetFailed          PostTargetStatus = "failed"
+	PostTargetDeliveryUnknown PostTargetStatus = "delivery_unknown"
+	PostTargetCanceled        PostTargetStatus = "canceled"
 )
 
 type TelegramMessageEntity struct {
@@ -97,13 +98,13 @@ type TelegramRichMessage struct {
 }
 
 type PostContent struct {
-	Format      string                  `json:"format,omitempty"`
-	Title       string                  `json:"title,omitempty"`
-	Text        string                  `json:"text,omitempty"`
-	ParseMode   string                  `json:"parse_mode,omitempty"`
-	Entities    []TelegramMessageEntity `json:"entities,omitempty"`
+	Format      string                   `json:"format,omitempty"`
+	Title       string                   `json:"title,omitempty"`
+	Text        string                   `json:"text,omitempty"`
+	ParseMode   string                   `json:"parse_mode,omitempty"`
+	Entities    []TelegramMessageEntity  `json:"entities,omitempty"`
 	Buttons     [][]TelegramInlineButton `json:"buttons,omitempty"`
-	RichMessage *TelegramRichMessage    `json:"rich_message,omitempty"`
+	RichMessage *TelegramRichMessage     `json:"rich_message,omitempty"`
 }
 
 type PostLocation struct {
@@ -189,16 +190,16 @@ type TelegramStorySettings struct {
 }
 
 type PostSettings struct {
-	FirstComment            string                  `json:"first_comment,omitempty"`
-	Location                *PostLocation           `json:"location,omitempty"`
-	Link                    *PostLinkSettings       `json:"link,omitempty"`
-	UTM                     *PostUTMSettings        `json:"utm,omitempty"`
-	ApprovalRequired        bool                    `json:"approval_required,omitempty"`
-	ApproverUserIDs         []string                `json:"approver_user_ids,omitempty"`
-	WorkflowID              string                  `json:"workflow_id,omitempty"`
-	WorkflowRunID           string                  `json:"workflow_run_id,omitempty"`
-	WorkflowNodeID          string                  `json:"workflow_node_id,omitempty"`
-	Recurrence              *PostRecurrenceSettings `json:"recurrence,omitempty"`
+	FirstComment            string                   `json:"first_comment,omitempty"`
+	Location                *PostLocation            `json:"location,omitempty"`
+	Link                    *PostLinkSettings        `json:"link,omitempty"`
+	UTM                     *PostUTMSettings         `json:"utm,omitempty"`
+	ApprovalRequired        bool                     `json:"approval_required,omitempty"`
+	ApproverUserIDs         []string                 `json:"approver_user_ids,omitempty"`
+	WorkflowID              string                   `json:"workflow_id,omitempty"`
+	WorkflowRunID           string                   `json:"workflow_run_id,omitempty"`
+	WorkflowNodeID          string                   `json:"workflow_node_id,omitempty"`
+	Recurrence              *PostRecurrenceSettings  `json:"recurrence,omitempty"`
 	TelegramMediaLayout     string                   `json:"telegram_media_layout,omitempty"`
 	TelegramCaptionPosition string                   `json:"telegram_caption_position,omitempty"`
 	TelegramMediaOrder      string                   `json:"telegram_media_order,omitempty"`
@@ -210,16 +211,20 @@ type PostSettings struct {
 }
 
 type PostTarget struct {
-	ID             string           `json:"id"`
-	ChannelID      string           `json:"channel_id"`
-	Status         PostTargetStatus `json:"status"`
-	Settings       json.RawMessage  `json:"settings"`
-	ProviderPostID string           `json:"provider_post_id,omitempty"`
-	LastError      string           `json:"last_error,omitempty"`
-	Attempts       int              `json:"attempts"`
-	LastAttemptAt  *time.Time       `json:"last_attempt_at,omitempty"`
-	NextAttemptAt  *time.Time       `json:"next_attempt_at,omitempty"`
-	PublishedAt    *time.Time       `json:"published_at,omitempty"`
+	ID                string           `json:"id"`
+	ChannelID         string           `json:"channel_id"`
+	Status            PostTargetStatus `json:"status"`
+	Settings          json.RawMessage  `json:"settings"`
+	ProviderPostID    string           `json:"provider_post_id,omitempty"`
+	ProviderRequestID string           `json:"provider_request_id,omitempty"`
+	IdempotencyKey    string           `json:"idempotency_key"`
+	LastError         string           `json:"last_error,omitempty"`
+	Attempts          int              `json:"attempts"`
+	LastAttemptAt     *time.Time       `json:"last_attempt_at,omitempty"`
+	NextAttemptAt     *time.Time       `json:"next_attempt_at,omitempty"`
+	PublishedAt       *time.Time       `json:"published_at,omitempty"`
+	StartedAt         *time.Time       `json:"started_at,omitempty"`
+	FinishedAt        *time.Time       `json:"finished_at,omitempty"`
 }
 
 type PostTargetSettings struct {
@@ -236,23 +241,23 @@ type PostMedia struct {
 }
 
 type Post struct {
-	ID                   string     `json:"id"`
-	WorkspaceID          string     `json:"workspace_id"`
-	CreatedByUserID      string     `json:"created_by_user_id,omitempty"`
-	MissionID            string     `json:"mission_id,omitempty"`
-	Origin               PostOrigin `json:"origin"`
-	PlanManuallyChanged  bool       `json:"plan_manually_changed,omitempty"`
-	Status               PostStatus `json:"status"`
-	Content              PostContent `json:"content"`
-	Settings             PostSettings `json:"settings"`
-	DueAt                *time.Time `json:"due_at,omitempty"`
-	PublishedAt          *time.Time `json:"published_at,omitempty"`
-	LastError            string     `json:"last_error,omitempty"`
-	Targets              []PostTarget `json:"targets"`
-	Media                []PostMedia `json:"media"`
-	CreatedAt            time.Time  `json:"created_at"`
-	UpdatedAt            time.Time  `json:"updated_at"`
-	NeedsRevision        bool       `json:"needs_revision,omitempty"`
+	ID                  string       `json:"id"`
+	WorkspaceID         string       `json:"workspace_id"`
+	CreatedByUserID     string       `json:"created_by_user_id,omitempty"`
+	MissionID           string       `json:"mission_id,omitempty"`
+	Origin              PostOrigin   `json:"origin"`
+	PlanManuallyChanged bool         `json:"plan_manually_changed,omitempty"`
+	Status              PostStatus   `json:"status"`
+	Content             PostContent  `json:"content"`
+	Settings            PostSettings `json:"settings"`
+	DueAt               *time.Time   `json:"due_at,omitempty"`
+	PublishedAt         *time.Time   `json:"published_at,omitempty"`
+	LastError           string       `json:"last_error,omitempty"`
+	Targets             []PostTarget `json:"targets"`
+	Media               []PostMedia  `json:"media"`
+	CreatedAt           time.Time    `json:"created_at"`
+	UpdatedAt           time.Time    `json:"updated_at"`
+	NeedsRevision       bool         `json:"needs_revision,omitempty"`
 }
 
 type PostTargetInput struct {
@@ -261,7 +266,7 @@ type PostTargetInput struct {
 }
 
 type PostMediaInput struct {
-	FileID  string          `json:"file_id"`
+	FileID   string          `json:"file_id"`
 	Settings json.RawMessage `json:"settings,omitempty"`
 }
 

@@ -55,7 +55,7 @@ func NewPublicationService(
 		channelTest: channelTest, telegram: telegram, maxClient: maxClient,
 		photochka: photochkaClient,
 		wordpress: wordpress.NewClient(),
-		quota: quota, shortener: shortener,
+		quota:     quota, shortener: shortener,
 	}
 }
 
@@ -91,48 +91,63 @@ func (s *PublicationService) Publish(ctx context.Context, postID string, allowRe
 
 	var earliestRetry *time.Time
 	var lastPublishErr error
+	var publishMu sync.Mutex
+	var publishWG sync.WaitGroup
 	for _, target := range post.Targets {
 		if target.Status == model.PostTargetPublished || target.Status == model.PostTargetCanceled {
 			continue
 		}
-		started, err := s.posts.StartTarget(ctx, target.ID)
-		if err != nil {
-			return err
-		}
-		if !started {
-			continue
-		}
-
-		providerID, publishErr := s.publishTarget(ctx, post, target)
-		if publishErr == nil {
-			if err := s.posts.CompleteTarget(ctx, target.ID, providerID); err != nil {
-				slog.Warn(
-					"post publish: mark target published failed after delivery",
-					"post_id", postID,
-					"target_id", target.ID,
-					"error", err,
-				)
+		publishWG.Add(1)
+		go func(target model.PostTarget) {
+			defer publishWG.Done()
+			started, err := s.posts.StartTarget(ctx, target.ID)
+			if err != nil {
+				publishMu.Lock()
+				if lastPublishErr == nil {
+					lastPublishErr = err
+				}
+				publishMu.Unlock()
+				return
 			}
-			continue
-		}
-		lastPublishErr = publishErr
-
-		var retryAt *time.Time
-		if allowRetry && target.Attempts+1 < maxPublishAttempts {
-			backoff := 30 * time.Second * time.Duration(1<<min(target.Attempts, 6))
-			if backoff > 30*time.Minute {
-				backoff = 30 * time.Minute
+			if !started {
+				return
 			}
-			next := time.Now().Add(backoff)
-			retryAt = &next
-			if earliestRetry == nil || next.Before(*earliestRetry) {
-				earliestRetry = &next
+			providerID, publishErr := s.publishTarget(ctx, post, target)
+			if publishErr == nil {
+				if err := s.posts.CompleteTarget(ctx, target.ID, providerID); err != nil {
+					_ = s.posts.MarkDeliveryUnknown(ctx, target.ID, err.Error())
+					slog.Warn("post publish: delivery result unknown", "post_id", postID, "target_id", target.ID, "error", err)
+				}
+				return
 			}
-		}
-		if err := s.posts.FailTarget(ctx, target.ID, safePublishError(publishErr), retryAt); err != nil {
-			return err
-		}
+			var retryAt *time.Time
+			if allowRetry && target.Attempts+1 < maxPublishAttempts {
+				backoff := 30 * time.Second * time.Duration(1<<min(target.Attempts, 6))
+				if backoff > 30*time.Minute {
+					backoff = 30 * time.Minute
+				}
+				next := time.Now().Add(backoff)
+				retryAt = &next
+			}
+			if err := s.posts.FailTarget(ctx, target.ID, safePublishError(publishErr), retryAt); err != nil {
+				publishMu.Lock()
+				if lastPublishErr == nil {
+					lastPublishErr = err
+				}
+				publishMu.Unlock()
+				return
+			}
+			publishMu.Lock()
+			if lastPublishErr == nil {
+				lastPublishErr = publishErr
+			}
+			if retryAt != nil && (earliestRetry == nil || retryAt.Before(*earliestRetry)) {
+				earliestRetry = retryAt
+			}
+			publishMu.Unlock()
+		}(target)
 	}
+	publishWG.Wait()
 	if err := s.posts.FinalizePublication(ctx, postID, earliestRetry); err != nil {
 		return err
 	}
