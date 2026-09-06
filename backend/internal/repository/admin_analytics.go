@@ -51,10 +51,10 @@ func (r *AdminAnalyticsRepository) Overview(ctx context.Context, from, to time.T
 	if err := r.pool.QueryRow(ctx, `
 		SELECT
 			COUNT(*),
-			COUNT(*) FILTER (WHERE status = 'succeeded'),
+			COUNT(*) FILTER (WHERE status = 'succeeded' OR generation_id IS NOT NULL),
 			COUNT(*) FILTER (WHERE status = 'failed'),
-			COALESCE(SUM(credit_cost) FILTER (WHERE status = 'succeeded'), 0),
-			COALESCE(SUM(wallet_cents_charged) FILTER (WHERE status = 'succeeded'), 0)
+			COALESCE(SUM(credit_cost) FILTER (WHERE status = 'succeeded' OR generation_id IS NOT NULL), 0),
+			COALESCE(SUM(wallet_cents_charged) FILTER (WHERE status = 'succeeded' OR generation_id IS NOT NULL), 0)
 		FROM ai_generation_jobs
 		WHERE created_at >= $1 AND created_at < $2
 	`, from, to).Scan(
@@ -209,11 +209,10 @@ func (r *AdminAnalyticsRepository) dailyAI(ctx context.Context, from, to time.Ti
 		LEFT JOIN (
 			SELECT date_trunc('day', created_at)::date AS day,
 				COUNT(*)::int AS total,
-				COUNT(*) FILTER (WHERE status = 'succeeded')::int AS succeeded,
-				COUNT(*) FILTER (WHERE status = 'failed')::int AS failed,
-				COALESCE(SUM(credit_cost) FILTER (WHERE status = 'succeeded'), 0)::int AS credits,
-				COALESCE(SUM(quota_credits_used) FILTER (WHERE status = 'succeeded'), 0)::int AS quota,
-				COALESCE(SUM(wallet_cents_charged) FILTER (WHERE status = 'succeeded'), 0)::int AS wallet
+				COUNT(*) FILTER (WHERE status = 'succeeded' OR generation_id IS NOT NULL)::int AS succeeded,
+				COALESCE(SUM(credit_cost) FILTER (WHERE status = 'succeeded' OR generation_id IS NOT NULL), 0)::int AS credits,
+				COALESCE(SUM(quota_credits_used) FILTER (WHERE status = 'succeeded' OR generation_id IS NOT NULL), 0)::int AS quota,
+				COALESCE(SUM(wallet_cents_charged) FILTER (WHERE status = 'succeeded' OR generation_id IS NOT NULL), 0)::int AS wallet
 			FROM ai_generation_jobs
 			WHERE created_at >= $1 AND created_at < $2
 			GROUP BY 1

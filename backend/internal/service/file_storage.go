@@ -288,6 +288,9 @@ func (s *FileStorageService) UploadComplete(ctx context.Context, userID string, 
 	})
 	if err != nil {
 		_ = s.releaseStorage(ctx, ws.ID, claims.Size)
+		if existing, lookupErr := s.files.GetByS3Key(ctx, ws.ID, claims.S3Key); lookupErr == nil {
+			return existing, nil
+		}
 		return nil, err
 	}
 	if s.notify != nil {
