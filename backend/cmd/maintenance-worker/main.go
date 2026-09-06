@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/postilka/postilka/internal/config"
+	"github.com/postilka/postilka/internal/photochka"
 	"github.com/postilka/postilka/internal/repository"
 	"github.com/postilka/postilka/internal/service"
 )
@@ -29,6 +30,15 @@ func main() {
 		os.Exit(1)
 	}
 	defer db.Close()
+	encKey := cfg.EncryptionKey
+	if encKey == "" {
+		encKey = cfg.JWTSecret
+	}
+	secretCipher, err := service.NewSecretCipher(encKey)
+	if err != nil {
+		logger.Error("initialize encryption", "error", err)
+		os.Exit(1)
+	}
 
 	// Инициализация необходимых репозиториев и сервисов для технического обслуживания
 	workspaceRepo := repository.NewWorkspaceRepository(db.Pool)
@@ -58,12 +68,22 @@ func main() {
 	renewalSvc := service.NewRenewalService(subscriptionRepo, planRepo, walletRepo, workspaceRepo, subscriptionSvc, logger)
 
 	// Сервисы для метрик
-	metrikaPlatformConfigSvc := service.NewMetrikaPlatformConfigService(metrikaPlatformConfigRepo, cfg, nil)
-	metrikaSvc := service.NewMetrikaConnectionService(metrikaRepo, wsSvc, metrikaPlatformConfigSvc, nil, cfg, nil)
+	metrikaPlatformConfigSvc := service.NewMetrikaPlatformConfigService(metrikaPlatformConfigRepo, cfg, secretCipher)
+	metrikaSvc := service.NewMetrikaConnectionService(metrikaRepo, wsSvc, metrikaPlatformConfigSvc, secretCipher, cfg, quotaSvc)
+	userRepo := repository.NewUserRepository(db.Pool)
+	telegramProviderSettingsRepo := repository.NewTelegramProviderSettingsRepository(db.Pool)
+	telegramProviderSettingsSvc := service.NewTelegramProviderSettingsService(telegramProviderSettingsRepo)
+	telegramBotClient := service.NewTelegramBotClient(telegramProviderSettingsSvc, cfg.TelegramLocalProxy)
+	socialProviderSettingsRepo := repository.NewSocialProviderSettingsRepository(db.Pool)
+	socialProviderSettingsSvc := service.NewSocialProviderSettingsService(socialProviderSettingsRepo)
+	photochkaClient := photochka.NewClient(cfg.PhotochkaAPIBaseURL)
+	channelTestSvc := service.NewChannelTestService(
+		channelRepo, userRepo, telegramBotClient, nil, socialProviderSettingsSvc, wsSvc, secretCipher, photochkaClient,
+	)
 
 	// Сервисы для аналитики
 	metricsCollector := service.NewMetricsCollectorService(
-		analyticsRepo, linkCodeRepo, postRepo, channelRepo, nil, metrikaSvc, nil, nil, logger,
+		analyticsRepo, linkCodeRepo, postRepo, channelRepo, channelTestSvc, metrikaSvc, telegramBotClient, nil, logger,
 	)
 
 	// Сервисы для бэкапов

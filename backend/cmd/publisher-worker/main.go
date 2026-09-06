@@ -12,6 +12,8 @@ import (
 	"github.com/postilka/postilka/internal/config"
 	"github.com/postilka/postilka/internal/handler"
 	appmetrics "github.com/postilka/postilka/internal/metrics"
+	"github.com/postilka/postilka/internal/oauth"
+	"github.com/postilka/postilka/internal/photochka"
 	"github.com/postilka/postilka/internal/repository"
 	"github.com/postilka/postilka/internal/service"
 )
@@ -32,6 +34,15 @@ func main() {
 		os.Exit(1)
 	}
 	defer db.Close()
+	encKey := cfg.EncryptionKey
+	if encKey == "" {
+		encKey = cfg.JWTSecret
+	}
+	secretCipher, err := service.NewSecretCipher(encKey)
+	if err != nil {
+		logger.Error("initialize encryption", "error", err)
+		os.Exit(1)
+	}
 
 	// Инициализация необходимых репозиториев и сервисов для публикации
 	postRepo := repository.NewPostRepository(db.Pool)
@@ -51,14 +62,17 @@ func main() {
 	telegramProviderSettingsRepo := repository.NewTelegramProviderSettingsRepository(db.Pool)
 	telegramProviderSettingsSvc := service.NewTelegramProviderSettingsService(telegramProviderSettingsRepo)
 	telegramBotClient := service.NewTelegramBotClient(telegramProviderSettingsSvc, cfg.TelegramLocalProxy)
+	socialProviderSettingsRepo := repository.NewSocialProviderSettingsRepository(db.Pool)
+	socialProviderSettingsSvc := service.NewSocialProviderSettingsService(socialProviderSettingsRepo)
+	photochkaClient := photochka.NewClient(cfg.PhotochkaAPIBaseURL)
 
 	// Сервисы для публикации
 	channelTestSvc := service.NewChannelTestService(
-		channelRepo, nil, telegramBotClient, nil, nil, wsSvc, nil, nil,
+		channelRepo, nil, telegramBotClient, nil, socialProviderSettingsSvc, wsSvc, secretCipher, photochkaClient,
 	)
 
 	publicationSvc := service.NewPublicationService(
-		postRepo, channelRepo, fileStorageRepo, objectStorage, channelTestSvc, telegramBotClient, nil, nil, nil, nil,
+		postRepo, channelRepo, fileStorageRepo, objectStorage, channelTestSvc, telegramBotClient, oauth.NewMAXBotClient(), photochkaClient, nil, nil,
 	)
 
 	// Сервисы для работы с workflow
