@@ -45,6 +45,7 @@ type WorkspaceStorageStats struct {
 type FileUploadInitRequest struct {
 	Name                 string  `json:"name"`
 	Size                 int64   `json:"size"`
+	ClientUploadID       string  `json:"client_upload_id"`
 	MimeType             string  `json:"mime_type"`
 	FolderID             *string `json:"folder_id"`
 	MediaDurationSeconds *int    `json:"media_duration_seconds"`

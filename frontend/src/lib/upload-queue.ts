@@ -116,6 +116,7 @@ class UploadQueueManager {
   private jobs: UploadJob[] = [];
   private running = false;
   private cancelled = false;
+  private hydratePromise: Promise<void> | null = null;
 
   subscribe(fn: QueueListener) {
     this.listeners.add(fn);
@@ -183,10 +184,20 @@ class UploadQueueManager {
   }
 
   async hydrate() {
+    if (this.hydratePromise) return this.hydratePromise;
+    this.hydratePromise = this.doHydrate();
+    try {
+      await this.hydratePromise;
+    } finally {
+      this.hydratePromise = null;
+    }
+  }
+
+  private async doHydrate() {
     const stored = this.sortStored(await dbGetAll());
     const active: UploadJob[] = [];
     for (const row of stored) {
-      if (row.status === "uploading") {
+      if (row.status === "uploading" && !this.running) {
         row.status = "pending";
         row.progress = 0;
         row.error = undefined;
@@ -332,6 +343,7 @@ class UploadQueueManager {
           body: JSON.stringify({
             name: job.name,
             size: job.size,
+			client_upload_id: job.id,
             mime_type: job.mimeType,
             folder_id: job.folderId,
             media_duration_seconds: mediaDurationSeconds ?? undefined,

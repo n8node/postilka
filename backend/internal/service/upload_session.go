@@ -12,6 +12,7 @@ type UploadSessionClaims struct {
 	UserID               string  `json:"user_id"`
 	S3Key                string  `json:"s3_key"`
 	Name                 string  `json:"name"`
+	ClientUploadID       string  `json:"client_upload_id,omitempty"`
 	MimeType             string  `json:"mime_type"`
 	Size                 int64   `json:"size"`
 	FolderID             *string `json:"folder_id"`

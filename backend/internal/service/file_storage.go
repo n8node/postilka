@@ -190,6 +190,7 @@ func (s *FileStorageService) UploadInit(ctx context.Context, userID string, r *h
 		UserID:               userID,
 		S3Key:                s3Key,
 		Name:                 name,
+		ClientUploadID:       strings.TrimSpace(req.ClientUploadID),
 		MimeType:             req.MimeType,
 		Size:                 req.Size,
 		FolderID:             req.FolderID,

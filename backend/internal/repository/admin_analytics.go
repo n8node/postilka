@@ -142,7 +142,7 @@ func (r *AdminAnalyticsRepository) Overview(ctx context.Context, from, to time.T
 
 	if out.AIByMode, err = r.breakdown(ctx, `
 		SELECT mode, COUNT(*)::int FROM ai_generation_jobs
-		WHERE status = 'succeeded' AND created_at >= $1 AND created_at <= $2
+		WHERE (status = 'succeeded' OR generation_id IS NOT NULL) AND created_at >= $1 AND created_at < $2
 		GROUP BY mode ORDER BY COUNT(*) DESC
 	`, from, to); err != nil {
 		return nil, fmt.Errorf("admin analytics ai modes: %w", err)

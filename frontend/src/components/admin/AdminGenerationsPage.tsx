@@ -81,7 +81,7 @@ export function AdminGenerationsPage() {
                   <td className="px-4 py-3"><span className={item.stale ? "font-semibold text-amber-700" : "text-slate-700"}>{statusLabel(item)}</span><div className="text-xs text-slate-500">{item.kie_state || "—"} · попыток {item.attempts}</div></td>
                   <td className="px-4 py-3">{item.progress}%</td>
                   <td className="px-4 py-3 whitespace-nowrap">{age(item.created_at)}</td>
-                  <td className="px-4 py-3 text-xs text-slate-500"><div>poll: {item.last_polled_at ? age(item.last_polled_at) + " назад" : "не было"}</div><div>{item.lease_until ? `lease до ${new Date(item.lease_until).toLocaleTimeString("ru-RU")}` : "lease свободен"}</div></td>
+                  <td className="px-4 py-3 text-xs text-slate-500"><div>poll: {item.last_polled_at ? age(item.last_polled_at) + " назад" : "не было"}</div><div>{item.lease_until ? `lease до ${new Date(item.lease_until).toLocaleTimeString("ru-RU")}` : "lease свободен"}</div>{item.last_error ? <div className="mt-1 max-w-xs truncate text-rose-600" title={item.last_error}>{item.last_error}</div> : null}</td>
                   <td className="px-4 py-3 text-right">{item.stale ? <button onClick={() => void remove(item)} className="rounded-md bg-rose-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-rose-700">Удалить</button> : null}</td>
                 </tr>
               ))}
