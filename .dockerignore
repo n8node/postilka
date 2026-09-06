@@ -1,0 +1,17 @@
+.git
+.github
+.env
+.env.*
+backups
+frontend/node_modules
+frontend/.next
+backend/tmp
+backend/bin
+Видео
+Картинки
+_imports
+trends-import
+marketing/voxel-scene/node_modules
+marketing/voxel-scene/dist
+wordpress/wp-content/uploads
+*.log
