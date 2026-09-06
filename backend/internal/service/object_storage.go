@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
-	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/postilka/postilka/internal/model"
 )
@@ -218,11 +217,11 @@ func (o *ObjectStorage) PutObjectFromFile(ctx context.Context, s3Key, contentTyp
 	if contentType == "" {
 		contentType = "application/octet-stream"
 	}
-	uploader := manager.NewUploader(client, func(u *manager.Uploader) {
-		u.PartSize = 8 << 20
-		u.Concurrency = 2
-	})
-	_, err = uploader.Upload(ctx, &s3.PutObjectInput{
+	// Use one PutObject request instead of the SDK multipart uploader. Beget's
+	// S3-compatible endpoint rejects multipart UploadPart checksum validation
+	// with XAmzContentSHA256Mismatch. Backup archives are built locally first,
+	// so a single request is deterministic and avoids that incompatibility.
+	_, err = client.PutObject(ctx, &s3.PutObjectInput{
 		Bucket:        aws.String(st.Bucket),
 		Key:           aws.String(s3Key),
 		Body:          f,
