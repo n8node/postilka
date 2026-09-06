@@ -74,6 +74,10 @@ func main() {
 	}
 	secretCipher, _ := service.NewSecretCipher(encKey)
 	userRepo := repository.NewUserRepository(db.Pool)
+	settingsRepo := repository.NewSettingsRepository(db.Pool)
+	identityRepo := repository.NewUserLoginIdentityRepository(db.Pool)
+	oauthSettingsRepo := repository.NewOAuthSettingsRepository(settingsRepo)
+	txEmailSvc := service.NewTransactionalEmailService(emailSvc, userRepo, planRepo, wsRepo, cfg, logger)
 	telegramProviderSettingsRepo := repository.NewTelegramProviderSettingsRepository(db.Pool)
 	telegramProviderSettingsSvc := service.NewTelegramProviderSettingsService(telegramProviderSettingsRepo)
 	socialProviderSettingsRepo := repository.NewSocialProviderSettingsRepository(db.Pool)
@@ -129,13 +133,16 @@ func main() {
 	telegramQueueRepo := repository.NewTelegramNotificationQueueRepository(db.Pool)
 	telegramSettingsSvc := service.NewTelegramSettingsService(telegramSettingsRepo)
 	telegramSvc := service.NewTelegramService(telegramSettingsSvc, telegramQueueRepo, cfg.TelegramLocalProxy, logger)
+	userMessenger := service.NewUserMessengerService(
+		identityRepo, oauthSettingsRepo, telegramSettingsSvc, telegramBotClient, oauthclient.NewMAXBotClient(), logger,
+	)
+	notificationSvc.BindOutbound(userRepo, txEmailSvc, userMessenger, cfg)
 	opsStateRepo := repository.NewOpsStateRepository(db.Pool)
 	opsDigestSvc := service.NewOpsDigestService(
 		telegramSvc, telegramSettingsSvc, opsStateRepo, postRepo, db, mailSvc, smtpSettingsSvc,
 		storageSettingsSvc, kieConfigSvc, kieVideoConfigSvc, yandexGptConfigSvc, socialProviderSettingsSvc,
 		telegramProviderSettingsSvc, telegramBotClient, secretCipher, photochkaClient, logger,
 	)
-	settingsRepo := repository.NewSettingsRepository(db.Pool)
 	loadMonitorRepo := repository.NewLoadMonitorRepository(db.Pool)
 	loadMonitorSvc := service.NewLoadMonitorService(
 		settingsRepo, loadMonitorRepo, postRepo, opsStateRepo, db, telegramSvc, telegramSettingsSvc, cfg, logger,
