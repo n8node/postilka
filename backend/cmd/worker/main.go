@@ -73,6 +73,16 @@ func main() {
 
 		workerProcesses[i] = cmd
 		logger.Info("started "+worker.name, "pid", cmd.Process.Pid)
+		go func(name string, child *exec.Cmd) {
+			if err := child.Wait(); err != nil {
+				logger.Error(name+" exited", "error", err)
+			} else {
+				logger.Error(name + " exited unexpectedly")
+			}
+			// The supervisor must not stay healthy while a required worker is dead.
+			// Docker restart policy will bring the complete worker group back up.
+			os.Exit(1)
+		}(worker.name, cmd)
 	}
 
 	// Ожидание сигналов завершения
@@ -93,7 +103,7 @@ func main() {
 	// Ожидание завершения процессов
 	for _, cmd := range workerProcesses {
 		if cmd != nil {
-			cmd.Wait()
+			// Child processes are waited for by the monitoring goroutines above.
 		}
 	}
 

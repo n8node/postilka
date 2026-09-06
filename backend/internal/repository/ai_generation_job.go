@@ -191,7 +191,10 @@ func (r *AIGenerationJobRepository) TryClaimKieSubmit(ctx context.Context, id st
 		WHERE id = $1
 		  AND status = $2
 		  AND COALESCE(TRIM(kie_task_id), '') = ''
-		  AND COALESCE(kie_state, '') <> 'submitting'
+		  AND (
+			COALESCE(kie_state, '') <> 'submitting'
+			OR updated_at < now() - interval '3 minutes'
+		  )
 	`, id, model.GenJobStatusPreparing)
 	if err != nil {
 		return false, err

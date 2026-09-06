@@ -1128,6 +1128,9 @@ func (s *GenerationService) submitPendingJob(ctx context.Context, jobID string, 
 	p = ai.NextJobProgress(jobRow.Progress, model.GenJobStatusWaiting, "waiting", 0, startedAt)
 	set, err := s.jobRepo.SetKieTask(ctx, jobID, taskID, model.GenJobStatusWaiting, p)
 	if err != nil {
+		// KIE уже принял задачу, но запись task ID не сохранилась. Освобождаем
+		// claim, чтобы job не завис навсегда в состоянии submitting.
+		_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
 		return err
 	}
 	if !set {
