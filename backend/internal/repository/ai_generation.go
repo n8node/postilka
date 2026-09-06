@@ -27,7 +27,10 @@ func (r *AIGenerationRepository) Create(ctx context.Context, g model.AIGeneratio
 	cols, argCount, includePreview := r.generationInsertSpec(ctx)
 	conflict := ""
 	if r.columns.sourceJobID {
-		conflict = " ON CONFLICT (source_job_id) WHERE source_job_id IS NOT NULL DO UPDATE SET source_job_id = EXCLUDED.source_job_id"
+		// The source-job index is repaired by migration 092. Do not reference a
+		// partial-index predicate here: older production databases may still have
+		// the index missing while the application is being upgraded.
+		conflict = " ON CONFLICT (source_job_id) DO UPDATE SET source_job_id = EXCLUDED.source_job_id"
 	}
 	query := fmt.Sprintf(`
 		INSERT INTO ai_generations (%s)

@@ -27,7 +27,9 @@ func (r *UsageRepository) RecordAIGeneration(ctx context.Context, workspaceID, g
 	_, err := r.pool.Exec(ctx, `
 		INSERT INTO usage_events (workspace_id, metric, quantity, period_start, reference_type, reference_id)
 		VALUES ($1, $2, $3, $4::date, 'ai_generation', $5)
-		ON CONFLICT (reference_type, reference_id, metric) DO NOTHING
+		ON CONFLICT (reference_type, reference_id, metric)
+		WHERE reference_type = 'ai_generation' AND reference_id IS NOT NULL
+		DO NOTHING
 	`, workspaceID, metric, quantity, periodStart.Format("2006-01-02"), generationID)
 	return err
 }
