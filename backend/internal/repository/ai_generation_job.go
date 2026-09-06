@@ -177,6 +177,20 @@ func (r *AIGenerationJobRepository) ResetActiveForAdmin(ctx context.Context, id 
 	return tag.RowsAffected() == 1, nil
 }
 
+// DeleteActiveForAdmin removes only a non-terminal job. Generated records and
+// user files are intentionally preserved; this operation is for clearing a
+// phantom queue entry, not for deleting user media.
+func (r *AIGenerationJobRepository) DeleteActiveForAdmin(ctx context.Context, id string) (bool, error) {
+	tag, err := r.pool.Exec(ctx, `
+		DELETE FROM ai_generation_jobs
+		WHERE id = $1 AND status IN ('preparing', 'waiting', 'queuing', 'generating')
+	`, id)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() == 1, nil
+}
+
 func adminGenerationStaleness(job model.AdminAIGenerationJob) (bool, string) {
 	now := time.Now()
 	if job.KieState == "success" && job.Status != model.GenJobStatusSucceeded && job.GenerationID == nil {

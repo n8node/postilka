@@ -63,6 +63,23 @@ func (h *AdminHandler) ResetGeneration(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "reset"})
 }
 
+func (h *AdminHandler) DeleteGeneration(w http.ResponseWriter, r *http.Request) {
+	if h.genJobs == nil {
+		writeError(w, http.StatusInternalServerError, "Мониторинг генераций не настроен")
+		return
+	}
+	ok, err := h.genJobs.DeleteActiveForAdmin(r.Context(), chi.URLParam(r, "jobID"))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось удалить зависшую генерацию")
+		return
+	}
+	if !ok {
+		writeError(w, http.StatusConflict, "Генерация уже завершена или не найдена")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
 func NewAdminHandler(
 	users *repository.UserRepository,
 	adminUsers *service.AdminUserService,

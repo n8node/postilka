@@ -275,6 +275,13 @@ export function resetAdminGeneration(jobId: string) {
   );
 }
 
+export function deleteAdminGeneration(jobId: string) {
+  return apiFetch<{ status: string }>(
+    `/admin/generations/${encodeURIComponent(jobId)}`,
+    { method: "DELETE" },
+  );
+}
+
 export type AdminFolderListItem = {
   id: string;
   name: string;

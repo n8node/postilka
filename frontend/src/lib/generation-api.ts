@@ -306,10 +306,20 @@ export async function uploadGenerationMediaFromWorkspace(
 }
 
 export async function uploadGenerationMediaFromGeneration(generationId: string) {
-  return apiFetch<GenerationUploadResult>("/generation/upload/from-generation", {
+  const res = await apiFetch<{ upload: RawGenerationUpload }>("/generation/upload/from-generation", {
     method: "POST",
     body: JSON.stringify({ generation_id: generationId }),
   });
+  const raw = res.upload ?? {};
+  if (!raw.id) {
+    throw new ApiError(0, "Некорректный ответ сервера при загрузке фото из истории");
+  }
+  return {
+    id: raw.id,
+    url: raw.url ?? "",
+    thumb_url: raw.thumb_url,
+    content_type: raw.content_type ?? "",
+  };
 }
 
 /** Downloads a generated image (auth via cookie) for attaching to sources. */

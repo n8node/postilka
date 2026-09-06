@@ -742,6 +742,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Get("/analytics", adminHandler.Analytics)
 				r.Get("/generations/active", adminHandler.ListActiveGenerations)
 				r.Post("/generations/{jobID}/reset", adminHandler.ResetGeneration)
+				r.Delete("/generations/{jobID}", adminHandler.DeleteGeneration)
 
 				r.Get("/load-monitor", loadMonitorHandler.GetDashboard)
 				r.Put("/load-monitor/settings", loadMonitorHandler.UpdateSettings)

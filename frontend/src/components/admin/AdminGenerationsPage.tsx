@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   ApiError,
+  deleteAdminGeneration,
   fetchAdminActiveGenerations,
-  resetAdminGeneration,
   type AdminActiveGeneration,
 } from "@/lib/api";
 
@@ -43,10 +43,10 @@ export function AdminGenerationsPage() {
     return () => clearInterval(timer);
   }, [load]);
 
-  async function reset(item: AdminActiveGeneration) {
-    if (!window.confirm(`Сбросить генерацию ${item.id}? Она будет возвращена в очередь.`)) return;
+  async function remove(item: AdminActiveGeneration) {
+    if (!window.confirm(`Удалить зависшую генерацию ${item.id}? Готовые файлы пользователя не будут удалены.`)) return;
     try {
-      await resetAdminGeneration(item.id);
+      await deleteAdminGeneration(item.id);
       await load();
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Не удалось сбросить генерацию");
@@ -82,7 +82,7 @@ export function AdminGenerationsPage() {
                   <td className="px-4 py-3">{item.progress}%</td>
                   <td className="px-4 py-3 whitespace-nowrap">{age(item.created_at)}</td>
                   <td className="px-4 py-3 text-xs text-slate-500"><div>poll: {item.last_polled_at ? age(item.last_polled_at) + " назад" : "не было"}</div><div>{item.lease_until ? `lease до ${new Date(item.lease_until).toLocaleTimeString("ru-RU")}` : "lease свободен"}</div></td>
-                  <td className="px-4 py-3 text-right">{item.stale ? <button onClick={() => void reset(item)} className="rounded-md bg-amber-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-amber-700">Сбросить</button> : null}</td>
+                  <td className="px-4 py-3 text-right">{item.stale ? <button onClick={() => void remove(item)} className="rounded-md bg-rose-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-rose-700">Удалить</button> : null}</td>
                 </tr>
               ))}
             </tbody>
