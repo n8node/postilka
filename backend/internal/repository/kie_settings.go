@@ -70,7 +70,7 @@ func (r *KieSettingsRepository) Upsert(ctx context.Context, s model.KieSettings,
 	`, s.APIBaseURL, apiKeyEncrypted, s.ModelTextToImage, s.ModelImageToImage, s.ModelCombine,
 		s.ModelFilter,
 		s.TokenCostTextToImage, s.TokenCostImageToImage, s.TokenCostCombine, s.TokenCostFilter,
-		positiveOrDefault(s.KopecksPerMediaCredit, 5000), positiveRateDefault(s.SubmitRateLimit, 18), positiveRateDefault(s.SubmitRateWindowSec, 10))
+		positiveOrDefault(s.KopecksPerMediaCredit, 5000), positiveOrDefault(s.SubmitRateLimit, 18), positiveOrDefault(s.SubmitRateWindowSec, 10))
 	return err
 }
 
