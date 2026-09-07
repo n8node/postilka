@@ -48,6 +48,17 @@ type TelegramBotClient struct {
 	client           *http.Client
 }
 
+type cancelOnCloseBody struct {
+	io.ReadCloser
+	cancel context.CancelFunc
+}
+
+func (b *cancelOnCloseBody) Close() error {
+	err := b.ReadCloser.Close()
+	b.cancel()
+	return err
+}
+
 func NewTelegramBotClient(providerSettings *TelegramProviderSettingsService, localProxy string) *TelegramBotClient {
 	return &TelegramBotClient{
 		providerSettings: providerSettings,
@@ -219,10 +230,15 @@ func (c *TelegramBotClient) doRequestWithClient(
 		}
 		hopCtx, cancel := context.WithTimeout(ctx, hopTimeout)
 		resp, reqErr := makeRequest(hopCtx, proxyClient)
-		cancel()
 		if reqErr == nil {
+			if resp.Body != nil {
+				resp.Body = &cancelOnCloseBody{ReadCloser: resp.Body, cancel: cancel}
+			} else {
+				cancel()
+			}
 			return resp, nil
 		}
+		cancel()
 		lastErr = fmt.Errorf("proxy %s: %w", maskProxyURLForError(proxyURL), sanitizeTelegramError(reqErr))
 		if !cfg.ProxyAutoFailover || idx == len(proxies)-1 || !isProxyRetryableError(reqErr) {
 			return nil, lastErr
