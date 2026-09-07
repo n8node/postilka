@@ -30,7 +30,9 @@ func mergeChannelAvatar(meta model.ChannelMetadata, avatarURL string) model.Chan
 
 func liveTelegramAvatarURL(ctx context.Context, client *TelegramBotClient, token, chatID string, chat telegramChat) string {
 	if client != nil && strings.TrimSpace(token) != "" && strings.TrimSpace(chatID) != "" {
-		if uri, err := client.ChatPhotoDataURI(ctx, token, chatID); err == nil && strings.TrimSpace(uri) != "" {
+		avatarCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 45*time.Second)
+		defer cancel()
+		if uri, err := client.ChatPhotoDataURI(avatarCtx, token, chatID); err == nil && strings.TrimSpace(uri) != "" {
 			return uri
 		} else if err != nil {
 			slog.Warn("telegram channel avatar fetch failed", "chat_id", chatID, "error", err)
@@ -172,7 +174,7 @@ func (s *ChannelService) fetchTelegramBusinessAvatar(
 	token string,
 	ch *model.Channel,
 ) ([]byte, string, error) {
-	avatarCtx, cancel := context.WithTimeout(ctx, 25*time.Second)
+	avatarCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 45*time.Second)
 	defer cancel()
 
 	userChatID, userID, username := s.enrichTelegramBusinessConnection(avatarCtx, token, ch)
@@ -267,6 +269,8 @@ func (s *ChannelService) FetchAvatar(
 		return nil, "", err
 	}
 	ch := row.Channel
+	avatarCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 45*time.Second)
+	defer cancel()
 	if body, contentType, ok := avatarBytesFromMetadata(ch.Metadata.AvatarURL); ok {
 		return body, contentType, nil
 	}
@@ -299,19 +303,19 @@ func (s *ChannelService) FetchAvatar(
 			}
 			return body, contentType, nil
 		}
-		body, contentType, err := s.botClient.FetchChatPhoto(ctx, token, ch.ChatID)
+		body, contentType, err := s.botClient.FetchChatPhoto(avatarCtx, token, ch.ChatID)
 		if err == nil && len(body) > 0 {
 			meta := mergeChannelAvatar(ch.Metadata, avatarDataURI(body, contentType))
 			_ = s.channels.UpdateChannelMetadata(ctx, ws.ID, ch.ID, meta)
 			return body, contentType, nil
 		}
-		chat, chatErr := s.botClient.GetChat(ctx, token, ch.ChatID)
+		chat, chatErr := s.botClient.GetChat(avatarCtx, token, ch.ChatID)
 		if chatErr == nil {
 			if publicURL := telegramPublicAvatarURL(chat); publicURL != "" {
 				// Forum/supergroup avatars may only be available through the
 				// public t.me fallback. Keep this request on Telegram's proxy
 				// chain too; direct access is blocked in production.
-				if remote, ct, rerr := s.botClient.FetchRemoteAvatar(ctx, publicURL); rerr == nil {
+				if remote, ct, rerr := s.botClient.FetchRemoteAvatar(avatarCtx, publicURL); rerr == nil {
 					return remote, ct, nil
 				}
 			}
