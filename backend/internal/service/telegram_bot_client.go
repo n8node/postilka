@@ -1141,7 +1141,7 @@ func (c *TelegramBotClient) SendRichMessage(
 		return "", err
 	}
 	payload := map[string]any{
-		"chat_id": telegramChatIDParam(chatID),
+		"chat_id":      telegramChatIDParam(chatID),
 		"rich_message": map[string]any{"blocks": blocks},
 	}
 	if markup := telegramReplyMarkup(message.Buttons); markup != nil {
@@ -1182,7 +1182,7 @@ func convertTelegramRichBlocks(blocks []model.TelegramRichBlock) ([]any, error) 
 			}
 		case "quote":
 			item = map[string]any{
-				"type": "blockquote",
+				"type":   "blockquote",
 				"blocks": []any{map[string]any{"type": "paragraph", "text": block.Text}},
 			}
 			if block.Credit != "" {
@@ -1513,13 +1513,39 @@ func (c *TelegramBotClient) FetchBusinessUserAvatar(
 		}
 		for _, size := range []string{"320", "160"} {
 			publicURL := "https://t.me/i/userpic/" + size + "/" + url.PathEscape(username) + ".jpg"
-			if body, contentType, err := fetchRemoteAvatar(ctx, publicURL); err == nil && len(body) > 0 {
+			if body, contentType, err := c.FetchRemoteAvatar(ctx, publicURL); err == nil && len(body) > 0 {
 				return body, contentType, nil
 			}
 		}
 	}
 
 	return nil, "", nil
+}
+
+// FetchRemoteAvatar downloads a Telegram-hosted avatar through the same proxy
+// chain as Bot API requests. Direct http.DefaultClient calls bypass the
+// configured Telegram proxy and fail on production networks.
+func (c *TelegramBotClient) FetchRemoteAvatar(ctx context.Context, avatarURL string) ([]byte, string, error) {
+	resp, err := c.doRequest(ctx, http.MethodGet, strings.TrimSpace(avatarURL), "", nil)
+	if err != nil {
+		return nil, "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= http.StatusBadRequest {
+		return nil, "", fmt.Errorf("telegram avatar fetch: HTTP %d", resp.StatusCode)
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	if err != nil {
+		return nil, "", err
+	}
+	if len(body) == 0 {
+		return nil, "", errors.New("telegram avatar fetch: empty response")
+	}
+	contentType := strings.TrimSpace(resp.Header.Get("Content-Type"))
+	if contentType == "" {
+		contentType = "image/jpeg"
+	}
+	return body, contentType, nil
 }
 
 func (c *TelegramBotClient) fetchTelegramFile(ctx context.Context, token, path string) ([]byte, string, error) {
@@ -1583,16 +1609,16 @@ type telegramChatMember struct {
 		IsBot    bool   `json:"is_bot"`
 		Username string `json:"username"`
 	} `json:"user"`
-	CanPostMessages   bool `json:"can_post_messages"`
-	CanSendMessages   bool `json:"can_send_messages"`
-	IsAnonymous       bool `json:"is_anonymous"`
+	CanPostMessages bool `json:"can_post_messages"`
+	CanSendMessages bool `json:"can_send_messages"`
+	IsAnonymous     bool `json:"is_anonymous"`
 }
 
 type telegramUpdate struct {
-	UpdateID      int64                    `json:"update_id"`
-	Message       *telegramMessageUpdate   `json:"message"`
-	ChannelPost   *telegramMessageUpdate   `json:"channel_post"`
-	MyChatMember  *telegramChatMemberEvent `json:"my_chat_member"`
+	UpdateID     int64                    `json:"update_id"`
+	Message      *telegramMessageUpdate   `json:"message"`
+	ChannelPost  *telegramMessageUpdate   `json:"channel_post"`
+	MyChatMember *telegramChatMemberEvent `json:"my_chat_member"`
 }
 
 type telegramMessageUpdate struct {

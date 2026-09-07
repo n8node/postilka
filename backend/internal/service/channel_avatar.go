@@ -182,7 +182,7 @@ func (s *ChannelService) fetchTelegramBusinessAvatar(
 	}
 
 	if url := strings.TrimSpace(ch.Metadata.AvatarURL); url != "" && !strings.HasPrefix(url, "data:") {
-		if body, ct, err := fetchRemoteAvatar(avatarCtx, url); err == nil && len(body) > 0 {
+		if body, ct, err := s.botClient.FetchRemoteAvatar(avatarCtx, url); err == nil && len(body) > 0 {
 			return body, ct, nil
 		}
 	}
