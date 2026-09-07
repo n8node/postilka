@@ -46,6 +46,7 @@ import { useGenerationJobStore } from "@/lib/generation-job-store";
 import type { GenerationUpload } from "@/lib/generation-data";
 import {
   fetchVideoGenerationPricing,
+  videoCostForModeDuration,
   type VideoGenerationJob,
   type VideoGenerationPricing,
 } from "@/lib/video-generation-api";
@@ -487,13 +488,11 @@ export function AdStudioPage({ catalog = "studio" }: { catalog?: AdStudioCatalog
     if (!selected) return 0;
     if (isVideo) {
       if (!videoPricing) return 0;
-      const perSec =
-        selectedMode === "text-to-video"
-          ? videoPricing.credits_per_second_text_to_video
-          : selectedMode === "reference-to-video"
-            ? videoPricing.credits_per_second_reference_to_video
-            : videoPricing.credits_per_second_image_to_video;
-      return Math.max(1, (perSec || 1) * (selected.duration || 5));
+      return videoCostForModeDuration(
+        videoPricing,
+        selectedMode as "text-to-video" | "image-to-video" | "reference-to-video",
+        selected.duration || 5,
+      );
     }
     if (!imagePricing || !selectedMode) return 0;
     if (selectedMode === "combine") return generationCostForMode(imagePricing, "combine");
