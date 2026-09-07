@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -31,6 +32,8 @@ func liveTelegramAvatarURL(ctx context.Context, client *TelegramBotClient, token
 	if client != nil && strings.TrimSpace(token) != "" && strings.TrimSpace(chatID) != "" {
 		if uri, err := client.ChatPhotoDataURI(ctx, token, chatID); err == nil && strings.TrimSpace(uri) != "" {
 			return uri
+		} else if err != nil {
+			slog.Warn("telegram channel avatar fetch failed", "chat_id", chatID, "error", err)
 		}
 	}
 	return telegramPublicAvatarURL(chat)
@@ -298,6 +301,8 @@ func (s *ChannelService) FetchAvatar(
 		}
 		body, contentType, err := s.botClient.FetchChatPhoto(ctx, token, ch.ChatID)
 		if err == nil && len(body) > 0 {
+			meta := mergeChannelAvatar(ch.Metadata, avatarDataURI(body, contentType))
+			_ = s.channels.UpdateChannelMetadata(ctx, ws.ID, ch.ID, meta)
 			return body, contentType, nil
 		}
 		chat, chatErr := s.botClient.GetChat(ctx, token, ch.ChatID)
