@@ -17,6 +17,8 @@ type KieSettings struct {
 	TokenCostCombine      int
 	TokenCostFilter       int
 	KopecksPerMediaCredit int
+	SubmitRateLimit       int
+	SubmitRateWindowSec   int
 	UpdatedAt             time.Time
 }
 
@@ -32,6 +34,8 @@ type KieSettingsDTO struct {
 	TokenCostCombine      int    `json:"token_cost_combine"`
 	TokenCostFilter       int    `json:"token_cost_filter"`
 	KopecksPerMediaCredit int    `json:"kopecks_per_media_credit"`
+	SubmitRateLimit       int    `json:"submit_rate_limit"`
+	SubmitRateWindowSec   int    `json:"submit_rate_window_sec"`
 	UpdatedAt             string `json:"updated_at,omitempty"`
 }
 
@@ -65,6 +69,8 @@ type KieUpdateRequest struct {
 	TokenCostCombine      *int    `json:"token_cost_combine"`
 	TokenCostFilter       *int    `json:"token_cost_filter"`
 	KopecksPerMediaCredit *int    `json:"kopecks_per_media_credit"`
+	SubmitRateLimit       *int    `json:"submit_rate_limit"`
+	SubmitRateWindowSec   *int    `json:"submit_rate_window_sec"`
 }
 
 func (s KieSettings) TokenCostForGenerationMode(mode string) int {

@@ -96,6 +96,18 @@ func (s *KieConfigService) Update(ctx context.Context, in model.KieUpdateRequest
 		}
 		current.KopecksPerMediaCredit = *in.KopecksPerMediaCredit
 	}
+	if in.SubmitRateLimit != nil {
+		if *in.SubmitRateLimit < 1 || *in.SubmitRateLimit > 20 {
+			return model.KieSettingsDTO{}, errors.New("invalid submit rate limit: maximum is 20")
+		}
+		current.SubmitRateLimit = *in.SubmitRateLimit
+	}
+	if in.SubmitRateWindowSec != nil {
+		if *in.SubmitRateWindowSec < 1 || *in.SubmitRateWindowSec > 60 {
+			return model.KieSettingsDTO{}, errors.New("invalid submit rate window")
+		}
+		current.SubmitRateWindowSec = *in.SubmitRateWindowSec
+	}
 
 	if in.ModelTextToImage != nil {
 		current.ModelTextToImage = ai.NormalizeKieModelID(*in.ModelTextToImage)
@@ -209,7 +221,14 @@ func (s *KieConfigService) resolveCredentials(ctx context.Context, overrideBaseU
 }
 
 func (s *KieConfigService) ResolveCredentials(ctx context.Context) (baseURL, apiKey string, err error) {
-	return s.resolveCredentials(ctx, "", "")
+	baseURL, apiKey, err = s.resolveCredentials(ctx, "", "")
+	if err == nil {
+		settings, settingsErr := s.GetSettings(ctx)
+		if settingsErr == nil {
+			ai.ConfigureKieSubmitRate(settings.SubmitRateLimit, time.Duration(settings.SubmitRateWindowSec)*time.Second)
+		}
+	}
+	return
 }
 
 func (s *KieConfigService) GetSettings(ctx context.Context) (model.KieSettings, error) {
@@ -233,6 +252,12 @@ func (s *KieConfigService) GetSettings(ctx context.Context) (model.KieSettings, 
 	if settings.KopecksPerMediaCredit <= 0 {
 		settings.KopecksPerMediaCredit = 5000
 	}
+	if settings.SubmitRateLimit <= 0 {
+		settings.SubmitRateLimit = 18
+	}
+	if settings.SubmitRateWindowSec <= 0 {
+		settings.SubmitRateWindowSec = 10
+	}
 	s.cacheMu.Lock()
 	s.cachedSettings = settings
 	s.cachedAt = time.Now()
@@ -253,11 +278,20 @@ func toKieSettingsDTO(s model.KieSettings) model.KieSettingsDTO {
 		TokenCostCombine:      s.TokenCostCombine,
 		TokenCostFilter:       s.TokenCostFilter,
 		KopecksPerMediaCredit: positiveKopecksPerCredit(s.KopecksPerMediaCredit),
+		SubmitRateLimit:       positiveRateDefault(s.SubmitRateLimit, 18),
+		SubmitRateWindowSec:   positiveRateDefault(s.SubmitRateWindowSec, 10),
 	}
 	if !s.UpdatedAt.IsZero() {
 		dto.UpdatedAt = s.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z")
 	}
 	return dto
+}
+
+func positiveRateDefault(value, fallback int) int {
+	if value > 0 {
+		return value
+	}
+	return fallback
 }
 
 func positiveKopecksPerCredit(n int) int {

@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -19,6 +20,57 @@ type KieClient struct {
 }
 
 var kieRequestLimiter = make(chan struct{}, 8)
+
+var kieSubmitLimiter = struct {
+	sync.Mutex
+	limit  int
+	window time.Duration
+	hits   []time.Time
+}{limit: 18, window: 10 * time.Second}
+
+func ConfigureKieSubmitRate(limit int, window time.Duration) {
+	if limit < 1 {
+		limit = 18
+	}
+	if window <= 0 {
+		window = 10 * time.Second
+	}
+	kieSubmitLimiter.Lock()
+	kieSubmitLimiter.limit = limit
+	kieSubmitLimiter.window = window
+	kieSubmitLimiter.hits = nil
+	kieSubmitLimiter.Unlock()
+}
+
+func waitForKieSubmit(ctx context.Context) error {
+	for {
+		now := time.Now()
+		kieSubmitLimiter.Lock()
+		cutoff := now.Add(-kieSubmitLimiter.window)
+		keep := 0
+		for keep < len(kieSubmitLimiter.hits) && kieSubmitLimiter.hits[keep].After(cutoff) {
+			keep++
+		}
+		kieSubmitLimiter.hits = kieSubmitLimiter.hits[:keep]
+		if len(kieSubmitLimiter.hits) < kieSubmitLimiter.limit {
+			kieSubmitLimiter.hits = append(kieSubmitLimiter.hits, now)
+			kieSubmitLimiter.Unlock()
+			return nil
+		}
+		wait := time.Until(kieSubmitLimiter.hits[0].Add(kieSubmitLimiter.window))
+		kieSubmitLimiter.Unlock()
+		if wait < time.Millisecond {
+			wait = time.Millisecond
+		}
+		timer := time.NewTimer(wait)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
+	}
+}
 
 func withKieRequest(ctx context.Context, fn func() error) error {
 	select {

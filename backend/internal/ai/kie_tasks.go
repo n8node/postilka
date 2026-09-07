@@ -68,6 +68,9 @@ func (c *KieClient) createTask(ctx context.Context, req KieCreateTaskRequest, no
 	if model == "" {
 		return "", fmt.Errorf("kie model is required")
 	}
+	if err := waitForKieSubmit(ctx); err != nil {
+		return "", err
+	}
 
 	body := map[string]any{
 		"model": model,

@@ -2702,6 +2702,8 @@ export type KieAdminSettings = {
   token_cost_combine: number;
   token_cost_filter: number;
   kopecks_per_media_credit: number;
+  submit_rate_limit: number;
+  submit_rate_window_sec: number;
   updated_at?: string;
 };
 

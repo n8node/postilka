@@ -24,13 +24,13 @@ func (r *KieSettingsRepository) Get(ctx context.Context) (model.KieSettings, err
 		SELECT api_base_url, api_key_encrypted, model_text_to_image, model_image_to_image,
 		       model_combine, model_filter,
 		       token_cost_text_to_image, token_cost_image_to_image, token_cost_combine,
-		       token_cost_filter, kopecks_per_media_credit, updated_at
+		       token_cost_filter, kopecks_per_media_credit, submit_rate_limit, submit_rate_window_sec, updated_at
 		FROM kie_settings
 		WHERE id = 1
 	`).Scan(
 		&s.APIBaseURL, &enc, &s.ModelTextToImage, &s.ModelImageToImage, &s.ModelCombine, &s.ModelFilter,
 		&s.TokenCostTextToImage, &s.TokenCostImageToImage, &s.TokenCostCombine,
-		&s.TokenCostFilter, &s.KopecksPerMediaCredit, &s.UpdatedAt,
+		&s.TokenCostFilter, &s.KopecksPerMediaCredit, &s.SubmitRateLimit, &s.SubmitRateWindowSec, &s.UpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -48,9 +48,9 @@ func (r *KieSettingsRepository) Upsert(ctx context.Context, s model.KieSettings,
 			id, api_base_url, api_key_encrypted, model_text_to_image, model_image_to_image,
 			model_combine, model_filter,
 			token_cost_text_to_image, token_cost_image_to_image, token_cost_combine,
-			token_cost_filter, kopecks_per_media_credit, updated_at
+			token_cost_filter, kopecks_per_media_credit, submit_rate_limit, submit_rate_window_sec, updated_at
 		) VALUES (
-			1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now()
+			1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, now()
 		)
 		ON CONFLICT (id) DO UPDATE SET
 			api_base_url = EXCLUDED.api_base_url,
@@ -64,11 +64,13 @@ func (r *KieSettingsRepository) Upsert(ctx context.Context, s model.KieSettings,
 			token_cost_combine = EXCLUDED.token_cost_combine,
 			token_cost_filter = EXCLUDED.token_cost_filter,
 			kopecks_per_media_credit = EXCLUDED.kopecks_per_media_credit,
+			submit_rate_limit = EXCLUDED.submit_rate_limit,
+			submit_rate_window_sec = EXCLUDED.submit_rate_window_sec,
 			updated_at = now()
 	`, s.APIBaseURL, apiKeyEncrypted, s.ModelTextToImage, s.ModelImageToImage, s.ModelCombine,
 		s.ModelFilter,
 		s.TokenCostTextToImage, s.TokenCostImageToImage, s.TokenCostCombine, s.TokenCostFilter,
-		positiveOrDefault(s.KopecksPerMediaCredit, 5000))
+		positiveOrDefault(s.KopecksPerMediaCredit, 5000), positiveRateDefault(s.SubmitRateLimit, 18), positiveRateDefault(s.SubmitRateWindowSec, 10))
 	return err
 }
 

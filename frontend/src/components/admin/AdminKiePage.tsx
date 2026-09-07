@@ -23,6 +23,8 @@ const DEFAULT_SETTINGS: KieAdminSettings = {
   token_cost_combine: 18,
   token_cost_filter: 8,
   kopecks_per_media_credit: 5000,
+  submit_rate_limit: 18,
+  submit_rate_window_sec: 10,
 };
 
 function sortModels(models: KieModel[]) {
@@ -145,6 +147,8 @@ export function AdminKiePage({ embedded = false }: { embedded?: boolean }) {
           1,
           Math.round(Math.max(0, mediaCreditPriceRub) * 100),
         ),
+        submit_rate_limit: form.submit_rate_limit,
+        submit_rate_window_sec: form.submit_rate_window_sec,
       };
       if (newApiKey.trim()) {
         body.api_key = newApiKey.trim();
@@ -218,6 +222,23 @@ export function AdminKiePage({ embedded = false }: { embedded?: boolean }) {
       <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
         <h2 className="text-base font-semibold text-slate-900">KIE.ai</h2>
         <p className="text-sm text-slate-500">Изображения через Market API (api.kie.ai)</p>
+
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+          <p className="text-sm font-medium text-blue-900">Ограничение новых генераций</p>
+          <p className="mt-1 text-xs text-blue-800">
+            KIE разрешает максимум 20 новых запросов за 10 секунд на аккаунт. Рабочее значение ниже защищает от HTTP 429.
+          </p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <label className="text-sm font-medium text-slate-700">
+              Запросов за окно
+              <input type="number" min={1} max={20} value={form.submit_rate_limit} onChange={(e) => patch("submit_rate_limit", Number(e.target.value))} className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+            </label>
+            <label className="text-sm font-medium text-slate-700">
+              Окно, секунд
+              <input type="number" min={1} max={60} value={form.submit_rate_window_sec} onChange={(e) => patch("submit_rate_window_sec", Number(e.target.value))} className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+            </label>
+          </div>
+        </div>
 
         <div>
           <label className="mb-1.5 block text-sm font-medium">API Base URL</label>
