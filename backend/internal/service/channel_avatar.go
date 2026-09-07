@@ -303,7 +303,10 @@ func (s *ChannelService) FetchAvatar(
 		chat, chatErr := s.botClient.GetChat(ctx, token, ch.ChatID)
 		if chatErr == nil {
 			if publicURL := telegramPublicAvatarURL(chat); publicURL != "" {
-				if remote, ct, rerr := fetchRemoteAvatar(ctx, publicURL); rerr == nil {
+				// Forum/supergroup avatars may only be available through the
+				// public t.me fallback. Keep this request on Telegram's proxy
+				// chain too; direct access is blocked in production.
+				if remote, ct, rerr := s.botClient.FetchRemoteAvatar(ctx, publicURL); rerr == nil {
 					return remote, ct, nil
 				}
 			}
