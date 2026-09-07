@@ -264,6 +264,9 @@ func (s *ChannelService) FetchAvatar(
 		return nil, "", err
 	}
 	ch := row.Channel
+	if body, contentType, ok := avatarBytesFromMetadata(ch.Metadata.AvatarURL); ok {
+		return body, contentType, nil
+	}
 
 	if url := strings.TrimSpace(ch.Metadata.AvatarURL); url != "" &&
 		ch.Provider != model.ChannelProviderMAX &&
@@ -275,12 +278,12 @@ func (s *ChannelService) FetchAvatar(
 	}
 
 	if s.cipher == nil {
-		return nil, "", ErrCryptoUnavailable
+		return generateInitialsAvatarSVG(channelAvatarInitials(ch)), "image/svg+xml", nil
 	}
 
 	token, err := resolveChannelPublishToken(ctx, &ch, s.channels, s.cipher, s.socialSettings)
 	if err != nil {
-		return nil, "", err
+		return generateInitialsAvatarSVG(channelAvatarInitials(ch)), "image/svg+xml", nil
 	}
 
 	switch ch.Provider {
@@ -289,10 +292,7 @@ func (s *ChannelService) FetchAvatar(
 			body, contentType, err := s.fetchTelegramBusinessAvatar(ctx, token, &ch)
 			s.persistTelegramBusinessMetadata(ctx, ws.ID, &ch, body, contentType)
 			if err != nil {
-				if errors.Is(err, ErrChannelAvatarNotFound) {
-					return generateInitialsAvatarSVG(channelAvatarInitials(ch)), "image/svg+xml", nil
-				}
-				return nil, "", err
+				return generateInitialsAvatarSVG(channelAvatarInitials(ch)), "image/svg+xml", nil
 			}
 			return body, contentType, nil
 		}
@@ -309,17 +309,17 @@ func (s *ChannelService) FetchAvatar(
 			}
 		}
 		if err != nil {
-			return nil, "", err
+			return generateInitialsAvatarSVG(channelAvatarInitials(ch)), "image/svg+xml", nil
 		}
-		return nil, "", ErrChannelAvatarNotFound
+		return generateInitialsAvatarSVG(channelAvatarInitials(ch)), "image/svg+xml", nil
 
 	case model.ChannelProviderMAX:
 		body, contentType, err := s.maxClient.FetchChatIcon(ctx, token, parseMAXChatID(ch.ChatID))
 		if err != nil {
-			return nil, "", err
+			return generateInitialsAvatarSVG(channelAvatarInitials(ch)), "image/svg+xml", nil
 		}
 		if len(body) == 0 {
-			return nil, "", repository.ErrNotFound
+			return generateInitialsAvatarSVG(channelAvatarInitials(ch)), "image/svg+xml", nil
 		}
 		return body, contentType, nil
 
