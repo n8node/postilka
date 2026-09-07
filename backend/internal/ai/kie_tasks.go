@@ -94,7 +94,12 @@ func (c *KieClient) createTask(ctx context.Context, req KieCreateTaskRequest, no
 	httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	res, err := c.taskHTTPClient().Do(httpReq)
+	var res *http.Response
+	err = withKieRequest(ctx, func() error {
+		var requestErr error
+		res, requestErr = c.taskHTTPClient().Do(httpReq)
+		return requestErr
+	})
 	if err != nil {
 		return "", err
 	}
@@ -141,7 +146,12 @@ func (c *KieClient) GetTask(ctx context.Context, taskID string) (KieTaskDetail, 
 	}
 	httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
 
-	res, err := c.taskHTTPClient().Do(httpReq)
+	var res *http.Response
+	err = withKieRequest(ctx, func() error {
+		var requestErr error
+		res, requestErr = c.taskHTTPClient().Do(httpReq)
+		return requestErr
+	})
 	if err != nil {
 		return KieTaskDetail{}, err
 	}

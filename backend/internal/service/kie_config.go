@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/postilka/postilka/internal/ai"
 	"github.com/postilka/postilka/internal/config"
@@ -19,9 +21,12 @@ var (
 )
 
 type KieConfigService struct {
-	repo   *repository.KieSettingsRepository
-	cfg    *config.Config
-	cipher *SecretCipher
+	repo           *repository.KieSettingsRepository
+	cfg            *config.Config
+	cipher         *SecretCipher
+	cacheMu        sync.Mutex
+	cachedSettings model.KieSettings
+	cachedAt       time.Time
 }
 
 func NewKieConfigService(
@@ -128,6 +133,10 @@ func (s *KieConfigService) Update(ctx context.Context, in model.KieUpdateRequest
 	if err != nil {
 		return model.KieSettingsDTO{}, err
 	}
+	s.cacheMu.Lock()
+	s.cachedSettings = updated
+	s.cachedAt = time.Now()
+	s.cacheMu.Unlock()
 	return toKieSettingsDTO(updated), nil
 }
 
@@ -204,6 +213,16 @@ func (s *KieConfigService) ResolveCredentials(ctx context.Context) (baseURL, api
 }
 
 func (s *KieConfigService) GetSettings(ctx context.Context) (model.KieSettings, error) {
+	s.cacheMu.Lock()
+	if !s.cachedAt.IsZero() && time.Since(s.cachedAt) < 15*time.Second {
+		cached := s.cachedSettings
+		s.cacheMu.Unlock()
+		if cached.KopecksPerMediaCredit <= 0 {
+			cached.KopecksPerMediaCredit = 5000
+		}
+		return cached, nil
+	}
+	s.cacheMu.Unlock()
 	settings, err := s.repo.Get(ctx)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
@@ -214,6 +233,10 @@ func (s *KieConfigService) GetSettings(ctx context.Context) (model.KieSettings, 
 	if settings.KopecksPerMediaCredit <= 0 {
 		settings.KopecksPerMediaCredit = 5000
 	}
+	s.cacheMu.Lock()
+	s.cachedSettings = settings
+	s.cachedAt = time.Now()
+	s.cacheMu.Unlock()
 	return settings, nil
 }
 

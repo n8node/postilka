@@ -18,6 +18,18 @@ type KieClient struct {
 	httpClient *http.Client
 }
 
+var kieRequestLimiter = make(chan struct{}, 8)
+
+func withKieRequest(ctx context.Context, fn func() error) error {
+	select {
+	case kieRequestLimiter <- struct{}{}:
+		defer func() { <-kieRequestLimiter }()
+		return fn()
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 type KieModelInfo struct {
 	ID       string
 	Name     string
@@ -82,7 +94,12 @@ func (c *KieClient) fetchCredits(ctx context.Context) (float64, error) {
 	}
 	req.Header.Set("Authorization", "Bearer "+c.apiKey)
 
-	res, err := c.httpClient.Do(req)
+	var res *http.Response
+	err = withKieRequest(ctx, func() error {
+		var requestErr error
+		res, requestErr = c.httpClient.Do(req)
+		return requestErr
+	})
 	if err != nil {
 		return 0, err
 	}
