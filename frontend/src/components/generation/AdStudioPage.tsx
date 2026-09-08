@@ -606,7 +606,7 @@ export function AdStudioPage({ catalog = "studio" }: { catalog?: AdStudioCatalog
               formHeight > 0 ? adStudioPreviewBoxSize(selected.aspect_ratio, formHeight) : undefined
             }
           >
-            {generating || (!resultUrl && activeJob) ? (
+            {generating ? (
               <div className="absolute inset-0">
                 <GenerationProgressPanel
                   progress={activeJob?.progress ?? 0}
