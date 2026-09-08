@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -13,11 +14,14 @@ import (
 )
 
 type TrendsImageImportResult struct {
-	Created       int      `json:"created"`
-	PreviewFilled int      `json:"preview_filled"`
-	Skipped       int      `json:"skipped"`
-	Failed        int      `json:"failed"`
-	Errors        []string `json:"errors,omitempty"`
+	Created        int      `json:"created"`
+	PreviewFilled  int      `json:"preview_filled"`
+	Skipped        int      `json:"skipped"`
+	Failed         int      `json:"failed"`
+	Optimized      int      `json:"optimized"`
+	OriginalBytes  int64    `json:"original_bytes"`
+	OptimizedBytes int64    `json:"optimized_bytes"`
+	Errors         []string `json:"errors,omitempty"`
 }
 
 type TrendsVideoImportResult = TrendsImageImportResult
@@ -136,18 +140,47 @@ func (s *AdStudioService) ImportUnpublishedVideoTrends(ctx context.Context, dir 
 				continue
 			}
 			if dryRun {
+				optimized, originalBytes, optimizedBytes, err := optimizeTrendVideoFile(item.mediaPath, item.mediaName)
+				if err != nil {
+					out.Failed++
+					out.Errors = append(out.Errors, fmt.Sprintf("%s: optimize: %s", item.jsonName, err))
+					continue
+				}
+				_ = optimized
+				out.Optimized++
+				out.OriginalBytes += originalBytes
+				out.OptimizedBytes += optimizedBytes
 				out.PreviewFilled++
 				continue
 			}
-			if err := s.uploadTrendsImportPreview(ctx, current.ID, item.mediaPath, item.mediaName, "video/mp4"); err != nil {
+			optimized, originalBytes, optimizedBytes, err := optimizeTrendVideoFile(item.mediaPath, item.mediaName)
+			if err != nil {
+				out.Failed++
+				out.Errors = append(out.Errors, fmt.Sprintf("%s: optimize: %s", item.jsonName, err))
+				continue
+			}
+			if err := s.uploadTrendsImportPreviewBytes(ctx, current.ID, optimized, item.mediaName, "video/mp4"); err != nil {
 				out.Failed++
 				out.Errors = append(out.Errors, fmt.Sprintf("%s: preview: %s", item.jsonName, err))
 				continue
 			}
+			out.Optimized++
+			out.OriginalBytes += originalBytes
+			out.OptimizedBytes += optimizedBytes
 			out.PreviewFilled++
 			continue
 		}
 		if dryRun {
+			optimized, originalBytes, optimizedBytes, err := optimizeTrendVideoFile(item.mediaPath, item.mediaName)
+			if err != nil {
+				out.Failed++
+				out.Errors = append(out.Errors, fmt.Sprintf("%s: optimize: %s", item.jsonName, err))
+				continue
+			}
+			_ = optimized
+			out.Optimized++
+			out.OriginalBytes += originalBytes
+			out.OptimizedBytes += optimizedBytes
 			out.Created++
 			continue
 		}
@@ -169,11 +202,20 @@ func (s *AdStudioService) ImportUnpublishedVideoTrends(ctx context.Context, dir 
 			continue
 		}
 		byTitle[strings.ToLower(item.title)] = model.AdStudioTemplate{ID: created.ID, Title: created.Title}
-		if err := s.uploadTrendsImportPreview(ctx, created.ID, item.mediaPath, item.mediaName, "video/mp4"); err != nil {
+		optimized, originalBytes, optimizedBytes, err := optimizeTrendVideoFile(item.mediaPath, item.mediaName)
+		if err != nil {
+			out.Failed++
+			out.Errors = append(out.Errors, fmt.Sprintf("%s: optimize: %s", item.jsonName, err))
+			continue
+		}
+		if err := s.uploadTrendsImportPreviewBytes(ctx, created.ID, optimized, item.mediaName, "video/mp4"); err != nil {
 			out.Failed++
 			out.Errors = append(out.Errors, fmt.Sprintf("%s: preview: %s", item.jsonName, err))
 			continue
 		}
+		out.Optimized++
+		out.OriginalBytes += originalBytes
+		out.OptimizedBytes += optimizedBytes
 		out.Created++
 	}
 	return out, nil
@@ -368,6 +410,57 @@ func (s *AdStudioService) uploadTrendsImportPreview(ctx context.Context, id, pat
 	}
 	_, err = s.UploadPreviewFromBytes(ctx, id, data, filename, contentType)
 	return err
+}
+
+func (s *AdStudioService) uploadTrendsImportPreviewBytes(ctx context.Context, id string, data []byte, filename, contentType string) error {
+	_, err := s.UploadPreviewFromBytes(ctx, id, data, filename, contentType)
+	return err
+}
+
+func optimizeTrendVideoFile(path, filename string) ([]byte, int64, int64, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, 0, 0, err
+	}
+	optimized, err := transcodeTrendVideoTo960(data, filename)
+	if err != nil {
+		return nil, int64(len(data)), 0, err
+	}
+	return optimized, int64(len(data)), int64(len(optimized)), nil
+}
+
+func transcodeTrendVideoTo960(data []byte, filename string) ([]byte, error) {
+	dir, err := os.MkdirTemp("", "postilka-trend-video-")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(dir)
+	ext := strings.ToLower(filepath.Ext(filename))
+	if ext == "" {
+		ext = ".mp4"
+	}
+	inPath := filepath.Join(dir, "input"+ext)
+	outPath := filepath.Join(dir, "output.mp4")
+	if err := os.WriteFile(inPath, data, 0o600); err != nil {
+		return nil, err
+	}
+	cmd := exec.Command("ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+		"-i", inPath, "-map", "0:v:0", "-map", "0:a:0?",
+		"-vf", "scale=960:960:force_original_aspect_ratio=decrease,fps=30",
+		"-c:v", "libx264", "-preset", "medium", "-crf", "29",
+		"-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k",
+		"-movflags", "+faststart", outPath)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return nil, fmt.Errorf("ffmpeg: %w: %s", err, strings.TrimSpace(string(output)))
+	}
+	optimized, err := os.ReadFile(outPath)
+	if err != nil {
+		return nil, err
+	}
+	if len(optimized) == 0 {
+		return nil, fmt.Errorf("ffmpeg returned empty file")
+	}
+	return optimized, nil
 }
 
 func parseTrendsImageImportFile(root, name string, usedTitles map[string]bool) (trendsImageImportItem, bool, error) {
