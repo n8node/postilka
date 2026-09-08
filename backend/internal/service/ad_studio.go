@@ -697,19 +697,12 @@ func (s *AdStudioService) Generate(
 		if edit := strings.TrimSpace(req.Edit); edit != "" {
 			prompt += "\nUser changes:\n" + edit
 		}
-		if mode == model.AdStudioModeTextToVideo || mode == model.AdStudioModeImageToVideo || mode == model.AdStudioModeReferenceToVideo {
-			videoMode := model.KieVideoModeImageToVideo
-			input := GenerateVideoInput{
-				Mode: videoMode, Prompt: prompt, AspectRatio: t.AspectRatio, Duration: t.Duration,
-			}
-			if mode == model.AdStudioModeTextToVideo || mode == model.AdStudioModeReferenceToVideo {
-				videoMode = model.KieVideoModeReferenceToVideo
-				input.Mode = videoMode
-				input.ReferenceUploadIDs = []string{referenceID}
-			} else {
-				input.SourceUploadID = referenceID
-			}
-			result, err := s.generation.StartGenerateVideo(ctx, userID, r, input)
+		if kind == model.AdStudioMediaVideo {
+			result, err := s.generation.StartGenerateVideo(ctx, userID, r, GenerateVideoInput{
+				Mode:   model.KieVideoModeReferenceToVideo,
+				Prompt: prompt, AspectRatio: t.AspectRatio, Duration: t.Duration,
+				ReferenceUploadIDs: []string{referenceID},
+			})
 			return result, kind, err
 		}
 		result, err := s.generation.StartGenerate(ctx, userID, r, GenerateImageInput{

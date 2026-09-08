@@ -516,11 +516,14 @@ export function AdStudioPage({ catalog = "studio" }: { catalog?: AdStudioCatalog
   // only a product, or both. Other image/video modes have an intrinsic product input.
   const needsProduct = Boolean(
     selected &&
+      !selected.trend_prompt &&
       (selected.requires_product ||
         (selectedMode && selectedMode !== "combine" && adStudioModeNeedsProduct(selectedMode))),
   );
-  const needsAvatar = Boolean(selected?.requires_avatar);
-  const needsTemplateInput = Boolean(selectedMode && adStudioModeUsesTemplateInput(selectedMode));
+  const needsAvatar = Boolean(selected && !selected.trend_prompt && selected.requires_avatar);
+  const needsTemplateInput = Boolean(
+    selected && !selected.trend_prompt && selectedMode && adStudioModeUsesTemplateInput(selectedMode),
+  );
   const canGenerate = Boolean(
     selected &&
       selectedMode &&
@@ -671,7 +674,11 @@ export function AdStudioPage({ catalog = "studio" }: { catalog?: AdStudioCatalog
                 {selected.aspect_ratio}
                 {isVideo ? ` · ${selected.duration} с` : ""}
               </p>
-              {needsTemplateInput && !selected.preview_url ? (
+              {selected.trend_prompt ? (
+                <p className="mt-2 text-[12px] text-muted">
+                  В Kie уйдут только системный промпт этого тренда, ваш референс и правка.
+                </p>
+              ) : needsTemplateInput && !selected.preview_url ? (
                 <p className="mt-2 text-[12px] text-red-700">
                                     Для этого режима нужно превью сцены. Загрузите его в админке.
                 </p>
