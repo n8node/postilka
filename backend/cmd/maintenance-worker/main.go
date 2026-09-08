@@ -71,9 +71,13 @@ func main() {
 	metrikaPlatformConfigSvc := service.NewMetrikaPlatformConfigService(metrikaPlatformConfigRepo, cfg, secretCipher)
 	metrikaSvc := service.NewMetrikaConnectionService(metrikaRepo, wsSvc, metrikaPlatformConfigSvc, secretCipher, cfg, quotaSvc)
 	userRepo := repository.NewUserRepository(db.Pool)
+	telegramSettingsRepo := repository.NewTelegramSettingsRepository(db.Pool)
+	telegramSettingsSvc := service.NewTelegramSettingsService(telegramSettingsRepo)
+	telegramQueueRepo := repository.NewTelegramNotificationQueueRepository(db.Pool)
 	telegramProviderSettingsRepo := repository.NewTelegramProviderSettingsRepository(db.Pool)
 	telegramProviderSettingsSvc := service.NewTelegramProviderSettingsService(telegramProviderSettingsRepo)
 	telegramBotClient := service.NewTelegramBotClient(telegramProviderSettingsSvc, cfg.TelegramLocalProxy)
+	telegramSvc := service.NewTelegramService(telegramSettingsSvc, telegramQueueRepo, cfg.TelegramLocalProxy, logger)
 	socialProviderSettingsRepo := repository.NewSocialProviderSettingsRepository(db.Pool)
 	socialProviderSettingsSvc := service.NewSocialProviderSettingsService(socialProviderSettingsRepo)
 	photochkaClient := photochka.NewClient(cfg.PhotochkaAPIBaseURL)
@@ -100,7 +104,7 @@ func main() {
 
 	// Сервисы для операционных задач
 	opsDigestSvc := service.NewOpsDigestService(
-		nil, nil, opsStateRepo, postRepo, db, nil, nil,
+		telegramSvc, telegramSettingsSvc, opsStateRepo, postRepo, db, nil, nil,
 		storageSettingsSvc, nil, nil, nil, nil, nil, nil, nil, nil, logger,
 	)
 
