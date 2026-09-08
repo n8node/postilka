@@ -758,7 +758,9 @@ func (s *AdStudioService) Generate(
 		}
 	}
 	prompt := composeAdStudioPrompt(t, mode, req.Edit)
-	if configured, promptErr := s.GetSystemPromptForGeneration(ctx, mode, scenario); promptErr != nil {
+	if t.Catalog == model.AdStudioCatalogStudio && t.UseTemplatePrompt {
+		prompt = composeAdStudioPromptWithBase(t, mode, req.Edit, t.SystemPrompt)
+	} else if configured, promptErr := s.GetSystemPromptForGeneration(ctx, mode, scenario); promptErr != nil {
 		return StartGenerateResult{}, "", promptErr
 	} else if strings.TrimSpace(configured) != "" {
 		prompt = composeAdStudioPromptWithBase(t, mode, req.Edit, configured)
@@ -966,6 +968,9 @@ func templateFromWrite(base model.AdStudioTemplate, req model.AdStudioTemplateWr
 	}
 	if req.TrendPrompt != nil {
 		t.TrendPrompt = *req.TrendPrompt
+	}
+	if req.UseTemplatePrompt != nil {
+		t.UseTemplatePrompt = *req.UseTemplatePrompt
 	}
 	if req.SortOrder != nil {
 		t.SortOrder = *req.SortOrder

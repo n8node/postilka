@@ -22,7 +22,7 @@ func NewAdStudioRepository(pool *pgxpool.Pool) *AdStudioRepository {
 const adStudioSelect = `
 	SELECT id, title, description, catalog, category, media_kind, generation_mode, aspect_ratio, duration,
 	       system_prompt, preview_s3_key, preview_content_type, preview_thumb_s3_key,
-	       requires_product, requires_avatar, trend_prompt, sort_order, is_published,
+	       requires_product, requires_avatar, trend_prompt, use_template_prompt, sort_order, is_published,
 	       created_at, updated_at
 	FROM ad_studio_templates
 `
@@ -30,7 +30,7 @@ const adStudioSelect = `
 const adStudioReturning = `
 		RETURNING id, title, description, catalog, category, media_kind, generation_mode, aspect_ratio, duration,
 		          system_prompt, preview_s3_key, preview_content_type, preview_thumb_s3_key,
-		          requires_product, requires_avatar, trend_prompt, sort_order, is_published,
+		          requires_product, requires_avatar, trend_prompt, use_template_prompt, sort_order, is_published,
 		          created_at, updated_at
 `
 
@@ -39,7 +39,7 @@ func scanAdStudioTemplate(row pgx.Row) (model.AdStudioTemplate, error) {
 	err := row.Scan(
 		&t.ID, &t.Title, &t.Description, &t.Catalog, &t.Category, &t.MediaKind, &t.GenerationMode, &t.AspectRatio, &t.Duration,
 		&t.SystemPrompt, &t.PreviewS3Key, &t.PreviewContentType, &t.PreviewThumbS3Key,
-		&t.RequiresProduct, &t.RequiresAvatar, &t.TrendPrompt, &t.SortOrder, &t.IsPublished,
+		&t.RequiresProduct, &t.RequiresAvatar, &t.TrendPrompt, &t.UseTemplatePrompt, &t.SortOrder, &t.IsPublished,
 		&t.CreatedAt, &t.UpdatedAt,
 	)
 	if err != nil {
@@ -102,14 +102,14 @@ func (r *AdStudioRepository) Create(ctx context.Context, t model.AdStudioTemplat
 		INSERT INTO ad_studio_templates (
 			id, title, description, catalog, category, media_kind, generation_mode, aspect_ratio, duration,
 			system_prompt, preview_s3_key, preview_content_type, preview_thumb_s3_key,
-			requires_product, requires_avatar, trend_prompt, sort_order, is_published
+			requires_product, requires_avatar, trend_prompt, use_template_prompt, sort_order, is_published
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7, $8, $9,
 			$10, $11, $12, $13,
-			$14, $15, $16, $17, $18
+			$14, $15, $16, $17, $18, $19
 		)`+adStudioReturning, t.ID, t.Title, t.Description, t.Catalog, t.Category, t.MediaKind, t.GenerationMode, t.AspectRatio, t.Duration,
 		t.SystemPrompt, t.PreviewS3Key, t.PreviewContentType, t.PreviewThumbS3Key,
-		t.RequiresProduct, t.RequiresAvatar, t.TrendPrompt, t.SortOrder, t.IsPublished,
+		t.RequiresProduct, t.RequiresAvatar, t.TrendPrompt, t.UseTemplatePrompt, t.SortOrder, t.IsPublished,
 	))
 }
 
@@ -128,12 +128,13 @@ func (r *AdStudioRepository) Update(ctx context.Context, t model.AdStudioTemplat
 			requires_product = $11,
 			requires_avatar = $12,
 			trend_prompt = $13,
-			sort_order = $14,
-			is_published = $15,
+			use_template_prompt = $14,
+			sort_order = $15,
+			is_published = $16,
 			updated_at = NOW()
 		WHERE id = $1`+adStudioReturning,
 		t.ID, t.Title, t.Description, t.Catalog, t.Category, t.MediaKind, t.GenerationMode, t.AspectRatio, t.Duration,
-		t.SystemPrompt, t.RequiresProduct, t.RequiresAvatar, t.TrendPrompt, t.SortOrder, t.IsPublished,
+		t.SystemPrompt, t.RequiresProduct, t.RequiresAvatar, t.TrendPrompt, t.UseTemplatePrompt, t.SortOrder, t.IsPublished,
 	))
 }
 

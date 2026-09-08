@@ -113,6 +113,7 @@ export type AdStudioTemplate = {
   requires_product: boolean;
   requires_avatar: boolean;
   trend_prompt: boolean;
+  use_template_prompt: boolean;
   preview_kind?: AdStudioMediaKind;
   preview_url?: string;
   preview_source_url?: string;
@@ -140,6 +141,7 @@ export type AdStudioWritePayload = {
   requires_product: boolean;
   requires_avatar: boolean;
   trend_prompt: boolean;
+  use_template_prompt: boolean;
   sort_order: number;
   is_published: boolean;
 };

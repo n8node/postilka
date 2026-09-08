@@ -106,6 +106,7 @@ type AdStudioTemplate struct {
 	RequiresProduct    bool
 	RequiresAvatar     bool
 	TrendPrompt        bool
+	UseTemplatePrompt  bool
 	SortOrder          int
 	IsPublished        bool
 	CreatedAt          time.Time
@@ -215,6 +216,7 @@ type AdStudioTemplatePublicView struct {
 	RequiresProduct  bool   `json:"requires_product"`
 	RequiresAvatar   bool   `json:"requires_avatar"`
 	TrendPrompt      bool   `json:"trend_prompt"`
+	UseTemplatePrompt bool  `json:"use_template_prompt"`
 	PreviewKind      string `json:"preview_kind,omitempty"`
 	PreviewURL       string `json:"preview_url,omitempty"`
 	PreviewSourceURL string `json:"preview_source_url,omitempty"`
@@ -224,6 +226,7 @@ type AdStudioTemplatePublicView struct {
 type AdStudioTemplateAdminView struct {
 	AdStudioTemplatePublicView
 	SystemPrompt string `json:"system_prompt"`
+	UseTemplatePrompt bool `json:"use_template_prompt"`
 	IsPublished  bool   `json:"is_published"`
 	HasPreview   bool   `json:"has_preview"`
 	CreatedAt    string `json:"created_at"`
@@ -243,6 +246,7 @@ type AdStudioTemplateWriteRequest struct {
 	RequiresProduct *bool  `json:"requires_product"`
 	RequiresAvatar  *bool  `json:"requires_avatar"`
 	TrendPrompt     *bool  `json:"trend_prompt"`
+	UseTemplatePrompt *bool `json:"use_template_prompt"`
 	SortOrder       *int   `json:"sort_order"`
 	IsPublished     *bool  `json:"is_published"`
 }
@@ -304,6 +308,7 @@ func (t AdStudioTemplate) ToPublicView() AdStudioTemplatePublicView {
 		RequiresProduct: t.RequiresProduct,
 		RequiresAvatar:  t.RequiresAvatar,
 		TrendPrompt:     t.TrendPrompt,
+		UseTemplatePrompt: t.UseTemplatePrompt,
 		PreviewKind:     previewKind,
 		PreviewURL:      t.PreviewPath(),
 		SortOrder:       t.SortOrder,
@@ -327,6 +332,7 @@ func (t AdStudioTemplate) ToAdminView() AdStudioTemplateAdminView {
 	return AdStudioTemplateAdminView{
 		AdStudioTemplatePublicView: t.ToPublicView(),
 		SystemPrompt:               t.SystemPrompt,
+		UseTemplatePrompt:          t.UseTemplatePrompt,
 		IsPublished:                t.IsPublished,
 		HasPreview:                 t.PreviewS3Key != "",
 		CreatedAt:                  t.CreatedAt.UTC().Format(time.RFC3339),

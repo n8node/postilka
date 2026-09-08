@@ -23,7 +23,9 @@ import {
   deleteAdminAdStudioTemplate,
   fetchAdminAdStudioCategories,
   fetchAdminAdStudioTemplates,
+  fetchAdminAdStudioSystemPrompts,
   updateAdminAdStudioCategories,
+  updateAdminAdStudioSystemPrompt,
   updateAdminAdStudioTemplate,
   uploadAdminAdStudioPreview,
   validateAdStudioPreviewFile,
@@ -32,6 +34,7 @@ import {
   type AdStudioGenerationMode,
   type AdStudioTemplateAdmin,
   type AdStudioWritePayload,
+  type AdStudioSystemPrompt,
   type CatalogCategoryId,
 } from "@/lib/ad-studio";
 
@@ -58,6 +61,7 @@ const emptyForm = (
     requires_product: adStudioModeNeedsProduct(mode),
     requires_avatar: nextCategory === "ugc",
     trend_prompt: false,
+    use_template_prompt: false,
     sort_order: 0,
     is_published: false,
   };
@@ -77,6 +81,7 @@ function toForm(item: AdStudioTemplateAdmin, catalog: AdStudioCatalog): AdStudio
     requires_product: item.requires_product,
     requires_avatar: item.requires_avatar,
     trend_prompt: item.trend_prompt,
+    use_template_prompt: item.use_template_prompt,
     sort_order: item.sort_order,
     is_published: item.is_published,
   };
@@ -103,6 +108,8 @@ export function AdminAdStudioPage({
   const [shuffleTemplates, setShuffleTemplates] = useState(false);
   const [savingSections, setSavingSections] = useState(false);
   const [backfillingPreviews, setBackfillingPreviews] = useState(false);
+  const [systemPrompts, setSystemPrompts] = useState<AdStudioSystemPrompt[]>([]);
+  const [savingPrompt, setSavingPrompt] = useState<number | null>(null);
 
   const selected = items.find((item) => item.id === selectedId) ?? null;
 
@@ -133,6 +140,29 @@ export function AdminAdStudioPage({
   }, [load]);
 
   useEffect(() => {
+    if (isTrends) return;
+    void fetchAdminAdStudioSystemPrompts()
+      .then((res) => setSystemPrompts(res.items ?? []))
+      .catch(() => setError("Не удалось загрузить системные промпты"));
+  }, [isTrends]);
+
+  async function saveSystemPrompt(item: AdStudioSystemPrompt) {
+    setSavingPrompt(item.id);
+    setError(null);
+    try {
+      const res = await updateAdminAdStudioSystemPrompt(item.id, {
+        prompt_text: item.prompt_text,
+        is_active: item.is_active,
+      });
+      setSystemPrompts((current) => current.map((x) => (x.id === item.id ? res.item : x)));
+    } catch {
+      setError("Не удалось сохранить системный промпт");
+    } finally {
+      setSavingPrompt(null);
+    }
+  }
+
+  useEffect(() => {
     const item = items.find((x) => x.id === selectedId);
     if (item) setForm(toForm(item, catalog));
   }, [selectedId, items, catalog]);
@@ -147,15 +177,19 @@ export function AdminAdStudioPage({
         next.generation_mode = mode;
         next.media_kind = kind;
         next.aspect_ratio = defaultAdStudioRatio(category, kind);
-        next.requires_product = adStudioModeNeedsProduct(mode);
-        next.requires_avatar = category === "ugc";
+        if (catalog === "trends") {
+          next.requires_product = adStudioModeNeedsProduct(mode);
+          next.requires_avatar = category === "ugc";
+        }
       }
       if (key === "generation_mode") {
         const mode = value as AdStudioGenerationMode;
         const kind = adStudioMediaKindForMode(mode);
         next.media_kind = kind;
         next.aspect_ratio = defaultAdStudioRatio(prev.category, kind);
-        next.requires_product = adStudioModeNeedsProduct(mode);
+        if (catalog === "trends") {
+          next.requires_product = adStudioModeNeedsProduct(mode);
+        }
       }
       return next;
     });
@@ -367,6 +401,56 @@ export function AdminAdStudioPage({
         </button>
       </div>
 
+      {!isTrends && systemPrompts.length > 0 ? (
+        <div className="space-y-3 rounded-md border border-slate-200 bg-white px-3 py-3">
+          <div>
+            <p className="text-sm font-medium text-slate-800">Единые системные промпты</p>
+            <p className="mt-1 text-xs text-slate-500">
+              Используются для генерации Студии, если у шаблона не включён «Студийный промпт».
+            </p>
+          </div>
+          {systemPrompts.map((item) => (
+            <div key={item.id} className="rounded-md border border-slate-200 p-3">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <span className="text-sm font-medium text-slate-700">
+                  {item.mode} / {item.scenario}
+                </span>
+                <label className="flex items-center gap-2 text-xs text-slate-500">
+                  <input
+                    type="checkbox"
+                    checked={item.is_active}
+                    onChange={(e) =>
+                      setSystemPrompts((current) =>
+                        current.map((x) => (x.id === item.id ? { ...x, is_active: e.target.checked } : x)),
+                      )
+                    }
+                  />
+                  Активен
+                </label>
+              </div>
+              <textarea
+                value={item.prompt_text}
+                onChange={(e) =>
+                  setSystemPrompts((current) =>
+                    current.map((x) => (x.id === item.id ? { ...x, prompt_text: e.target.value } : x)),
+                  )
+                }
+                rows={4}
+                className="w-full rounded-md border border-slate-200 px-3 py-2 font-mono text-xs"
+              />
+              <button
+                type="button"
+                onClick={() => void saveSystemPrompt(item)}
+                disabled={savingPrompt === item.id}
+                className="mt-2 rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+              >
+                {savingPrompt === item.id ? "Сохранение…" : "Сохранить промпт"}
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
       <div className="flex flex-wrap gap-2">
         <select
           value={filter}
@@ -536,6 +620,16 @@ export function AdminAdStudioPage({
                 />
                 Нужна модель
               </label>
+              {!isTrends ? (
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={form.use_template_prompt}
+                    onChange={(e) => patch("use_template_prompt", e.target.checked)}
+                  />
+                  Студийный промпт
+                </label>
+              ) : null}
               {isTrends ? (
                 <label className="flex items-center gap-2">
                   <input
