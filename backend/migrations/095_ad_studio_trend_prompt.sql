@@ -1,7 +1,7 @@
 -- +goose Up
 
 ALTER TABLE ad_studio_templates
-    ADD COLUMN trend_prompt BOOLEAN NOT NULL DEFAULT FALSE;
+    ADD COLUMN IF NOT EXISTS trend_prompt BOOLEAN NOT NULL DEFAULT FALSE;
 
 -- +goose Down
 
