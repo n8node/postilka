@@ -15,7 +15,8 @@ import (
 )
 
 func main() {
-	dir := flag.String("dir", envOr("TRENDS_IMPORT_DIR", "/data/trends-import"), "folder with Syntx image JSON and postilka-preview/")
+	dir := flag.String("dir", envOr("TRENDS_IMPORT_DIR", "/data/trends-import"), "folder with Syntx trend JSON and media files")
+	kind := flag.String("kind", "all", "import kind: all, image, or video")
 	dryRun := flag.Bool("dry-run", false, "parse and report without writing templates")
 	flag.Parse()
 
@@ -40,7 +41,28 @@ func main() {
 	settingsRepo := repository.NewSettingsRepository(db.Pool)
 	adStudioSvc := service.NewAdStudioService(adStudioRepo, nil, settingsRepo, nil, objectStorage)
 
-	result, err := adStudioSvc.ImportUnpublishedImageTrends(ctx, *dir, *dryRun)
+	var result service.TrendsImageImportResult
+	switch strings.ToLower(strings.TrimSpace(*kind)) {
+	case "video":
+		result, err = adStudioSvc.ImportUnpublishedVideoTrends(ctx, *dir, *dryRun)
+	case "image":
+		result, err = adStudioSvc.ImportUnpublishedImageTrends(ctx, *dir, *dryRun)
+	case "all":
+		result, err = adStudioSvc.ImportUnpublishedImageTrends(ctx, *dir, *dryRun)
+		if err == nil {
+			videoResult, videoErr := adStudioSvc.ImportUnpublishedVideoTrends(ctx, *dir, *dryRun)
+			result.Created += videoResult.Created
+			result.PreviewFilled += videoResult.PreviewFilled
+			result.Skipped += videoResult.Skipped
+			result.Failed += videoResult.Failed
+			result.Errors = append(result.Errors, videoResult.Errors...)
+			if videoErr != nil && len(videoResult.Errors) == 0 {
+				err = videoErr
+			}
+		}
+	default:
+		fail("invalid kind %q: use all, image, or video", *kind)
+	}
 	if err != nil {
 		fail("import: %v", err)
 	}

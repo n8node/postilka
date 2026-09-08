@@ -20,6 +20,8 @@ type TrendsImageImportResult struct {
 	Errors        []string `json:"errors,omitempty"`
 }
 
+type TrendsVideoImportResult = TrendsImageImportResult
+
 type syntxTrendImageMeta struct {
 	ID                 string `json:"id"`
 	Slug               string `json:"slug"`
@@ -35,6 +37,20 @@ type syntxTrendImageMeta struct {
 	} `json:"files"`
 }
 
+type syntxTrendVideoMeta struct {
+	ID                 string `json:"id"`
+	Slug               string `json:"slug"`
+	Title              string `json:"title"`
+	GenerationType     string `json:"generation_type"`
+	MediaFile          string `json:"media_file"`
+	Prompt             string `json:"prompt"`
+	GenerationSettings struct {
+		AspectRatio   string `json:"aspect_ratio"`
+		VideoDuration int    `json:"video_duration"`
+	} `json:"generation_settings"`
+	Categories []syntxTrendCategory `json:"categories"`
+}
+
 type syntxTrendCategory struct {
 	Slug  string `json:"slug"`
 	Title string `json:"title"`
@@ -48,6 +64,179 @@ type trendsImageImportItem struct {
 	prompt      string
 	previewPath string
 	sortOrder   int
+}
+
+type trendsVideoImportItem struct {
+	jsonName  string
+	title     string
+	category  string
+	ratio     string
+	duration  int
+	prompt    string
+	mediaPath string
+	mediaName string
+	sortOrder int
+}
+
+func (s *AdStudioService) ImportUnpublishedVideoTrends(ctx context.Context, dir string, dryRun bool) (TrendsVideoImportResult, error) {
+	var out TrendsVideoImportResult
+	abs, err := filepath.Abs(strings.TrimSpace(dir))
+	if err != nil {
+		return out, fmt.Errorf("import dir: %w", err)
+	}
+	entries, err := os.ReadDir(abs)
+	if err != nil {
+		return out, fmt.Errorf("read import dir: %w", err)
+	}
+
+	jsonNames := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() && strings.EqualFold(filepath.Ext(entry.Name()), ".json") {
+			jsonNames = append(jsonNames, entry.Name())
+		}
+	}
+	sort.Strings(jsonNames)
+	if len(jsonNames) == 0 {
+		return out, fmt.Errorf("no json files in %s", abs)
+	}
+
+	usedTitles := map[string]bool{}
+	items := make([]trendsVideoImportItem, 0, len(jsonNames))
+	for _, name := range jsonNames {
+		item, skip, err := parseTrendsVideoImportFile(abs, name, usedTitles)
+		if err != nil {
+			out.Failed++
+			out.Errors = append(out.Errors, fmt.Sprintf("%s: %s", name, err))
+			continue
+		}
+		if skip {
+			out.Skipped++
+			continue
+		}
+		items = append(items, item)
+	}
+
+	existing, err := s.repo.List(ctx, model.AdStudioCatalogTrends, "", false)
+	if err != nil {
+		return out, err
+	}
+	byTitle := make(map[string]model.AdStudioTemplate, len(existing))
+	for _, template := range existing {
+		byTitle[strings.ToLower(strings.TrimSpace(template.Title))] = template
+	}
+
+	for _, item := range items {
+		if err := ctx.Err(); err != nil {
+			return out, err
+		}
+		current, found := byTitle[strings.ToLower(item.title)]
+		if found {
+			if strings.TrimSpace(current.PreviewS3Key) != "" {
+				out.Skipped++
+				continue
+			}
+			if dryRun {
+				out.PreviewFilled++
+				continue
+			}
+			if err := s.uploadTrendsImportPreview(ctx, current.ID, item.mediaPath, item.mediaName, "video/mp4"); err != nil {
+				out.Failed++
+				out.Errors = append(out.Errors, fmt.Sprintf("%s: preview: %s", item.jsonName, err))
+				continue
+			}
+			out.PreviewFilled++
+			continue
+		}
+		if dryRun {
+			out.Created++
+			continue
+		}
+		published := false
+		requiresProduct := false
+		requiresAvatar := false
+		trendPrompt := true
+		order := item.sortOrder
+		created, err := s.CreateAdmin(ctx, model.AdStudioTemplateWriteRequest{
+			Title: item.title, Catalog: model.AdStudioCatalogTrends, Category: item.category,
+			GenerationMode: model.AdStudioModeReferenceToVideo, AspectRatio: item.ratio,
+			Duration: item.duration, SystemPrompt: item.prompt,
+			RequiresProduct: &requiresProduct, RequiresAvatar: &requiresAvatar,
+			TrendPrompt: &trendPrompt, SortOrder: &order, IsPublished: &published,
+		})
+		if err != nil {
+			out.Failed++
+			out.Errors = append(out.Errors, fmt.Sprintf("%s: create: %s", item.jsonName, err))
+			continue
+		}
+		byTitle[strings.ToLower(item.title)] = model.AdStudioTemplate{ID: created.ID, Title: created.Title}
+		if err := s.uploadTrendsImportPreview(ctx, created.ID, item.mediaPath, item.mediaName, "video/mp4"); err != nil {
+			out.Failed++
+			out.Errors = append(out.Errors, fmt.Sprintf("%s: preview: %s", item.jsonName, err))
+			continue
+		}
+		out.Created++
+	}
+	return out, nil
+}
+
+func parseTrendsVideoImportFile(root, name string, usedTitles map[string]bool) (trendsVideoImportItem, bool, error) {
+	item := trendsVideoImportItem{}
+	item.jsonName = name
+	raw, err := os.ReadFile(filepath.Join(root, name))
+	if err != nil {
+		return item, false, err
+	}
+	var meta syntxTrendVideoMeta
+	if err := json.Unmarshal(raw, &meta); err != nil {
+		return item, false, err
+	}
+	if strings.ToLower(strings.TrimSpace(meta.GenerationType)) != "video" {
+		return item, true, nil
+	}
+	if strings.TrimSpace(meta.Prompt) == "" {
+		return item, false, fmt.Errorf("empty prompt")
+	}
+	mediaName := filepath.Base(strings.TrimSpace(meta.MediaFile))
+	if mediaName == "." || mediaName == "" {
+		return item, false, fmt.Errorf("media_file is required")
+	}
+	mediaPath := filepath.Join(root, mediaName)
+	info, err := os.Stat(mediaPath)
+	if err != nil || !info.Mode().IsRegular() {
+		return item, false, fmt.Errorf("video not found: %s", mediaName)
+	}
+	category, err := trendsCategoryFromSlugs(meta.Categories)
+	if err != nil {
+		return item, false, err
+	}
+	ratio := normalizeAdStudioVideoRatio(meta.GenerationSettings.AspectRatio)
+	duration := meta.GenerationSettings.VideoDuration
+	if duration < 4 {
+		duration = 4
+	}
+	if duration > 15 {
+		duration = 15
+	}
+	title := uniqueTrendsImportTitle(meta.Title, meta.Slug, meta.ID, usedTitles)
+	return trendsVideoImportItem{jsonName: name, title: title, category: category, ratio: ratio, duration: duration, prompt: strings.TrimSpace(meta.Prompt), mediaPath: mediaPath, mediaName: mediaName, sortOrder: trendsImportSortOrder(name)}, false, nil
+}
+
+func trendsCategoryFromSlugs(categories []syntxTrendCategory) (string, error) {
+	for _, category := range categories {
+		if model.IsAdTrendsCategory(strings.TrimSpace(category.Slug)) {
+			return strings.TrimSpace(category.Slug), nil
+		}
+	}
+	return "", fmt.Errorf("no known trends category")
+}
+
+func normalizeAdStudioVideoRatio(ratio string) string {
+	switch strings.TrimSpace(ratio) {
+	case "9:16", "16:9", "1:1", "4:3", "3:4", "21:9":
+		return strings.TrimSpace(ratio)
+	default:
+		return "16:9"
+	}
 }
 
 func (s *AdStudioService) ImportUnpublishedImageTrends(ctx context.Context, dir string, dryRun bool) (TrendsImageImportResult, error) {
@@ -121,7 +310,7 @@ func (s *AdStudioService) ImportUnpublishedImageTrends(ctx context.Context, dir 
 				out.PreviewFilled++
 				continue
 			}
-			if err := s.uploadTrendsImportPreview(ctx, current.ID, item.previewPath); err != nil {
+			if err := s.uploadTrendsImportPreview(ctx, current.ID, item.previewPath, filepath.Base(item.previewPath), ""); err != nil {
 				out.Failed++
 				out.Errors = append(out.Errors, fmt.Sprintf("%s: preview: %s", item.jsonName, err.Error()))
 				continue
@@ -159,7 +348,7 @@ func (s *AdStudioService) ImportUnpublishedImageTrends(ctx context.Context, dir 
 			continue
 		}
 		byTitle[strings.ToLower(item.title)] = model.AdStudioTemplate{ID: created.ID, Title: created.Title}
-		if err := s.uploadTrendsImportPreview(ctx, created.ID, item.previewPath); err != nil {
+		if err := s.uploadTrendsImportPreview(ctx, created.ID, item.previewPath, filepath.Base(item.previewPath), ""); err != nil {
 			out.Failed++
 			out.Errors = append(out.Errors, fmt.Sprintf("%s: preview: %s", item.jsonName, err.Error()))
 			continue
@@ -169,12 +358,15 @@ func (s *AdStudioService) ImportUnpublishedImageTrends(ctx context.Context, dir 
 	return out, nil
 }
 
-func (s *AdStudioService) uploadTrendsImportPreview(ctx context.Context, id, path string) error {
+func (s *AdStudioService) uploadTrendsImportPreview(ctx context.Context, id, path, filename, contentType string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}
-	_, err = s.UploadPreviewFromBytes(ctx, id, data, filepath.Base(path), "")
+	if filename == "" {
+		filename = filepath.Base(path)
+	}
+	_, err = s.UploadPreviewFromBytes(ctx, id, data, filename, contentType)
 	return err
 }
 
