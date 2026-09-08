@@ -10,6 +10,7 @@ import {
   Type,
 } from "lucide-react";
 import { ProtectedMediaImage } from "@/components/media/ProtectedMediaImage";
+import { MediaPreviewStage } from "@/components/media/MediaPreviewStage";
 import { GenerationHistory } from "@/components/generation/GenerationHistory";
 import { GenerationProgressPanel } from "@/components/generation/GenerationProgressPanel";
 import { GenerationSidebarStats } from "@/components/generation/GenerationSidebarStats";
@@ -448,11 +449,11 @@ export function GenerationPageContent() {
             empty={!generating}
           />
         ) : resultUrl ? (
-          <div className="relative min-h-[360px] overflow-hidden rounded-lg bg-zinc-50">
+          <MediaPreviewStage tone="light">
             <ProtectedMediaImage
               url={resultUrl}
               alt="Результат генерации"
-              className="h-full min-h-[360px] w-full object-contain"
+              className="h-full w-full object-contain"
             />
             {generating && activeJob ? (
               <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/50 to-transparent px-4 pb-4 pt-10">
@@ -468,7 +469,7 @@ export function GenerationPageContent() {
                 </div>
               </div>
             ) : null}
-          </div>
+          </MediaPreviewStage>
         ) : (
           <GenerationProgressPanel
             progress={0}

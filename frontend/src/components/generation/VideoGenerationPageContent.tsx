@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Film, PenLine, Sparkles } from "lucide-react";
 import { ProtectedMediaImage } from "@/components/media/ProtectedMediaImage";
 import { ProtectedMediaVideo } from "@/components/media/ProtectedMediaVideo";
+import { MediaPreviewStage } from "@/components/media/MediaPreviewStage";
 import { GenerationProgressPanel } from "@/components/generation/GenerationProgressPanel";
 import { VideoExamplesStrip } from "@/components/generation/VideoExamplesStrip";
 import { VideoFormatParamsPanel } from "@/components/generation/VideoFormatParamsPanel";
@@ -619,22 +620,17 @@ export function VideoGenerationPageContent() {
             variant="video"
           />
         ) : resultUrl ? (
-          <div
-            className={cn(
-              "relative min-h-[360px] overflow-hidden rounded-lg",
-              previewIsImage ? "bg-zinc-50" : "bg-zinc-900",
-            )}
-          >
+          <MediaPreviewStage tone={previewIsImage ? "light" : "dark"}>
             {previewIsImage ? (
               <ProtectedMediaImage
                 url={resultUrl}
                 alt="Результат генерации"
-                className="h-full min-h-[360px] w-full object-contain"
+                className="h-full w-full object-contain"
               />
             ) : (
               <ProtectedMediaVideo
                 url={resultUrl}
-                className="h-full min-h-[360px] w-full object-contain"
+                className="h-full w-full object-contain"
                 controls
               />
             )}
@@ -652,7 +648,7 @@ export function VideoGenerationPageContent() {
                 </div>
               </div>
             ) : null}
-          </div>
+          </MediaPreviewStage>
         ) : (
           <GenerationProgressPanel
             progress={0}
