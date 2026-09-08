@@ -112,6 +112,7 @@ export type AdStudioTemplate = {
   duration: number;
   requires_product: boolean;
   requires_avatar: boolean;
+  trend_prompt: boolean;
   preview_kind?: AdStudioMediaKind;
   preview_url?: string;
   preview_source_url?: string;
@@ -138,6 +139,7 @@ export type AdStudioWritePayload = {
   system_prompt: string;
   requires_product: boolean;
   requires_avatar: boolean;
+  trend_prompt: boolean;
   sort_order: number;
   is_published: boolean;
 };
@@ -396,7 +398,7 @@ export function updateAdminAdStudioCategories(
 
 export function generateFromAdStudioTemplate(
   id: string,
-  body: { product_upload_id?: string; avatar_upload_id?: string; edit?: string },
+  body: { product_upload_id?: string; avatar_upload_id?: string; reference_upload_id?: string; edit?: string },
 ) {
   return apiFetch<{
     job: GenerationJob | VideoGenerationJob;

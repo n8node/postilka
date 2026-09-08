@@ -105,6 +105,7 @@ type AdStudioTemplate struct {
 	PreviewThumbS3Key  string
 	RequiresProduct    bool
 	RequiresAvatar     bool
+	TrendPrompt        bool
 	SortOrder          int
 	IsPublished        bool
 	CreatedAt          time.Time
@@ -213,6 +214,7 @@ type AdStudioTemplatePublicView struct {
 	Duration         int    `json:"duration"`
 	RequiresProduct  bool   `json:"requires_product"`
 	RequiresAvatar   bool   `json:"requires_avatar"`
+	TrendPrompt      bool   `json:"trend_prompt"`
 	PreviewKind      string `json:"preview_kind,omitempty"`
 	PreviewURL       string `json:"preview_url,omitempty"`
 	PreviewSourceURL string `json:"preview_source_url,omitempty"`
@@ -240,14 +242,16 @@ type AdStudioTemplateWriteRequest struct {
 	SystemPrompt    string `json:"system_prompt"`
 	RequiresProduct *bool  `json:"requires_product"`
 	RequiresAvatar  *bool  `json:"requires_avatar"`
+	TrendPrompt     *bool  `json:"trend_prompt"`
 	SortOrder       *int   `json:"sort_order"`
 	IsPublished     *bool  `json:"is_published"`
 }
 
 type AdStudioGenerateRequest struct {
-	ProductUploadID string `json:"product_upload_id"`
-	AvatarUploadID  string `json:"avatar_upload_id,omitempty"`
-	Edit            string `json:"edit"`
+	ProductUploadID   string `json:"product_upload_id"`
+	AvatarUploadID    string `json:"avatar_upload_id,omitempty"`
+	ReferenceUploadID string `json:"reference_upload_id,omitempty"`
+	Edit              string `json:"edit"`
 }
 
 func AdStudioPreviewIsVideo(contentType string) bool {
@@ -299,6 +303,7 @@ func (t AdStudioTemplate) ToPublicView() AdStudioTemplatePublicView {
 		Duration:        t.Duration,
 		RequiresProduct: t.RequiresProduct,
 		RequiresAvatar:  t.RequiresAvatar,
+		TrendPrompt:     t.TrendPrompt,
 		PreviewKind:     previewKind,
 		PreviewURL:      t.PreviewPath(),
 		SortOrder:       t.SortOrder,

@@ -341,6 +341,8 @@ func (h *AdStudioHandler) mapError(w http.ResponseWriter, err error) {
 		writeErrorWithCode(w, http.StatusBadRequest, "product_required", "Загрузите фото товара")
 	case errors.Is(err, service.ErrAdStudioAvatarRequired):
 		writeErrorWithCode(w, http.StatusBadRequest, "avatar_required", "Загрузите фото модели")
+	case errors.Is(err, service.ErrAdStudioReferenceRequired):
+		writeErrorWithCode(w, http.StatusBadRequest, "reference_required", "Загрузите референсное изображение")
 	case errors.Is(err, service.ErrAdStudioNotPublished):
 		writeErrorWithCode(w, http.StatusNotFound, "not_found", "Шаблон не найден")
 	case errors.Is(err, service.ErrAdStudioInvalidCategory):

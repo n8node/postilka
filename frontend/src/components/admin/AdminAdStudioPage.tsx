@@ -57,6 +57,7 @@ const emptyForm = (
     system_prompt: "",
     requires_product: adStudioModeNeedsProduct(mode),
     requires_avatar: nextCategory === "ugc",
+    trend_prompt: false,
     sort_order: 0,
     is_published: false,
   };
@@ -75,6 +76,7 @@ function toForm(item: AdStudioTemplateAdmin, catalog: AdStudioCatalog): AdStudio
     system_prompt: item.system_prompt,
     requires_product: item.requires_product,
     requires_avatar: item.requires_avatar,
+    trend_prompt: item.trend_prompt,
     sort_order: item.sort_order,
     is_published: item.is_published,
   };
@@ -534,6 +536,16 @@ export function AdminAdStudioPage({
                 />
                 Нужна модель
               </label>
+              {isTrends ? (
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={form.trend_prompt}
+                    onChange={(e) => patch("trend_prompt", e.target.checked)}
+                  />
+                  Трендовый промпт
+                </label>
+              ) : null}
               <label className="flex items-center gap-2">
                 <input
                   type="checkbox"

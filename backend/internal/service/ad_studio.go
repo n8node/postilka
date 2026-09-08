@@ -23,17 +23,18 @@ import (
 )
 
 var (
-	ErrAdStudioProductRequired = errors.New("ad studio product required")
-	ErrAdStudioAvatarRequired  = errors.New("ad studio avatar required")
-	ErrAdStudioNotPublished    = errors.New("ad studio template not published")
-	ErrAdStudioInvalidCategory = errors.New("ad studio invalid category")
-	ErrAdStudioInvalidKind     = errors.New("ad studio invalid media kind")
-	ErrAdStudioTitleRequired   = errors.New("ad studio title required")
-	ErrAdStudioPromptRequired  = errors.New("ad studio prompt required")
-	ErrAdStudioPreviewInvalid  = errors.New("ad studio preview invalid")
-	ErrAdStudioPreviewRequired = errors.New("ad studio preview required")
-	ErrAdStudioPreviewProcess  = errors.New("ad studio preview process failed")
-	ErrAdStudioInvalidMode     = errors.New("ad studio invalid generation mode")
+	ErrAdStudioProductRequired   = errors.New("ad studio product required")
+	ErrAdStudioAvatarRequired    = errors.New("ad studio avatar required")
+	ErrAdStudioNotPublished      = errors.New("ad studio template not published")
+	ErrAdStudioInvalidCategory   = errors.New("ad studio invalid category")
+	ErrAdStudioInvalidKind       = errors.New("ad studio invalid media kind")
+	ErrAdStudioTitleRequired     = errors.New("ad studio title required")
+	ErrAdStudioPromptRequired    = errors.New("ad studio prompt required")
+	ErrAdStudioPreviewInvalid    = errors.New("ad studio preview invalid")
+	ErrAdStudioPreviewRequired   = errors.New("ad studio preview required")
+	ErrAdStudioPreviewProcess    = errors.New("ad studio preview process failed")
+	ErrAdStudioInvalidMode       = errors.New("ad studio invalid generation mode")
+	ErrAdStudioReferenceRequired = errors.New("ad studio trend prompt reference required")
 )
 
 type AdStudioService struct {
@@ -683,10 +684,43 @@ func (s *AdStudioService) Generate(
 
 	productID := strings.TrimSpace(req.ProductUploadID)
 	avatarID := strings.TrimSpace(req.AvatarUploadID)
+	referenceID := strings.TrimSpace(req.ReferenceUploadID)
+	if t.TrendPrompt && referenceID == "" {
+		return StartGenerateResult{}, "", ErrAdStudioReferenceRequired
+	}
+	if t.TrendPrompt {
+		kind := model.AdStudioMediaKindForMode(mode)
+		prompt := strings.TrimSpace(t.SystemPrompt)
+		if prompt == "" {
+			return StartGenerateResult{}, "", ErrAdStudioPromptRequired
+		}
+		if edit := strings.TrimSpace(req.Edit); edit != "" {
+			prompt += "\nUser changes:\n" + edit
+		}
+		if mode == model.AdStudioModeTextToVideo || mode == model.AdStudioModeImageToVideo || mode == model.AdStudioModeReferenceToVideo {
+			videoMode := model.KieVideoModeImageToVideo
+			input := GenerateVideoInput{
+				Mode: videoMode, Prompt: prompt, AspectRatio: t.AspectRatio, Duration: t.Duration,
+			}
+			if mode == model.AdStudioModeTextToVideo || mode == model.AdStudioModeReferenceToVideo {
+				videoMode = model.KieVideoModeReferenceToVideo
+				input.Mode = videoMode
+				input.ReferenceUploadIDs = []string{referenceID}
+			} else {
+				input.SourceUploadID = referenceID
+			}
+			result, err := s.generation.StartGenerateVideo(ctx, userID, r, input)
+			return result, kind, err
+		}
+		result, err := s.generation.StartGenerate(ctx, userID, r, GenerateImageInput{
+			Mode: model.AdStudioModeImageToImage, Prompt: prompt, AspectRatio: normalizeAdStudioImageRatio(t.AspectRatio), SourceUploadID: referenceID,
+		})
+		return result, kind, err
+	}
 	// The combine mode is configurable: a template may require a product,
 	// a model, both references, or neither. Other product-based modes keep
 	// their intrinsic product requirement.
-	needsProduct := t.RequiresProduct || (mode != model.AdStudioModeCombine && model.AdStudioModeNeedsProduct(mode))
+	needsProduct := !t.TrendPrompt && (t.RequiresProduct || (mode != model.AdStudioModeCombine && model.AdStudioModeNeedsProduct(mode)))
 	if needsProduct && productID == "" {
 		return StartGenerateResult{}, "", ErrAdStudioProductRequired
 	}
@@ -936,6 +970,9 @@ func templateFromWrite(base model.AdStudioTemplate, req model.AdStudioTemplateWr
 	}
 	if req.RequiresAvatar != nil {
 		t.RequiresAvatar = *req.RequiresAvatar
+	}
+	if req.TrendPrompt != nil {
+		t.TrendPrompt = *req.TrendPrompt
 	}
 	if req.SortOrder != nil {
 		t.SortOrder = *req.SortOrder

@@ -271,15 +271,16 @@ export function AdStudioPage({ catalog = "studio" }: { catalog?: AdStudioCatalog
   const [selected, setSelected] = useState<AdStudioTemplate | null>(null);
   const [product, setProduct] = useState<GenerationUpload | null>(null);
   const [avatar, setAvatar] = useState<GenerationUpload | null>(null);
+  const [reference, setReference] = useState<GenerationUpload | null>(null);
   const [edit, setEdit] = useState("");
-  const [uploading, setUploading] = useState<"product" | "avatar" | null>(null);
-  const [pickerSlot, setPickerSlot] = useState<"product" | "avatar" | null>(null);
-  const pickerSlotRef = useRef<"product" | "avatar" | null>(null);
+  const [uploading, setUploading] = useState<"product" | "avatar" | "reference" | null>(null);
+  const [pickerSlot, setPickerSlot] = useState<"product" | "avatar" | "reference" | null>(null);
+  const pickerSlotRef = useRef<"product" | "avatar" | "reference" | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const formRef = useRef<HTMLDivElement>(null);
   const [formHeight, setFormHeight] = useState(0);
 
-  const openPicker = (slot: "product" | "avatar") => {
+  const openPicker = (slot: "product" | "avatar" | "reference") => {
     pickerSlotRef.current = slot;
     setPickerSlot(slot);
   };
@@ -394,6 +395,7 @@ export function AdStudioPage({ catalog = "studio" }: { catalog?: AdStudioCatalog
       selectedIdRef.current = item.id;
       setSelected(item);
       setEdit("");
+      setReference(null);
       clearImageError();
       clearVideoError();
       clearImageResult();
@@ -434,9 +436,10 @@ export function AdStudioPage({ catalog = "studio" }: { catalog?: AdStudioCatalog
     applyTemplate(match);
   }, [templateParam, loading, items, applyTemplate]);
 
-  const applyUpload = (slot: "product" | "avatar", next: GenerationUpload) => {
+  const applyUpload = (slot: "product" | "avatar" | "reference", next: GenerationUpload) => {
     if (slot === "product") setProduct(next);
-    else setAvatar(next);
+    else if (slot === "avatar") setAvatar(next);
+    else setReference(next);
   };
 
   const failUpload = (msg: string) => {
@@ -447,7 +450,7 @@ export function AdStudioPage({ catalog = "studio" }: { catalog?: AdStudioCatalog
     }
   };
 
-  const pickUpload = async (slot: "product" | "avatar", file: File) => {
+  const pickUpload = async (slot: "product" | "avatar" | "reference", file: File) => {
     setUploading(slot);
     try {
       const uploaded = await uploadGenerationMedia(file);
@@ -462,7 +465,7 @@ export function AdStudioPage({ catalog = "studio" }: { catalog?: AdStudioCatalog
     }
   };
 
-  const pickWorkspace = async (slot: "product" | "avatar", file: WorkspaceFile) => {
+  const pickWorkspace = async (slot: "product" | "avatar" | "reference", file: WorkspaceFile) => {
     if (!file.mime_type.startsWith("image/")) {
       failUpload("Нужен файл изображения");
       return;
@@ -526,6 +529,7 @@ export function AdStudioPage({ catalog = "studio" }: { catalog?: AdStudioCatalog
       !uploading &&
       (!needsProduct || product) &&
       (!needsAvatar || avatar) &&
+      (!selected.trend_prompt || reference) &&
       hasMediaCredits(creditsRemaining),
   );
 
@@ -543,6 +547,7 @@ export function AdStudioPage({ catalog = "studio" }: { catalog?: AdStudioCatalog
       const { job, media_kind } = await generateFromAdStudioTemplate(selected.id, {
         product_upload_id: product?.uploadId,
         avatar_upload_id: avatar?.uploadId,
+        reference_upload_id: reference?.uploadId,
         edit: edit.trim(),
       });
       if (media_kind === "video") {
@@ -729,6 +734,17 @@ export function AdStudioPage({ catalog = "studio" }: { catalog?: AdStudioCatalog
               />
             ) : null}
 
+            {selected.trend_prompt ? (
+              <UploadSlot
+                label="Референс"
+                hint="Загрузить референс"
+                photo={reference}
+                disabled={generating || uploading === "reference"}
+                onOpen={() => openPicker("reference")}
+                onClear={() => setReference(null)}
+              />
+            ) : null}
+
             <label className="block">
               <span className="mb-2 flex items-center gap-1.5 text-[12px] font-medium text-text">
                 <UserRound size={13} className="text-muted" />
@@ -892,7 +908,7 @@ export function AdStudioPage({ catalog = "studio" }: { catalog?: AdStudioCatalog
       />
       <MediaSourcePickerModal
         open={pickerSlot !== null}
-        title={pickerSlot === "avatar" ? "Фото модели" : "Фото товара"}
+        title={pickerSlot === "avatar" ? "Фото модели" : pickerSlot === "reference" ? "Референс" : "Фото товара"}
         subtitle="С компьютера или с диска проекта"
         mediaKind="image"
         onClose={closePicker}
