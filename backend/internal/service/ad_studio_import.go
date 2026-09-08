@@ -82,6 +82,17 @@ type trendsVideoImportItem struct {
 	sortOrder int
 }
 
+var excludedVideoTrendJSON = map[string]struct{}{
+	"074_levitation_01a01553.json":           {},
+	"090_rotation-360_01a0152c.json":         {},
+	"139_the-dune_01a011b3.json":             {},
+	"173_the-red-thread_01a01173.json":       {},
+	"174_armored-knight_01a01172.json":       {},
+	"175_red-koi-fish_01a01171.json":         {},
+	"190_a-meal-made-together_01a01040.json": {},
+	"199_the-mouse-king_01a01022.json":       {},
+}
+
 func (s *AdStudioService) ImportUnpublishedVideoTrends(ctx context.Context, dir string, dryRun bool) (TrendsVideoImportResult, error) {
 	var out TrendsVideoImportResult
 	abs, err := filepath.Abs(strings.TrimSpace(dir))
@@ -107,6 +118,10 @@ func (s *AdStudioService) ImportUnpublishedVideoTrends(ctx context.Context, dir 
 	usedTitles := map[string]bool{}
 	items := make([]trendsVideoImportItem, 0, len(jsonNames))
 	for _, name := range jsonNames {
+		if _, excluded := excludedVideoTrendJSON[name]; excluded {
+			out.Skipped++
+			continue
+		}
 		item, skip, err := parseTrendsVideoImportFile(abs, name, usedTitles)
 		if err != nil {
 			out.Failed++
