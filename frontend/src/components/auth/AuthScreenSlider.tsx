@@ -77,7 +77,7 @@ export function AuthScreenSlider({
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent" />
       </div>
 
-      <div className="relative flex min-h-[26rem] flex-col justify-end px-7 pb-3 pt-14 xl:px-9 xl:pb-4 xl:pt-16 lg:min-h-[34rem]">
+      <div className="absolute inset-0 flex flex-col justify-end px-7 pb-3 pt-14 xl:px-9 xl:pb-4 xl:pt-16">
         <div className="auth-slide-content-viewport overflow-hidden">
           <div
             className="auth-slide-track flex"
