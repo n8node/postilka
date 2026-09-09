@@ -141,6 +141,15 @@ export function RichTextEditor({ html, onChange, placeholder, disabled }: Props)
     return true;
   }
 
+  function selectedLinkURL(): string {
+    const selection = window.getSelection();
+    const node = selection?.anchorNode;
+    if (!node) return "";
+    const element = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+    const link = element instanceof HTMLElement ? element.closest("a") : null;
+    return safeURL(link?.getAttribute("href") ?? null);
+  }
+
   function wrapSelection(tag: "tg-spoiler" | "blockquote") {
     editorRef.current?.focus();
     const selection = window.getSelection();
@@ -162,7 +171,7 @@ export function RichTextEditor({ html, onChange, placeholder, disabled }: Props)
 
   function openLinkModal() {
     saveSelection();
-    setLinkURL("");
+    setLinkURL(selectedLinkURL());
     setLinkError(null);
     setLinkOpen(true);
   }
@@ -182,13 +191,7 @@ export function RichTextEditor({ html, onChange, placeholder, disabled }: Props)
     if (!restoreSelection()) {
       editorRef.current?.focus();
     }
-    const selection = window.getSelection();
-    const selected = selection?.toString().trim() || href;
-    document.execCommand(
-      "insertHTML",
-      false,
-      `<a href="${escapeText(href)}">${escapeText(selected)}</a>`,
-    );
+    document.execCommand("createLink", false, href);
     emit();
     closeLinkModal();
   }
@@ -267,7 +270,7 @@ export function RichTextEditor({ html, onChange, placeholder, disabled }: Props)
         data-placeholder={placeholder ?? "Напишите текст публикации…"}
         onInput={emit}
         onBlur={emit}
-        className="min-h-40 px-4 py-3 text-[15px] leading-6 outline-none empty:before:pointer-events-none empty:before:text-zinc-400 empty:before:content-[attr(data-placeholder)] [&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-blue-300 [&_blockquote]:pl-3 [&_pre]:my-2 [&_pre]:rounded [&_pre]:bg-zinc-100 [&_pre]:p-2"
+        className="min-h-40 px-4 py-3 text-[15px] leading-6 outline-none empty:before:pointer-events-none empty:before:text-zinc-400 empty:before:content-[attr(data-placeholder)] [&_a]:text-blue-600 [&_a]:underline [&_a]:decoration-blue-300 [&_a]:underline-offset-2 [&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-blue-300 [&_blockquote]:pl-3 [&_pre]:my-2 [&_pre]:rounded [&_pre]:bg-zinc-100 [&_pre]:p-2"
       />
       {linkOpen && (
         <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/30 p-4">
