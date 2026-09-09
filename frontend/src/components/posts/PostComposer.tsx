@@ -244,6 +244,14 @@ function htmlToPlain(html: string) {
   return (node.innerText || node.textContent || "").trim();
 }
 
+function extractFirstURL(html: string, plain: string): string {
+  return (
+    plain.match(/https?:\/\/[^\s<]+/)?.[0] ??
+    html.match(/href=["'](https?:\/\/[^"']+)["']/i)?.[1] ??
+    ""
+  );
+}
+
 type PostKind = "post" | "story" | "short_video" | "video" | "shorts";
 
 function formatToPostKind(format: PostContent["format"]): PostKind {
@@ -1517,10 +1525,7 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
   const previewPlain = currentOverride?.detached ? currentOverride.plain : plain;
   const editorHTML = activeChannelId && currentOverride?.detached ? currentOverride.html : html;
   const editorPlain = activeChannelId && currentOverride?.detached ? currentOverride.plain : plain;
-  const detectedURL =
-    previewPlain.match(/https?:\/\/[^\s<]+/)?.[0] ??
-    html.match(/href=["'](https?:\/\/[^"']+)["']/i)?.[1] ??
-    "";
+  const detectedURL = extractFirstURL(previewHTML, previewPlain);
   const maxText =
     activeChannel !== null
       ? channelTextLimit(activeChannel, media.length, telegramMediaLayout)
@@ -2426,24 +2431,34 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
   }
 
   async function loadShortURLs(post: Post): Promise<void> {
-    if (!detectedURL) return;
-    const targets = post.targets.filter((target) => {
-      const utmSettings = target.settings?.settings?.utm;
-      return Boolean(utmSettings?.shorten);
-    });
+    const targets = post.targets
+      .map((target) => {
+        const channel = channels.find((item) => item.id === target.channel_id);
+        const utmSettings = channelUTM[target.channel_id];
+        const targetURL = channel
+          ? extractFirstURL(
+              overrides[channel.id]?.detached ? overrides[channel.id]!.html : html,
+              overrides[channel.id]?.detached ? overrides[channel.id]!.plain : plain,
+            )
+          : detectedURL;
+        return { target, targetURL, shorten: Boolean(utmSettings?.shorten) };
+      })
+      .filter((item) => item.shorten && item.targetURL);
     if (targets.length === 0) return;
 
     setShortURLBusy((current) =>
-      Object.fromEntries(targets.map((target) => [target.id, true])) as Record<string, boolean>,
+      Object.fromEntries(
+        targets.map(({ target }) => [target.channel_id, true]),
+      ) as Record<string, boolean>,
     );
     try {
       const results = await Promise.all(
-        targets.map(async (target) => {
+        targets.map(async ({ target, targetURL }) => {
           const result = await previewPostShortLink(post.id, {
             target_id: target.id,
-            destination_url: detectedURL,
+            destination_url: targetURL,
           });
-          return [target.id, result.short_url] as const;
+          return [target.channel_id, result.short_url] as const;
         }),
       );
       setShortURLs((current) => ({ ...current, ...Object.fromEntries(results) }));
@@ -2452,7 +2467,7 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
     } finally {
       setShortURLBusy((current) => {
         const next = { ...current };
-        for (const target of targets) delete next[target.id];
+        for (const { target } of targets) delete next[target.channel_id];
         return next;
       });
     }
