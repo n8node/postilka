@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strconv"
 
@@ -116,12 +117,12 @@ func (h *AuthScreenHandler) DeleteSlideMedia(w http.ResponseWriter, r *http.Requ
 }
 
 func (h *AuthScreenHandler) ServeLogo(w http.ResponseWriter, r *http.Request) {
-	url, err := h.svc.LogoPresignedURL(r.Context())
+	media, err := h.svc.OpenLogo(r.Context(), r.Header.Get("Range"))
 	if err != nil {
 		h.writeError(w, err)
 		return
 	}
-	redirectPresignedObject(w, r, url)
+	writeAuthScreenMedia(w, media, r.Header.Get("Range") != "")
 }
 
 func (h *AuthScreenHandler) ServeSlideMedia(w http.ResponseWriter, r *http.Request) {
@@ -129,12 +130,12 @@ func (h *AuthScreenHandler) ServeSlideMedia(w http.ResponseWriter, r *http.Reque
 	if !ok {
 		return
 	}
-	url, err := h.svc.SlideMediaPresignedURL(r.Context(), slot)
+	media, err := h.svc.OpenSlideMedia(r.Context(), slot, r.Header.Get("Range"))
 	if err != nil {
 		h.writeError(w, err)
 		return
 	}
-	redirectPresignedObject(w, r, url)
+	writeAuthScreenMedia(w, media, r.Header.Get("Range") != "")
 }
 
 func parseAuthScreenSlot(w http.ResponseWriter, raw string) (int, bool) {
@@ -144,6 +145,26 @@ func parseAuthScreenSlot(w http.ResponseWriter, raw string) (int, bool) {
 		return 0, false
 	}
 	return slot, true
+}
+
+func writeAuthScreenMedia(w http.ResponseWriter, media *service.ObjectReadResult, partial bool) {
+	defer media.Body.Close()
+	w.Header().Set("Accept-Ranges", "bytes")
+	w.Header().Set("Cache-Control", "public, max-age=300")
+	w.Header().Set("Content-Type", media.ContentType)
+	w.Header().Set("X-Content-Type-Options", "nosniff")
+	if media.ContentLength > 0 {
+		w.Header().Set("Content-Length", strconv.FormatInt(media.ContentLength, 10))
+	}
+	if media.ContentRange != "" {
+		w.Header().Set("Content-Range", media.ContentRange)
+	}
+	if partial && media.ContentRange != "" {
+		w.WriteHeader(http.StatusPartialContent)
+	} else {
+		w.WriteHeader(http.StatusOK)
+	}
+	_, _ = io.Copy(w, media.Body)
 }
 
 func (h *AuthScreenHandler) writeError(w http.ResponseWriter, err error) {

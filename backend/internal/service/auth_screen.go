@@ -255,6 +255,33 @@ func (s *AuthScreenService) FetchSlideMedia(ctx context.Context, slot int) ([]by
 	return s.fetchObject(ctx, slide.MediaS3Key, slide.MediaType, maxAuthScreenMediaUpload)
 }
 
+func (s *AuthScreenService) OpenLogo(ctx context.Context, rangeHeader string) (*ObjectReadResult, error) {
+	config, err := s.repo.GetSettings(ctx)
+	if err != nil || config.LogoS3Key == "" {
+		return nil, ErrAuthScreenNotFound
+	}
+	return s.openObject(ctx, config.LogoS3Key, rangeHeader)
+}
+
+func (s *AuthScreenService) OpenSlideMedia(ctx context.Context, slot int, rangeHeader string) (*ObjectReadResult, error) {
+	if !validAuthScreenSlot(slot) {
+		return nil, ErrAuthScreenNotFound
+	}
+	slide, err := s.repo.GetSlide(ctx, slot)
+	if err != nil || slide.MediaS3Key == "" {
+		return nil, ErrAuthScreenNotFound
+	}
+	return s.openObject(ctx, slide.MediaS3Key, rangeHeader)
+}
+
+func (s *AuthScreenService) openObject(ctx context.Context, key, rangeHeader string) (*ObjectReadResult, error) {
+	result, err := s.store.GetObjectWithRange(ctx, key, rangeHeader)
+	if err != nil {
+		return nil, ErrAuthScreenNotFound
+	}
+	return result, nil
+}
+
 func (s *AuthScreenService) LogoPresignedURL(ctx context.Context) (string, error) {
 	config, err := s.repo.GetSettings(ctx)
 	if err != nil || config.LogoS3Key == "" {

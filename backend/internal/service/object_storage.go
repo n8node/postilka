@@ -133,23 +133,55 @@ type HeadObjectResult struct {
 	ContentType string
 }
 
+type ObjectReadResult struct {
+	Body          io.ReadCloser
+	ContentType   string
+	ContentLength int64
+	ContentRange  string
+}
+
 func (o *ObjectStorage) GetObject(ctx context.Context, s3Key string) (io.ReadCloser, string, error) {
-	client, st, err := o.client(ctx)
+	result, err := o.GetObjectWithRange(ctx, s3Key, "")
 	if err != nil {
 		return nil, "", err
 	}
-	out, err := client.GetObject(ctx, &s3.GetObjectInput{
+	return result.Body, result.ContentType, nil
+}
+
+func (o *ObjectStorage) GetObjectWithRange(ctx context.Context, s3Key, rangeHeader string) (*ObjectReadResult, error) {
+	client, st, err := o.client(ctx)
+	if err != nil {
+		return nil, err
+	}
+	input := &s3.GetObjectInput{
 		Bucket: aws.String(st.Bucket),
 		Key:    aws.String(s3Key),
-	})
+	}
+	if strings.TrimSpace(rangeHeader) != "" {
+		input.Range = aws.String(rangeHeader)
+	}
+	out, err := client.GetObject(ctx, input)
 	if err != nil {
-		return nil, "", err
+		return nil, err
 	}
 	contentType := "application/octet-stream"
 	if out.ContentType != nil && strings.TrimSpace(*out.ContentType) != "" {
 		contentType = *out.ContentType
 	}
-	return out.Body, contentType, nil
+	var contentLength int64
+	if out.ContentLength != nil {
+		contentLength = *out.ContentLength
+	}
+	contentRange := ""
+	if out.ContentRange != nil {
+		contentRange = *out.ContentRange
+	}
+	return &ObjectReadResult{
+		Body:          out.Body,
+		ContentType:   contentType,
+		ContentLength: contentLength,
+		ContentRange:  contentRange,
+	}, nil
 }
 
 func (o *ObjectStorage) HeadObject(ctx context.Context, s3Key string) (*HeadObjectResult, error) {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRef } from "react";
 import type { AuthScreenSlide } from "@/lib/api";
 import { mediaUrl } from "@/lib/media-display";
 
@@ -16,6 +17,7 @@ export function AuthScreenSlider({
 }) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [direction, setDirection] = useState<1 | -1>(1);
+  const videoRefs = useRef(new Map<number, HTMLVideoElement>());
 
   const activeSlide = slides[activeIndex];
   const activeDuration = Math.max(
@@ -37,6 +39,13 @@ export function AuthScreenSlider({
     if (activeIndex >= slides.length) setActiveIndex(0);
   }, [activeIndex, slides.length]);
 
+  useEffect(() => {
+    for (const video of videoRefs.current.values()) {
+      video.preload = "auto";
+      video.load();
+    }
+  }, [slides]);
+
   if (loading || slides.length === 0) {
     if (!loading) return null;
     return (
@@ -46,35 +55,45 @@ export function AuthScreenSlider({
 
   return (
     <aside className="relative min-h-[26rem] overflow-hidden rounded-2xl border border-white/40 bg-slate-950 text-white shadow-xl lg:min-h-[34rem]">
-      <div
-        className="auth-slide-track absolute inset-0 flex"
-        style={{
-          transform: `translate3d(-${activeIndex * 100}%, 0, 0)`,
-          transitionDuration: direction === 1 ? "520ms" : "420ms",
-        }}
-      >
-        {slides.map((slide) => {
-          const mediaURL = slide.media_url ? mediaUrl(slide.media_url) : "";
-          return (
-            <div key={slide.slot} className="relative h-full min-w-full shrink-0">
-              {mediaURL && slide.media_kind === "video" ? (
-                <video
-                  className="h-full w-full object-cover"
-                  src={mediaURL}
-                  autoPlay
-                  muted
-                  playsInline
-                  loop
-                />
-              ) : mediaURL ? (
-                <img className="h-full w-full object-cover" src={mediaURL} alt="" />
-              ) : (
-                <div className="h-full w-full bg-slate-900" />
-              )}
-            </div>
-          );
-        })}
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent" />
+      <div className="absolute inset-0 overflow-hidden">
+        <div
+          className="auth-slide-track absolute inset-0 flex"
+          style={{
+            transform: `translate3d(-${activeIndex * 100}%, 0, 0)`,
+            transitionDuration: direction === 1 ? "520ms" : "420ms",
+          }}
+        >
+          {slides.map((slide) => {
+            const mediaURL = slide.media_url ? mediaUrl(slide.media_url) : "";
+            return (
+              <div key={slide.slot} className="auth-slide-item relative h-full">
+                {mediaURL && slide.media_kind === "video" ? (
+                  <video
+                    ref={(element) => {
+                      if (element) {
+                        videoRefs.current.set(slide.slot, element);
+                      } else {
+                        videoRefs.current.delete(slide.slot);
+                      }
+                    }}
+                    className="h-full w-full object-cover"
+                    src={mediaURL}
+                    preload="auto"
+                    autoPlay
+                    muted
+                    playsInline
+                    loop
+                  />
+                ) : mediaURL ? (
+                  <img className="h-full w-full object-cover" src={mediaURL} alt="" />
+                ) : (
+                  <div className="h-full w-full bg-slate-900" />
+                )}
+              </div>
+            );
+          })}
+          <div className="auth-slide-overlay absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent" />
+        </div>
       </div>
 
       <div className="absolute inset-0 flex flex-col justify-end px-7 pb-3 pt-14 xl:px-9 xl:pb-4 xl:pt-16">
@@ -87,7 +106,7 @@ export function AuthScreenSlider({
             }}
           >
             {slides.map((slide) => (
-              <div key={slide.slot} className="min-w-full shrink-0 pr-4">
+              <div key={slide.slot} className="auth-slide-item min-w-0 pr-4">
                 <div className="max-w-md">
                   {slide.tag && (
                     <span className="inline-flex rounded-full border border-white/30 bg-white/10 px-3 py-1 text-xs font-medium uppercase tracking-[0.14em] text-white/85 backdrop-blur-sm">
