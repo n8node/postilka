@@ -71,6 +71,16 @@ func (s *LinkShortenerService) EnsureShortLink(
 	return "", fmt.Errorf("failed to allocate link code")
 }
 
+func (s *LinkShortenerService) EnsureShortLinkWithUTM(
+	ctx context.Context,
+	workspaceID, postID, targetID, channelID, destinationURL string,
+	utm *model.PostUTMSettings,
+) (string, error) {
+	destinationURL, _ = splitURLPunctuation(strings.TrimSpace(destinationURL))
+	destinationURL = rewriteAbsoluteURL(destinationURL, utm)
+	return s.EnsureShortLink(ctx, workspaceID, postID, targetID, channelID, destinationURL)
+}
+
 func (s *LinkShortenerService) Resolve(
 	ctx context.Context,
 	code, referrer, userAgent string,

@@ -231,6 +231,23 @@ func (s *PostService) Update(
 	return s.maybeSubmitForApproval(ctx, userID, r, updated)
 }
 
+func (s *PostService) PreviewShortLink(
+	ctx context.Context,
+	userID string,
+	r *http.Request,
+	postID, targetID, destinationURL string,
+) (string, error) {
+	ws, err := s.requireEditor(ctx, userID, r)
+	if err != nil {
+		return "", err
+	}
+	post, err := s.posts.Get(ctx, ws.ID, postID)
+	if err != nil {
+		return "", err
+	}
+	return s.publication.PreviewShortLink(ctx, post, targetID, destinationURL)
+}
+
 func (s *PostService) Delete(ctx context.Context, userID string, r *http.Request, postID string) error {
 	ws, err := s.requireEditor(ctx, userID, r)
 	if err != nil {

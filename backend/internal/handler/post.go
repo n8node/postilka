@@ -133,6 +133,34 @@ func (h *PostHandler) Update(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, post)
 }
 
+func (h *PostHandler) PreviewShortLink(w http.ResponseWriter, r *http.Request) {
+	userID, ok := postUserID(w, r)
+	if !ok {
+		return
+	}
+	var req struct {
+		TargetID       string `json:"target_id"`
+		DestinationURL string `json:"destination_url"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Некорректное тело запроса")
+		return
+	}
+	shortURL, err := h.posts.PreviewShortLink(
+		r.Context(),
+		userID,
+		r,
+		chi.URLParam(r, "id"),
+		strings.TrimSpace(req.TargetID),
+		strings.TrimSpace(req.DestinationURL),
+	)
+	if err != nil {
+		writePostError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"short_url": shortURL})
+}
+
 func (h *PostHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	userID, ok := postUserID(w, r)
 	if !ok {

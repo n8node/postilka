@@ -11,6 +11,7 @@ import {
   ChevronDown,
   ChevronUp,
   Circle,
+  CircleHelp,
   Copy,
   FileImage,
   GripVertical,
@@ -87,6 +88,7 @@ import {
   schedulePost,
   syncTelegramStory,
   updatePost,
+  previewPostShortLink,
   type Post,
   type PostApprovalEvent,
   type PostContent,
@@ -1287,6 +1289,9 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
   const [telegramMediaOrder, setTelegramMediaOrder] = useState<"media_first" | "text_first">("media_first");
   const [channelUTM, setChannelUTM] = useState<Record<string, ChannelUTMSettings>>({});
   const [expandedUTMChannelId, setExpandedUTMChannelId] = useState<string | null>(null);
+  const [utmHelpOpen, setUtmHelpOpen] = useState(false);
+  const [shortURLs, setShortURLs] = useState<Record<string, string>>({});
+  const [shortURLBusy, setShortURLBusy] = useState<Record<string, boolean>>({});
   const [approvalRequired, setApprovalRequired] = useState(false);
   const [selectedApproverIds, setSelectedApproverIds] = useState<string[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -1649,6 +1654,8 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
     setLongitude("");
     setChannelUTM({});
     setExpandedUTMChannelId(null);
+    setShortURLs({});
+    setShortURLBusy({});
     setApprovalRequired(false);
     setSelectedApproverIds([]);
     setDecisionComment("");
@@ -1754,6 +1761,8 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
     }
     setChannelUTM(loadedChannelUTM);
     setExpandedUTMChannelId(null);
+    setShortURLs({});
+    setShortURLBusy({});
     setApprovalRequired(Boolean(post.settings.approval_required));
     setSelectedApproverIds(post.settings.approver_user_ids ?? []);
     setDecisionComment("");
@@ -2413,6 +2422,39 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
     }
   }
 
+  async function loadShortURLs(post: Post): Promise<void> {
+    if (!detectedURL) return;
+    const targets = post.targets.filter((target) => {
+      const utmSettings = target.settings?.settings?.utm;
+      return Boolean(utmSettings?.shorten);
+    });
+    if (targets.length === 0) return;
+
+    setShortURLBusy((current) =>
+      Object.fromEntries(targets.map((target) => [target.id, true])) as Record<string, boolean>,
+    );
+    try {
+      const results = await Promise.all(
+        targets.map(async (target) => {
+          const result = await previewPostShortLink(post.id, {
+            target_id: target.id,
+            destination_url: detectedURL,
+          });
+          return [target.id, result.short_url] as const;
+        }),
+      );
+      setShortURLs((current) => ({ ...current, ...Object.fromEntries(results) }));
+    } catch (shortURLError) {
+      setError(errorText(shortURLError, "Не удалось подготовить короткую ссылку"));
+    } finally {
+      setShortURLBusy((current) => {
+        const next = { ...current };
+        for (const target of targets) delete next[target.id];
+        return next;
+      });
+    }
+  }
+
   async function save(action: Timing) {
     if ((action === "now" || action === "schedule") && !emailVerified) {
       setError(EMAIL_UNVERIFIED_RESTRICTED_MESSAGE);
@@ -2443,14 +2485,18 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
         const saved = postId
           ? await updatePost(postId, buildPayload())
           : await createPost(buildPayload());
+        void loadShortURLs(saved);
         finalPost = await publishPostAndWait(saved.id);
       } else if (canPublishWithoutSave) {
+        const latest = await fetchPost(postId!);
+        void loadShortURLs(latest);
         finalPost = await publishPostAndWait(postId!);
       } else {
         const saved = postId
           ? await updatePost(postId, buildPayload())
           : await createPost(buildPayload());
         finalPost = saved;
+        void loadShortURLs(saved);
         if (action === "schedule") {
           finalPost = await schedulePost(saved.id, new Date(scheduleAt).toISOString());
         }
@@ -2864,6 +2910,17 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
                               <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted" />
                             )}
                             <span className="font-medium">Отслеживание ссылок</span>
+                            <button
+                              type="button"
+                              aria-label="Что такое отслеживание ссылок"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setUtmHelpOpen(true);
+                              }}
+                              className="rounded-full text-zinc-400 transition hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                            >
+                              <CircleHelp className="h-4 w-4" />
+                            </button>
                             <span
                               className={cn(
                                 "ml-auto rounded-full px-2 py-0.5 text-[10px] font-medium",
@@ -2921,6 +2978,42 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
                                 />
                                 Сокращать ссылки Postilka
                               </label>
+                              {utmSettings.shorten && shortURLs[channel.id] ? (
+                                <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50/70 p-3">
+                                  <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-800">
+                                    Короткая ссылка
+                                  </p>
+                                  <div className="mt-1 flex items-center gap-2">
+                                    <a
+                                      href={shortURLs[channel.id]}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="min-w-0 flex-1 truncate font-mono text-xs text-emerald-800 underline"
+                                    >
+                                      {shortURLs[channel.id]}
+                                    </a>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        void navigator.clipboard.writeText(shortURLs[channel.id]!);
+                                        setSuccess("Короткая ссылка скопирована");
+                                      }}
+                                      className="shrink-0 rounded-md border border-emerald-300 px-2 py-1 text-[11px] font-medium text-emerald-800 hover:bg-emerald-100"
+                                    >
+                                      <Copy className="mr-1 inline h-3 w-3" />
+                                      Копировать
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : utmSettings.shorten ? (
+                                <p className="mt-2 text-[11px] text-muted">
+                                  {shortURLBusy[channel.id]
+                                    ? "Готовим короткую ссылку…"
+                                    : postId
+                                      ? "Сохраните пост после изменения ссылки, чтобы обновить короткий адрес."
+                                      : "Сохраните пост, чтобы получить короткую ссылку. Она появится здесь."}
+                                </p>
+                              ) : null}
                             </div>
                           )}
                         </div>
@@ -4403,6 +4496,79 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
                 Отметьте хотя бы одного сотрудника, иначе запрос не уйдёт.
               </p>
             )}
+          </div>
+        </div>
+      )}
+      {utmHelpOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/40 p-4 backdrop-blur-sm"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setUtmHelpOpen(false);
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="utm-help-title"
+            className="max-h-[min(760px,calc(100vh-2rem))] w-full max-w-2xl overflow-y-auto rounded-2xl border border-border bg-white p-5 shadow-2xl sm:p-7"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-accent">Помощь</p>
+                <h2 id="utm-help-title" className="mt-1 text-xl font-semibold text-zinc-900">
+                  Как работает отслеживание ссылок
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setUtmHelpOpen(false)}
+                className="rounded-full p-1.5 text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700"
+                aria-label="Закрыть справку"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="mt-5 space-y-4 text-sm leading-relaxed text-zinc-700">
+              <p>Postilka добавляет к ссылке пометки, чтобы было видно, из какого канала пришёл человек и к какой кампании относится переход.</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+                  <p className="font-semibold text-zinc-900">До включения</p>
+                  <p className="mt-2 break-all font-mono text-xs text-zinc-600">https://site.ru/catalog</p>
+                </div>
+                <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-4">
+                  <p className="font-semibold text-zinc-900">После включения для Telegram</p>
+                  <p className="mt-2 break-all font-mono text-xs text-blue-800">https://site.ru/catalog?utm_source=telegram&utm_medium=social&utm_campaign=summer</p>
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-3">
+                {[
+                  ["Источник", "telegram", "Откуда пришёл человек"],
+                  ["Способ", "social", "Каким способом пришёл"],
+                  ["Кампания", "summer", "К какой кампании относится"],
+                ].map(([label, value, description]) => (
+                  <div key={label} className="rounded-xl border border-border p-3">
+                    <p className="font-semibold text-zinc-900">{label}</p>
+                    <p className="mt-1 font-mono text-xs text-accent">{value}</p>
+                    <p className="mt-1 text-xs text-muted">{description}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-950">
+                <p className="font-semibold">Важно</p>
+                <p className="mt-1 text-xs">Настройки действуют только для выбранного канала. Для Telegram и VK можно использовать разные пометки.</p>
+              </div>
+              <p>При включённом сокращении после сохранения появится короткий адрес вида <span className="mx-1 rounded bg-zinc-100 px-1.5 py-0.5 font-mono text-xs">postilka.ru/go/Ab12Cd</span>. Postilka посчитает переход и отправит человека на исходный адрес.</p>
+            </div>
+            <div className="mt-6 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setUtmHelpOpen(false)}
+                className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
+              >
+                Понятно
+              </button>
+            </div>
           </div>
         </div>
       )}

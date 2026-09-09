@@ -63,6 +63,40 @@ func (s *PublicationService) SetNotifier(n *NotificationService) {
 	s.notify = n
 }
 
+func (s *PublicationService) PreviewShortLink(
+	ctx context.Context,
+	post *model.Post,
+	targetID, destinationURL string,
+) (string, error) {
+	if post == nil || s.shortener == nil {
+		return "", fmt.Errorf("%w: сокращение ссылок недоступно", ErrInvalidPost)
+	}
+	targetID = strings.TrimSpace(targetID)
+	for _, target := range post.Targets {
+		if target.ID != targetID {
+			continue
+		}
+		targetSettings, err := DecodePostTargetSettings(target.Settings)
+		if err != nil {
+			return "", err
+		}
+		_, settings := mergePostTarget(post.Content, post.Settings, targetSettings)
+		if settings.UTM == nil || !settings.UTM.Shorten {
+			return "", fmt.Errorf("%w: включите сокращение ссылок для этого канала", ErrInvalidPost)
+		}
+		return s.shortener.EnsureShortLinkWithUTM(
+			ctx,
+			post.WorkspaceID,
+			post.ID,
+			target.ID,
+			target.ChannelID,
+			destinationURL,
+			settings.UTM,
+		)
+	}
+	return "", fmt.Errorf("%w: канал поста не найден", ErrInvalidPost)
+}
+
 func (s *PublicationService) Publish(ctx context.Context, postID string, allowRetry bool) error {
 	if err := s.posts.ResetStaleTargets(ctx, postID); err != nil {
 		return err

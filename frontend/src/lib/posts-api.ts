@@ -250,6 +250,16 @@ export function updatePost(id: string, input: PostSaveInput) {
   });
 }
 
+export function previewPostShortLink(
+  id: string,
+  input: { target_id: string; destination_url: string },
+) {
+  return apiFetch<{ short_url: string }>(`/posts/${encodeURIComponent(id)}/short-link`, {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
 export function deletePost(id: string) {
   return apiFetch<void>(`/posts/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
