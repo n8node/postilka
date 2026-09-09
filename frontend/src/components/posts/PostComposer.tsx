@@ -2737,7 +2737,7 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
             title="Каналы"
             action={
               <div className="flex items-center gap-3">
-                {detectedURL && selectedChannels.length > 1 && (
+                {selectedChannels.length > 1 && (
                   <button
                     type="button"
                     onClick={applyCampaignToSelectedChannels}
@@ -2848,7 +2848,7 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
                           </ChannelHintIcon>
                         </div>
                       )}
-                      {selected && detectedURL && (
+                      {selected && (
                         <div className="mt-1 rounded-lg border border-border bg-white">
                           <button
                             type="button"
@@ -2867,12 +2867,18 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
                             <span
                               className={cn(
                                 "ml-auto rounded-full px-2 py-0.5 text-[10px] font-medium",
-                                utmSettings.enabled
+                                utmSettings.enabled && detectedURL
                                   ? "bg-emerald-50 text-emerald-700"
-                                  : "bg-zinc-100 text-muted",
+                                  : utmSettings.enabled
+                                    ? "bg-amber-50 text-amber-700"
+                                    : "bg-zinc-100 text-muted",
                               )}
                             >
-                              {utmSettings.enabled ? "Включено" : "Выключено"}
+                              {utmSettings.enabled
+                                ? detectedURL
+                                  ? "Включено"
+                                  : "Ждёт ссылки"
+                                : "Выключено"}
                             </span>
                           </button>
                           {utmExpanded && (
