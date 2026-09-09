@@ -63,6 +63,14 @@ func main() {
 	wsSvc := service.NewWorkspaceService(workspaceRepo, planRepo)
 	quotaSvc := service.NewQuotaService(planRepo, workspaceRepo, subscriptionRepo, usageRepo, channelRepo, workflowRepo)
 
+	// Сервисы, которые используются health-check'ами ежедневной сводки
+	kieSettingsRepo := repository.NewKieSettingsRepository(db.Pool)
+	kieConfigSvc := service.NewKieConfigService(kieSettingsRepo, cfg, secretCipher)
+	kieVideoSettingsRepo := repository.NewKieVideoSettingsRepository(db.Pool)
+	kieVideoConfigSvc := service.NewKieVideoConfigService(kieVideoSettingsRepo, cfg, secretCipher)
+	yandexGptConfigRepo := repository.NewYandexGptConfigRepository(db.Pool)
+	yandexGptConfigSvc := service.NewYandexGptConfigService(yandexGptConfigRepo, cfg, secretCipher)
+
 	// Сервисы для подписок
 	subscriptionSvc := service.NewSubscriptionService(subscriptionRepo, planRepo, workspaceRepo)
 	renewalSvc := service.NewRenewalService(subscriptionRepo, planRepo, walletRepo, workspaceRepo, subscriptionSvc, logger)
@@ -80,6 +88,9 @@ func main() {
 	telegramSvc := service.NewTelegramService(telegramSettingsSvc, telegramQueueRepo, cfg.TelegramLocalProxy, logger)
 	socialProviderSettingsRepo := repository.NewSocialProviderSettingsRepository(db.Pool)
 	socialProviderSettingsSvc := service.NewSocialProviderSettingsService(socialProviderSettingsRepo)
+	smtpSettingsRepo := repository.NewSMTPSettingsRepository(db.Pool)
+	smtpSettingsSvc := service.NewSMTPSettingsService(smtpSettingsRepo)
+	mailSvc := service.NewMailService(smtpSettingsSvc)
 	photochkaClient := photochka.NewClient(cfg.PhotochkaAPIBaseURL)
 	channelTestSvc := service.NewChannelTestService(
 		channelRepo, userRepo, telegramBotClient, nil, socialProviderSettingsSvc, wsSvc, secretCipher, photochkaClient,
@@ -104,8 +115,10 @@ func main() {
 
 	// Сервисы для операционных задач
 	opsDigestSvc := service.NewOpsDigestService(
-		telegramSvc, telegramSettingsSvc, opsStateRepo, postRepo, db, nil, nil,
-		storageSettingsSvc, nil, nil, nil, nil, nil, nil, nil, nil, logger,
+		telegramSvc, telegramSettingsSvc, opsStateRepo, postRepo, db, mailSvc, smtpSettingsSvc,
+		storageSettingsSvc, kieConfigSvc, kieVideoConfigSvc, yandexGptConfigSvc,
+		socialProviderSettingsSvc, telegramProviderSettingsSvc, telegramBotClient,
+		secretCipher, photochkaClient, logger,
 	)
 
 	// Сервисы для workflow
