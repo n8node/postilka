@@ -1517,7 +1517,10 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
   const previewPlain = currentOverride?.detached ? currentOverride.plain : plain;
   const editorHTML = activeChannelId && currentOverride?.detached ? currentOverride.html : html;
   const editorPlain = activeChannelId && currentOverride?.detached ? currentOverride.plain : plain;
-  const detectedURL = previewPlain.match(/https?:\/\/[^\s<]+/)?.[0] ?? "";
+  const detectedURL =
+    previewPlain.match(/https?:\/\/[^\s<]+/)?.[0] ??
+    html.match(/href=["'](https?:\/\/[^"']+)["']/i)?.[1] ??
+    "";
   const maxText =
     activeChannel !== null
       ? channelTextLimit(activeChannel, media.length, telegramMediaLayout)
@@ -4530,7 +4533,11 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
               </button>
             </div>
             <div className="mt-5 space-y-4 text-sm leading-relaxed text-zinc-700">
-              <p>Postilka добавляет к ссылке пометки, чтобы было видно, из какого канала пришёл человек и к какой кампании относится переход.</p>
+              <p>
+                Postilka добавляет к ссылкам, которые видит в посте, метки. Эти метки помогут
+                отслеживать переходы из ваших постов. Статистика будет отображаться у вас в
+                Яндекс Метрике и в Postilka, если настроить её в разделе «Аналитика».
+              </p>
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4">
                   <p className="font-semibold text-zinc-900">До включения</p>
