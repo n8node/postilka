@@ -65,8 +65,7 @@ export function MaxOAuthWaitContent() {
   }, [token, router]);
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-16">
-      <div className="rounded-xl border border-slate-200 bg-surface p-6 shadow-sm">
+    <div className="rounded-xl border border-slate-200 bg-surface p-6 shadow-sm">
         <h1 className="text-xl font-semibold">Вход или привязка через MAX</h1>
         <p className="mt-2 text-sm text-muted">
           Нажмите «Открыть MAX», подтвердите запуск бота. После этого в чате с ботом
@@ -94,7 +93,6 @@ export function MaxOAuthWaitContent() {
             Вернуться ко входу
           </Link>
         </p>
-      </div>
-    </main>
+    </div>
   );
 }

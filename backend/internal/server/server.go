@@ -119,6 +119,9 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	)
 	fileStorageRepo := repository.NewWorkspaceFileRepository(db.Pool)
 	objectStorage := service.NewObjectStorage(storageSettingsSvc)
+	authScreenRepo := repository.NewAuthScreenRepository(db.Pool)
+	authScreenSvc := service.NewAuthScreenService(authScreenRepo, objectStorage)
+	authScreenHandler := handler.NewAuthScreenHandler(authScreenSvc)
 	postRepo := repository.NewPostRepository(db.Pool)
 	linkCodeRepo := repository.NewLinkCodeRepository(db.Pool)
 	linkShortener := service.NewLinkShortenerService(linkCodeRepo, cfg.LinkBaseURL)
@@ -305,6 +308,9 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 		r.Get("/status", status.ServeHTTP)
 
 		r.Route("/auth", func(r chi.Router) {
+			r.Get("/screen", authScreenHandler.GetPublic)
+			r.Get("/screen/logo", authScreenHandler.ServeLogo)
+			r.Get("/screen/slides/{slot}/media", authScreenHandler.ServeSlideMedia)
 			r.Get("/methods", inviteHandler.AuthMethods)
 			r.Post("/invite/verify", inviteHandler.VerifyInvite)
 			r.With(middleware.RateLimit(authLimiter, 5, time.Minute)).Post("/register", authHandler.Register)
@@ -627,6 +633,12 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 
 				r.Get("/auth-settings", adminInviteHandler.AuthSettingsGet)
 				r.Put("/auth-settings", adminInviteHandler.AuthSettingsPut)
+				r.Get("/auth-screen", authScreenHandler.GetAdmin)
+				r.Put("/auth-screen/slides/{slot}", authScreenHandler.UpdateSlide)
+				r.Post("/auth-screen/logo", authScreenHandler.UploadLogo)
+				r.Delete("/auth-screen/logo", authScreenHandler.DeleteLogo)
+				r.Post("/auth-screen/slides/{slot}/media", authScreenHandler.UploadSlideMedia)
+				r.Delete("/auth-screen/slides/{slot}/media", authScreenHandler.DeleteSlideMedia)
 				r.Get("/email-smtp", smtpHandler.GetAdmin)
 				r.Put("/email-smtp", smtpHandler.UpdateAdmin)
 				r.Post("/email-smtp/test", smtpHandler.SendTest)

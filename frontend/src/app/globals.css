@@ -13,6 +13,21 @@ body {
   @apply bg-bg text-text antialiased;
 }
 
+@keyframes auth-slide-progress {
+  from {
+    width: 0;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+.auth-slide-progress {
+  animation-name: auth-slide-progress;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
 .post-composer-layout {
   display: grid;
   width: 100%;

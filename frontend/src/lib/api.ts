@@ -626,6 +626,85 @@ export type AuthMethods = {
   max_login_enabled?: boolean;
 };
 
+export type AuthScreenSlide = {
+  slot: number;
+  enabled: boolean;
+  tag: string;
+  title: string;
+  description: string;
+  media_kind: "" | "image" | "video";
+  media_url?: string;
+  duration_seconds: number;
+  updated_at: string;
+};
+
+export type AuthScreenSettings = {
+  logo_url?: string;
+  slides: AuthScreenSlide[];
+  updated_at: string;
+};
+
+export type AuthScreenAdminView = {
+  settings: AuthScreenSettings;
+};
+
+export type AuthScreenSlideUpdate = {
+  enabled: boolean;
+  tag: string;
+  title: string;
+  description: string;
+  duration_seconds: number;
+};
+
+export function fetchAuthScreen() {
+  return apiFetch<AuthScreenSettings>("/auth/screen");
+}
+
+export function fetchAdminAuthScreen() {
+  return apiFetch<AuthScreenAdminView>("/admin/auth-screen");
+}
+
+export function updateAdminAuthScreenSlide(
+  slot: number,
+  input: AuthScreenSlideUpdate,
+) {
+  return apiFetch<AuthScreenSlide>(`/admin/auth-screen/slides/${slot}`, {
+    method: "PUT",
+    body: JSON.stringify(input),
+  });
+}
+
+export function uploadAdminAuthScreenLogo(file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+  return postUserAvatarMultipart<AuthScreenAdminView>(
+    "/admin/auth-screen/logo",
+    formData,
+  );
+}
+
+export function deleteAdminAuthScreenLogo() {
+  return apiFetch<{ ok: boolean }>("/admin/auth-screen/logo", {
+    method: "DELETE",
+  });
+}
+
+export function uploadAdminAuthScreenSlideMedia(slot: number, file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+  return postUserAvatarMultipart<AuthScreenAdminView>(
+    `/admin/auth-screen/slides/${slot}/media`,
+    formData,
+  );
+}
+
+export function deleteAdminAuthScreenSlideMedia(slot: number) {
+  return apiFetch<{ ok: boolean }>(
+    `/admin/auth-screen/slides/${slot}/media`,
+    { method: "DELETE" },
+  );
+}
+
 export type LoginIdentity = {
   id: string;
   user_id: string;

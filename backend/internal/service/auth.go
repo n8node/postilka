@@ -135,7 +135,7 @@ func (s *AuthService) Register(ctx context.Context, email, password, name, invit
 	}
 
 	var consumedInviteID string
-	if inviteEnabled {
+	if inviteEnabled && strings.TrimSpace(inviteCode) != "" {
 		consumedInviteID, err = s.invites.ConsumeInviteTx(ctx, tx, inviteCode, user.ID)
 		if err != nil {
 			return nil, err

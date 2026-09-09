@@ -22,6 +22,7 @@ import { AdminAdStudioPage } from "@/components/admin/AdminAdStudioPage";
 import { AdminAdStudioPromptsPage } from "@/components/admin/AdminAdStudioPromptsPage";
 import { AdminSketchStylesPage } from "@/components/admin/AdminSketchStylesPage";
 import { AdminGenerationNavPage } from "@/components/admin/AdminGenerationNavPage";
+import { AdminAuthScreenPage } from "@/components/admin/AdminAuthScreenPage";
 import { AdminBackupSettingsPage } from "@/components/admin/AdminBackupSettingsPage";
 // Hidden until agents return: import { AdminAgentTemplatesPage } from "@/components/admin/AdminAgentTemplatesPage";
 import { cn } from "@/lib/utils";
@@ -42,6 +43,7 @@ type SettingsKey =
   | "ai-ad-prompts"
   | "ai-sketch-styles"
   | "generation-nav"
+  | "auth-screen"
   | "analytics-metrika";
 
 const SETTINGS_MENU: { key: SettingsKey; label: string; description: string }[] = [
@@ -120,6 +122,11 @@ const SETTINGS_MENU: { key: SettingsKey; label: string; description: string }[] 
     key: "generation-nav",
     label: "Меню генерации",
     description: "Плашки в сайдбаре кабинета",
+  },
+  {
+    key: "auth-screen",
+    label: "Экран входа",
+    description: "Логотип и слайды auth-страниц",
   },
   {
     key: "analytics-metrika",
@@ -301,6 +308,9 @@ function SettingsSectionContent({
   }
   if (selected === "generation-nav") {
     return <AdminGenerationNavPage embedded />;
+  }
+  if (selected === "auth-screen") {
+    return <AdminAuthScreenPage embedded />;
   }
   if (selected === "analytics-metrika") {
     return <AdminMetrikaPage embedded />;
