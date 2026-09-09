@@ -77,7 +77,7 @@ export function AuthScreenSlider({
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent" />
       </div>
 
-      <div className="relative flex min-h-[26rem] flex-col justify-end px-7 pb-5 pt-14 xl:px-9 xl:pb-6 xl:pt-16 lg:min-h-[34rem]">
+      <div className="relative flex min-h-[26rem] flex-col justify-end px-7 pb-3 pt-14 xl:px-9 xl:pb-4 xl:pt-16 lg:min-h-[34rem]">
         <div className="auth-slide-content-viewport overflow-hidden">
           <div
             className="auth-slide-track flex"
@@ -94,11 +94,11 @@ export function AuthScreenSlider({
                       {slide.tag}
                     </span>
                   )}
-                  <h2 className="mt-4 text-3xl font-semibold tracking-tight text-white">
+                  <h2 className="mt-3 text-3xl font-semibold tracking-tight text-white">
                     {slide.title || "Создавайте больше с Postilka"}
                   </h2>
                   {slide.description && (
-                    <p className="mt-3 text-sm leading-relaxed text-white/75">
+                    <p className="mt-2 text-sm leading-relaxed text-white/75">
                       {slide.description}
                     </p>
                   )}
@@ -108,7 +108,7 @@ export function AuthScreenSlider({
           </div>
         </div>
 
-        <div className="mt-8 grid grid-cols-4 gap-2" aria-label="Слайды">
+        <div className="mt-4 grid grid-cols-4 gap-2" aria-label="Слайды">
           {slides.map((slide, index) => (
             <button
               key={slide.slot}
@@ -118,7 +118,7 @@ export function AuthScreenSlider({
                 setDirection(index >= activeIndex ? 1 : -1);
                 setActiveIndex(index);
               }}
-              className="group h-8 cursor-pointer pt-3"
+              className="group h-6 cursor-pointer pt-2"
             >
               <span className="block h-1 overflow-hidden rounded-full bg-white/25">
                 <span
