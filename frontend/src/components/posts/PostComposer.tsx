@@ -147,7 +147,24 @@ const HASHTAG_SETS = [
 ];
 
 type Override = { detached: boolean; html: string; plain: string };
+type ChannelUTMSettings = {
+  enabled: boolean;
+  source: string;
+  medium: string;
+  campaign: string;
+  shorten: boolean;
+};
 const TELEGRAM_CIRCLE_LABEL = "Кружок Telegram";
+
+function defaultChannelUTM(channel: ChannelListItem): ChannelUTMSettings {
+  return {
+    enabled: false,
+    source: channel.provider,
+    medium: "social",
+    campaign: "",
+    shorten: false,
+  };
+}
 
 function selectableApproverMembers(members: WorkspaceMember[]) {
   return members.filter(
@@ -1268,7 +1285,8 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
   const [telegramMediaLayout, setTelegramMediaLayout] = useState<"separate" | "caption">("separate");
   const [telegramCaptionPosition, setTelegramCaptionPosition] = useState<"above" | "below">("below");
   const [telegramMediaOrder, setTelegramMediaOrder] = useState<"media_first" | "text_first">("media_first");
-  const [utm, setUTM] = useState({ source: "", medium: "social", campaign: "", shorten: false });
+  const [channelUTM, setChannelUTM] = useState<Record<string, ChannelUTMSettings>>({});
+  const [expandedUTMChannelId, setExpandedUTMChannelId] = useState<string | null>(null);
   const [approvalRequired, setApprovalRequired] = useState(false);
   const [selectedApproverIds, setSelectedApproverIds] = useState<string[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -1629,7 +1647,8 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
     setLocationName("");
     setLatitude("");
     setLongitude("");
-    setUTM({ source: "", medium: "social", campaign: "", shorten: false });
+    setChannelUTM({});
+    setExpandedUTMChannelId(null);
     setApprovalRequired(false);
     setSelectedApproverIds([]);
     setDecisionComment("");
@@ -1717,13 +1736,24 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
       post.settings.telegram_media_order === "text_first" ? "text_first" : "media_first",
     );
     setTelegramStory(normalizeStorySettings(post.settings.telegram_story));
-    const storedUTM = post.targets[0]?.settings?.settings?.utm;
-    setUTM({
-      source: storedUTM?.source ?? "",
-      medium: storedUTM?.medium ?? "social",
-      campaign: storedUTM?.campaign ?? "",
-      shorten: storedUTM?.shorten ?? false,
-    });
+    const storedGlobalUTM = post.settings.utm;
+    const loadedChannelUTM: Record<string, ChannelUTMSettings> = {};
+    for (const target of post.targets) {
+      const channel = channels.find((item) => item.id === target.channel_id);
+      if (!channel) continue;
+      const storedUTM = target.settings?.settings?.utm ?? storedGlobalUTM;
+      loadedChannelUTM[channel.id] = storedUTM
+        ? {
+            enabled: true,
+            source: storedUTM.source ?? channel.provider,
+            medium: storedUTM.medium ?? "social",
+            campaign: storedUTM.campaign ?? "",
+            shorten: storedUTM.shorten ?? false,
+          }
+        : defaultChannelUTM(channel);
+    }
+    setChannelUTM(loadedChannelUTM);
+    setExpandedUTMChannelId(null);
     setApprovalRequired(Boolean(post.settings.approval_required));
     setSelectedApproverIds(post.settings.approver_user_ids ?? []);
     setDecisionComment("");
@@ -1743,10 +1773,54 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
     setSelectedIds((current) => {
       const exists = current.includes(channel.id);
       const next = exists ? current.filter((id) => id !== channel.id) : [...current, channel.id];
+      if (exists) {
+        setChannelUTM((settings) => {
+          const nextSettings = { ...settings };
+          delete nextSettings[channel.id];
+          return nextSettings;
+        });
+        if (expandedUTMChannelId === channel.id) setExpandedUTMChannelId(null);
+      } else {
+        setChannelUTM((settings) => ({
+          ...settings,
+          [channel.id]: settings[channel.id] ?? defaultChannelUTM(channel),
+        }));
+      }
       if (exists && activeChannelId === channel.id) setActiveChannelId(next[0] ?? null);
       if (!exists) setActiveChannelId(channel.id);
       return next;
     });
+  }
+
+  function updateChannelUTM(
+    channel: ChannelListItem,
+    patch: Partial<ChannelUTMSettings>,
+  ) {
+    setChannelUTM((current) => ({
+      ...current,
+      [channel.id]: {
+        ...(current[channel.id] ?? defaultChannelUTM(channel)),
+        ...patch,
+      },
+    }));
+    markDirty();
+  }
+
+  function applyCampaignToSelectedChannels() {
+    const currentCampaign = selectedChannels
+      .map((channel) => channelUTM[channel.id]?.campaign.trim())
+      .find((campaign) => campaign);
+    const campaign = window.prompt("Кампания для выбранных каналов", currentCampaign ?? "")?.trim();
+    if (!campaign) return;
+    setChannelUTM((current) => {
+      const next = { ...current };
+      for (const channel of selectedChannels) {
+        const settings = current[channel.id] ?? defaultChannelUTM(channel);
+        next[channel.id] = { ...settings, enabled: true, campaign };
+      }
+      return next;
+    });
+    markDirty();
   }
 
   function updateCurrentText(nextHTML: string, nextPlain: string) {
@@ -1873,21 +1947,17 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
       settings: buildSettings(),
       targets: selectedChannels.map((channel) => {
         const override = overrides[channel.id];
-        const hasUTM = Boolean(
-          utm.source.trim() ||
-            utm.medium.trim() ||
-            utm.campaign.trim() ||
-            utm.shorten,
-        );
+        const utmSettings = channelUTM[channel.id] ?? defaultChannelUTM(channel);
+        const hasUTM = utmSettings.enabled;
         const settings: PostTargetSettings = {
           detached: Boolean(override?.detached) || hasUTM,
           settings: hasUTM
             ? {
                 utm: {
-                  source: utm.source.trim() || undefined,
-                  medium: utm.medium.trim() || undefined,
-                  campaign: utm.campaign.trim() || undefined,
-                  shorten: utm.shorten,
+                  source: utmSettings.source.trim() || undefined,
+                  medium: utmSettings.medium.trim() || undefined,
+                  campaign: utmSettings.campaign.trim() || undefined,
+                  shorten: utmSettings.shorten,
                 },
               }
             : undefined,
@@ -2666,22 +2736,45 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
           <Card
             title="Каналы"
             action={
-              <button
-                type="button"
-                onClick={() => {
-                  const active = channels.filter((channel) =>
-                    channelSupportsPostKind(channel, postKind),
-                  );
-                  setSelectedIds(
-                    selectedIds.length === active.length ? [] : active.map((channel) => channel.id),
-                  );
-                  setActiveChannelId(selectedIds.length === active.length ? null : active[0]?.id ?? null);
-                  markDirty();
-                }}
-                className="text-xs font-medium text-accent hover:underline"
-              >
-                {selectedIds.length ? "Снять выбор" : "Выбрать все"}
-              </button>
+              <div className="flex items-center gap-3">
+                {detectedURL && selectedChannels.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={applyCampaignToSelectedChannels}
+                    className="text-xs font-medium text-accent hover:underline"
+                  >
+                    Одна кампания для всех
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const active = channels.filter((channel) =>
+                      channelSupportsPostKind(channel, postKind),
+                    );
+                    const selectAll = selectedIds.length !== active.length;
+                    setSelectedIds(selectAll ? active.map((channel) => channel.id) : []);
+                    setActiveChannelId(selectAll ? active[0]?.id ?? null : null);
+                    if (selectAll) {
+                      setChannelUTM((current) => ({
+                        ...current,
+                        ...Object.fromEntries(
+                          active.map((channel) => [
+                            channel.id,
+                            current[channel.id] ?? defaultChannelUTM(channel),
+                          ]),
+                        ),
+                      }));
+                    } else {
+                      setExpandedUTMChannelId(null);
+                    }
+                    markDirty();
+                  }}
+                  className="text-xs font-medium text-accent hover:underline"
+                >
+                  {selectedIds.length ? "Снять выбор" : "Выбрать все"}
+                </button>
+              </div>
             }
           >
             {channels.length === 0 ? (
@@ -2693,6 +2786,8 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
                   const supportsPost = channelSupportsPostKind(channel, postKind);
                   const unavailableReason = channelUnavailableReason(channel, postKind);
                   const isBusiness = isTelegramBusinessChannel(channel);
+                  const utmSettings = channelUTM[channel.id] ?? defaultChannelUTM(channel);
+                  const utmExpanded = expandedUTMChannelId === channel.id;
                   return (
                     <div key={channel.id} className="relative min-w-0">
                       <button
@@ -2751,6 +2846,77 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
                               aria-label="Почему канал недоступен"
                             />
                           </ChannelHintIcon>
+                        </div>
+                      )}
+                      {selected && detectedURL && (
+                        <div className="mt-1 rounded-lg border border-border bg-white">
+                          <button
+                            type="button"
+                            aria-expanded={utmExpanded}
+                            onClick={() =>
+                              setExpandedUTMChannelId(utmExpanded ? null : channel.id)
+                            }
+                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs"
+                          >
+                            {utmExpanded ? (
+                              <ChevronUp className="h-3.5 w-3.5 shrink-0 text-muted" />
+                            ) : (
+                              <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted" />
+                            )}
+                            <span className="font-medium">Отслеживание ссылок</span>
+                            <span
+                              className={cn(
+                                "ml-auto rounded-full px-2 py-0.5 text-[10px] font-medium",
+                                utmSettings.enabled
+                                  ? "bg-emerald-50 text-emerald-700"
+                                  : "bg-zinc-100 text-muted",
+                              )}
+                            >
+                              {utmSettings.enabled ? "Включено" : "Выключено"}
+                            </span>
+                          </button>
+                          {utmExpanded && (
+                            <div className="border-t border-border px-3 pb-3 pt-2">
+                              <label className="flex items-center gap-2 text-xs">
+                                <input
+                                  type="checkbox"
+                                  checked={utmSettings.enabled}
+                                  onChange={(event) =>
+                                    updateChannelUTM(channel, { enabled: event.target.checked })
+                                  }
+                                />
+                                Добавлять UTM к ссылкам этого канала
+                              </label>
+                              <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                                {(["source", "medium", "campaign"] as const).map((key) => (
+                                  <label key={key} className="min-w-0">
+                                    <span className="mb-1 block text-[10px] uppercase tracking-wide text-muted">
+                                      utm_{key}
+                                    </span>
+                                    <input
+                                      value={utmSettings[key]}
+                                      disabled={!utmSettings.enabled}
+                                      onChange={(event) =>
+                                        updateChannelUTM(channel, { [key]: event.target.value })
+                                      }
+                                      className="w-full min-w-0 rounded-md border border-border px-2 py-1.5 text-xs disabled:bg-zinc-50 disabled:text-muted"
+                                    />
+                                  </label>
+                                ))}
+                              </div>
+                              <label className="mt-2 flex items-center gap-2 text-xs text-muted">
+                                <input
+                                  type="checkbox"
+                                  checked={utmSettings.shorten}
+                                  disabled={!utmSettings.enabled}
+                                  onChange={(event) =>
+                                    updateChannelUTM(channel, { shorten: event.target.checked })
+                                  }
+                                />
+                                Сокращать ссылки Postilka
+                              </label>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -3174,41 +3340,6 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
               })}
             </div>
           </Card>
-
-          {detectedURL && (
-            <Card title="Ссылка и UTM">
-              <p className="truncate text-sm font-medium text-accent">{detectedURL}</p>
-              <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                {(["source", "medium", "campaign"] as const).map((key) => (
-                  <input
-                    key={key}
-                    value={utm[key]}
-                    onChange={(event) => {
-                      setUTM((current) => ({ ...current, [key]: event.target.value }));
-                      markDirty();
-                    }}
-                    placeholder={`utm_${key}`}
-                    className="min-w-0 rounded-md border border-border px-2 py-1.5 text-xs"
-                  />
-                ))}
-              </div>
-              <label className="mt-2 flex items-center gap-2 text-xs">
-                <input
-                  type="checkbox"
-                  checked={utm.shorten}
-                  onChange={(event) => {
-                    setUTM((current) => ({ ...current, shorten: event.target.checked }));
-                    markDirty();
-                  }}
-                />
-                Сократить ссылку при публикации
-              </label>
-              <p className="mt-2 text-[11px] text-muted">
-                UTM и сокращение сохраняются отдельно для каждого выбранного канала. При
-                публикации URL заменяются на короткие отслеживаемые ссылки с учётом UTM.
-              </p>
-            </Card>
-          )}
 
           {canTelegramButtons && (
             <ButtonBuilder
