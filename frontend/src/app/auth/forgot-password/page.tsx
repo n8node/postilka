@@ -4,7 +4,7 @@ export default function ForgotPasswordPage() {
   return (
     <main className="w-full">
       <div className="mb-6">
-        <h2 className="text-2xl font-semibold tracking-tight">
+        <h2 className="text-center text-2xl font-semibold tracking-tight">
           Восстановление пароля
         </h2>
       </div>

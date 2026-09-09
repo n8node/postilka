@@ -4,7 +4,7 @@ export default function ResetPasswordPage() {
   return (
     <main className="w-full">
       <div className="mb-6">
-        <h2 className="text-2xl font-semibold tracking-tight">
+        <h2 className="text-center text-2xl font-semibold tracking-tight">
           Новый пароль
         </h2>
       </div>

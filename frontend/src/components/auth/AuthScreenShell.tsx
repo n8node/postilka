@@ -39,15 +39,15 @@ export function AuthScreenShell({ children }: { children: React.ReactNode }) {
         <section className="min-w-0 p-6 sm:p-8 lg:p-10">
           <div className="mx-auto w-full max-w-md">
             <div className="mb-8">
-              <div className="flex h-14 items-center">
+              <div className="flex h-14 items-center justify-center">
                 {logoURL ? (
-                  <img className="max-h-12 max-w-[13rem] object-contain object-left" src={logoURL} alt="Postilka" />
+                  <img className="max-h-12 max-w-[13rem] object-contain object-center" src={logoURL} alt="Postilka" />
                 ) : (
-                  <span className="text-lg font-semibold tracking-tight text-slate-900">Postilka</span>
+                  <span className="text-center text-lg font-semibold tracking-tight text-slate-900">Postilka</span>
                 )}
               </div>
-              <h1 className="mt-5 text-2xl font-semibold tracking-tight text-slate-900">
-                Добро пожаловать в Постику
+              <h1 className="mt-5 text-center text-2xl font-semibold tracking-tight text-slate-900">
+                Добро пожаловать в Постилку
               </h1>
             </div>
             {children}

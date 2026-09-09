@@ -5,7 +5,7 @@ export default function LoginPage() {
   return (
     <main className="w-full">
       <div className="mb-6">
-        <h2 className="text-2xl font-semibold tracking-tight">Вход</h2>
+        <h2 className="text-center text-2xl font-semibold tracking-tight">Вход</h2>
       </div>
       <div className="rounded-xl border border-white/60 bg-surface/90 p-6 shadow-sm backdrop-blur-sm">
         <Suspense fallback={<p className="text-sm text-muted">Загрузка…</p>}>
