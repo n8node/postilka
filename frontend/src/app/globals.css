@@ -28,6 +28,12 @@ body {
   animation-fill-mode: forwards;
 }
 
+.auth-slide-track {
+  transition-property: transform;
+  transition-timing-function: cubic-bezier(0.22, 0.61, 0.36, 1);
+  will-change: transform;
+}
+
 .post-composer-layout {
   display: grid;
   width: 100%;
