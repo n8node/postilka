@@ -705,13 +705,13 @@ export function CarouselPage(): ReactElement {
                   }}
                   onDragEnd={() => setDraggedSlideId(null)}
                   className={cn(
-                    "relative w-32 min-w-32 shrink-0 rounded-lg border p-2 text-left transition",
+                    "relative w-64 min-w-64 shrink-0 rounded-lg border p-2 text-left transition",
                     slide.id === selectedId
                       ? "border-accent bg-blue-50/70"
                       : "border-border bg-surface hover:border-accent/60",
                   )}
                 >
-                  <div className="mb-2 flex h-36 w-28 items-center justify-center overflow-hidden rounded-md bg-zinc-100 text-center text-[10px] text-muted">
+                  <div className="mb-2 flex h-72 w-56 items-center justify-center overflow-hidden rounded-md bg-zinc-100 text-center text-[10px] text-muted">
                     {slide.generationImageUrl ? (
                       <img
                         src={mediaUrl(slide.generationImageUrl)}
@@ -907,19 +907,6 @@ export function CarouselPage(): ReactElement {
         </div>
 
         <aside className="flex min-w-0 flex-col gap-4">
-          <button
-            type="button"
-            onClick={() => setRegenerateOpen(true)}
-            disabled={busy !== null || !selectedSlide}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-accent bg-surface px-3 py-2.5 text-sm font-semibold text-accent hover:bg-blue-50 disabled:opacity-50"
-          >
-            {busy === "regenerate" ? (
-              <Loader2 size={15} className="animate-spin" />
-            ) : (
-              <Sparkles size={15} />
-            )}
-            Перегенерировать выбранный слайд
-          </button>
           <div className="rounded-lg border border-border bg-surface p-4">
             <label
               className="text-sm font-semibold text-text"
