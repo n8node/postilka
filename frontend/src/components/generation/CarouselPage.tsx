@@ -711,7 +711,7 @@ export function CarouselPage(): ReactElement {
                       : "border-border bg-surface hover:border-accent/60",
                   )}
                 >
-                  <div className="mb-2 flex h-72 w-56 items-center justify-center overflow-hidden rounded-md bg-zinc-100 text-center text-[10px] text-muted">
+                  <div className="relative mb-2 flex h-72 w-full items-center justify-center overflow-hidden rounded-md bg-zinc-100 text-center text-[10px] text-muted">
                     {slide.generationImageUrl ? (
                       <img
                         src={mediaUrl(slide.generationImageUrl)}
