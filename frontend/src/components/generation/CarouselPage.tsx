@@ -8,7 +8,6 @@ import {
   FileImage,
   GalleryHorizontalEnd,
   Loader2,
-  MessageSquareText,
   Plus,
   Sparkles,
   Trash2,
@@ -121,7 +120,6 @@ export function CarouselPage(): ReactElement {
   const [caption, setCaption] = useState("");
   const [slides, setSlides] = useState<CarouselSlide[]>(INITIAL_SLIDES);
   const [selectedId, setSelectedId] = useState(INITIAL_SLIDES[0].id);
-  const [command, setCommand] = useState("");
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerPurpose, setPickerPurpose] = useState<
     "reference" | "background"
@@ -131,7 +129,6 @@ export function CarouselPage(): ReactElement {
   const [regeneratePrompt, setRegeneratePrompt] = useState("");
   const [busy, setBusy] = useState<
     | "storyboard"
-    | "command"
     | "upload"
     | "generate"
     | "regenerate"
@@ -245,39 +242,6 @@ export function CarouselPage(): ReactElement {
     }
   }
 
-  async function applyCommand(): Promise<void> {
-    if (!command.trim() || !selectedSlide) return;
-    setBusy("command");
-    setError(null);
-    setNotice(null);
-    try {
-      const result = await composePostText({
-        task: "generate",
-        prompt: `Измени только выбранный слайд по команде пользователя. Верни JSON без markdown в формате {"slides":[{"headline":"...","body":"..."}]}. Команда: ${command.trim()}. Текущий слайд: ${JSON.stringify({ role: selectedSlide.role, headline: selectedSlide.headline, body: selectedSlide.body })}. Стиль: ${style.name}; правила: ${style.visualRules}; выравнивание: ${style.alignment}.`,
-        length: "medium",
-        tone: "сохрани смысл и стиль карусели",
-      });
-      const parsed = parseStoryboard(result.text);
-      const firstSlide = parsed?.slides?.[0];
-      updateSlide(selectedSlide.id, {
-        headline: firstSlide?.headline?.trim() || selectedSlide.headline,
-        body:
-          firstSlide?.body?.trim() ||
-          (parsed ? selectedSlide.body : result.text.trim()),
-      });
-      setCommand("");
-      setNotice(
-        `Слайд ${selectedIndex + 1} обновлен. Остальные слайды не изменялись.`,
-      );
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Не удалось применить команду",
-      );
-    } finally {
-      setBusy(null);
-    }
-  }
-
   function selectReference(file: WorkspaceFile): void {
     setReferenceFiles((current) => {
       if (
@@ -367,7 +331,7 @@ export function CarouselPage(): ReactElement {
         }),
       );
       setNotice(
-        "Слайды поставлены в очередь KIE и появятся на своих позициях по мере готовности.",
+        "Слайды поставлены в очередь и появятся на своих позициях по мере готовности.",
       );
       await Promise.all(
         jobs.map(async ({ slideId, jobId }) => {
@@ -529,8 +493,8 @@ export function CarouselPage(): ReactElement {
             Соберите историю из слайдов
           </h1>
           <p className="mt-2 text-sm leading-6 text-muted">
-            Утвердите структуру, добавьте референсы, сгенерируйте слайды в KIE
-            и передайте готовый набор в Посты.
+            Утвердите структуру, добавьте референсы, сгенерируйте слайды и
+            передайте готовый набор в Посты.
           </p>
         </div>
         <div className="rounded-lg border border-border bg-bg px-3 py-2 text-xs text-muted">
@@ -847,82 +811,19 @@ export function CarouselPage(): ReactElement {
         </div>
 
         <aside className="flex min-w-0 flex-col gap-4">
-          <div className="rounded-lg border border-border bg-bg p-4">
-            <div className="flex items-center gap-2 text-text">
-              <MessageSquareText size={17} />
-              <h2 className="text-sm font-semibold">Команда для AI</h2>
-            </div>
-            <p className="mt-2 text-xs leading-5 text-muted">
-              Команда изменит только выбранный слайд. Текстовые токены
-              списываются существующим контуром YandexGPT после успешного
-              ответа.
-            </p>
-            <textarea
-              value={command}
-              onChange={(event) => setCommand(event.target.value)}
-              placeholder="Усиль хук и сократи текст в два раза"
-              className="mt-3 min-h-24 w-full resize-y rounded-md border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-accent"
-            />
-            <button
-              type="button"
-              onClick={() => void applyCommand()}
-              disabled={!command.trim() || busy !== null}
-              className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-md border border-accent bg-surface px-3 py-2 text-sm font-semibold text-accent hover:bg-blue-50 disabled:opacity-50"
-            >
-              {busy === "command" ? (
-                <Loader2 size={15} className="animate-spin" />
-              ) : (
-                <Sparkles size={15} />
-              )}{" "}
-              Применить к слайду
-            </button>
-          </div>
-          <div className="rounded-lg border border-border bg-surface p-4">
-            <div className="flex items-center justify-between gap-3">
-              <h2 className="text-sm font-semibold text-text">Профиль стиля</h2>
-              <span className="text-[11px] text-muted">
-                сохраняется в браузере
-              </span>
-            </div>
-            <input
-              value={style.name}
-              onChange={(event) => updateStyle({ name: event.target.value })}
-              className="mt-3 w-full rounded-md border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-accent"
-              aria-label="Название профиля стиля"
-            />
-            <div className="mt-2 flex items-center gap-2">
-              <input
-                type="color"
-                value={style.accent}
-                onChange={(event) =>
-                  updateStyle({ accent: event.target.value })
-                }
-                className="h-9 w-11 rounded border border-border bg-bg p-1"
-                aria-label="Акцентный цвет"
-              />
-              <select
-                value={style.alignment}
-                onChange={(event) =>
-                  updateStyle({
-                    alignment: event.target
-                      .value as CarouselStyleProfile["alignment"],
-                  })
-                }
-                className="h-9 flex-1 rounded-md border border-border bg-bg px-2 text-sm"
-              >
-                <option value="left">Слева</option>
-                <option value="center">По центру</option>
-              </select>
-            </div>
-            <textarea
-              value={style.visualRules}
-              onChange={(event) =>
-                updateStyle({ visualRules: event.target.value })
-              }
-              className="mt-2 min-h-20 w-full resize-y rounded-md border border-border bg-bg px-3 py-2 text-xs leading-5 outline-none focus:border-accent"
-              aria-label="Правила визуального стиля"
-            />
-          </div>
+          <button
+            type="button"
+            onClick={() => setRegenerateOpen(true)}
+            disabled={busy !== null || !selectedSlide}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-accent bg-surface px-3 py-2.5 text-sm font-semibold text-accent hover:bg-blue-50 disabled:opacity-50"
+          >
+            {busy === "regenerate" ? (
+              <Loader2 size={15} className="animate-spin" />
+            ) : (
+              <Sparkles size={15} />
+            )}
+            Перегенерировать выбранный слайд
+          </button>
           <div className="rounded-lg border border-border bg-surface p-4">
             <label
               className="text-sm font-semibold text-text"
@@ -945,8 +846,8 @@ export function CarouselPage(): ReactElement {
             </div>
             <p className="mt-2 text-xs leading-5 text-muted">
               {pricing
-                ? `KIE: ${pricing.carousel} кредит${pricing.carousel === 1 ? "" : pricing.carousel < 5 ? "а" : "ов"} за слайд, ${pricing.carousel_wallet_rub} ₽ из кошелька.`
-                : "Стоимость KIE загружается…"}
+                ? `Стоимость генерации: ${pricing.carousel} кредит${pricing.carousel === 1 ? "" : pricing.carousel < 5 ? "а" : "ов"} за слайд, ${pricing.carousel_wallet_rub} ₽ из кошелька.`
+                : "Стоимость генерации загружается…"}
             </p>
             <button
               type="button"
