@@ -1300,7 +1300,7 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
   const [expandedUTMChannelId, setExpandedUTMChannelId] = useState<string | null>(null);
   const [utmHelpOpen, setUtmHelpOpen] = useState(false);
   const [shortLinks, setShortLinks] = useState<
-    Record<string, Array<{ short_url: string; target_url: string; location: string }>>
+    Record<string, Array<{ short_url: string; target_url: string; location: string; label: string }>>
   >({});
   const [shortURLBusy, setShortURLBusy] = useState<Record<string, boolean>>({});
   const [approvalRequired, setApprovalRequired] = useState(false);
@@ -3005,6 +3005,9 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
                                   {shortLinks[channel.id].map((link) => (
                                     <div key={`${link.short_url}-${link.target_url}`} className="rounded-md border border-emerald-200/80 bg-white/70 p-2">
                                       <p className="text-[10px] font-medium text-emerald-900">{link.location}</p>
+                                      <p className="mt-1 truncate text-xs font-semibold text-zinc-800" title={link.label}>
+                                        Текст ссылки: {link.label}
+                                      </p>
                                       <div className="mt-1 flex items-center gap-2">
                                         <a
                                           href={link.short_url}

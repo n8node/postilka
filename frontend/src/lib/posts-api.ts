@@ -264,6 +264,7 @@ export type ShortLinkPreview = {
   short_url: string;
   target_url: string;
   location: string;
+  label: string;
 };
 
 export function previewPostShortLinks(id: string, targetId: string) {

@@ -36,9 +36,10 @@ type PublicationService struct {
 }
 
 type ShortLinkPreview struct {
-	ShortURL string `json:"short_url"`
+	ShortURL  string `json:"short_url"`
 	TargetURL string `json:"target_url"`
-	Location string `json:"location"`
+	Location  string `json:"location"`
+	Label     string `json:"label"`
 }
 
 func NewPublicationService(
@@ -137,7 +138,11 @@ func (s *PublicationService) PreviewShortLinks(
 			if shortErr != nil {
 				return nil, shortErr
 			}
-			out = append(out, ShortLinkPreview{ShortURL: shortURL, TargetURL: rewriteAbsoluteURL(item.url, settings.UTM), Location: item.location})
+					label := item.label
+					if label == "" {
+						label = item.url
+					}
+					out = append(out, ShortLinkPreview{ShortURL: shortURL, TargetURL: rewriteAbsoluteURL(item.url, settings.UTM), Location: item.location, Label: label})
 		}
 		return out, nil
 	}
@@ -145,8 +150,9 @@ func (s *PublicationService) PreviewShortLinks(
 }
 
 type postURL struct {
-	url string
+	url      string
 	location string
+	label    string
 }
 
 func collectPostURLs(content model.PostContent, maxButtons [][]model.TelegramInlineButton) []postURL {
@@ -724,7 +730,7 @@ func (s *PublicationService) publishTarget(
 		return "", err
 	}
 	content, settings := mergePostTarget(post.Content, post.Settings, targetSettings)
-		content = ApplyUTMToContent(content, settings.UTM) // Закрепляю использование общего обработчика UTM-кнопок для MAX
+	content = ApplyUTMToContent(content, settings.UTM) // Закрепляю использование общего обработчика UTM-кнопок для MAX
 	var shortenErr error
 	content, shortenErr = ApplyLinkShorteningToContent(
 		ctx, content, s.shortener, post.WorkspaceID, post.ID, target.ID, target.ChannelID, settings.UTM,
