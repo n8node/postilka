@@ -1177,10 +1177,10 @@ export async function uploadAdminHelpImage(file: File) {
   return data as { id: string; url: string };
 }
 
-export function assignAdminUserPlan(userId: string, planId: string) {
-  return apiFetch<{ plan: Plan }>(`/admin/users/${userId}/plan`, {
+export function assignAdminUserPlan(userId: string, planId: string, workspaceId: string) {
+  return apiFetch<{ plan: Plan; workspace: { id: string } }>(`/admin/users/${userId}/plan`, {
     method: "PUT",
-    body: JSON.stringify({ plan_id: planId }),
+    body: JSON.stringify({ plan_id: planId, workspace_id: workspaceId }),
   });
 }
 

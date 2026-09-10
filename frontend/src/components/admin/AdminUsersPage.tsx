@@ -390,6 +390,7 @@ function UserDrawer({
 }) {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [planId, setPlanId] = useState(user.plan?.id ?? "");
+  const [workspaceId, setWorkspaceId] = useState(user.workspace?.id ?? "");
   const [saving, setSaving] = useState(false);
   const [planError, setPlanError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -409,7 +410,8 @@ function UserDrawer({
 
   useEffect(() => {
     setPlanId(user.plan?.id ?? "");
-  }, [user.id, user.plan?.id]);
+    setWorkspaceId(user.workspace?.id ?? "");
+  }, [user.id, user.plan?.id, user.workspace?.id]);
 
   useEffect(() => {
     void fetchAdminPlans()
@@ -455,16 +457,33 @@ function UserDrawer({
     setSaving(true);
     setPlanError(null);
     try {
-      const res = await assignAdminUserPlan(user.id, planId);
-      onPlanChanged({
-        ...user,
-        plan: {
-          id: res.plan.id,
-          slug: res.plan.slug,
-          name: res.plan.name,
-          is_free: res.plan.is_free,
-        },
-      });
+      const res = await assignAdminUserPlan(user.id, planId, workspaceId);
+      setUserWorkspaces((prev) =>
+        prev.map((ws) =>
+          ws.id === res.workspace.id
+            ? {
+                ...ws,
+                plan: {
+                  id: res.plan.id,
+                  slug: res.plan.slug,
+                  name: res.plan.name,
+                  is_free: res.plan.is_free,
+                },
+              }
+            : ws,
+        ),
+      );
+      if (workspaceId === user.workspace?.id) {
+        onPlanChanged({
+          ...user,
+          plan: {
+            id: res.plan.id,
+            slug: res.plan.slug,
+            name: res.plan.name,
+            is_free: res.plan.is_free,
+          },
+        });
+      }
     } catch (e) {
       setPlanError(e instanceof ApiError ? e.message : "Не удалось назначить тариф");
     } finally {
@@ -811,9 +830,31 @@ function UserDrawer({
           <section className="rounded-xl border border-slate-200 p-4">
             <h3 className="text-sm font-semibold text-slate-900">Тариф</h3>
             <p className="mt-1 text-xs text-slate-500">
-              Назначается на primary workspace пользователя (включая ваш
-              superadmin-аккаунт).
+              Тариф назначается на выбранный workspace. Активная подписка этого
+              workspace будет отменена.
             </p>
+            <label className="mt-3 block text-xs font-medium text-slate-500">
+              Workspace
+              <select
+                value={workspaceId}
+                onChange={(e) => {
+                  const nextWorkspaceId = e.target.value;
+                  setWorkspaceId(nextWorkspaceId);
+                  const selectedWorkspace = userWorkspaces.find(
+                    (ws) => ws.id === nextWorkspaceId,
+                  );
+                  setPlanId(selectedWorkspace?.plan?.id ?? "");
+                }}
+                className="mt-1 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900"
+              >
+                <option value="">Выберите workspace</option>
+                {userWorkspaces.map((ws) => (
+                  <option key={ws.id} value={ws.id}>
+                    {ws.name} {ws.is_owner ? "(владелец)" : "(участник)"}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label className="mt-3 block text-xs font-medium text-slate-500">
               Текущий / новый тариф
               <select
@@ -836,7 +877,7 @@ function UserDrawer({
             )}
             <button
               type="button"
-              disabled={!planId || saving || planId === user.plan?.id}
+              disabled={!workspaceId || !planId || saving}
               onClick={() => void handleAssignPlan()}
               className="mt-3 w-full rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
             >

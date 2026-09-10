@@ -397,7 +397,9 @@ export function PlansWalletPage() {
           const isCurrent = plan.id === currentPlanId;
           const isPopular = plan.is_popular;
           const preview = previews[plan.id];
-          const paidPlan = !plan.is_free && (plan.price_monthly_cents ?? 0) > 0;
+          const selectedPeriodPriceCents =
+            period === "yearly" ? plan.price_yearly_cents : plan.price_monthly_cents;
+          const paidPlan = !plan.is_free && (selectedPeriodPriceCents ?? 0) > 0;
           const canBuy = canPay && !isCurrent && paidPlan;
           const checkoutKey = `plan:${plan.id}`;
           const isCheckingOut = checkoutTarget === checkoutKey;

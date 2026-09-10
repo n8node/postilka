@@ -10,10 +10,10 @@ import (
 )
 
 var (
-	ErrPlanNotFound   = errors.New("plan not found")
-	ErrPlanInUse      = errors.New("plan is assigned to workspaces")
-	ErrPlanSlugTaken  = errors.New("plan slug already exists")
-	ErrNoPrimaryWS    = errors.New("user has no workspace")
+	ErrPlanNotFound  = errors.New("plan not found")
+	ErrPlanInUse     = errors.New("plan is assigned to workspaces")
+	ErrPlanSlugTaken = errors.New("plan slug already exists")
+	ErrNoPrimaryWS   = errors.New("user has no workspace")
 )
 
 type PlanService struct {
@@ -174,8 +174,8 @@ func (s *PlanService) Delete(ctx context.Context, id string) error {
 	return err
 }
 
-// AssignToUserPrimaryWorkspace sets the plan on the user's primary workspace.
-func (s *PlanService) AssignToUserPrimaryWorkspace(ctx context.Context, userID, planID string) (*model.Plan, *model.Workspace, error) {
+// AssignToWorkspace sets the plan on a workspace after verifying the user belongs to it.
+func (s *PlanService) AssignToWorkspace(ctx context.Context, userID, workspaceID, planID string) (*model.Plan, *model.Workspace, error) {
 	plan, err := s.plans.GetByID(ctx, planID)
 	if errors.Is(err, repository.ErrNotFound) {
 		return nil, nil, ErrPlanNotFound
@@ -184,15 +184,15 @@ func (s *PlanService) AssignToUserPrimaryWorkspace(ctx context.Context, userID, 
 		return nil, nil, err
 	}
 
-	ws, err := s.workspaces.GetPrimaryForUser(ctx, userID)
+	ws, err := s.workspaces.GetMembership(ctx, workspaceID, userID)
 	if errors.Is(err, repository.ErrNotFound) {
-		return nil, nil, ErrNoPrimaryWS
+		return nil, nil, ErrWorkspaceNotFound
 	}
 	if err != nil {
 		return nil, nil, err
 	}
 
-	if err := s.workspaces.SetPlan(ctx, ws.ID, plan.ID); err != nil {
+	if err := s.workspaces.SetPlanManually(ctx, ws.ID, plan.ID); err != nil {
 		return nil, nil, err
 	}
 	return plan, ws, nil

@@ -272,14 +272,15 @@ func (h *AdminHandler) DeletePlan(w http.ResponseWriter, r *http.Request) {
 }
 
 type assignPlanBody struct {
-	PlanID string `json:"plan_id"`
+	PlanID      string `json:"plan_id"`
+	WorkspaceID string `json:"workspace_id"`
 }
 
 func (h *AdminHandler) AssignUserPlan(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "userID")
 	var body assignPlanBody
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.PlanID) == "" {
-		writeError(w, http.StatusBadRequest, "Укажите plan_id")
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || strings.TrimSpace(body.PlanID) == "" || strings.TrimSpace(body.WorkspaceID) == "" {
+		writeError(w, http.StatusBadRequest, "Укажите plan_id и workspace_id")
 		return
 	}
 
@@ -288,7 +289,7 @@ func (h *AdminHandler) AssignUserPlan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	plan, ws, err := h.plans.AssignToUserPrimaryWorkspace(r.Context(), userID, body.PlanID)
+	plan, ws, err := h.plans.AssignToWorkspace(r.Context(), userID, body.WorkspaceID, body.PlanID)
 	if err != nil {
 		h.writePlanError(w, err)
 		return
@@ -423,6 +424,8 @@ func (h *AdminHandler) writePlanError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusConflict, "Slug тарифа уже занят")
 	case errors.Is(err, service.ErrNoPrimaryWS):
 		writeError(w, http.StatusBadRequest, "У пользователя нет workspace")
+	case errors.Is(err, service.ErrWorkspaceNotFound):
+		writeError(w, http.StatusNotFound, "Workspace пользователя не найден")
 	case errors.Is(err, service.ErrInvalidInput):
 		writeError(w, http.StatusBadRequest, "Проверьте название тарифа")
 	default:

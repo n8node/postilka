@@ -62,6 +62,37 @@ func (r *WorkspaceRepository) SetPlan(ctx context.Context, workspaceID, planID s
 	return r.SetPlanWithPeriod(ctx, workspaceID, planID, time.Now().UTC())
 }
 
+// SetPlanManually changes the plan and invalidates paid subscription state in one transaction.
+func (r *WorkspaceRepository) SetPlanManually(ctx context.Context, workspaceID, planID string) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	if _, err := tx.Exec(ctx, `
+		UPDATE workspace_subscriptions
+		SET status = 'cancelled', auto_renew = false, updated_at = NOW()
+		WHERE workspace_id = $1 AND status IN ('active', 'past_due')
+	`, workspaceID); err != nil {
+		return err
+	}
+
+	tag, err := tx.Exec(ctx, `
+		UPDATE workspaces
+		SET plan_id = $2::uuid, plan_assigned_at = NOW(), updated_at = NOW()
+		WHERE id = $1::uuid
+	`, workspaceID, planID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+
+	return tx.Commit(ctx)
+}
+
 func (r *WorkspaceRepository) SetPlanWithPeriod(ctx context.Context, workspaceID, planID string, assignedAt time.Time) error {
 	tag, err := r.pool.Exec(ctx, `
 		UPDATE workspaces
