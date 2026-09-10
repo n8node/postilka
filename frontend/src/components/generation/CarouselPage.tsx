@@ -119,12 +119,15 @@ export function CarouselPage(): ReactElement {
   const [topic, setTopic] = useState("");
   const [caption, setCaption] = useState("");
   const [slides, setSlides] = useState<CarouselSlide[]>(INITIAL_SLIDES);
-  const [selectedId, setSelectedId] = useState(INITIAL_SLIDES[0].id);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [pickerPurpose, setPickerPurpose] = useState<
     "reference" | "background"
   >("reference");
-  const [referenceFiles, setReferenceFiles] = useState<WorkspaceFile[]>([]);
+  const [referenceFiles, setReferenceFiles] = useState<
+    Array<WorkspaceFile | null>
+  >([]);
+  const [referenceSlot, setReferenceSlot] = useState<number | null>(null);
   const [regenerateOpen, setRegenerateOpen] = useState(false);
   const [regeneratePrompt, setRegeneratePrompt] = useState("");
   const [busy, setBusy] = useState<
@@ -168,7 +171,7 @@ export function CarouselPage(): ReactElement {
   }
 
   const selectedIndex = slides.findIndex((slide) => slide.id === selectedId);
-  const selectedSlide = slides[selectedIndex] ?? slides[0];
+  const selectedSlide = selectedIndex >= 0 ? slides[selectedIndex] : null;
 
   function updateSlide(id: string, patch: Partial<CarouselSlide>): void {
     setSlides((current) =>
@@ -245,13 +248,17 @@ export function CarouselPage(): ReactElement {
   function selectReference(file: WorkspaceFile): void {
     setReferenceFiles((current) => {
       if (
-        current.some((item) => item.id === file.id) ||
+        current.some((item) => item?.id === file.id) ||
         current.length >= MAX_REFERENCES
       )
         return current;
-      return [...current, file];
+      if (referenceSlot === null) return [...current, file];
+      const next = [...current];
+      next[referenceSlot] = file;
+      return next;
     });
     setPickerOpen(false);
+    setReferenceSlot(null);
     setNotice("Референс добавлен для всех слайдов.");
   }
 
@@ -281,7 +288,8 @@ export function CarouselPage(): ReactElement {
     setBusy("upload");
     setError(null);
     try {
-      selectReference(await uploadFile(file));
+      const uploaded = await uploadFile(file);
+      selectReference(uploaded);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Не удалось загрузить референс",
@@ -307,7 +315,9 @@ export function CarouselPage(): ReactElement {
       const jobs = await Promise.all(
         slides.map(async (slide, index) => {
           const slideReferenceFiles = [
-            ...referenceFiles,
+            ...referenceFiles.filter(
+              (file): file is WorkspaceFile => file !== null,
+            ),
             ...(slide.backgroundFile ? [slide.backgroundFile] : []),
           ].slice(0, MAX_REFERENCES);
           const referenceUploadIDs = await Promise.all(
@@ -379,7 +389,9 @@ export function CarouselPage(): ReactElement {
     try {
       const referenceUploadIDs = await Promise.all(
         [
-          ...referenceFiles,
+          ...referenceFiles.filter(
+            (file): file is WorkspaceFile => file !== null,
+          ),
           ...(selectedSlide.backgroundFile ? [selectedSlide.backgroundFile] : []),
         ]
           .slice(0, MAX_REFERENCES)
@@ -518,7 +530,7 @@ export function CarouselPage(): ReactElement {
             placeholder="Например: как владельцу малого бизнеса собрать контент-план на неделю"
             className="mt-2 min-h-24 w-full resize-y rounded-lg border border-border bg-bg px-3 py-2.5 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20"
           />
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-3">
             <button
               type="button"
               onClick={() => void generateStoryboard()}
@@ -532,26 +544,13 @@ export function CarouselPage(): ReactElement {
               )}{" "}
               Подготовить структуру
             </button>
-            <button
-              type="button"
-              onClick={() => void generateSlides()}
-              disabled={busy !== null || slides.length < MIN_SLIDES}
-              className="inline-flex items-center gap-2 rounded-lg border border-accent px-4 py-2.5 text-sm font-semibold text-accent transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {busy === "generate" ? (
-                <Loader2 size={16} className="animate-spin" />
-              ) : (
-                <GalleryHorizontalEnd size={16} />
-              )}{" "}
-              Сгенерировать слайды
-            </button>
           </div>
 
           <div className="mt-4 rounded-lg border border-border bg-bg p-3">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="text-sm font-semibold text-text">
-                  Референсы для серии
+                  Реферсы для карусели
                 </h2>
                 <p className="mt-1 text-xs text-muted">
                   До {MAX_REFERENCES} изображений. Они будут переданы KIE для
@@ -561,9 +560,17 @@ export function CarouselPage(): ReactElement {
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={() => referenceInputRef.current?.click()}
+                  onClick={() => {
+                    setReferenceSlot(
+                      referenceFiles.findIndex((file) => !file) >= 0
+                        ? referenceFiles.findIndex((file) => !file)
+                        : Math.min(referenceFiles.length, MAX_REFERENCES - 1),
+                    );
+                    referenceInputRef.current?.click();
+                  }}
                   disabled={
-                    busy !== null || referenceFiles.length >= MAX_REFERENCES
+                    busy !== null ||
+                    referenceFiles.filter(Boolean).length >= MAX_REFERENCES
                   }
                   className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs font-medium text-text hover:border-accent disabled:opacity-50"
                 >
@@ -572,11 +579,18 @@ export function CarouselPage(): ReactElement {
                 <button
                   type="button"
                   onClick={() => {
+                    const nextSlot = referenceFiles.findIndex((file) => !file);
+                    setReferenceSlot(
+                      nextSlot >= 0
+                        ? nextSlot
+                        : Math.min(referenceFiles.length, MAX_REFERENCES - 1),
+                    );
                     setPickerPurpose("reference");
                     setPickerOpen(true);
                   }}
                   disabled={
-                    busy !== null || referenceFiles.length >= MAX_REFERENCES
+                    busy !== null ||
+                    referenceFiles.filter(Boolean).length >= MAX_REFERENCES
                   }
                   className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs font-medium text-text hover:border-accent disabled:opacity-50"
                 >
@@ -605,30 +619,42 @@ export function CarouselPage(): ReactElement {
                 event.currentTarget.value = "";
               }}
             />
-            {referenceFiles.length > 0 ? (
-              <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-6">
-                {referenceFiles.map((file) => (
-                  <div
-                    key={file.id}
-                    className="overflow-hidden rounded-md border border-border bg-surface"
+            <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-6">
+              {Array.from({ length: MAX_REFERENCES }, (_, index) => {
+                const file = referenceFiles[index] ?? null;
+                return (
+                  <button
+                    key={index}
+                    type="button"
+                    disabled={busy !== null}
+                    onClick={() => {
+                      setReferenceSlot(index);
+                      referenceInputRef.current?.click();
+                    }}
+                    className="relative flex aspect-square min-w-0 flex-col items-center justify-center overflow-hidden rounded-lg border border-dashed border-zinc-300 bg-zinc-50 p-2 text-center transition hover:border-zinc-400 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    <div className="flex aspect-square items-center justify-center bg-zinc-100">
-                      <FileImage size={16} className="text-muted" />
-                    </div>
-                    <p
-                      className="truncate px-1.5 py-1 text-[10px] text-muted"
-                      title={file.name}
-                    >
-                      {file.name}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="mt-3 text-xs text-muted">
-                Референсы пока не добавлены.
-              </p>
-            )}
+                    {file ? (
+                      <>
+                        <FileImage size={18} className="text-muted" />
+                        <span className="mt-1 w-full truncate text-[10px] text-muted">
+                          {file.name}
+                        </span>
+                        <span className="absolute inset-x-1 bottom-1 rounded bg-black/55 px-1 py-0.5 text-[10px] text-white">
+                          Заменить
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload size={18} className="text-zinc-400" />
+                        <span className="mt-1 text-[10px] font-medium text-text">
+                          Референс {index + 1}
+                        </span>
+                      </>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <div className="mt-6 rounded-lg border border-border bg-bg p-3">
@@ -650,13 +676,13 @@ export function CarouselPage(): ReactElement {
                   type="button"
                   onClick={() => setSelectedId(slide.id)}
                   className={cn(
-                    "relative min-w-28 rounded-lg border p-2 text-left transition",
+                    "relative w-32 min-w-32 shrink-0 rounded-lg border p-2 text-left transition",
                     slide.id === selectedId
                       ? "border-accent bg-blue-50/70"
                       : "border-border bg-surface hover:border-accent/60",
                   )}
                 >
-                  <div className="mb-2 flex aspect-[4/5] items-center justify-center overflow-hidden rounded-md bg-zinc-100 text-center text-[10px] text-muted">
+                  <div className="mb-2 flex h-36 w-28 items-center justify-center overflow-hidden rounded-md bg-zinc-100 text-center text-[10px] text-muted">
                     {slide.generationImageUrl ? (
                       <img
                         src={mediaUrl(slide.generationImageUrl)}
@@ -685,6 +711,20 @@ export function CarouselPage(): ReactElement {
               ))}
             </div>
           </div>
+
+          <button
+            type="button"
+            onClick={() => void generateSlides()}
+            disabled={busy !== null || slides.length < MIN_SLIDES}
+            className="mt-4 inline-flex items-center gap-2 rounded-lg border border-accent px-4 py-2.5 text-sm font-semibold text-accent transition hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {busy === "generate" ? (
+              <Loader2 size={16} className="animate-spin" />
+            ) : (
+              <GalleryHorizontalEnd size={16} />
+            )}{" "}
+            Сгенерировать слайды
+          </button>
 
           {selectedSlide ? (
             <div className="mt-4 rounded-lg border border-border bg-surface p-4">
@@ -740,7 +780,7 @@ export function CarouselPage(): ReactElement {
                 <img
                   src={mediaUrl(selectedSlide.generationImageUrl)}
                   alt={selectedSlide.headline}
-                  className="mt-4 aspect-[4/5] w-full rounded-md object-cover"
+                  className="mt-4 h-[420px] w-full rounded-md object-cover"
                 />
               ) : null}
               <input
