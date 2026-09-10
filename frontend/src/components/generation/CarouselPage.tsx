@@ -92,6 +92,8 @@ export function CarouselPage(): ReactElement {
   const [command, setCommand] = useState("");
   const [pickerOpen, setPickerOpen] = useState(false);
   const [referenceFiles, setReferenceFiles] = useState<WorkspaceFile[]>([]);
+  const [regenerateOpen, setRegenerateOpen] = useState(false);
+  const [regeneratePrompt, setRegeneratePrompt] = useState("");
   const [busy, setBusy] = useState<"storyboard" | "command" | "upload" | "draft" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -285,6 +287,48 @@ export function CarouselPage(): ReactElement {
     }
   }
 
+  async function regenerateSelectedSlide(): Promise<void> {
+    if (!selectedSlide || !regeneratePrompt.trim()) return;
+    setBusy("draft");
+    setError(null);
+    setNotice(null);
+    try {
+      const referenceUploadIDs = await Promise.all(
+        [...referenceFiles, ...(selectedSlide.file ? [selectedSlide.file] : [])]
+          .slice(0, MAX_REFERENCES)
+          .map((file) => uploadGenerationMediaFromWorkspace(file.id).then((upload) => upload.id)),
+      );
+      const result = await startGeneration({
+        mode: "carousel",
+        prompt: `${buildSlidePrompt(selectedSlide, selectedIndex)} Дополнительная правка пользователя: ${regeneratePrompt.trim()}`,
+        aspect_ratio: "4:5",
+        reference_upload_ids: referenceUploadIDs,
+      });
+      updateSlide(selectedSlide.id, { generationJobId: result.job.id, generationStatus: "queued" });
+      setRegenerateOpen(false);
+      setRegeneratePrompt("");
+      const started = Date.now();
+      while (Date.now() - started < 15 * 60 * 1000) {
+        const response = await fetchGenerationJob(result.job.id);
+        const job = response.job as GenerationJob;
+        if (job.status === "succeeded") {
+          const workspaceFileID = job.generation?.workspace_file_id;
+          if (!workspaceFileID) throw new Error("Перегенерированный слайд не привязан к файлу workspace");
+          updateSlide(selectedSlide.id, { file: { id: workspaceFileID } as WorkspaceFile, generationStatus: "succeeded" });
+          setNotice(`Слайд ${selectedIndex + 1} перегенерирован. Стоимость списана как новая генерация слайда.`);
+          return;
+        }
+        if (job.status === "failed") throw new Error(job.fail_message || "Не удалось перегенерировать слайд");
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+      }
+      throw new Error("Ожидание перегенерации превысило лимит времени");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Не удалось перегенерировать слайд");
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function saveDraft(): Promise<void> {
     if (slides.some((slide) => slide.generationStatus !== "succeeded")) {
       await generateSlides();
@@ -338,6 +382,16 @@ export function CarouselPage(): ReactElement {
         <aside className="flex min-w-0 flex-col gap-4"><div className="rounded-lg border border-border bg-bg p-4"><div className="flex items-center gap-2 text-text"><MessageSquareText size={17} /><h2 className="text-sm font-semibold">Команда для AI</h2></div><p className="mt-2 text-xs leading-5 text-muted">Команда изменит только выбранный слайд. Текстовые токены списываются существующим контуром YandexGPT после успешного ответа.</p><textarea value={command} onChange={(event) => setCommand(event.target.value)} placeholder="Усиль хук и сократи текст в два раза" className="mt-3 min-h-24 w-full resize-y rounded-md border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-accent" /><button type="button" onClick={() => void applyCommand()} disabled={!command.trim() || busy !== null} className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-md border border-accent bg-surface px-3 py-2 text-sm font-semibold text-accent hover:bg-blue-50 disabled:opacity-50">{busy === "command" ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />} Применить к слайду</button></div><div className="rounded-lg border border-border bg-surface p-4"><div className="flex items-center justify-between gap-3"><h2 className="text-sm font-semibold text-text">Профиль стиля</h2><span className="text-[11px] text-muted">сохраняется в браузере</span></div><input value={style.name} onChange={(event) => updateStyle({ name: event.target.value })} className="mt-3 w-full rounded-md border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-accent" aria-label="Название профиля стиля" /><div className="mt-2 flex items-center gap-2"><input type="color" value={style.accent} onChange={(event) => updateStyle({ accent: event.target.value })} className="h-9 w-11 rounded border border-border bg-bg p-1" aria-label="Акцентный цвет" /><select value={style.alignment} onChange={(event) => updateStyle({ alignment: event.target.value as CarouselStyleProfile["alignment"] })} className="h-9 flex-1 rounded-md border border-border bg-bg px-2 text-sm"><option value="left">Слева</option><option value="center">По центру</option></select></div><textarea value={style.visualRules} onChange={(event) => updateStyle({ visualRules: event.target.value })} className="mt-2 min-h-20 w-full resize-y rounded-md border border-border bg-bg px-3 py-2 text-xs leading-5 outline-none focus:border-accent" aria-label="Правила визуального стиля" /></div><div className="rounded-lg border border-border bg-surface p-4"><label className="text-sm font-semibold text-text" htmlFor="carousel-caption">Подпись публикации</label><textarea id="carousel-caption" value={caption} onChange={(event) => setCaption(event.target.value)} placeholder="Текст, который будет отправлен вместе с каруселью" className="mt-2 min-h-28 w-full resize-y rounded-md border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-accent" /></div><div className="rounded-lg border border-accent/30 bg-blue-50/60 p-4"><div className="flex items-center gap-2 text-accent"><Check size={17} /><h2 className="text-sm font-semibold">Готово к постингу</h2></div><p className="mt-2 text-xs leading-5 text-muted">Сохраните слайды как PNG-черновик. Каналы, ограничения и публикация останутся в существующем PostComposer.</p><button type="button" onClick={() => void saveDraft()} disabled={busy !== null} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-md bg-accent px-3 py-2.5 text-sm font-semibold text-white hover:bg-accent/90 disabled:opacity-60">{busy === "draft" ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />} Сохранить черновик</button></div>{notice ? <p className="text-xs leading-5 text-emerald-700">{notice}</p> : null}{error ? <p className="text-xs leading-5 text-red-600">{error}</p> : null}</aside>
       </div>
       <WorkspaceMediaPickerModal open={pickerOpen} mediaKind="image" onClose={() => setPickerOpen(false)} onSelect={selectReference} />
+      {regenerateOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true" aria-labelledby="regenerate-slide-title">
+          <div className="w-full max-w-md rounded-xl border border-border bg-surface p-5 shadow-xl">
+            <h2 id="regenerate-slide-title" className="text-base font-semibold text-text">Перегенерировать слайд {selectedIndex + 1}</h2>
+            <p className="mt-1 text-xs leading-5 text-muted">Опишите, что изменить. Текущий слайд будет отправлен в KIE как референс.</p>
+            <textarea autoFocus value={regeneratePrompt} onChange={(event) => setRegeneratePrompt(event.target.value)} placeholder="Сделай фон светлее, сохрани композицию и увеличь заголовок" className="mt-4 min-h-28 w-full resize-y rounded-md border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-accent" />
+            <div className="mt-4 flex justify-end gap-2"><button type="button" onClick={() => setRegenerateOpen(false)} className="rounded-md border border-border px-3 py-2 text-sm text-text hover:bg-bg">Отмена</button><button type="button" onClick={() => void regenerateSelectedSlide()} disabled={!regeneratePrompt.trim() || busy !== null} className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent/90 disabled:opacity-50">{busy === "draft" ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />} Перегенерировать</button></div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
