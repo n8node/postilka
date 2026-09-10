@@ -273,6 +273,20 @@ func (s *PostService) Delete(ctx context.Context, userID string, r *http.Request
 	return s.posts.DeleteDraft(ctx, ws.ID, postID)
 }
 
+func (s *PostService) SetHidden(
+	ctx context.Context,
+	userID string,
+	r *http.Request,
+	postID string,
+	hidden bool,
+) (*model.Post, error) {
+	ws, err := s.requireEditor(ctx, userID, r)
+	if err != nil {
+		return nil, err
+	}
+	return s.posts.SetHidden(ctx, ws.ID, postID, hidden)
+}
+
 func (s *PostService) Schedule(
 	ctx context.Context,
 	userID string,

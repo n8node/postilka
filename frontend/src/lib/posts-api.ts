@@ -145,6 +145,7 @@ export type Post = {
   mission_id?: string;
   origin?: "user" | "agent";
   plan_manually_changed?: boolean;
+  is_hidden: boolean;
   needs_revision?: boolean;
   status:
     | "draft"
@@ -191,6 +192,7 @@ export type PostListParams = {
   format?: string;
   origin?: "user" | "agent" | "";
   mission_id?: string;
+  hidden?: boolean;
   calendar?: boolean;
   from?: string;
   to?: string;
@@ -225,6 +227,7 @@ export function fetchPosts(params: PostListParams = {}) {
   if (params.format) qs.set("format", params.format);
   if (params.origin) qs.set("origin", params.origin);
   if (params.mission_id) qs.set("mission_id", params.mission_id);
+  if (params.hidden != null) qs.set("hidden", params.hidden ? "1" : "0");
   if (params.calendar) qs.set("calendar", "1");
   if (params.from) qs.set("from", params.from);
   if (params.to) qs.set("to", params.to);
@@ -276,6 +279,13 @@ export function previewPostShortLinks(id: string, targetId: string) {
 
 export function deletePost(id: string) {
   return apiFetch<void>(`/posts/${encodeURIComponent(id)}`, { method: "DELETE" });
+}
+
+export function setPostHidden(id: string, hidden: boolean) {
+  return apiFetch<Post>(`/posts/${encodeURIComponent(id)}/hidden`, {
+    method: "PATCH",
+    body: JSON.stringify({ hidden }),
+  });
 }
 
 export function schedulePost(id: string, dueAt: string) {

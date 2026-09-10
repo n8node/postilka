@@ -7,6 +7,8 @@ import {
   Ban,
   Check,
   Copy,
+  Eye,
+  EyeOff,
   ImageIcon,
   Loader2,
   PenSquare,
@@ -40,6 +42,7 @@ import {
   fetchPosts,
   publishPostAndWait,
   rejectPost,
+  setPostHidden,
   type Post,
 } from "@/lib/posts-api";
 import {
@@ -58,7 +61,7 @@ import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 25;
 
-type StatusFilter = Post["status"] | "";
+type StatusFilter = Post["status"] | "" | "hidden";
 
 const STATUS_TABS: { id: StatusFilter; label: string }[] = [
   { id: "", label: "Все" },
@@ -68,6 +71,7 @@ const STATUS_TABS: { id: StatusFilter; label: string }[] = [
   { id: "published", label: "Опубликованные" },
   { id: "failed", label: "Ошибки" },
   { id: "canceled", label: "Отменённые" },
+  { id: "hidden", label: "Скрытые" },
 ];
 
 const STATUS_TAB_IDS = new Set<string>(STATUS_TABS.map((tab) => tab.id));
@@ -198,7 +202,9 @@ export function PostsListPage() {
   const emailVerified = isEmailVerified(user);
   const router = useRouter();
   const searchParams = useSearchParams();
-  const statusFromUrl = parseStatus(searchParams.get("status"));
+  const statusFromUrl = searchParams.get("hidden") === "1"
+    ? "hidden"
+    : parseStatus(searchParams.get("status"));
   const [items, setItems] = useState<Post[]>([]);
   const [channels, setChannels] = useState<ChannelListItem[]>([]);
   const [members, setMembers] = useState<WorkspaceMember[]>([]);
@@ -247,7 +253,8 @@ export function PostsListPage() {
       const postData = await fetchPosts({
         limit: PAGE_SIZE,
         offset,
-        status: statusFilter,
+        status: statusFilter === "hidden" ? "" : statusFilter,
+        hidden: statusFilter === "hidden",
         channel_id: channelFilter || undefined,
         q: search || undefined,
       });
@@ -300,11 +307,26 @@ export function PostsListPage() {
 
   function applyStatus(next: StatusFilter) {
     const params = new URLSearchParams(searchParams.toString());
-    if (next) params.set("status", next);
+    params.delete("hidden");
+    if (next && next !== "hidden") params.set("status", next);
     else params.delete("status");
+    if (next === "hidden") params.set("hidden", "1");
     const query = params.toString();
     router.replace(query ? `/posts?${query}` : "/posts");
     setStatusFilter(next);
+  }
+
+  async function handleToggleHidden(post: Post) {
+    setActionId(post.id);
+    setError(null);
+    try {
+      await setPostHidden(post.id, !post.is_hidden);
+      await load();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Не удалось изменить видимость публикации");
+    } finally {
+      setActionId(null);
+    }
   }
 
   function authorLabel(post: Post) {
@@ -638,6 +660,17 @@ export function PostsListPage() {
                               <Ban className="h-3.5 w-3.5" />
                             </ActionButton>
                           )}
+                          <ActionButton
+                            label={post.is_hidden ? "Показать публикацию" : "Скрыть публикацию"}
+                            disabled={busy}
+                            onClick={() => void handleToggleHidden(post)}
+                          >
+                            {post.is_hidden ? (
+                              <EyeOff className="h-3.5 w-3.5" />
+                            ) : (
+                              <Eye className="h-3.5 w-3.5" />
+                            )}
+                          </ActionButton>
                           <ActionButton
                             label="Удалить"
                             disabled={busy || !canDeletePost(post.status)}

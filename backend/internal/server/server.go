@@ -458,6 +458,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Put("/posts/{id}", postHandler.Update)
 			r.Patch("/posts/{id}", postHandler.Update)
 			r.Delete("/posts/{id}", postHandler.Delete)
+			r.Patch("/posts/{id}/hidden", postHandler.SetHidden)
 			r.Post("/posts/{id}/short-link", postHandler.PreviewShortLink)
 			r.Post("/posts/{id}/schedule", postHandler.Schedule)
 			r.Post("/posts/{id}/publish", postHandler.Publish)

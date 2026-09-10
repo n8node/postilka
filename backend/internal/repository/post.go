@@ -22,7 +22,7 @@ func NewPostRepository(pool *pgxpool.Pool) *PostRepository {
 }
 
 const postColumns = `
-	id, workspace_id, COALESCE(created_by_user_id::text, ''), status, content, settings,
+	id, workspace_id, COALESCE(created_by_user_id::text, ''), status, is_hidden, content, settings,
 	due_at, published_at, COALESCE(last_error, ''), created_at, updated_at,
 	COALESCE(mission_id::text, ''), origin, plan_manually_changed
 `
@@ -31,7 +31,7 @@ func scanPost(row pgx.Row) (*model.Post, error) {
 	var post model.Post
 	var contentRaw, settingsRaw []byte
 	err := row.Scan(
-		&post.ID, &post.WorkspaceID, &post.CreatedByUserID, &post.Status, &contentRaw, &settingsRaw,
+		&post.ID, &post.WorkspaceID, &post.CreatedByUserID, &post.Status, &post.IsHidden, &contentRaw, &settingsRaw,
 		&post.DueAt, &post.PublishedAt, &post.LastError, &post.CreatedAt, &post.UpdatedAt,
 		&post.MissionID, &post.Origin, &post.PlanManuallyChanged,
 	)
@@ -60,6 +60,7 @@ type PostListFilter struct {
 	Format             string
 	Origin             string
 	MissionID          string
+	Hidden             *bool
 	From               *time.Time
 	To                 *time.Time
 	Calendar           bool
@@ -72,6 +73,13 @@ func (r *PostRepository) buildListWhere(filter PostListFilter) (string, []any) {
 	conditions := []string{"workspace_id = $1"}
 	args := []any{filter.WorkspaceID}
 	argN := 2
+	if filter.Hidden == nil {
+		conditions = append(conditions, "is_hidden = false")
+	} else {
+		conditions = append(conditions, fmt.Sprintf("is_hidden = $%d", argN))
+		args = append(args, *filter.Hidden)
+		argN++
+	}
 
 	if filter.Status != "" {
 		conditions = append(conditions, fmt.Sprintf("status = $%d", argN))
@@ -458,6 +466,21 @@ func (r *PostRepository) MarkPlanManuallyChanged(ctx context.Context, workspaceI
 		WHERE id = $1 AND workspace_id = $2 AND mission_id IS NOT NULL
 	`, postID, workspaceID)
 	return err
+}
+
+func (r *PostRepository) SetHidden(ctx context.Context, workspaceID, postID string, hidden bool) (*model.Post, error) {
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE posts
+		SET is_hidden = $3, updated_at = NOW()
+		WHERE id = $1 AND workspace_id = $2
+	`, postID, workspaceID, hidden)
+	if err != nil {
+		return nil, err
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, ErrNotFound
+	}
+	return r.Get(ctx, workspaceID, postID)
 }
 
 func (r *PostRepository) SetScheduled(ctx context.Context, workspaceID, postID string, dueAt time.Time) (*model.Post, error) {

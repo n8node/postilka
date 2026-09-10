@@ -247,6 +247,7 @@ type Post struct {
 	MissionID           string       `json:"mission_id,omitempty"`
 	Origin              PostOrigin   `json:"origin"`
 	PlanManuallyChanged bool         `json:"plan_manually_changed,omitempty"`
+	IsHidden            bool         `json:"is_hidden"`
 	Status              PostStatus   `json:"status"`
 	Content             PostContent  `json:"content"`
 	Settings            PostSettings `json:"settings"`

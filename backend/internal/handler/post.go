@@ -50,6 +50,10 @@ func (h *PostHandler) List(w http.ResponseWriter, r *http.Request) {
 		Limit:     limit,
 		Offset:    offset,
 	}
+	if q.Get("hidden") == "1" || q.Get("hidden") == "true" {
+		hidden := true
+		filter.Hidden = &hidden
+	}
 	if q.Get("calendar") == "1" || q.Get("calendar") == "true" {
 		filter.Calendar = true
 	}
@@ -181,6 +185,26 @@ func (h *PostHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *PostHandler) SetHidden(w http.ResponseWriter, r *http.Request) {
+	userID, ok := postUserID(w, r)
+	if !ok {
+		return
+	}
+	var req struct {
+		Hidden bool `json:"hidden"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Некорректное тело запроса")
+		return
+	}
+	post, err := h.posts.SetHidden(r.Context(), userID, r, chi.URLParam(r, "id"), req.Hidden)
+	if err != nil {
+		writePostError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, post)
 }
 
 func (h *PostHandler) Schedule(w http.ResponseWriter, r *http.Request) {
