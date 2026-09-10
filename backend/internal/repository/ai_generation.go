@@ -62,7 +62,7 @@ func (r *AIGenerationRepository) GetBySourceJobID(ctx context.Context, jobID str
 		WHERE source_job_id = $1
 	`, r.generationSelectColumns(ctx)), jobID).Scan(
 		&g.ID, &g.UserID, &g.WorkspaceID, &g.Mode, &g.Prompt, &g.Model, &g.AspectRatio,
-		&g.ResultS3Key, &g.ResultContentType, &g.VideoDurationSeconds, &g.PreviewS3Key, &g.CreatedAt, &g.SourceJobID,
+		&g.ResultS3Key, &g.ResultContentType, &g.VideoDurationSeconds, &g.PreviewS3Key, &g.WorkspaceFileID, &g.CreatedAt, &g.SourceJobID,
 	)
 	if err == pgx.ErrNoRows {
 		return model.AIGeneration{}, ErrNotFound
@@ -80,7 +80,7 @@ func (r *AIGenerationRepository) GetByID(ctx context.Context, id, userID string)
 	`, cols)
 	err := r.pool.QueryRow(ctx, query, id, userID).Scan(
 		&g.ID, &g.UserID, &g.WorkspaceID, &g.Mode, &g.Prompt, &g.Model, &g.AspectRatio,
-		&g.ResultS3Key, &g.ResultContentType, &g.VideoDurationSeconds, &g.PreviewS3Key, &g.CreatedAt,
+		&g.ResultS3Key, &g.ResultContentType, &g.VideoDurationSeconds, &g.PreviewS3Key, &g.WorkspaceFileID, &g.CreatedAt,
 	)
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -126,7 +126,7 @@ func (r *AIGenerationRepository) listByWorkspace(ctx context.Context, workspaceI
 		var g model.AIGenerationWithUsage
 		if err := rows.Scan(
 			&g.ID, &g.UserID, &g.WorkspaceID, &g.Mode, &g.Prompt, &g.Model, &g.AspectRatio,
-			&g.ResultS3Key, &g.ResultContentType, &g.VideoDurationSeconds, &g.PreviewS3Key, &g.CreatedAt,
+			&g.ResultS3Key, &g.ResultContentType, &g.VideoDurationSeconds, &g.PreviewS3Key, &g.WorkspaceFileID, &g.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -156,7 +156,7 @@ func (r *AIGenerationRepository) ListOwnedByIDs(ctx context.Context, workspaceID
 		var g model.AIGeneration
 		if err := rows.Scan(
 			&g.ID, &g.UserID, &g.WorkspaceID, &g.Mode, &g.Prompt, &g.Model, &g.AspectRatio,
-			&g.ResultS3Key, &g.ResultContentType, &g.VideoDurationSeconds, &g.PreviewS3Key, &g.CreatedAt,
+			&g.ResultS3Key, &g.ResultContentType, &g.VideoDurationSeconds, &g.PreviewS3Key, &g.WorkspaceFileID, &g.CreatedAt,
 		); err != nil {
 			return nil, err
 		}

@@ -23,18 +23,19 @@ type AIGeneration struct {
 }
 
 type AIGenerationView struct {
-	ID                   string `json:"id"`
-	Mode                 string `json:"mode"`
-	Prompt               string `json:"prompt"`
-	Model                string `json:"model"`
-	AspectRatio          string `json:"aspect_ratio,omitempty"`
-	ImageURL             string `json:"image_url"`
-	VideoURL             string `json:"video_url,omitempty"`
-	ThumbURL             string `json:"thumb_url,omitempty"`
-	VideoDurationSeconds int    `json:"video_duration_seconds,omitempty"`
-	CreatedAt            string `json:"created_at"`
-	UsedInPost           bool   `json:"used_in_post"`
-	MediaType            string `json:"media_type,omitempty"`
+	ID                   string  `json:"id"`
+	Mode                 string  `json:"mode"`
+	Prompt               string  `json:"prompt"`
+	Model                string  `json:"model"`
+	AspectRatio          string  `json:"aspect_ratio,omitempty"`
+	ImageURL             string  `json:"image_url"`
+	VideoURL             string  `json:"video_url,omitempty"`
+	ThumbURL             string  `json:"thumb_url,omitempty"`
+	WorkspaceFileID      *string `json:"workspace_file_id,omitempty"`
+	VideoDurationSeconds int     `json:"video_duration_seconds,omitempty"`
+	CreatedAt            string  `json:"created_at"`
+	UsedInPost           bool    `json:"used_in_post"`
+	MediaType            string  `json:"media_type,omitempty"`
 }
 
 type AIGenerationWithUsage struct {
@@ -63,6 +64,7 @@ func (g AIGeneration) ToViewWithUsage(usedInPost bool) AIGenerationView {
 		VideoDurationSeconds: g.VideoDurationSeconds,
 		CreatedAt:            g.CreatedAt.UTC().Format(time.RFC3339),
 		UsedInPost:           usedInPost,
+		WorkspaceFileID:      g.WorkspaceFileID,
 	}
 	if IsVideoGenerationMode(g.Mode) || strings.HasPrefix(g.ResultContentType, "video/") {
 		view.MediaType = "video"

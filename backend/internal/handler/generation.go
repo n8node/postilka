@@ -22,11 +22,12 @@ func NewGenerationHandler(generation *service.GenerationService) *GenerationHand
 }
 
 type generateImageRequest struct {
-	Mode             string   `json:"mode"`
-	Prompt           string   `json:"prompt"`
-	AspectRatio      string   `json:"aspect_ratio"`
-	SourceUploadID   string   `json:"source_upload_id"`
-	CombineUploadIDs []string `json:"combine_upload_ids"`
+	Mode               string   `json:"mode"`
+	Prompt             string   `json:"prompt"`
+	AspectRatio        string   `json:"aspect_ratio"`
+	SourceUploadID     string   `json:"source_upload_id"`
+	CombineUploadIDs   []string `json:"combine_upload_ids"`
+	ReferenceUploadIDs []string `json:"reference_upload_ids"`
 }
 
 func (h *GenerationHandler) Generate(w http.ResponseWriter, r *http.Request) {
@@ -43,11 +44,12 @@ func (h *GenerationHandler) Generate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result, err := h.generation.StartGenerate(r.Context(), userID, r, service.GenerateImageInput{
-		Mode:             req.Mode,
-		Prompt:           req.Prompt,
-		AspectRatio:      req.AspectRatio,
-		SourceUploadID:   req.SourceUploadID,
-		CombineUploadIDs: req.CombineUploadIDs,
+		Mode:               req.Mode,
+		Prompt:             req.Prompt,
+		AspectRatio:        req.AspectRatio,
+		SourceUploadID:     req.SourceUploadID,
+		CombineUploadIDs:   req.CombineUploadIDs,
+		ReferenceUploadIDs: req.ReferenceUploadIDs,
 	})
 	if err != nil {
 		h.mapError(w, err)

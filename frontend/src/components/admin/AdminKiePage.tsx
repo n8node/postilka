@@ -18,10 +18,12 @@ const DEFAULT_SETTINGS: KieAdminSettings = {
   model_image_to_image: "",
   model_combine: "",
   model_filter: "",
+  model_carousel: "",
   token_cost_text_to_image: 15,
   token_cost_image_to_image: 15,
   token_cost_combine: 18,
   token_cost_filter: 8,
+  token_cost_carousel: 15,
   kopecks_per_media_credit: 5000,
   submit_rate_limit: 18,
   submit_rate_window_sec: 10,
@@ -139,10 +141,12 @@ export function AdminKiePage({ embedded = false }: { embedded?: boolean }) {
         model_image_to_image: form.model_image_to_image,
         model_combine: form.model_combine,
         model_filter: form.model_filter,
+        model_carousel: form.model_carousel,
         token_cost_text_to_image: form.token_cost_text_to_image,
         token_cost_image_to_image: form.token_cost_image_to_image,
         token_cost_combine: form.token_cost_combine,
         token_cost_filter: form.token_cost_filter,
+        token_cost_carousel: form.token_cost_carousel,
         kopecks_per_media_credit: Math.max(
           1,
           Math.round(Math.max(0, mediaCreditPriceRub) * 100),
@@ -342,6 +346,19 @@ export function AdminKiePage({ embedded = false }: { embedded?: boolean }) {
           />
           <p className="mt-1 text-xs text-slate-500">Редактирование, стилизация и апскейл в разделе фильтров</p>
         </div>
+
+        <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
+          <label className="mb-1.5 block text-sm font-medium text-blue-950">Карусель</label>
+          <ModelSelect
+            value={form.model_carousel}
+            onChange={(value) => patch("model_carousel", value)}
+            models={generationModels}
+            emptyLabel="Выберите модель для слайдов"
+          />
+          <p className="mt-1 text-xs text-blue-800">
+            KIE получает отдельный prompt и до шести референсов для каждого слайда.
+          </p>
+        </div>
       </section>
 
       <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
@@ -359,6 +376,7 @@ export function AdminKiePage({ embedded = false }: { embedded?: boolean }) {
             ["token_cost_image_to_image", "Фото → фото", "Кредитов за генерацию"],
             ["token_cost_combine", "Комбинация фото", "Кредитов за генерацию"],
             ["token_cost_filter", "Раздел «Фильтры»", "Кредитов за операцию"],
+            ["token_cost_carousel", "Карусель", "Кредитов за один слайд"],
           ] as const
         ).map(([key, label, hint]) => (
           <div key={key}>

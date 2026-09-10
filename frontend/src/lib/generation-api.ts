@@ -12,6 +12,7 @@ export type GenerationItem = {
   video_url?: string;
   media_type?: string;
   thumb_url?: string;
+  workspace_file_id?: string | null;
   created_at: string;
   used_in_post?: boolean;
 };
@@ -154,11 +155,12 @@ export type AIUsageHistoryItem = {
 };
 
 export type GenerateImageBody = {
-  mode: GenerationModeId;
+  mode: GenerationModeId | "carousel";
   prompt: string;
   aspect_ratio: string;
   source_upload_id?: string;
   combine_upload_ids?: string[];
+  reference_upload_ids?: string[];
 };
 
 export type ComposePostTextPayload = {

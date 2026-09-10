@@ -12,10 +12,12 @@ type KieSettings struct {
 	ModelImageToImage     string
 	ModelCombine          string
 	ModelFilter           string
+	ModelCarousel         string
 	TokenCostTextToImage  int
 	TokenCostImageToImage int
 	TokenCostCombine      int
 	TokenCostFilter       int
+	TokenCostCarousel     int
 	KopecksPerMediaCredit int
 	SubmitRateLimit       int
 	SubmitRateWindowSec   int
@@ -29,10 +31,12 @@ type KieSettingsDTO struct {
 	ModelImageToImage     string `json:"model_image_to_image"`
 	ModelCombine          string `json:"model_combine"`
 	ModelFilter           string `json:"model_filter"`
+	ModelCarousel         string `json:"model_carousel"`
 	TokenCostTextToImage  int    `json:"token_cost_text_to_image"`
 	TokenCostImageToImage int    `json:"token_cost_image_to_image"`
 	TokenCostCombine      int    `json:"token_cost_combine"`
 	TokenCostFilter       int    `json:"token_cost_filter"`
+	TokenCostCarousel     int    `json:"token_cost_carousel"`
 	KopecksPerMediaCredit int    `json:"kopecks_per_media_credit"`
 	SubmitRateLimit       int    `json:"submit_rate_limit"`
 	SubmitRateWindowSec   int    `json:"submit_rate_window_sec"`
@@ -64,10 +68,12 @@ type KieUpdateRequest struct {
 	ModelImageToImage     *string `json:"model_image_to_image"`
 	ModelCombine          *string `json:"model_combine"`
 	ModelFilter           *string `json:"model_filter"`
+	ModelCarousel         *string `json:"model_carousel"`
 	TokenCostTextToImage  *int    `json:"token_cost_text_to_image"`
 	TokenCostImageToImage *int    `json:"token_cost_image_to_image"`
 	TokenCostCombine      *int    `json:"token_cost_combine"`
 	TokenCostFilter       *int    `json:"token_cost_filter"`
+	TokenCostCarousel     *int    `json:"token_cost_carousel"`
 	KopecksPerMediaCredit *int    `json:"kopecks_per_media_credit"`
 	SubmitRateLimit       *int    `json:"submit_rate_limit"`
 	SubmitRateWindowSec   *int    `json:"submit_rate_window_sec"`
@@ -75,6 +81,8 @@ type KieUpdateRequest struct {
 
 func (s KieSettings) TokenCostForGenerationMode(mode string) int {
 	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "carousel":
+		return positiveOrOne(s.TokenCostCarousel)
 	case "image-to-image", "sketch":
 		return positiveOrOne(s.TokenCostImageToImage)
 	case "combine":

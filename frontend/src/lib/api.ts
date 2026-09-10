@@ -2776,10 +2776,12 @@ export type KieAdminSettings = {
   model_image_to_image: string;
   model_combine: string;
   model_filter: string;
+  model_carousel: string;
   token_cost_text_to_image: number;
   token_cost_image_to_image: number;
   token_cost_combine: number;
   token_cost_filter: number;
+  token_cost_carousel: number;
   kopecks_per_media_credit: number;
   submit_rate_limit: number;
   submit_rate_window_sec: number;

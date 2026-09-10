@@ -90,6 +90,12 @@ func (s *KieConfigService) Update(ctx context.Context, in model.KieUpdateRequest
 		}
 		current.TokenCostFilter = *in.TokenCostFilter
 	}
+	if in.TokenCostCarousel != nil {
+		if *in.TokenCostCarousel < 0 || *in.TokenCostCarousel > 1_000_000 {
+			return model.KieSettingsDTO{}, errors.New("invalid token cost for carousel")
+		}
+		current.TokenCostCarousel = *in.TokenCostCarousel
+	}
 	if in.KopecksPerMediaCredit != nil {
 		if *in.KopecksPerMediaCredit <= 0 || *in.KopecksPerMediaCredit > 10_000_000 {
 			return model.KieSettingsDTO{}, errors.New("invalid kopecks per media credit")
@@ -120,6 +126,9 @@ func (s *KieConfigService) Update(ctx context.Context, in model.KieUpdateRequest
 	}
 	if in.ModelFilter != nil {
 		current.ModelFilter = ai.NormalizeKieModelID(*in.ModelFilter)
+	}
+	if in.ModelCarousel != nil {
+		current.ModelCarousel = ai.NormalizeKieModelID(*in.ModelCarousel)
 	}
 
 	apiKeyEnc := current.APIKey
@@ -273,10 +282,12 @@ func toKieSettingsDTO(s model.KieSettings) model.KieSettingsDTO {
 		ModelImageToImage:     s.ModelImageToImage,
 		ModelCombine:          s.ModelCombine,
 		ModelFilter:           s.ModelFilter,
+		ModelCarousel:         s.ModelCarousel,
 		TokenCostTextToImage:  s.TokenCostTextToImage,
 		TokenCostImageToImage: s.TokenCostImageToImage,
 		TokenCostCombine:      s.TokenCostCombine,
 		TokenCostFilter:       s.TokenCostFilter,
+		TokenCostCarousel:     s.TokenCostCarousel,
 		KopecksPerMediaCredit: positiveKopecksPerCredit(s.KopecksPerMediaCredit),
 		SubmitRateLimit:       positiveRateDefault(s.SubmitRateLimit, 18),
 		SubmitRateWindowSec:   positiveRateDefault(s.SubmitRateWindowSec, 10),

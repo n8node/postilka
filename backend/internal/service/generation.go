@@ -109,11 +109,12 @@ func (s *GenerationService) markJobFailed(ctx context.Context, jobID, msg string
 }
 
 type GenerateImageInput struct {
-	Mode             string
-	Prompt           string
-	AspectRatio      string
-	SourceUploadID   string
-	CombineUploadIDs []string
+	Mode               string
+	Prompt             string
+	AspectRatio        string
+	SourceUploadID     string
+	CombineUploadIDs   []string
+	ReferenceUploadIDs []string
 }
 
 type StartGenerateResult struct {
@@ -166,6 +167,10 @@ func (s *GenerationService) StartGenerate(ctx context.Context, userID string, r 
 		if valid < 2 {
 			return StartGenerateResult{}, ErrGenerationCombineMin
 		}
+	case "carousel":
+		if len(nonEmptyUploadIDs(in.ReferenceUploadIDs)) > 6 {
+			return StartGenerateResult{}, errors.New("carousel supports at most 6 references")
+		}
 	}
 
 	settings, err := s.kieConfig.GetSettings(ctx)
@@ -184,18 +189,19 @@ func (s *GenerationService) StartGenerate(ctx context.Context, userID string, r 
 	}
 
 	job, err := s.jobRepo.Create(ctx, model.AIGenerationJob{
-		UserID:           userID,
-		WorkspaceID:      ws.ID,
-		Status:           model.GenJobStatusPreparing,
-		Progress:         5,
-		Mode:             mode,
-		Prompt:           prompt,
-		Model:            modelID,
-		AspectRatio:      strings.TrimSpace(in.AspectRatio),
-		SourceUploadID:   strings.TrimSpace(in.SourceUploadID),
-		CombineUploadIDs: append([]string(nil), in.CombineUploadIDs...),
-		CreditCost:       cost,
-		PollAfter:        time.Now(),
+		UserID:             userID,
+		WorkspaceID:        ws.ID,
+		Status:             model.GenJobStatusPreparing,
+		Progress:           5,
+		Mode:               mode,
+		Prompt:             prompt,
+		Model:              modelID,
+		AspectRatio:        strings.TrimSpace(in.AspectRatio),
+		SourceUploadID:     strings.TrimSpace(in.SourceUploadID),
+		CombineUploadIDs:   append([]string(nil), in.CombineUploadIDs...),
+		ReferenceUploadIDs: append([]string(nil), in.ReferenceUploadIDs...),
+		CreditCost:         cost,
+		PollAfter:          time.Now(),
 	})
 	if err != nil {
 		return StartGenerateResult{}, err
@@ -1083,11 +1089,12 @@ func (s *GenerationService) submitPendingJob(ctx context.Context, jobID string, 
 	mode := normalizeGenerationMode(jobRow.Mode)
 	prompt := strings.TrimSpace(jobRow.Prompt)
 	in := GenerateImageInput{
-		Mode:             mode,
-		Prompt:           prompt,
-		AspectRatio:      jobRow.AspectRatio,
-		SourceUploadID:   jobRow.SourceUploadID,
-		CombineUploadIDs: append([]string(nil), jobRow.CombineUploadIDs...),
+		Mode:               mode,
+		Prompt:             prompt,
+		AspectRatio:        jobRow.AspectRatio,
+		SourceUploadID:     jobRow.SourceUploadID,
+		CombineUploadIDs:   append([]string(nil), jobRow.CombineUploadIDs...),
+		ReferenceUploadIDs: append([]string(nil), jobRow.ReferenceUploadIDs...),
 	}
 	startedAt := jobRow.CreatedAt
 
@@ -1150,6 +1157,26 @@ func (s *GenerationService) submitPendingJob(ctx context.Context, jobID string, 
 			return err
 		}
 		imageURLs = urls
+	case "carousel":
+		refIDs := nonEmptyUploadIDs(in.ReferenceUploadIDs)
+		if len(refIDs) > 6 {
+			_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
+			s.markJobFailed(ctx, jobID, "carousel supports at most 6 references")
+			return errors.New("carousel supports at most 6 references")
+		}
+		if len(refIDs) > 0 {
+			urls, err := s.kieImageURLs(ctx, client, userID, workspaceID, refIDs)
+			if err != nil {
+				if isKieRateLimited(err) {
+					deferSubmit(true)
+					return nil
+				}
+				_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
+				s.markJobFailed(ctx, jobID, generationFailMessage(err))
+				return err
+			}
+			imageURLs = urls
+		}
 	}
 
 	jobRow, err = s.jobRepo.GetByIDInternal(ctx, jobID)
@@ -1280,7 +1307,7 @@ func normalizeGenerationMode(mode string) string {
 	switch strings.TrimSpace(mode) {
 	case generationModeFilter:
 		return generationModeFilter
-	case "image-to-image", "combine", "sketch":
+	case "image-to-image", "combine", "sketch", "carousel":
 		return strings.TrimSpace(mode)
 	default:
 		return "text-to-image"
@@ -1289,6 +1316,8 @@ func normalizeGenerationMode(mode string) string {
 
 func modelForGenerationMode(settings model.KieSettings, mode string) string {
 	switch mode {
+	case "carousel":
+		return strings.TrimSpace(settings.ModelCarousel)
 	case generationModeFilter:
 		return strings.TrimSpace(settings.ModelFilter)
 	case "image-to-image", "sketch":

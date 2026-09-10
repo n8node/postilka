@@ -50,7 +50,7 @@ func (r *AIGenerationRepository) generationSelectColumns(ctx context.Context) st
 	} else {
 		cols += `, '' AS preview_s3_key`
 	}
-	cols += `, created_at`
+	cols += `, workspace_file_id, created_at`
 	return cols
 }
 

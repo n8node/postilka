@@ -16,13 +16,14 @@ import {
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { WorkspaceMediaPickerModal } from "@/components/generation/WorkspaceMediaPickerModal";
-import { composePostText } from "@/lib/generation-api";
-import { downloadFile, uploadFile, type WorkspaceFile } from "@/lib/files-api";
+import { composePostText, fetchGenerationJob, startGeneration, uploadGenerationMediaFromWorkspace, type GenerationJob } from "@/lib/generation-api";
+import { uploadFile, type WorkspaceFile } from "@/lib/files-api";
 import { createPost } from "@/lib/posts-api";
 import { cn } from "@/lib/utils";
 
 const MIN_SLIDES = 3;
-const MAX_SLIDES = 10;
+const MAX_SLIDES = 6;
+const MAX_REFERENCES = 6;
 
 type CarouselSlide = {
   id: string;
@@ -32,6 +33,8 @@ type CarouselSlide = {
   file?: WorkspaceFile;
   styleAccent?: string;
   textAlignment?: "left" | "center";
+  generationJobId?: string;
+  generationStatus?: "idle" | "queued" | "succeeded" | "failed";
 };
 
 type StoryboardResponse = {
@@ -79,95 +82,6 @@ function parseStoryboard(text: string): StoryboardResponse | null {
   }
 }
 
-function wrapCanvasText(context: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
-  const words = text.trim().split(/\s+/).filter(Boolean);
-  const lines: string[] = [];
-  let current = "";
-  for (const word of words) {
-    const candidate = current ? `${current} ${word}` : word;
-    if (current && context.measureText(candidate).width > maxWidth) {
-      lines.push(current);
-      current = word;
-    } else {
-      current = candidate;
-    }
-  }
-  if (current) lines.push(current);
-  return lines;
-}
-
-async function loadWorkspaceImage(file: WorkspaceFile): Promise<HTMLImageElement> {
-  const { url } = await downloadFile(file.id, "inline");
-  const image = new Image();
-  image.crossOrigin = "anonymous";
-  image.src = url;
-  await image.decode();
-  return image;
-}
-
-async function renderSlide(slide: CarouselSlide, index: number): Promise<File> {
-  const width = 1080;
-  const height = 1350;
-  const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
-  const context = canvas.getContext("2d");
-  if (!context) throw new Error("Браузер не поддерживает рендер карусели");
-
-  context.fillStyle = "#f1eee7";
-  context.fillRect(0, 0, width, height);
-  if (slide.file) {
-    try {
-      const image = await loadWorkspaceImage(slide.file);
-      const scale = Math.max(width / image.width, height / image.height);
-      const imageWidth = image.width * scale;
-      const imageHeight = image.height * scale;
-      context.globalAlpha = 0.72;
-      context.drawImage(image, (width - imageWidth) / 2, (height - imageHeight) / 2, imageWidth, imageHeight);
-      context.globalAlpha = 1;
-      context.fillStyle = "rgba(241, 238, 231, 0.72)";
-      context.fillRect(0, 0, width, height);
-    } catch {
-      context.fillStyle = "#e4ded2";
-      context.fillRect(0, 0, width, height);
-    }
-  }
-
-  const inset = 104;
-  context.fillStyle = slide.styleAccent ?? "#9c4938";
-  context.fillRect(inset, 112, 92, 10);
-  context.fillStyle = "#1d2724";
-  context.font = "600 30px Georgia, serif";
-  context.fillText(`${String(index + 1).padStart(2, "0")} / ${String(MAX_SLIDES).padStart(2, "0")}`, inset, 92);
-
-  context.font = "700 72px Georgia, serif";
-  context.textAlign = slide.textAlignment ?? "left";
-  const headlineLines = wrapCanvasText(context, slide.headline, width - inset * 2);
-  let y = 350;
-  const textX = slide.textAlignment === "center" ? width / 2 : inset;
-  for (const line of headlineLines.slice(0, 4)) {
-    context.fillText(line, textX, y);
-    y += 82;
-  }
-
-  context.font = "400 34px Arial, sans-serif";
-  const bodyLines = wrapCanvasText(context, slide.body, width - inset * 2);
-  y += 46;
-  for (const line of bodyLines.slice(0, 7)) {
-    context.fillText(line, textX, y);
-    y += 48;
-  }
-
-  context.font = "600 24px Arial, sans-serif";
-  context.fillStyle = "#59635e";
-  context.fillText(slide.role, textX, height - 112);
-
-  const blob = await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob((value) => (value ? resolve(value) : reject(new Error("Не удалось создать PNG"))), "image/png");
-  });
-  return new File([blob], `carousel_slide_${String(index + 1).padStart(2, "0")}.png`, { type: "image/png" });
-}
-
 export function CarouselPage(): ReactElement {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -177,6 +91,7 @@ export function CarouselPage(): ReactElement {
   const [selectedId, setSelectedId] = useState(INITIAL_SLIDES[0].id);
   const [command, setCommand] = useState("");
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [referenceFiles, setReferenceFiles] = useState<WorkspaceFile[]>([]);
   const [busy, setBusy] = useState<"storyboard" | "command" | "upload" | "draft" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -291,11 +206,13 @@ export function CarouselPage(): ReactElement {
     }
   }
 
-  function selectBackground(file: WorkspaceFile): void {
-    if (!selectedSlide) return;
-    updateSlide(selectedSlide.id, { file });
+  function selectReference(file: WorkspaceFile): void {
+    setReferenceFiles((current) => {
+      if (current.some((item) => item.id === file.id) || current.length >= MAX_REFERENCES) return current;
+      return [...current, file];
+    });
     setPickerOpen(false);
-    setNotice(`Фон назначен для слайда ${selectedIndex + 1}.`);
+    setNotice("Референс добавлен для всех слайдов.");
   }
 
   async function uploadBackground(file: File): Promise<void> {
@@ -303,7 +220,7 @@ export function CarouselPage(): ReactElement {
     setError(null);
     try {
       const uploaded = await uploadFile(file);
-      selectBackground(uploaded);
+      selectReference(uploaded);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Не удалось загрузить изображение");
     } finally {
@@ -311,18 +228,80 @@ export function CarouselPage(): ReactElement {
     }
   }
 
-  async function saveDraft(): Promise<void> {
+  function buildSlidePrompt(slide: CarouselSlide, index: number): string {
+    return `Создай готовый слайд карусели с текстом внутри изображения. Тема: ${topic.trim()}. Это слайд ${index + 1} из ${slides.length}. Роль: ${slide.role}. Заголовок, который нужно точно написать на русском: ${slide.headline}. Основной текст, который нужно точно написать на русском: ${slide.body}. Не добавляй лишние слова, псевдотекст или lorem ipsum. Сохрани единый визуальный стиль серии. Стиль: ${style.name}. Правила: ${style.visualRules}. Выравнивание: ${style.alignment}. Формат: 4:5. Не копируй референсы буквально.`;
+  }
+
+  async function generateSlides(): Promise<void> {
+    if (!topic.trim()) {
+      setError("Сначала укажите тему карусели.");
+      return;
+    }
     setBusy("draft");
     setError(null);
     setNotice(null);
     try {
-      const renderedFiles = await Promise.all(slides.map((slide, index) => renderSlide({ ...slide, styleAccent: style.accent, textAlignment: style.alignment }, index)));
-      const media = await Promise.all(renderedFiles.map((file) => uploadFile(file)));
+      const referenceUploadIDs = await Promise.all(
+        referenceFiles.map((file) => uploadGenerationMediaFromWorkspace(file.id).then((upload) => upload.id)),
+      );
+      const jobs = await Promise.all(
+        slides.map(async (slide, index) => {
+          const result = await startGeneration({
+            mode: "carousel",
+            prompt: buildSlidePrompt(slide, index),
+            aspect_ratio: "4:5",
+            reference_upload_ids: referenceUploadIDs,
+          });
+          updateSlide(slide.id, { generationJobId: result.job.id, generationStatus: "queued" });
+          return { slideId: slide.id, jobId: result.job.id };
+        }),
+      );
+      setNotice("Слайды поставлены в очередь KIE и появятся на своих позициях по мере готовности.");
+      await Promise.all(
+        jobs.map(async ({ slideId, jobId }) => {
+          const started = Date.now();
+          while (Date.now() - started < 15 * 60 * 1000) {
+            const result = await fetchGenerationJob(jobId);
+            const job = result.job as GenerationJob;
+            if (job.status === "succeeded") {
+              const workspaceFileID = job.generation?.workspace_file_id;
+              if (!workspaceFileID) throw new Error("Готовый слайд не привязан к файлу workspace");
+              updateSlide(slideId, {
+                file: { id: workspaceFileID } as WorkspaceFile,
+                generationStatus: "succeeded",
+              });
+              return;
+            }
+            if (job.status === "failed") throw new Error(job.fail_message || "Генерация слайда не удалась");
+            await new Promise((resolve) => setTimeout(resolve, 2500));
+          }
+          throw new Error("Ожидание генерации слайда превысило лимит времени");
+        }),
+      );
+      setNotice("Все слайды готовы. Проверьте карусель и сохраните ее в Посты.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Не удалось сгенерировать слайды");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function saveDraft(): Promise<void> {
+    if (slides.some((slide) => slide.generationStatus !== "succeeded")) {
+      await generateSlides();
+      return;
+    }
+    setBusy("draft");
+    setError(null);
+    setNotice(null);
+    try {
+      const media = slides.filter((slide) => slide.file);
+      if (media.length !== slides.length) throw new Error("Дождитесь готовности всех слайдов перед сохранением");
       const post = await createPost({
         content: { format: "message", text: caption.trim() || topic.trim(), parse_mode: "HTML", entities: [], buttons: [] },
         settings: { telegram_media_layout: "separate", telegram_media_order: "media_first" },
         targets: [],
-        media: media.map((file, index) => ({ file_id: file.id, settings: { alt_text: slides[index].headline } })),
+        media: media.map((slide) => ({ file_id: slide.file!.id, settings: { alt_text: slide.headline } })),
       });
       router.push(`/posts/${post.id}`);
     } catch (err) {
@@ -359,7 +338,7 @@ export function CarouselPage(): ReactElement {
 
         <aside className="flex min-w-0 flex-col gap-4"><div className="rounded-lg border border-border bg-bg p-4"><div className="flex items-center gap-2 text-text"><MessageSquareText size={17} /><h2 className="text-sm font-semibold">Команда для AI</h2></div><p className="mt-2 text-xs leading-5 text-muted">Команда изменит только выбранный слайд. Текстовые токены списываются существующим контуром YandexGPT после успешного ответа.</p><textarea value={command} onChange={(event) => setCommand(event.target.value)} placeholder="Усиль хук и сократи текст в два раза" className="mt-3 min-h-24 w-full resize-y rounded-md border border-border bg-surface px-3 py-2 text-sm outline-none focus:border-accent" /><button type="button" onClick={() => void applyCommand()} disabled={!command.trim() || busy !== null} className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-md border border-accent bg-surface px-3 py-2 text-sm font-semibold text-accent hover:bg-blue-50 disabled:opacity-50">{busy === "command" ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />} Применить к слайду</button></div><div className="rounded-lg border border-border bg-surface p-4"><div className="flex items-center justify-between gap-3"><h2 className="text-sm font-semibold text-text">Профиль стиля</h2><span className="text-[11px] text-muted">сохраняется в браузере</span></div><input value={style.name} onChange={(event) => updateStyle({ name: event.target.value })} className="mt-3 w-full rounded-md border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-accent" aria-label="Название профиля стиля" /><div className="mt-2 flex items-center gap-2"><input type="color" value={style.accent} onChange={(event) => updateStyle({ accent: event.target.value })} className="h-9 w-11 rounded border border-border bg-bg p-1" aria-label="Акцентный цвет" /><select value={style.alignment} onChange={(event) => updateStyle({ alignment: event.target.value as CarouselStyleProfile["alignment"] })} className="h-9 flex-1 rounded-md border border-border bg-bg px-2 text-sm"><option value="left">Слева</option><option value="center">По центру</option></select></div><textarea value={style.visualRules} onChange={(event) => updateStyle({ visualRules: event.target.value })} className="mt-2 min-h-20 w-full resize-y rounded-md border border-border bg-bg px-3 py-2 text-xs leading-5 outline-none focus:border-accent" aria-label="Правила визуального стиля" /></div><div className="rounded-lg border border-border bg-surface p-4"><label className="text-sm font-semibold text-text" htmlFor="carousel-caption">Подпись публикации</label><textarea id="carousel-caption" value={caption} onChange={(event) => setCaption(event.target.value)} placeholder="Текст, который будет отправлен вместе с каруселью" className="mt-2 min-h-28 w-full resize-y rounded-md border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-accent" /></div><div className="rounded-lg border border-accent/30 bg-blue-50/60 p-4"><div className="flex items-center gap-2 text-accent"><Check size={17} /><h2 className="text-sm font-semibold">Готово к постингу</h2></div><p className="mt-2 text-xs leading-5 text-muted">Сохраните слайды как PNG-черновик. Каналы, ограничения и публикация останутся в существующем PostComposer.</p><button type="button" onClick={() => void saveDraft()} disabled={busy !== null} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-md bg-accent px-3 py-2.5 text-sm font-semibold text-white hover:bg-accent/90 disabled:opacity-60">{busy === "draft" ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />} Сохранить черновик</button></div>{notice ? <p className="text-xs leading-5 text-emerald-700">{notice}</p> : null}{error ? <p className="text-xs leading-5 text-red-600">{error}</p> : null}</aside>
       </div>
-      <WorkspaceMediaPickerModal open={pickerOpen} mediaKind="image" onClose={() => setPickerOpen(false)} onSelect={selectBackground} />
+      <WorkspaceMediaPickerModal open={pickerOpen} mediaKind="image" onClose={() => setPickerOpen(false)} onSelect={selectReference} />
     </section>
   );
 }
