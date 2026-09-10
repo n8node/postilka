@@ -128,6 +128,7 @@ export function CarouselPage(): ReactElement {
   const [referenceFiles, setReferenceFiles] = useState<
     Array<WorkspaceFile | null>
   >([]);
+  const [draggedSlideId, setDraggedSlideId] = useState<string | null>(null);
   const [referenceSlot, setReferenceSlot] = useState<number | null>(null);
   const [regenerateOpen, setRegenerateOpen] = useState(false);
   const [regeneratePrompt, setRegeneratePrompt] = useState("");
@@ -190,6 +191,21 @@ export function CarouselPage(): ReactElement {
     const [slide] = nextSlides.splice(selectedIndex, 1);
     nextSlides.splice(nextIndex, 0, slide);
     setSlides(nextSlides);
+  }
+
+  function moveSlideToIndex(slideId: string, targetIndex: number): void {
+    const sourceIndex = slides.findIndex((slide) => slide.id === slideId);
+    if (sourceIndex < 0 || sourceIndex === targetIndex) return;
+    const nextSlides = [...slides];
+    const [draggedSlide] = nextSlides.splice(sourceIndex, 1);
+    nextSlides.splice(targetIndex, 0, draggedSlide);
+    setSlides(nextSlides);
+  }
+
+  function clearBackground(): void {
+    if (!selectedSlide) return;
+    updateSlide(selectedSlide.id, { backgroundFile: undefined });
+    setNotice(`Свой фон у слайда ${selectedIndex + 1} удален.`);
   }
 
   function addSlide(): void {
@@ -679,6 +695,15 @@ export function CarouselPage(): ReactElement {
                   key={slide.id}
                   type="button"
                   onClick={() => setSelectedId(slide.id)}
+                  draggable
+                  onDragStart={() => setDraggedSlideId(slide.id)}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    if (draggedSlideId) moveSlideToIndex(draggedSlideId, index);
+                    setDraggedSlideId(null);
+                  }}
+                  onDragEnd={() => setDraggedSlideId(null)}
                   className={cn(
                     "relative w-32 min-w-32 shrink-0 rounded-lg border p-2 text-left transition",
                     slide.id === selectedId
@@ -792,7 +817,7 @@ export function CarouselPage(): ReactElement {
                 <img
                   src={mediaUrl(selectedSlide.generationImageUrl)}
                   alt={selectedSlide.headline}
-                  className="mt-4 h-[420px] w-full rounded-md object-cover"
+                  className="mt-4 max-h-[500px] w-auto max-w-full rounded-md object-contain"
                 />
               ) : null}
               <input
@@ -853,6 +878,16 @@ export function CarouselPage(): ReactElement {
                     >
                       <FileImage size={14} /> С диска
                     </button>
+                    {selectedSlide.backgroundFile ? (
+                      <button
+                        type="button"
+                        onClick={clearBackground}
+                        disabled={busy !== null}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-text hover:border-red-400 hover:text-red-600 disabled:opacity-50"
+                      >
+                        <Trash2 size={14} /> Удалить фон
+                      </button>
+                    ) : null}
                   </div>
                 </div>
                 <input
