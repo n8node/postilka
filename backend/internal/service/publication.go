@@ -138,11 +138,11 @@ func (s *PublicationService) PreviewShortLinks(
 			if shortErr != nil {
 				return nil, shortErr
 			}
-					label := item.label
-					if label == "" {
-						label = item.url
-					}
-					out = append(out, ShortLinkPreview{ShortURL: shortURL, TargetURL: rewriteAbsoluteURL(item.url, settings.UTM), Location: item.location, Label: label})
+			label := item.label
+			if label == "" {
+				label = item.url
+			}
+			out = append(out, ShortLinkPreview{ShortURL: shortURL, TargetURL: rewriteAbsoluteURL(item.url, settings.UTM), Location: item.location, Label: label})
 		}
 		return out, nil
 	}
@@ -197,12 +197,14 @@ func appendTextURLs(urls []postURL, text, location string) []postURL {
 	return urls
 }
 
-var contentHTMLHrefURL = regexp.MustCompile(`(?i)href=["'](https?://[^"']+)["']`)
+var contentHTMLHrefURL = regexp.MustCompile(`(?is)<a\s+href=["'](https?://[^"']+)["']\s*>(.*?)</a>`)
 
 func appendHTMLHrefURLs(urls []postURL, text, location string) []postURL {
 	for _, match := range contentHTMLHrefURL.FindAllStringSubmatch(text, -1) {
-		if len(match) > 1 {
-			urls = append(urls, postURL{url: html.UnescapeString(match[1]), location: location})
+		if len(match) > 2 {
+			label := telegramHTMLTag.ReplaceAllString(match[2], "")
+			label = strings.TrimSpace(html.UnescapeString(label))
+			urls = append(urls, postURL{url: html.UnescapeString(match[1]), location: location, label: label})
 		}
 	}
 	return urls
