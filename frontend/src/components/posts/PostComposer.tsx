@@ -89,6 +89,7 @@ import {
   syncTelegramStory,
   updatePost,
   previewPostShortLink,
+  previewPostShortLinks,
   type Post,
   type PostApprovalEvent,
   type PostContent,
@@ -1298,7 +1299,9 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
   const [channelUTM, setChannelUTM] = useState<Record<string, ChannelUTMSettings>>({});
   const [expandedUTMChannelId, setExpandedUTMChannelId] = useState<string | null>(null);
   const [utmHelpOpen, setUtmHelpOpen] = useState(false);
-  const [shortURLs, setShortURLs] = useState<Record<string, string>>({});
+  const [shortLinks, setShortLinks] = useState<
+    Record<string, Array<{ short_url: string; target_url: string; location: string }>>
+  >({});
   const [shortURLBusy, setShortURLBusy] = useState<Record<string, boolean>>({});
   const [approvalRequired, setApprovalRequired] = useState(false);
   const [selectedApproverIds, setSelectedApproverIds] = useState<string[]>([]);
@@ -1662,7 +1665,7 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
     setLongitude("");
     setChannelUTM({});
     setExpandedUTMChannelId(null);
-    setShortURLs({});
+    setShortLinks({});
     setShortURLBusy({});
     setApprovalRequired(false);
     setSelectedApproverIds([]);
@@ -1769,7 +1772,7 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
     }
     setChannelUTM(loadedChannelUTM);
     setExpandedUTMChannelId(null);
-    setShortURLs({});
+    setShortLinks({});
     setShortURLBusy({});
     setApprovalRequired(Boolean(post.settings.approval_required));
     setSelectedApproverIds(post.settings.approver_user_ids ?? []);
@@ -2454,14 +2457,12 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
     try {
       const results = await Promise.all(
         targets.map(async ({ target, targetURL }) => {
-          const result = await previewPostShortLink(post.id, {
-            target_id: target.id,
-            destination_url: targetURL,
-          });
-          return [target.channel_id, result.short_url] as const;
+          if (!targetURL) return [target.channel_id, []] as const;
+          const result = await previewPostShortLinks(post.id, target.id);
+          return [target.channel_id, result.links] as const;
         }),
       );
-      setShortURLs((current) => ({ ...current, ...Object.fromEntries(results) }));
+      setShortLinks((current) => ({ ...current, ...Object.fromEntries(results) }));
     } catch (shortURLError) {
       setError(errorText(shortURLError, "Не удалось подготовить короткую ссылку"));
     } finally {
@@ -2996,32 +2997,40 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
                                 />
                                 Сокращать ссылки Postilka
                               </label>
-                              {utmSettings.shorten && shortURLs[channel.id] ? (
-                                <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50/70 p-3">
+                              {utmSettings.shorten && shortLinks[channel.id]?.length ? (
+                                <div className="mt-3 space-y-2 rounded-lg border border-emerald-200 bg-emerald-50/70 p-3">
                                   <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-800">
-                                    Короткая ссылка
+                                    Короткие ссылки и адреса назначения
                                   </p>
-                                  <div className="mt-1 flex items-center gap-2">
-                                    <a
-                                      href={shortURLs[channel.id]}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      className="min-w-0 flex-1 truncate font-mono text-xs text-emerald-800 underline"
-                                    >
-                                      {shortURLs[channel.id]}
-                                    </a>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        void navigator.clipboard.writeText(shortURLs[channel.id]!);
-                                        setSuccess("Короткая ссылка скопирована");
-                                      }}
-                                      className="shrink-0 rounded-md border border-emerald-300 px-2 py-1 text-[11px] font-medium text-emerald-800 hover:bg-emerald-100"
-                                    >
-                                      <Copy className="mr-1 inline h-3 w-3" />
-                                      Копировать
-                                    </button>
-                                  </div>
+                                  {shortLinks[channel.id].map((link) => (
+                                    <div key={`${link.short_url}-${link.target_url}`} className="rounded-md border border-emerald-200/80 bg-white/70 p-2">
+                                      <p className="text-[10px] font-medium text-emerald-900">{link.location}</p>
+                                      <div className="mt-1 flex items-center gap-2">
+                                        <a
+                                          href={link.short_url}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="min-w-0 flex-1 truncate font-mono text-xs text-emerald-800 underline"
+                                        >
+                                          {link.short_url}
+                                        </a>
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            void navigator.clipboard.writeText(link.short_url);
+                                            setSuccess("Короткая ссылка скопирована");
+                                          }}
+                                          className="shrink-0 rounded-md border border-emerald-300 px-2 py-1 text-[11px] font-medium text-emerald-800 hover:bg-emerald-100"
+                                        >
+                                          <Copy className="mr-1 inline h-3 w-3" />
+                                          Копировать
+                                        </button>
+                                      </div>
+                                      <p className="mt-1 truncate font-mono text-[10px] text-zinc-500" title={link.target_url}>
+                                        Ведёт на: {link.target_url}
+                                      </p>
+                                    </div>
+                                  ))}
                                 </div>
                               ) : utmSettings.shorten ? (
                                 <p className="mt-2 text-[11px] text-muted">

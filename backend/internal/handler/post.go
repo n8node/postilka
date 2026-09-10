@@ -141,9 +141,19 @@ func (h *PostHandler) PreviewShortLink(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		TargetID       string `json:"target_id"`
 		DestinationURL string `json:"destination_url"`
+		All            bool   `json:"all"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "Некорректное тело запроса")
+		return
+	}
+	if req.All {
+		links, err := h.posts.PreviewShortLinks(r.Context(), userID, r, chi.URLParam(r, "id"), strings.TrimSpace(req.TargetID))
+		if err != nil {
+			writePostError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"links": links})
 		return
 	}
 	shortURL, err := h.posts.PreviewShortLink(

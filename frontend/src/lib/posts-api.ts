@@ -260,6 +260,19 @@ export function previewPostShortLink(
   });
 }
 
+export type ShortLinkPreview = {
+  short_url: string;
+  target_url: string;
+  location: string;
+};
+
+export function previewPostShortLinks(id: string, targetId: string) {
+  return apiFetch<{ links: ShortLinkPreview[] }>(`/posts/${encodeURIComponent(id)}/short-link`, {
+    method: "POST",
+    body: JSON.stringify({ target_id: targetId, all: true }),
+  });
+}
+
 export function deletePost(id: string) {
   return apiFetch<void>(`/posts/${encodeURIComponent(id)}`, { method: "DELETE" });
 }

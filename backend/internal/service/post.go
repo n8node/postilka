@@ -29,21 +29,21 @@ var (
 )
 
 const (
-	maxPostTargets     = 100
-	maxPostMedia       = 10
-	maxTelegramButtons = 100
-	maxMAXButtons      = 210
-	maxMAXButtonRows   = 30
+	maxPostTargets      = 100
+	maxPostMedia        = 10
+	maxTelegramButtons  = 100
+	maxMAXButtons       = 210
+	maxMAXButtonRows    = 30
 	maxMAXButtonsPerRow = 3
-	maxPublishAttempts = 5
+	maxPublishAttempts  = 5
 )
 
 type PostService struct {
-	posts       *repository.PostRepository
-	channels    *repository.ChannelRepository
-	workspaces  *WorkspaceService
-	publication *PublicationService
-	approvals   *repository.PostApprovalRepository
+	posts        *repository.PostRepository
+	channels     *repository.ChannelRepository
+	workspaces   *WorkspaceService
+	publication  *PublicationService
+	approvals    *repository.PostApprovalRepository
 	users        *repository.UserRepository
 	notify       *NotificationService
 	workflowRuns WorkflowApprovalRunResolver
@@ -246,6 +246,23 @@ func (s *PostService) PreviewShortLink(
 		return "", err
 	}
 	return s.publication.PreviewShortLink(ctx, post, targetID, destinationURL)
+}
+
+func (s *PostService) PreviewShortLinks(
+	ctx context.Context,
+	userID string,
+	r *http.Request,
+	postID, targetID string,
+) ([]ShortLinkPreview, error) {
+	ws, err := s.requireEditor(ctx, userID, r)
+	if err != nil {
+		return nil, err
+	}
+	post, err := s.posts.Get(ctx, ws.ID, postID)
+	if err != nil {
+		return nil, err
+	}
+	return s.publication.PreviewShortLinks(ctx, post, targetID)
 }
 
 func (s *PostService) Delete(ctx context.Context, userID string, r *http.Request, postID string) error {
@@ -983,8 +1000,8 @@ func validatePostSettings(settings model.PostSettings) error {
 	}
 	if settings.UTM != nil {
 		for name, value := range map[string]string{
-			"utm_source": settings.UTM.Source,
-			"utm_medium": settings.UTM.Medium,
+			"utm_source":   settings.UTM.Source,
+			"utm_medium":   settings.UTM.Medium,
 			"utm_campaign": settings.UTM.Campaign,
 		} {
 			limit := 100
@@ -1301,7 +1318,29 @@ func ApplyUTMToContent(content model.PostContent, utm *model.PostUTMSettings) mo
 		rich.Blocks = rewriteRichBlocks(rich.Blocks, utm)
 		content.RichMessage = &rich
 	}
+	content.Buttons = rewriteButtons(content.Buttons, utm)
 	return content
+}
+
+func rewriteButtons(rows [][]model.TelegramInlineButton, utm *model.PostUTMSettings) [][]model.TelegramInlineButton {
+	if len(rows) == 0 {
+		return rows
+	}
+	out := make([][]model.TelegramInlineButton, len(rows))
+	for rowIndex, row := range rows {
+		out[rowIndex] = make([]model.TelegramInlineButton, len(row))
+		for buttonIndex, source := range row {
+			button := source
+			if button.URL != "" {
+				button.URL = rewriteAbsoluteURL(button.URL, utm)
+			}
+			if button.WebAppURL != "" {
+				button.WebAppURL = rewriteAbsoluteURL(button.WebAppURL, utm)
+			}
+			out[rowIndex][buttonIndex] = button
+		}
+	}
+	return out
 }
 
 func rewriteRichBlocks(

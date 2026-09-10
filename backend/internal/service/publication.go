@@ -35,6 +35,12 @@ type PublicationService struct {
 	notify      *NotificationService
 }
 
+type ShortLinkPreview struct {
+	ShortURL string `json:"short_url"`
+	TargetURL string `json:"target_url"`
+	Location string `json:"location"`
+}
+
 func NewPublicationService(
 	posts *repository.PostRepository,
 	channels *repository.ChannelRepository,
@@ -95,6 +101,125 @@ func (s *PublicationService) PreviewShortLink(
 		)
 	}
 	return "", fmt.Errorf("%w: канал поста не найден", ErrInvalidPost)
+}
+
+func (s *PublicationService) PreviewShortLinks(
+	ctx context.Context,
+	post *model.Post,
+	targetID string,
+) ([]ShortLinkPreview, error) {
+	if post == nil || s.shortener == nil {
+		return nil, fmt.Errorf("%w: сокращение ссылок недоступно", ErrInvalidPost)
+	}
+	for _, target := range post.Targets {
+		if target.ID != strings.TrimSpace(targetID) {
+			continue
+		}
+		targetSettings, err := DecodePostTargetSettings(target.Settings)
+		if err != nil {
+			return nil, err
+		}
+		content, settings := mergePostTarget(post.Content, post.Settings, targetSettings)
+		if settings.UTM == nil || !settings.UTM.Shorten {
+			return nil, fmt.Errorf("%w: включите сокращение ссылок для этого канала", ErrInvalidPost)
+		}
+		urls := collectPostURLs(content, settings.MaxButtons)
+		out := make([]ShortLinkPreview, 0, len(urls))
+		seen := map[string]struct{}{}
+		for _, item := range urls {
+			if _, exists := seen[item.url]; exists {
+				continue
+			}
+			seen[item.url] = struct{}{}
+			shortURL, shortErr := s.shortener.EnsureShortLinkWithUTM(
+				ctx, post.WorkspaceID, post.ID, target.ID, target.ChannelID, item.url, settings.UTM,
+			)
+			if shortErr != nil {
+				return nil, shortErr
+			}
+			out = append(out, ShortLinkPreview{ShortURL: shortURL, TargetURL: rewriteAbsoluteURL(item.url, settings.UTM), Location: item.location})
+		}
+		return out, nil
+	}
+	return nil, fmt.Errorf("%w: канал поста не найден", ErrInvalidPost)
+}
+
+type postURL struct {
+	url string
+	location string
+}
+
+func collectPostURLs(content model.PostContent, maxButtons [][]model.TelegramInlineButton) []postURL {
+	urls := make([]postURL, 0)
+	urls = appendTextURLs(urls, content.Text, "Текст")
+	urls = appendHTMLHrefURLs(urls, content.Text, "Текстовая ссылка")
+	for _, entity := range content.Entities {
+		if entity.URL != "" {
+			urls = append(urls, postURL{url: entity.URL, location: "Текстовая ссылка"})
+		}
+	}
+	for _, row := range content.Buttons {
+		for _, button := range row {
+			if button.URL != "" {
+				urls = append(urls, postURL{url: button.URL, location: "Кнопка Telegram"})
+			}
+			if button.WebAppURL != "" {
+				urls = append(urls, postURL{url: button.WebAppURL, location: "Кнопка Telegram"})
+			}
+		}
+	}
+	for _, row := range maxButtons {
+		for _, button := range row {
+			if button.URL != "" {
+				urls = append(urls, postURL{url: button.URL, location: "Кнопка MAX"})
+			}
+		}
+	}
+	if content.RichMessage != nil {
+		urls = appendTextURLs(urls, content.RichMessage.Title, "Статья")
+		urls = appendHTMLHrefURLs(urls, content.RichMessage.Title, "Ссылка в статье")
+		urls = collectRichBlockURLs(urls, content.RichMessage.Blocks)
+	}
+	return urls
+}
+
+func appendTextURLs(urls []postURL, text, location string) []postURL {
+	for _, match := range contentAbsoluteHTTPURL.FindAllString(text, -1) {
+		core, _ := splitURLPunctuation(match)
+		urls = append(urls, postURL{url: core, location: location})
+	}
+	return urls
+}
+
+var contentHTMLHrefURL = regexp.MustCompile(`(?i)href=["'](https?://[^"']+)["']`)
+
+func appendHTMLHrefURLs(urls []postURL, text, location string) []postURL {
+	for _, match := range contentHTMLHrefURL.FindAllStringSubmatch(text, -1) {
+		if len(match) > 1 {
+			urls = append(urls, postURL{url: html.UnescapeString(match[1]), location: location})
+		}
+	}
+	return urls
+}
+
+func collectRichBlockURLs(urls []postURL, blocks []model.TelegramRichBlock) []postURL {
+	for _, block := range blocks {
+		for _, value := range []string{block.Text, block.Credit, block.Summary, block.Expression} {
+			urls = appendTextURLs(urls, value, "Статья")
+			urls = appendHTMLHrefURLs(urls, value, "Ссылка в статье")
+		}
+		urls = collectRichBlockURLs(urls, block.Blocks)
+		for _, item := range block.Items {
+			urls = collectRichBlockURLs(urls, item.Blocks)
+		}
+		for _, row := range block.Rows {
+			for _, cell := range row {
+				urls = appendTextURLs(urls, cell.Text, "Таблица статьи")
+				urls = appendHTMLHrefURLs(urls, cell.Text, "Ссылка в таблице")
+			}
+		}
+	}
+	return urls
 }
 
 func (s *PublicationService) Publish(ctx context.Context, postID string, allowRetry bool) error {
@@ -599,10 +724,23 @@ func (s *PublicationService) publishTarget(
 		return "", err
 	}
 	content, settings := mergePostTarget(post.Content, post.Settings, targetSettings)
-	content = ApplyUTMToContent(content, settings.UTM)
+		content = ApplyUTMToContent(content, settings.UTM) // Закрепляю использование общего обработчика UTM-кнопок для MAX
 	var shortenErr error
 	content, shortenErr = ApplyLinkShorteningToContent(
 		ctx, content, s.shortener, post.WorkspaceID, post.ID, target.ID, target.ChannelID, settings.UTM,
+	)
+	if shortenErr != nil {
+		return "", shortenErr
+	}
+	settings.MaxButtons, shortenErr = ApplyLinkShorteningToButtons(
+		ctx,
+		rewriteButtons(settings.MaxButtons, settings.UTM),
+		s.shortener,
+		post.WorkspaceID,
+		post.ID,
+		target.ID,
+		target.ChannelID,
+		settings.UTM,
 	)
 	if shortenErr != nil {
 		return "", shortenErr

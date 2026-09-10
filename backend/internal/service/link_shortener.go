@@ -156,6 +156,27 @@ func ApplyLinkShorteningToContent(
 	return content, nil
 }
 
+func ApplyLinkShorteningToButtons(
+	ctx context.Context,
+	rows [][]model.TelegramInlineButton,
+	shortener *LinkShortenerService,
+	workspaceID, postID, targetID, channelID string,
+	utm *model.PostUTMSettings,
+) ([][]model.TelegramInlineButton, error) {
+	if shortener == nil || utm == nil || !utm.Shorten || len(rows) == 0 {
+		return rows, nil
+	}
+	lctx := linkShortenContext{
+		workspaceID: workspaceID,
+		postID:      postID,
+		targetID:    targetID,
+		channelID:   channelID,
+		shortener:   shortener,
+		cache:       map[string]string{},
+	}
+	return shortenButtons(ctx, rows, utm, lctx)
+}
+
 func shortenButtons(
 	ctx context.Context,
 	rows [][]model.TelegramInlineButton,
