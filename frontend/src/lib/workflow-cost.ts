@@ -54,10 +54,12 @@ const FALLBACK_IMAGE_PRICING: GenerationPricing = {
   text_to_image: 1,
   image_to_image: 1,
   combine: 1,
+  carousel: 1,
   media_credit_price_rub: 50,
   text_to_image_wallet_rub: 50,
   image_to_image_wallet_rub: 50,
   combine_wallet_rub: 50,
+  carousel_wallet_rub: 50,
 };
 
 const FALLBACK_VIDEO_PRICING: VideoGenerationPricing = {

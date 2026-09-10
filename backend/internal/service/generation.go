@@ -284,12 +284,14 @@ func (s *GenerationService) GetPricing(ctx context.Context, userID string, r *ht
 		TextToImage:  settings.TokenCostForGenerationMode("text-to-image"),
 		ImageToImage: settings.TokenCostForGenerationMode("image-to-image"),
 		Combine:      settings.TokenCostForGenerationMode("combine"),
+		Carousel:     settings.TokenCostForGenerationMode("carousel"),
 	}
 	priceRub := settings.MediaCreditPriceRub()
 	out.MediaCreditPriceRub = priceRub
 	out.TextToImageWalletRub = priceRub * float64(out.TextToImage)
 	out.ImageToImageWalletRub = priceRub * float64(out.ImageToImage)
 	out.CombineWalletRub = priceRub * float64(out.Combine)
+	out.CarouselWalletRub = priceRub * float64(out.Carousel)
 	credits, err := s.aiBilling.GetMediaCreditsRemaining(ctx, ws.ID, userID)
 	if err == nil {
 		out.Unlimited = credits.Unlimited

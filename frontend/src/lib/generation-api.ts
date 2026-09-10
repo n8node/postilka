@@ -21,10 +21,12 @@ export type GenerationPricing = {
   text_to_image: number;
   image_to_image: number;
   combine: number;
+  carousel: number;
   media_credit_price_rub: number;
   text_to_image_wallet_rub: number;
   image_to_image_wallet_rub: number;
   combine_wallet_rub: number;
+  carousel_wallet_rub: number;
   credits_remaining?: number | null;
   unlimited?: boolean;
 };
@@ -122,10 +124,12 @@ export async function fetchGenerationPricing() {
           text_to_image: 1,
           image_to_image: 1,
           combine: 1,
+          carousel: 1,
           media_credit_price_rub: 50,
           text_to_image_wallet_rub: 50,
           image_to_image_wallet_rub: 50,
           combine_wallet_rub: 50,
+          carousel_wallet_rub: 50,
           credits_remaining: mediaCreditsFromOverview(overview),
         },
       };

@@ -109,10 +109,12 @@ type GenerationPricingView struct {
 	TextToImage           int     `json:"text_to_image"`
 	ImageToImage          int     `json:"image_to_image"`
 	Combine               int     `json:"combine"`
+	Carousel              int     `json:"carousel"`
 	MediaCreditPriceRub   float64 `json:"media_credit_price_rub"`
 	TextToImageWalletRub  float64 `json:"text_to_image_wallet_rub"`
 	ImageToImageWalletRub float64 `json:"image_to_image_wallet_rub"`
 	CombineWalletRub      float64 `json:"combine_wallet_rub"`
+	CarouselWalletRub     float64 `json:"carousel_wallet_rub"`
 	CreditsRemaining      *int    `json:"credits_remaining,omitempty"`
 	Unlimited             bool    `json:"unlimited,omitempty"`
 }
