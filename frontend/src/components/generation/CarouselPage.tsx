@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { FileThumbnail } from "@/components/files/FileThumbnail";
 import { WorkspaceMediaPickerModal } from "@/components/generation/WorkspaceMediaPickerModal";
 import {
   composePostText,
@@ -213,10 +214,11 @@ export function CarouselPage(): ReactElement {
     setBusy("storyboard");
     setError(null);
     setNotice(null);
+    const slideCount = slides.length;
     try {
       const result = await composePostText({
         task: "generate",
-        prompt: `Создай storyboard карусели на тему: ${topic.trim()}. Верни только JSON без markdown в формате {"caption":"подпись поста","slides":[{"role":"Хук","headline":"...","body":"..."}]}. Сделай от ${MIN_SLIDES} до ${Math.min(7, MAX_SLIDES)} слайдов. Правила: сильный хук, одна мысль на слайд, логическое продолжение и понятный CTA в финале. Стиль: ${style.name}. Правила стиля: ${style.visualRules}. Выравнивание: ${style.alignment}.`,
+        prompt: `Создай storyboard карусели на тему: ${topic.trim()}. Верни только JSON без markdown в формате {"caption":"подпись поста","slides":[{"role":"Хук","headline":"...","body":"..."}]}. Сделай ровно ${slideCount} слайд${slideCount === 1 ? "" : slideCount < 5 ? "а" : "ов"}; не добавляй и не удаляй слайды. Правила: сильный хук, одна мысль на слайд, логическое продолжение и понятный CTA в финале. Стиль: ${style.name}. Правила стиля: ${style.visualRules}. Выравнивание: ${style.alignment}.`,
         length: "long",
         tone: "ясный, живой и профессиональный",
       });
@@ -226,7 +228,7 @@ export function CarouselPage(): ReactElement {
           "Нейросеть вернула неподдерживаемый формат. Повторите запрос.",
         );
       const nextSlides = parsed.slides
-        .slice(0, MAX_SLIDES)
+        .slice(0, slideCount)
         .map((slide, index) => ({
           ...createSlide(index),
           role: slide.role?.trim() || `Слайд ${index + 1}`,
@@ -552,10 +554,6 @@ export function CarouselPage(): ReactElement {
                 <h2 className="text-sm font-semibold text-text">
                   Реферсы для карусели
                 </h2>
-                <p className="mt-1 text-xs text-muted">
-                  До {MAX_REFERENCES} изображений. Они будут переданы KIE для
-                  всех слайдов.
-                </p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <button
@@ -635,7 +633,13 @@ export function CarouselPage(): ReactElement {
                   >
                     {file ? (
                       <>
-                        <FileImage size={18} className="text-muted" />
+                        <FileThumbnail
+                          fileId={file.id}
+                          name={file.name}
+                          mimeType={file.mime_type}
+                          size="sm"
+                          className="absolute inset-0 h-full w-full rounded-lg border-0"
+                        />
                         <span className="mt-1 w-full truncate text-[10px] text-muted">
                           {file.name}
                         </span>
@@ -688,6 +692,14 @@ export function CarouselPage(): ReactElement {
                         src={mediaUrl(slide.generationImageUrl)}
                         alt=""
                         className="h-full w-full object-cover"
+                      />
+                    ) : slide.backgroundFile ? (
+                      <FileThumbnail
+                        fileId={slide.backgroundFile.id}
+                        name={slide.backgroundFile.name}
+                        mimeType={slide.backgroundFile.mime_type}
+                        size="sm"
+                        className="absolute inset-0 h-full w-full rounded-md border-0"
                       />
                     ) : slide.generationStatus === "queued" ? (
                       <Loader2 size={18} className="animate-spin" />
@@ -805,11 +817,20 @@ export function CarouselPage(): ReactElement {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <p className="text-xs font-semibold text-text">
-                      Ручной фон слайда
+                      Свой фон для слайда
                     </p>
                     <p className="mt-1 text-[11px] text-muted">
-                      {selectedSlide.backgroundFile?.name ??
-                        "Не выбран, KIE создаст изображение по задаче"}
+                      {selectedSlide.backgroundFile ? (
+                        <FileThumbnail
+                          fileId={selectedSlide.backgroundFile.id}
+                          name={selectedSlide.backgroundFile.name}
+                          mimeType={selectedSlide.backgroundFile.mime_type}
+                          size="sm"
+                          className="mt-2 h-20 w-16 rounded-md border-0"
+                        />
+                      ) : (
+                        "Фон не выбран"
+                      )}
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
