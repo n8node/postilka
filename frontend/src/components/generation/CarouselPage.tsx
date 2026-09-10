@@ -170,7 +170,6 @@ export function CarouselPage(): ReactElement {
       }));
       setSlides(nextSlides);
       setSelectedId(nextSlides[0].id);
-      setCaption(parsed.caption?.trim() || "");
       setNotice("План готов. Проверьте текст до генерации изображений.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Не удалось создать storyboard");
@@ -326,7 +325,7 @@ export function CarouselPage(): ReactElement {
         <div className="min-w-0">
           <label className="block text-sm font-medium text-text" htmlFor="carousel-topic">Тема или задача</label>
           <textarea id="carousel-topic" value={topic} onChange={(event) => setTopic(event.target.value)} placeholder="Например: как владельцу малого бизнеса собрать контент-план на неделю" className="mt-2 min-h-24 w-full resize-y rounded-lg border border-border bg-bg px-3 py-2.5 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20" />
-          <button type="button" onClick={() => void generateStoryboard()} disabled={busy !== null} className="mt-3 inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-60">{busy === "storyboard" ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />} Создать storyboard</button>
+          <button type="button" onClick={() => void generateStoryboard()} disabled={busy !== null} className="mt-3 inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-60">{busy === "storyboard" ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />} Подготовить структуру</button>
 
           <div className="mt-6 rounded-lg border border-border bg-bg p-3">
             <div className="mb-3 flex items-center justify-between gap-3"><h2 className="text-sm font-semibold text-text">Слайды</h2><button type="button" onClick={addSlide} disabled={slides.length >= MAX_SLIDES} className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs font-medium text-text hover:border-accent disabled:opacity-50"><Plus size={14} /> Добавить</button></div>
