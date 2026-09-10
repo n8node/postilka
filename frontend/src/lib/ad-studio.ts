@@ -276,7 +276,7 @@ export function visibleCategoriesForCatalog(
   return categoriesForCatalog(catalog).filter((item) => !blocked.has(item.id));
 }
 
-export type AiHubTab = "studio" | "trends" | "photo" | "video" | "sketch";
+export type AiHubTab = "studio" | "trends" | "photo" | "video" | "sketch" | "carousel";
 export type CatalogMediaFilter = "all" | "image" | "video";
 
 export function parseStudioSection(raw: string | null | undefined): string {
@@ -339,6 +339,7 @@ export function generationNavSuggestedHrefs(): { href: string; label: string }[]
     { href: "/ai?tab=photo", label: "Фото" },
     { href: "/ai?tab=video", label: "Видео" },
     { href: "/ai?tab=sketch", label: "Набросок" },
+    { href: "/ai?tab=carousel", label: "Карусель" },
     ...AD_STUDIO_CATEGORIES.map((item) => ({
       href: studioHref(item.id),
       label: `Студия — ${item.label}`,

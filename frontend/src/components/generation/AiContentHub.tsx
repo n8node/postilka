@@ -3,8 +3,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Film, ImageIcon, LayoutGrid, Paintbrush, TrendingUp } from "lucide-react";
+import { Film, GalleryHorizontalEnd, ImageIcon, LayoutGrid, Paintbrush, TrendingUp } from "lucide-react";
 import { AdStudioPage } from "@/components/generation/AdStudioPage";
+import { CarouselPage } from "@/components/generation/CarouselPage";
 import { GenerationPageContent } from "@/components/generation/GenerationPageContent";
 import { VideoGenerationPageContent } from "@/components/generation/VideoGenerationPageContent";
 import { SketchPage } from "@/components/sketch/SketchPage";
@@ -20,10 +21,17 @@ const toolTabs: { id: AiHubTab; label: string; icon: typeof ImageIcon }[] = [
   { id: "photo", label: "Фото", icon: ImageIcon },
   { id: "video", label: "Видео", icon: Film },
   { id: "sketch", label: "Набросок", icon: Paintbrush },
+  { id: "carousel", label: "Карусель", icon: GalleryHorizontalEnd },
 ];
 
 function parseAiTab(raw: string | null): AiHubTab {
-  if (raw === "video" || raw === "photo" || raw === "sketch" || raw === "trends") {
+  if (
+    raw === "video" ||
+    raw === "photo" ||
+    raw === "sketch" ||
+    raw === "trends" ||
+    raw === "carousel"
+  ) {
     return raw;
   }
   return "studio";
@@ -91,6 +99,8 @@ export function AiContentHub() {
         <GenerationPageContent />
       ) : tab === "video" ? (
         <VideoGenerationPageContent />
+      ) : tab === "carousel" ? (
+        <CarouselPage />
       ) : null}
 
       {sketchReady ? (
