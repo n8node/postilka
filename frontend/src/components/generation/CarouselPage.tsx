@@ -350,6 +350,21 @@ export function CarouselPage(): ReactElement {
     setNotice(`Карусель «${carousel.title}» загружена в редактор.`);
   }
 
+  function createNewCarousel(): void {
+    setTitle("");
+    setTopic("");
+    setReferenceFiles([]);
+    setSlides(INITIAL_SLIDES.map((slide) => ({ ...slide })));
+    setSelectedId(null);
+    setPreviewIndex(0);
+    setTextTokenCost(0);
+    setRegenerateOpen(false);
+    setRegeneratePrompt("");
+    setError(null);
+    setNotice("Новая карусель создана.");
+    loadedCarouselId.current = null;
+  }
+
   async function deleteSavedCarousel(carousel: Carousel): Promise<void> {
     try {
       await deleteCarousel(carousel.id);
@@ -1330,6 +1345,14 @@ export function CarouselPage(): ReactElement {
               <Check size={17} />
               <h2 className="text-sm font-semibold">Сохранение и постинг</h2>
             </div>
+            <button
+              type="button"
+              onClick={createNewCarousel}
+              disabled={busy !== null}
+              className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-md border border-accent bg-white px-3 py-2.5 text-sm font-semibold text-accent hover:bg-blue-50 disabled:opacity-60"
+            >
+              <Plus size={15} /> Создать карусель
+            </button>
             <p className="mt-2 text-xs leading-5 text-muted">
               {pricing
                 ? `Всего: ${slides.reduce((total, slide) => total + (slide.generationCreditCost ?? 0), 0)} кредитов генерации + ${textTokenCost} текстовых токенов.`
