@@ -139,6 +139,9 @@ const (
 	TelegramMediaLayoutCaption  = "caption"
 	TelegramMediaLayoutCarousel = "carousel"
 
+	TelegramCarouselTextSeparate    = "separate_message"
+	TelegramCarouselTextSameMessage = "same_message"
+
 	TelegramCaptionPositionAbove = "above"
 	TelegramCaptionPositionBelow = "below"
 
@@ -202,6 +205,7 @@ type PostSettings struct {
 	WorkflowNodeID          string                   `json:"workflow_node_id,omitempty"`
 	Recurrence              *PostRecurrenceSettings  `json:"recurrence,omitempty"`
 	TelegramMediaLayout     string                   `json:"telegram_media_layout,omitempty"`
+	TelegramCarouselText    string                   `json:"telegram_carousel_text,omitempty"`
 	TelegramCaptionPosition string                   `json:"telegram_caption_position,omitempty"`
 	TelegramMediaOrder      string                   `json:"telegram_media_order,omitempty"`
 	TelegramPin             bool                     `json:"telegram_pin,omitempty"`

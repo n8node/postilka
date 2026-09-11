@@ -257,9 +257,19 @@ func TestValidateTelegramComposerMediaRejectsCaptionAboveAlbum(t *testing.T) {
 
 func TestValidatePostContentAllowsCarouselSettings(t *testing.T) {
 	if err := validatePostSettings(model.PostSettings{
-		TelegramMediaLayout: model.TelegramMediaLayoutCarousel,
+		TelegramMediaLayout:  model.TelegramMediaLayoutCarousel,
+		TelegramCarouselText: model.TelegramCarouselTextSameMessage,
 	}); err != nil {
 		t.Fatalf("expected carousel media layout to be valid, got %v", err)
+	}
+}
+
+func TestValidatePostSettingsRejectsUnknownCarouselTextMode(t *testing.T) {
+	err := validatePostSettings(model.PostSettings{
+		TelegramCarouselText: "inline",
+	})
+	if !errors.Is(err, ErrInvalidPost) {
+		t.Fatalf("expected invalid carousel text mode, got %v", err)
 	}
 }
 

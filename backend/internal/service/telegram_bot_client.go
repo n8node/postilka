@@ -1179,6 +1179,16 @@ func (c *TelegramBotClient) SendRichMediaSlideshow(
 	media []TelegramMediaInput,
 	disableNotification bool,
 ) (string, error) {
+	return c.SendRichMediaSlideshowMessage(ctx, token, chatID, "", nil, media, disableNotification)
+}
+
+func (c *TelegramBotClient) SendRichMediaSlideshowMessage(
+	ctx context.Context,
+	token, chatID, text string,
+	buttons [][]model.TelegramInlineButton,
+	media []TelegramMediaInput,
+	disableNotification bool,
+) (string, error) {
 	if len(media) < 2 {
 		return "", fmt.Errorf("%w: slideshow Telegram должен содержать минимум 2 медиафайла", ErrInvalidPost)
 	}
@@ -1212,11 +1222,20 @@ func (c *TelegramBotClient) SendRichMediaSlideshow(
 		}
 	}
 
+	richBlocks := make([]map[string]any, 0, 2)
+	if strings.TrimSpace(text) != "" {
+		paragraph := map[string]any{
+			"type": "paragraph",
+			"text": text,
+		}
+		richBlocks = append(richBlocks, paragraph)
+	}
+	richBlocks = append(richBlocks, map[string]any{
+		"type":   "slideshow",
+		"blocks": blocks,
+	})
 	richMessage, err := json.Marshal(map[string]any{
-		"blocks": []map[string]any{{
-			"type":   "slideshow",
-			"blocks": blocks,
-		}},
+		"blocks": richBlocks,
 	})
 	if err != nil {
 		return "", err
@@ -1227,6 +1246,13 @@ func (c *TelegramBotClient) SendRichMediaSlideshow(
 	}
 	if disableNotification {
 		fields["disable_notification"] = "true"
+	}
+	if markup := telegramReplyMarkup(buttons); markup != nil {
+		markupJSON, err := json.Marshal(markup)
+		if err != nil {
+			return "", err
+		}
+		fields["reply_markup"] = string(markupJSON)
 	}
 	raw, err := c.apiMultipartForm(ctx, token, "sendRichMessage", fields, files)
 	if err != nil {

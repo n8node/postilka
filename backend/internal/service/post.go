@@ -428,9 +428,6 @@ func validatePostTargets(ctx context.Context, channels *repository.ChannelReposi
 		if channel.Status != model.ChannelStatusActive {
 			return fmt.Errorf("%w: канал «%s» неактивен или требует переподключения", ErrInvalidPost, channel.Name)
 		}
-		if len(post.Media) > 0 && !channel.Provider.PublishCapabilities().ComposerMedia {
-			return fmt.Errorf("%w: вложения композера для %s пока не поддерживаются", ErrInvalidPost, channel.Provider.Label())
-		}
 		if len(post.Media) > 0 && channel.Provider == model.ChannelProviderMAX {
 			maxMedia := channel.Provider.PublishCapabilities().MaxMedia
 			if maxMedia <= 0 {
@@ -445,8 +442,10 @@ func validatePostTargets(ctx context.Context, channels *repository.ChannelReposi
 			return err
 		}
 		content, settings := mergePostTarget(post.Content, post.Settings, targetSettings)
+		if len(post.Media) > 0 && !channel.Provider.PublishCapabilities().ComposerMedia {
+			return fmt.Errorf("%w: вложения композера для %s пока не поддерживаются", ErrInvalidPost, channel.Provider.Label())
+		}
 		if !(strings.TrimSpace(settings.TelegramMediaLayout) == model.TelegramMediaLayoutCarousel &&
-			channel.Provider == model.ChannelProviderTelegram &&
 			len(post.Media) >= 3 && strings.TrimSpace(content.Text) == "") {
 			if err := ValidatePostContent(content, settings); err != nil {
 				return err
@@ -576,10 +575,6 @@ func (s *PostService) validate(
 		}
 		if channel.Status != model.ChannelStatusActive {
 			return fmt.Errorf("%w: канал «%s» неактивен или требует переподключения", ErrInvalidPost, channel.Name)
-		}
-		if strings.TrimSpace(req.Settings.TelegramMediaLayout) == model.TelegramMediaLayoutCarousel &&
-			channel.Provider != model.ChannelProviderTelegram {
-			return fmt.Errorf("%w: карусель поддерживается только для Telegram", ErrInvalidPost)
 		}
 		targetSettings, err := DecodePostTargetSettings(target.Settings)
 		if err != nil {
@@ -1019,6 +1014,10 @@ func validatePostSettings(settings model.PostSettings) error {
 	mediaOrder := strings.TrimSpace(settings.TelegramMediaOrder)
 	if mediaOrder != "" && mediaOrder != model.TelegramMediaOrderMediaFirst && mediaOrder != model.TelegramMediaOrderTextFirst {
 		return fmt.Errorf("%w: некорректный порядок медиа и текста в Telegram", ErrInvalidPost)
+	}
+	carouselText := strings.TrimSpace(settings.TelegramCarouselText)
+	if carouselText != "" && carouselText != model.TelegramCarouselTextSeparate && carouselText != model.TelegramCarouselTextSameMessage {
+		return fmt.Errorf("%w: некорректный режим текста карусели Telegram", ErrInvalidPost)
 	}
 	if utf8.RuneCountInString(settings.FirstComment) > 4096 {
 		return fmt.Errorf("%w: первый комментарий не должен превышать 4096 символов", ErrInvalidPost)

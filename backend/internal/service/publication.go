@@ -425,6 +425,10 @@ func telegramTextBeforeMedia(settings model.PostSettings) bool {
 	return strings.TrimSpace(settings.TelegramMediaOrder) == model.TelegramMediaOrderTextFirst
 }
 
+func telegramCarouselTextSameMessage(settings model.PostSettings) bool {
+	return strings.TrimSpace(settings.TelegramCarouselText) == model.TelegramCarouselTextSameMessage
+}
+
 func hasTelegramButtons(buttons [][]model.TelegramInlineButton) bool {
 	return len(buttons) > 0 && len(buttons[0]) > 0
 }
@@ -724,14 +728,14 @@ func (s *PublicationService) publishTarget(
 	if channel.Status != model.ChannelStatusActive {
 		return "", fmt.Errorf("канал «%s» неактивен или требует переподключения", channel.Name)
 	}
-	if len(post.Media) > 0 && !channel.Provider.PublishCapabilities().ComposerMedia {
-		return "", fmt.Errorf("вложения композера для %s пока не поддерживаются", channel.Provider.Label())
-	}
 	targetSettings, err := DecodePostTargetSettings(target.Settings)
 	if err != nil {
 		return "", err
 	}
 	content, settings := mergePostTarget(post.Content, post.Settings, targetSettings)
+	if len(post.Media) > 0 && !channel.Provider.PublishCapabilities().ComposerMedia {
+		return "", fmt.Errorf("вложения композера для %s пока не поддерживаются", channel.Provider.Label())
+	}
 	content = ApplyUTMToContent(content, settings.UTM) // Закрепляю использование общего обработчика UTM-кнопок для MAX
 	var shortenErr error
 	content, shortenErr = ApplyLinkShorteningToContent(
@@ -873,12 +877,23 @@ func (s *PublicationService) publishTarget(
 					return s.telegramFinishPublish(ctx, token, channel, format, settings, msgID)
 				}
 				if strings.TrimSpace(settings.TelegramMediaLayout) == model.TelegramMediaLayoutCarousel {
-					mediaMsgID, err := s.telegram.SendRichMediaSlideshow(ctx, token, channel.ChatID, media, silent)
+					var mediaMsgID string
+					var err error
+					carouselTextInMessage := telegramCarouselTextSameMessage(settings)
+					if carouselTextInMessage {
+						mediaMsgID, err = s.telegram.SendRichMediaSlideshowMessage(
+							ctx, token, channel.ChatID, readableProviderText(content),
+							content.Buttons, media, silent,
+						)
+					} else {
+						mediaMsgID, err = s.telegram.SendRichMediaSlideshow(ctx, token, channel.ChatID, media, silent)
+					}
 					var mediaMsgIDs []string
 					if err != nil && telegramRichMessagesUnsupported(err) {
 						mediaMsgID, mediaMsgIDs, err = s.telegram.SendMedia(ctx, token, channel.ChatID, media, &TelegramMediaSendOptions{
 							DisableNotification: silent,
 						})
+						carouselTextInMessage = false
 					}
 					if err != nil {
 						return "", err
@@ -887,7 +902,7 @@ func (s *PublicationService) publishTarget(
 						mediaMsgIDs = []string{mediaMsgID}
 					}
 					msgID := mediaMsgID
-					if strings.TrimSpace(content.Text) != "" || hasTelegramButtons(content.Buttons) {
+					if !carouselTextInMessage && (strings.TrimSpace(content.Text) != "" || hasTelegramButtons(content.Buttons)) {
 						msgID, err = s.telegram.SendFormattedMessage(ctx, token, channel.ChatID, TelegramMessageInput{
 							Text: content.Text, ParseMode: parseMode, Entities: content.Entities,
 							Buttons: content.Buttons, LinkPreviewEnabled: preview, DisableNotification: silent,

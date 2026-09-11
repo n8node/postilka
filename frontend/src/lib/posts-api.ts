@@ -99,8 +99,10 @@ export type PostSettings = {
   approval_required?: boolean;
   approver_user_ids?: string[];
   recurrence?: PostRecurrenceSettings;
-  /** separate = media then text; caption = text on media (Telegram only) */
+  /** separate = media then text; caption = text on media; carousel = Telegram slideshow */
   telegram_media_layout?: "separate" | "caption" | "carousel";
+  /** separate_message = slideshow and text are separate; same_message = one Telegram Rich Message */
+  telegram_carousel_text?: "separate_message" | "same_message";
   /** above | below — caption position when telegram_media_layout is caption */
   telegram_caption_position?: "above" | "below";
   /** media_first | text_first — message order when telegram_media_layout is separate */

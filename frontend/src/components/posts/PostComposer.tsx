@@ -1296,6 +1296,9 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
   const [telegramMediaLayout, setTelegramMediaLayout] = useState<
     "separate" | "caption" | "carousel"
   >("separate");
+  const [telegramCarouselText, setTelegramCarouselText] = useState<
+    "separate_message" | "same_message"
+  >("separate_message");
   const [telegramCaptionPosition, setTelegramCaptionPosition] = useState<"above" | "below">("below");
   const [telegramMediaOrder, setTelegramMediaOrder] = useState<"media_first" | "text_first">("media_first");
   const [channelUTM, setChannelUTM] = useState<Record<string, ChannelUTMSettings>>({});
@@ -1655,6 +1658,7 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
     setMaxButtonRows([]);
     setMedia([]);
     setTelegramMediaLayout("separate");
+    setTelegramCarouselText("separate_message");
     setTelegramCaptionPosition("below");
     setTelegramMediaOrder("media_first");
     setTelegramPin(false);
@@ -1754,6 +1758,11 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
         : post.settings.telegram_media_layout === "carousel"
           ? "carousel"
           : "separate",
+    );
+    setTelegramCarouselText(
+      post.settings.telegram_carousel_text === "same_message"
+        ? "same_message"
+        : "separate_message",
     );
     setTelegramCaptionPosition(
       post.settings.telegram_caption_position === "above" ? "above" : "below",
@@ -1902,6 +1911,10 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
       approver_user_ids: approvalRequired ? selectedApproverIds : undefined,
       telegram_media_layout:
         media.length > 0 && telegramChannels.length > 0 ? telegramMediaLayout : undefined,
+      telegram_carousel_text:
+        media.length > 0 && telegramChannels.length > 0 && telegramMediaLayout === "carousel"
+          ? telegramCarouselText
+          : undefined,
       telegram_caption_position:
         media.length > 0 && telegramChannels.length > 0 && telegramMediaLayout === "caption"
           ? media.length > 1
@@ -3540,12 +3553,17 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
                   : "Прикрепите фото или видео — это ключевой блок публикации."}
               </p>
             )}
-            {media.length > 0 && noMediaDelivery.length > 0 && (
+            {media.length > 0 && noMediaDelivery.length > 0 && telegramMediaLayout !== "carousel" && (
               <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
                 Медиа сохранится в черновике, но сейчас не будет доставлено в{" "}
-                {noMediaDelivery
-                  .map((channel) => PROVIDER_LABEL[channel.provider])
-                  .join(", ")}. Публикация и планирование заблокированы.
+                {noMediaDelivery.map((channel) => PROVIDER_LABEL[channel.provider]).join(", ")}. Публикация и планирование заблокированы.
+              </div>
+            )}
+            {media.length > 0 &&
+              telegramMediaLayout === "carousel" &&
+              selectedChannels.some((channel) => channel.provider !== "telegram") && (
+              <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-800">
+                Карусель доступна только в Telegram. В остальных выбранных каналах медиа будут опубликованы как обычные вложения.
               </div>
             )}
             {media.length > 0 && telegramChannels.length > 0 && !isYouTubeVideoMode && (
@@ -3583,8 +3601,28 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
                   </div>
                 </div>
                 {telegramMediaLayout === "carousel" ? (
-                  <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
-                    Карусель отправится как последовательность из 3–6 слайдов. Текст и кнопки будут отправлены отдельным сообщением.
+                  <div className="space-y-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+                    <p>Карусель отправится как нативное Telegram-слайдшоу из 3–6 слайдов.</p>
+                    <div className="flex flex-wrap gap-2">
+                      <SmallButton
+                        active={telegramCarouselText === "same_message"}
+                        onClick={() => {
+                          setTelegramCarouselText("same_message");
+                          markDirty();
+                        }}
+                      >
+                        Текст и карусель вместе
+                      </SmallButton>
+                      <SmallButton
+                        active={telegramCarouselText === "separate_message"}
+                        onClick={() => {
+                          setTelegramCarouselText("separate_message");
+                          markDirty();
+                        }}
+                      >
+                        Текст отдельным сообщением
+                      </SmallButton>
+                    </div>
                   </div>
                 ) : telegramMediaLayout === "caption" ? (
                   <div>
