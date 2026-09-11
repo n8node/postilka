@@ -264,6 +264,31 @@ func TestValidatePostContentAllowsCarouselSettings(t *testing.T) {
 	}
 }
 
+func TestTelegramRichSlideshowBlocksRespectTextOrder(t *testing.T) {
+	mediaBlocks := []map[string]any{{"type": "photo"}}
+	for _, test := range []struct {
+		name  string
+		order string
+		want  []string
+	}{
+		{name: "text first", order: model.TelegramMediaOrderTextFirst, want: []string{"paragraph", "slideshow"}},
+		{name: "media first", order: model.TelegramMediaOrderMediaFirst, want: []string{"slideshow", "paragraph"}},
+		{name: "legacy default", order: "", want: []string{"paragraph", "slideshow"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			blocks := telegramRichSlideshowBlocks("Текст", mediaBlocks, test.order)
+			if len(blocks) != len(test.want) {
+				t.Fatalf("expected %d blocks, got %#v", len(test.want), blocks)
+			}
+			for index, wantType := range test.want {
+				if blocks[index]["type"] != wantType {
+					t.Fatalf("block %d: expected %q, got %#v", index, wantType, blocks[index])
+				}
+			}
+		})
+	}
+}
+
 func TestValidatePostSettingsRejectsUnknownCarouselTextMode(t *testing.T) {
 	err := validatePostSettings(model.PostSettings{
 		TelegramCarouselText: "inline",

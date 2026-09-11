@@ -1922,7 +1922,8 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
             : telegramCaptionPosition
           : undefined,
       telegram_media_order:
-        media.length > 0 && telegramChannels.length > 0 && telegramMediaLayout === "separate"
+        media.length > 0 && telegramChannels.length > 0 &&
+        (telegramMediaLayout === "separate" || telegramMediaLayout === "carousel")
           ? telegramMediaOrder
           : undefined,
       telegram_pin: telegramChannels.length > 0 && canTelegramPin && telegramPin ? true : undefined,
@@ -3622,6 +3623,29 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
                       >
                         Текст отдельным сообщением
                       </SmallButton>
+                    </div>
+                    <div>
+                      <p className="mb-1.5 font-semibold">Положение текста</p>
+                      <div className="flex flex-wrap gap-2">
+                        <SmallButton
+                          active={telegramMediaOrder === "text_first"}
+                          onClick={() => {
+                            setTelegramMediaOrder("text_first");
+                            markDirty();
+                          }}
+                        >
+                          Текст сверху
+                        </SmallButton>
+                        <SmallButton
+                          active={telegramMediaOrder === "media_first"}
+                          onClick={() => {
+                            setTelegramMediaOrder("media_first");
+                            markDirty();
+                          }}
+                        >
+                          Текст снизу
+                        </SmallButton>
+                      </div>
                     </div>
                   </div>
                 ) : telegramMediaLayout === "caption" ? (

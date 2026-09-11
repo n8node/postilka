@@ -1189,6 +1189,19 @@ func (c *TelegramBotClient) SendRichMediaSlideshowMessage(
 	media []TelegramMediaInput,
 	disableNotification bool,
 ) (string, error) {
+	return c.sendRichMediaSlideshowMessage(
+		ctx, token, chatID, text, buttons, media, model.TelegramMediaOrderTextFirst, disableNotification,
+	)
+}
+
+func (c *TelegramBotClient) sendRichMediaSlideshowMessage(
+	ctx context.Context,
+	token, chatID, text string,
+	buttons [][]model.TelegramInlineButton,
+	media []TelegramMediaInput,
+	order string,
+	disableNotification bool,
+) (string, error) {
 	if len(media) < 2 {
 		return "", fmt.Errorf("%w: slideshow Telegram должен содержать минимум 2 медиафайла", ErrInvalidPost)
 	}
@@ -1222,18 +1235,7 @@ func (c *TelegramBotClient) SendRichMediaSlideshowMessage(
 		}
 	}
 
-	richBlocks := make([]map[string]any, 0, 2)
-	if strings.TrimSpace(text) != "" {
-		paragraph := map[string]any{
-			"type": "paragraph",
-			"text": text,
-		}
-		richBlocks = append(richBlocks, paragraph)
-	}
-	richBlocks = append(richBlocks, map[string]any{
-		"type":   "slideshow",
-		"blocks": blocks,
-	})
+	richBlocks := telegramRichSlideshowBlocks(text, blocks, order)
 	richMessage, err := json.Marshal(map[string]any{
 		"blocks": richBlocks,
 	})
@@ -1259,6 +1261,28 @@ func (c *TelegramBotClient) SendRichMediaSlideshowMessage(
 		return "", sanitizeTelegramError(err)
 	}
 	return telegramMessageID(raw)
+}
+
+func telegramRichSlideshowBlocks(text string, mediaBlocks []map[string]any, order string) []map[string]any {
+	slideshow := map[string]any{
+		"type":   "slideshow",
+		"blocks": mediaBlocks,
+	}
+	richBlocks := make([]map[string]any, 0, 2)
+	if strings.TrimSpace(text) != "" && order != model.TelegramMediaOrderMediaFirst {
+		richBlocks = append(richBlocks, map[string]any{
+			"type": "paragraph",
+			"text": text,
+		})
+	}
+	richBlocks = append(richBlocks, slideshow)
+	if strings.TrimSpace(text) != "" && order == model.TelegramMediaOrderMediaFirst {
+		richBlocks = append(richBlocks, map[string]any{
+			"type": "paragraph",
+			"text": text,
+		})
+	}
+	return richBlocks
 }
 
 func telegramRichMessagesUnsupported(err error) bool {

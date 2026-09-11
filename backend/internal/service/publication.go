@@ -880,12 +880,23 @@ func (s *PublicationService) publishTarget(
 					var mediaMsgID string
 					var err error
 					carouselTextInMessage := telegramCarouselTextSameMessage(settings)
+					textSentBeforeMedia := false
 					if carouselTextInMessage {
-						mediaMsgID, err = s.telegram.SendRichMediaSlideshowMessage(
+						mediaMsgID, err = s.telegram.sendRichMediaSlideshowMessage(
 							ctx, token, channel.ChatID, readableProviderText(content),
-							content.Buttons, media, silent,
+							content.Buttons, media, settings.TelegramMediaOrder, silent,
 						)
 					} else {
+						if telegramTextBeforeMedia(settings) && (strings.TrimSpace(content.Text) != "" || hasTelegramButtons(content.Buttons)) {
+							mediaMsgID, err = s.telegram.SendFormattedMessage(ctx, token, channel.ChatID, TelegramMessageInput{
+								Text: content.Text, ParseMode: parseMode, Entities: content.Entities,
+								Buttons: content.Buttons, LinkPreviewEnabled: preview, DisableNotification: silent,
+							})
+							if err != nil {
+								return "", err
+							}
+							textSentBeforeMedia = true
+						}
 						mediaMsgID, err = s.telegram.SendRichMediaSlideshow(ctx, token, channel.ChatID, media, silent)
 					}
 					var mediaMsgIDs []string
@@ -902,7 +913,7 @@ func (s *PublicationService) publishTarget(
 						mediaMsgIDs = []string{mediaMsgID}
 					}
 					msgID := mediaMsgID
-					if !carouselTextInMessage && (strings.TrimSpace(content.Text) != "" || hasTelegramButtons(content.Buttons)) {
+					if !carouselTextInMessage && !textSentBeforeMedia && (strings.TrimSpace(content.Text) != "" || hasTelegramButtons(content.Buttons)) {
 						msgID, err = s.telegram.SendFormattedMessage(ctx, token, channel.ChatID, TelegramMessageInput{
 							Text: content.Text, ParseMode: parseMode, Entities: content.Entities,
 							Buttons: content.Buttons, LinkPreviewEnabled: preview, DisableNotification: silent,
