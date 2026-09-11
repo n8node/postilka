@@ -4,6 +4,8 @@ import { useEffect, useRef, useState, type ReactElement } from "react";
 import {
   ArrowDown,
   ArrowUp,
+  ChevronLeft,
+  ChevronRight,
   Check,
   FileImage,
   GalleryHorizontalEnd,
@@ -188,7 +190,6 @@ export function CarouselPage(): ReactElement {
   const referenceInputRef = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState("");
   const [topic, setTopic] = useState("");
-  const [caption, setCaption] = useState("");
   const [slides, setSlides] = useState<CarouselSlide[]>(INITIAL_SLIDES);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -216,6 +217,7 @@ export function CarouselPage(): ReactElement {
   const [pricing, setPricing] = useState<GenerationPricing | null>(null);
   const [history, setHistory] = useState<Carousel[]>([]);
   const [textTokenCost, setTextTokenCost] = useState(0);
+  const [previewIndex, setPreviewIndex] = useState(0);
 
   useEffect(() => {
     try {
@@ -252,6 +254,7 @@ export function CarouselPage(): ReactElement {
 
   const selectedIndex = slides.findIndex((slide) => slide.id === selectedId);
   const selectedSlide = selectedIndex >= 0 ? slides[selectedIndex] : null;
+  const previewSlide = slides[previewIndex] ?? slides[0];
   const loadedCarouselId = useRef<string | null>(null);
 
   function slideFile(slide: CarouselSlide): WorkspaceFile | undefined {
@@ -281,7 +284,7 @@ export function CarouselPage(): ReactElement {
       const input = {
         title: title.trim(),
         topic: topic.trim(),
-        caption: caption.trim(),
+        caption: "",
         references: referenceFiles.filter(
           (file): file is WorkspaceFile => file !== null,
         ).map((file) => ({
@@ -321,7 +324,7 @@ export function CarouselPage(): ReactElement {
     setError(null);
     try {
       const post = await createPost({
-        content: { format: "message", text: caption.trim() || topic.trim(), parse_mode: "HTML", entities: [], buttons: [] },
+        content: { format: "message", text: "", parse_mode: "HTML", entities: [], buttons: [] },
         settings: { telegram_media_layout: "separate", telegram_media_order: "media_first" },
         targets: [],
         media: media.map(({ slide, file }) => ({ file_id: file.id, settings: { alt_text: slide.headline } })),
@@ -338,10 +341,10 @@ export function CarouselPage(): ReactElement {
     const restoredSlides = carousel.slides.map(restoreSlide);
     setTitle(carousel.title);
     setTopic(carousel.topic);
-    setCaption(carousel.caption);
     setReferenceFiles(carousel.references.map(toWorkspaceReference));
     setSlides(restoredSlides);
     setSelectedId(restoredSlides[0]?.id ?? null);
+    setPreviewIndex(0);
     setTextTokenCost(carousel.text_credits);
     loadedCarouselId.current = carousel.id;
     setNotice(`Карусель «${carousel.title}» загружена в редактор.`);
@@ -368,7 +371,7 @@ export function CarouselPage(): ReactElement {
       const post = await createPost({
         content: {
           format: "message",
-          text: carousel.caption || carousel.topic,
+          text: "",
           parse_mode: "HTML",
           entities: [],
           buttons: [],
@@ -393,6 +396,18 @@ export function CarouselPage(): ReactElement {
       current.map((slide) =>
         slide.id === id ? { ...slide, ...patch } : slide,
       ),
+    );
+  }
+
+  function selectSlide(id: string, index: number): void {
+    setSelectedId(id);
+    setPreviewIndex(index);
+  }
+
+  function changePreview(direction: -1 | 1): void {
+    if (slides.length === 0) return;
+    setPreviewIndex((current) =>
+      (current + direction + slides.length) % slides.length,
     );
   }
 
@@ -426,13 +441,16 @@ export function CarouselPage(): ReactElement {
     const slide = createSlide(slides.length);
     setSlides((current) => [...current, slide]);
     setSelectedId(slide.id);
+    setPreviewIndex(slides.length);
   }
 
   function removeSlide(): void {
     if (slides.length <= MIN_SLIDES || selectedIndex < 0) return;
     const nextSlides = slides.filter((slide) => slide.id !== selectedId);
     setSlides(nextSlides);
-    setSelectedId(nextSlides[Math.max(0, selectedIndex - 1)].id);
+    const nextIndex = Math.max(0, selectedIndex - 1);
+    setSelectedId(nextSlides[nextIndex].id);
+    setPreviewIndex(Math.min(previewIndex, nextSlides.length - 1));
   }
 
   async function generateStoryboard(): Promise<void> {
@@ -467,6 +485,7 @@ export function CarouselPage(): ReactElement {
         }));
       setSlides(nextSlides);
       setSelectedId(nextSlides[0].id);
+      setPreviewIndex(0);
       setNotice("План готов. Проверьте текст до генерации изображений.");
     } catch (err) {
       setError(
@@ -723,7 +742,7 @@ export function CarouselPage(): ReactElement {
       const post = await createPost({
         content: {
           format: "message",
-          text: caption.trim() || topic.trim(),
+          text: "",
           parse_mode: "HTML",
           entities: [],
           buttons: [],
@@ -933,7 +952,7 @@ export function CarouselPage(): ReactElement {
                 <button
                   key={slide.id}
                   type="button"
-                  onClick={() => setSelectedId(slide.id)}
+                  onClick={() => selectSlide(slide.id, index)}
                   draggable
                   onDragStart={() => setDraggedSlideId(slide.id)}
                   onDragOver={(event) => event.preventDefault()}
@@ -1199,19 +1218,80 @@ export function CarouselPage(): ReactElement {
             />
           </div>
           <div className="rounded-lg border border-border bg-surface p-4">
-            <label
-              className="text-sm font-semibold text-text"
-              htmlFor="carousel-caption"
-            >
-              Подпись публикации
-            </label>
-            <textarea
-              id="carousel-caption"
-              value={caption}
-              onChange={(event) => setCaption(event.target.value)}
-              placeholder="Текст, который будет отправлен вместе с каруселью"
-              className="mt-2 min-h-28 w-full resize-y rounded-md border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-accent"
-            />
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-semibold text-text">Превью карусели</h2>
+                <p className="mt-1 text-[11px] text-muted">
+                  {previewIndex + 1} из {slides.length} слайдов
+                </p>
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => changePreview(-1)}
+                  disabled={slides.length <= 1}
+                  className="rounded-md p-1.5 text-muted hover:bg-bg hover:text-text disabled:opacity-40"
+                  aria-label="Предыдущий слайд"
+                >
+                  <ChevronLeft size={16} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => changePreview(1)}
+                  disabled={slides.length <= 1}
+                  className="rounded-md p-1.5 text-muted hover:bg-bg hover:text-text disabled:opacity-40"
+                  aria-label="Следующий слайд"
+                >
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            </div>
+            {previewSlide ? (
+              <button
+                type="button"
+                onClick={() => selectSlide(previewSlide.id, previewIndex)}
+                className="relative mt-3 block aspect-[4/5] w-full overflow-hidden rounded-lg bg-zinc-100 text-left"
+              >
+                {previewSlide.generationImageUrl ? (
+                  <img
+                    src={mediaUrl(previewSlide.generationImageUrl)}
+                    alt={previewSlide.headline}
+                    className="h-full w-full object-cover"
+                  />
+                ) : slideFile(previewSlide) ? (
+                  <FileThumbnail
+                    fileId={slideFile(previewSlide)!.id}
+                    name={slideFile(previewSlide)!.name}
+                    mimeType={slideFile(previewSlide)!.mime_type}
+                    size="sm"
+                    className="absolute inset-0 h-full w-full rounded-lg border-0"
+                  />
+                ) : (
+                  <div className="flex h-full items-center justify-center px-6 text-center text-xs text-muted">
+                    Слайд пока без изображения
+                  </div>
+                )}
+                <span className="absolute inset-x-2 bottom-2 rounded-md bg-black/60 px-2 py-1 text-xs font-medium text-white">
+                  {previewSlide.headline}
+                </span>
+              </button>
+            ) : null}
+            <div className="mt-3 flex justify-center gap-1.5">
+              {slides.map((slide, index) => (
+                <button
+                  key={slide.id}
+                  type="button"
+                  onClick={() => selectSlide(slide.id, index)}
+                  className={cn(
+                    "h-1.5 rounded-full transition-all",
+                    index === previewIndex
+                      ? "w-5 bg-accent"
+                      : "w-1.5 bg-zinc-300 hover:bg-zinc-400",
+                  )}
+                  aria-label={`Открыть слайд ${index + 1}`}
+                />
+              ))}
+            </div>
           </div>
           <div className="rounded-lg border border-accent/30 bg-blue-50/60 p-4">
             <div className="flex items-center gap-2 text-accent">
