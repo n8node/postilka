@@ -580,7 +580,11 @@ export function CarouselPage(): ReactElement {
     return `Создай готовый слайд карусели с текстом внутри изображения. Тема: ${topic.trim()}. Это слайд ${index + 1} из ${slides.length}. Роль: ${slide.role}. Заголовок, который нужно точно написать на русском: ${slide.headline}. Основной текст, который нужно точно написать на русском: ${slide.body}. Не добавляй лишние слова, псевдотекст или lorem ipsum. Сохрани единый визуальный стиль серии. Стиль: ${style.name}. Правила: ${style.visualRules}. Выравнивание: ${style.alignment}. Формат: 4:5. Не копируй референсы буквально.`;
   }
 
-  async function waitForSlideJob(slideId: string, jobId: string): Promise<void> {
+  async function waitForSlideJob(
+    slideId: string,
+    jobId: string,
+    previousCreditCost: number,
+  ): Promise<void> {
     const started = Date.now();
     while (Date.now() - started < 15 * 60 * 1000) {
       const result = await fetchGenerationJob(jobId);
@@ -596,7 +600,8 @@ export function CarouselPage(): ReactElement {
           generationError: undefined,
           generationImageUrl: job.generation?.image_url,
           generationCreditCost:
-            job.credit_cost ?? job.token_cost ?? pricing?.carousel ?? 0,
+            previousCreditCost +
+            (job.credit_cost ?? job.token_cost ?? pricing?.carousel ?? 0),
         });
         return;
       }
@@ -633,7 +638,11 @@ export function CarouselPage(): ReactElement {
         generationStatus: "queued",
         generationError: undefined,
       });
-      await waitForSlideJob(slide.id, result.job.id);
+      await waitForSlideJob(
+        slide.id,
+        result.job.id,
+        slide.generationCreditCost ?? 0,
+      );
     } catch (err) {
       updateSlide(slide.id, {
         generationStatus: "failed",
@@ -1202,7 +1211,14 @@ export function CarouselPage(): ReactElement {
         </div>
 
         <aside className="flex min-w-0 flex-col gap-4">
-          <div className="rounded-lg border border-border bg-surface p-4">
+          <div
+            className={cn(
+              "rounded-lg border bg-surface p-4",
+              title.trim()
+                ? "border-border"
+                : "border-amber-400 bg-amber-50/60 ring-1 ring-amber-200",
+            )}
+          >
             <label
               className="text-sm font-semibold text-text"
               htmlFor="carousel-title"
@@ -1214,7 +1230,11 @@ export function CarouselPage(): ReactElement {
               value={title}
               onChange={(event) => setTitle(event.target.value)}
               placeholder="Например: Контент-план на неделю"
-              className="mt-2 w-full rounded-md border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-accent"
+              aria-invalid={!title.trim()}
+              className={cn(
+                "mt-2 w-full rounded-md border bg-bg px-3 py-2 text-sm outline-none focus:border-accent",
+                title.trim() ? "border-border" : "border-amber-400",
+              )}
             />
           </div>
           <div className="rounded-lg border border-border bg-surface p-4">
@@ -1296,13 +1316,18 @@ export function CarouselPage(): ReactElement {
           <div className="rounded-lg border border-accent/30 bg-blue-50/60 p-4">
             <div className="flex items-center gap-2 text-accent">
               <Check size={17} />
-              <h2 className="text-sm font-semibold">Готово к постингу</h2>
+              <h2 className="text-sm font-semibold">Сохранение и постинг</h2>
             </div>
             <p className="mt-2 text-xs leading-5 text-muted">
               {pricing
                 ? `Всего: ${slides.reduce((total, slide) => total + (slide.generationCreditCost ?? 0), 0)} кредитов генерации + ${textTokenCost} текстовых токенов.`
                 : "Стоимость генерации загружается…"}
             </p>
+            {!title.trim() ? (
+              <p className="mt-3 text-xs font-medium text-amber-700">
+                Укажите название карусели, чтобы сохранить её в истории.
+              </p>
+            ) : null}
             <button
               type="button"
               onClick={saveCarouselHistory}
