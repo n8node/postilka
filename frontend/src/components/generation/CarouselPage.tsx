@@ -1095,12 +1095,24 @@ export function CarouselPage(): ReactElement {
                   </button>
                 </div>
               </div>
-              {selectedSlide.generationImageUrl ? (
-                <img
-                  src={mediaUrl(selectedSlide.generationImageUrl)}
-                  alt={selectedSlide.headline}
-                  className="mt-4 max-h-[500px] w-auto max-w-full rounded-md object-contain"
-                />
+              {selectedSlide.generationImageUrl || selectedSlide.file ? (
+                <div className="relative mt-4 aspect-[4/5] w-full max-w-[420px] overflow-hidden rounded-md bg-zinc-100">
+                  {selectedSlide.generationImageUrl ? (
+                    <img
+                      src={mediaUrl(selectedSlide.generationImageUrl)}
+                      alt={selectedSlide.headline}
+                      className="h-full w-full object-contain"
+                    />
+                  ) : selectedSlide.file ? (
+                    <FileThumbnail
+                      fileId={selectedSlide.file.id}
+                      name={selectedSlide.file.name}
+                      mimeType={selectedSlide.file.mime_type}
+                      size="lg"
+                      className="absolute inset-0 h-full w-full rounded-md border-0"
+                    />
+                  ) : null}
+                </div>
               ) : null}
               <div className="mt-4 flex flex-wrap gap-2">
                 {selectedSlide.generationStatus === "failed" ? (
