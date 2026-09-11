@@ -27,6 +27,9 @@ type WorkspaceMediaPickerModalProps = {
   mediaKind: VideoMediaKind;
   onClose: () => void;
   onSelect: (file: WorkspaceFile) => void;
+  onSelectMany?: (files: WorkspaceFile[]) => void;
+  multiple?: boolean;
+  maxSelected?: number;
   embedded?: boolean;
   onBack?: () => void;
   referenceVideoFilter?: boolean;
@@ -82,6 +85,9 @@ export function WorkspaceMediaPickerModal({
   mediaKind,
   onClose,
   onSelect,
+  onSelectMany,
+  multiple = false,
+  maxSelected = 6,
   embedded = false,
   onBack,
   referenceVideoFilter = false,
@@ -96,6 +102,7 @@ export function WorkspaceMediaPickerModal({
   const [files, setFiles] = useState<WorkspaceFile[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<WorkspaceFile[]>([]);
 
   const filterFile = useCallback(
     (file: WorkspaceFile) => {
@@ -169,6 +176,7 @@ export function WorkspaceMediaPickerModal({
     if (!open) return;
     setTab(tabs[0]?.id ?? "recent");
     setFolderId(null);
+    setSelectedFiles([]);
   }, [open, tabs]);
 
   useEffect(() => {
@@ -192,7 +200,33 @@ export function WorkspaceMediaPickerModal({
 
   const subtitle = referenceVideoFilter
     ? "MP4 или MOV с телефона · до 50 МБ · длительность проверится при выборе"
-    : "Файлы workspace с превью";
+    : multiple
+      ? `Выберите до ${maxSelected} изображений`
+      : "Файлы workspace с превью";
+
+  function selectFile(file: WorkspaceFile): void {
+    if (!multiple) {
+      onSelect(file);
+      if (!embedded) onClose();
+      return;
+    }
+    setSelectedFiles((current) => {
+      if (current.some((item) => item.id === file.id)) {
+        return current.filter((item) => item.id !== file.id);
+      }
+      if (current.length >= maxSelected) return current;
+      return [...current, file];
+    });
+  }
+
+  function confirmSelection(): void {
+    if (onSelectMany) {
+      onSelectMany(selectedFiles);
+    } else {
+      selectedFiles.forEach((file) => onSelect(file));
+    }
+    onClose();
+  }
 
   const panel = (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -323,13 +357,13 @@ export function WorkspaceMediaPickerModal({
               <button
                 key={file.id}
                 type="button"
-                onClick={() => {
-                  onSelect(file);
-                  if (!embedded) {
-                    onClose();
-                  }
-                }}
-                className="min-w-0 text-left"
+                onClick={() => selectFile(file)}
+                className={cn(
+                  "min-w-0 text-left",
+                  multiple && selectedFiles.some((item) => item.id === file.id)
+                    ? "rounded-lg ring-2 ring-accent"
+                    : "",
+                )}
               >
                 <FileThumbnail
                   fileId={file.id}
@@ -353,6 +387,18 @@ export function WorkspaceMediaPickerModal({
     return (
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {panel}
+        {multiple ? (
+          <div className="shrink-0 border-t border-border bg-surface p-3">
+            <button
+              type="button"
+              onClick={confirmSelection}
+              disabled={selectedFiles.length === 0}
+              className="w-full rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              Добавить выбранные ({selectedFiles.length})
+            </button>
+          </div>
+        ) : null}
       </div>
     );
   }
@@ -370,6 +416,18 @@ export function WorkspaceMediaPickerModal({
         onClick={(e) => e.stopPropagation()}
       >
         {panel}
+        {multiple ? (
+          <div className="border-t border-border bg-surface p-3">
+            <button
+              type="button"
+              onClick={confirmSelection}
+              disabled={selectedFiles.length === 0}
+              className="w-full rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              Добавить выбранные ({selectedFiles.length})
+            </button>
+          </div>
+        ) : null}
       </div>
     </div>
   );

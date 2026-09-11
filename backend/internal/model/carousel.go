@@ -25,6 +25,7 @@ type Carousel struct {
 	Title             string          `json:"title"`
 	Topic             string          `json:"topic"`
 	Caption           string          `json:"caption"`
+	References        []CarouselFile  `json:"references"`
 	Slides            []CarouselSlide `json:"slides"`
 	GenerationCredits int             `json:"generation_credits"`
 	TextCredits       int             `json:"text_credits"`
@@ -36,6 +37,7 @@ type SaveCarouselRequest struct {
 	Title             string          `json:"title"`
 	Topic             string          `json:"topic"`
 	Caption           string          `json:"caption"`
+	References        []CarouselFile  `json:"references"`
 	Slides            []CarouselSlide `json:"slides"`
 	GenerationCredits int             `json:"generation_credits"`
 	TextCredits       int             `json:"text_credits"`

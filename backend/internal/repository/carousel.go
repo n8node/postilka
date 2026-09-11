@@ -21,16 +21,16 @@ func NewCarouselRepository(pool *pgxpool.Pool) *CarouselRepository {
 
 const carouselColumns = `
 	id, workspace_id, created_by::text, title, topic, caption, slides,
-	generation_credits, text_credits, created_at, updated_at
+	reference_files, generation_credits, text_credits, created_at, updated_at
 `
 
 func scanCarousel(row pgx.Row) (*model.Carousel, error) {
 	var carousel model.Carousel
 	var createdBy *string
-	var slidesRaw []byte
+	var slidesRaw, referencesRaw []byte
 	if err := row.Scan(
 		&carousel.ID, &carousel.WorkspaceID, &createdBy,
-		&carousel.Title, &carousel.Topic, &carousel.Caption, &slidesRaw,
+		&carousel.Title, &carousel.Topic, &carousel.Caption, &slidesRaw, &referencesRaw,
 		&carousel.GenerationCredits, &carousel.TextCredits,
 		&carousel.CreatedAt, &carousel.UpdatedAt,
 	); err != nil {
@@ -42,6 +42,14 @@ func scanCarousel(row pgx.Row) (*model.Carousel, error) {
 	carousel.CreatedBy = createdBy
 	if err := json.Unmarshal(slidesRaw, &carousel.Slides); err != nil {
 		return nil, fmt.Errorf("decode carousel slides: %w", err)
+	}
+	if len(referencesRaw) > 0 {
+		if err := json.Unmarshal(referencesRaw, &carousel.References); err != nil {
+			return nil, fmt.Errorf("decode carousel references: %w", err)
+		}
+	}
+	if carousel.References == nil {
+		carousel.References = make([]model.CarouselFile, 0)
 	}
 	return &carousel, nil
 }
@@ -80,14 +88,18 @@ func (r *CarouselRepository) Create(ctx context.Context, carousel *model.Carouse
 	if err != nil {
 		return nil, err
 	}
+	references, err := json.Marshal(carousel.References)
+	if err != nil {
+		return nil, err
+	}
 	return scanCarousel(r.pool.QueryRow(ctx, `
 		INSERT INTO carousels (
-			workspace_id, created_by, title, topic, caption, slides,
+			workspace_id, created_by, title, topic, caption, slides, reference_files,
 			generation_credits, text_credits
-		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		RETURNING `+carouselColumns,
 		carousel.WorkspaceID, carousel.CreatedBy, carousel.Title, carousel.Topic,
-		carousel.Caption, slides, carousel.GenerationCredits, carousel.TextCredits,
+		carousel.Caption, slides, references, carousel.GenerationCredits, carousel.TextCredits,
 	))
 }
 
@@ -96,14 +108,18 @@ func (r *CarouselRepository) Update(ctx context.Context, carousel *model.Carouse
 	if err != nil {
 		return nil, err
 	}
+	references, err := json.Marshal(carousel.References)
+	if err != nil {
+		return nil, err
+	}
 	return scanCarousel(r.pool.QueryRow(ctx, `
 		UPDATE carousels SET
-			title = $3, topic = $4, caption = $5, slides = $6,
-			generation_credits = $7, text_credits = $8, updated_at = NOW()
+			title = $3, topic = $4, caption = $5, slides = $6, reference_files = $7,
+			generation_credits = $8, text_credits = $9, updated_at = NOW()
 		WHERE id = $1 AND workspace_id = $2
 		RETURNING `+carouselColumns,
 		carousel.ID, carousel.WorkspaceID, carousel.Title, carousel.Topic,
-		carousel.Caption, slides, carousel.GenerationCredits, carousel.TextCredits,
+		carousel.Caption, slides, references, carousel.GenerationCredits, carousel.TextCredits,
 	))
 }
 

@@ -14,6 +14,7 @@ const (
 	minCarouselSlides = 3
 	maxCarouselSlides = 6
 	maxCarouselTitle  = 200
+	maxCarouselRefs   = 6
 )
 
 var ErrCarouselNotFound = errors.New("carousel not found")
@@ -83,6 +84,17 @@ func (s *CarouselService) prepare(ctx context.Context, workspaceID, userID, id s
 	if len(req.Slides) < minCarouselSlides || len(req.Slides) > maxCarouselSlides {
 		return nil, fmt.Errorf("carousel must contain %d to %d slides", minCarouselSlides, maxCarouselSlides)
 	}
+	if len(req.References) > maxCarouselRefs {
+		return nil, fmt.Errorf("carousel supports at most %d references", maxCarouselRefs)
+	}
+	for index := range req.References {
+		reference := &req.References[index]
+		file, err := s.files.GetByID(ctx, workspaceID, strings.TrimSpace(reference.ID), false)
+		if err != nil || !strings.HasPrefix(file.MimeType, "image/") {
+			return nil, fmt.Errorf("reference %d is not available", index+1)
+		}
+		*reference = model.CarouselFile{ID: file.ID, Name: file.Name, MimeType: file.MimeType}
+	}
 	for index := range req.Slides {
 		slide := &req.Slides[index]
 		slide.Role = strings.TrimSpace(slide.Role)
@@ -119,6 +131,7 @@ func (s *CarouselService) prepare(ctx context.Context, workspaceID, userID, id s
 		Title:             title,
 		Topic:             strings.TrimSpace(req.Topic),
 		Caption:           strings.TrimSpace(req.Caption),
+		References:        req.References,
 		Slides:            req.Slides,
 		GenerationCredits: req.GenerationCredits,
 		TextCredits:       req.TextCredits,

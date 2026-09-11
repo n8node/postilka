@@ -22,6 +22,7 @@ export type Carousel = {
   title: string;
   topic: string;
   caption: string;
+  references: CarouselFile[];
   slides: CarouselSlide[];
   generation_credits: number;
   text_credits: number;
@@ -33,6 +34,7 @@ export type SaveCarouselInput = {
   title: string;
   topic: string;
   caption: string;
+  references: CarouselFile[];
   slides: CarouselSlide[];
   generation_credits: number;
   text_credits: number;

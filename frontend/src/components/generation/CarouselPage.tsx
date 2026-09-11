@@ -178,6 +178,10 @@ function restoreSlide(slide: SavedCarouselSlide, index: number): CarouselSlide {
   };
 }
 
+function toWorkspaceReference(file: SavedCarouselSlide["file"]): WorkspaceFile {
+  return toWorkspaceFile(file);
+}
+
 export function CarouselPage(): ReactElement {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -278,6 +282,13 @@ export function CarouselPage(): ReactElement {
         title: title.trim(),
         topic: topic.trim(),
         caption: caption.trim(),
+        references: referenceFiles.filter(
+          (file): file is WorkspaceFile => file !== null,
+        ).map((file) => ({
+          id: file.id,
+          name: file.name,
+          mime_type: file.mime_type,
+        })),
         slides: slides.map(toSavedSlide),
         generation_credits: slides.reduce(
           (total, slide) => total + (slide.generationCreditCost ?? 0),
@@ -328,6 +339,7 @@ export function CarouselPage(): ReactElement {
     setTitle(carousel.title);
     setTopic(carousel.topic);
     setCaption(carousel.caption);
+    setReferenceFiles(carousel.references.map(toWorkspaceReference));
     setSlides(restoredSlides);
     setSelectedId(restoredSlides[0]?.id ?? null);
     setTextTokenCost(carousel.text_credits);
@@ -482,6 +494,21 @@ export function CarouselPage(): ReactElement {
     setNotice("Референс добавлен для всех слайдов.");
   }
 
+  function selectReferences(files: WorkspaceFile[]): void {
+    setReferenceFiles((current) => {
+      const next = [...current];
+      for (const file of files) {
+        if (next.some((item) => item?.id === file.id)) continue;
+        if (next.filter(Boolean).length >= MAX_REFERENCES) break;
+        const emptyIndex = next.findIndex((item) => !item);
+        if (emptyIndex >= 0) next[emptyIndex] = file;
+        else next.push(file);
+      }
+      return next;
+    });
+    setNotice(`${files.length} референс(ов) добавлено для всех слайдов.`);
+  }
+
   function selectBackground(file: WorkspaceFile): void {
     if (!selectedSlide) return;
     updateSlide(selectedSlide.id, { backgroundFile: file });
@@ -504,18 +531,29 @@ export function CarouselPage(): ReactElement {
     }
   }
 
-  async function uploadReference(file: File): Promise<void> {
+  async function uploadReferences(files: FileList | null): Promise<void> {
+    if (!files?.length) return;
     setBusy("upload");
     setError(null);
     try {
-      const uploaded = await uploadFile(file);
-      selectReference(uploaded);
+      const remaining = MAX_REFERENCES - referenceFiles.filter(Boolean).length;
+      const uploaded = await Promise.all(
+        Array.from(files)
+          .slice(0, remaining)
+          .map((file) => uploadFile(file)),
+      );
+      uploaded.forEach(selectReference);
+      if (Array.from(files).length > remaining) {
+        setNotice(`Добавлены первые ${remaining} референс(ов): максимум ${MAX_REFERENCES}.`);
+      }
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Не удалось загрузить референс",
       );
     } finally {
       setBusy(null);
+      setReferenceSlot(null);
+      if (referenceInputRef.current) referenceInputRef.current.value = "";
     }
   }
 
@@ -773,44 +811,6 @@ export function CarouselPage(): ReactElement {
                 </h2>
               </div>
               <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setReferenceSlot(
-                      referenceFiles.findIndex((file) => !file) >= 0
-                        ? referenceFiles.findIndex((file) => !file)
-                        : Math.min(referenceFiles.length, MAX_REFERENCES - 1),
-                    );
-                    referenceInputRef.current?.click();
-                  }}
-                  disabled={
-                    busy !== null ||
-                    referenceFiles.filter(Boolean).length >= MAX_REFERENCES
-                  }
-                  className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs font-medium text-text hover:border-accent disabled:opacity-50"
-                >
-                  <Upload size={14} /> Добавить с ПК
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const nextSlot = referenceFiles.findIndex((file) => !file);
-                    setReferenceSlot(
-                      nextSlot >= 0
-                        ? nextSlot
-                        : Math.min(referenceFiles.length, MAX_REFERENCES - 1),
-                    );
-                    setPickerPurpose("reference");
-                    setPickerOpen(true);
-                  }}
-                  disabled={
-                    busy !== null ||
-                    referenceFiles.filter(Boolean).length >= MAX_REFERENCES
-                  }
-                  className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs font-medium text-text hover:border-accent disabled:opacity-50"
-                >
-                  <FileImage size={14} /> Добавить с диска
-                </button>
                 {referenceFiles.length > 0 ? (
                   <button
                     type="button"
@@ -826,12 +826,11 @@ export function CarouselPage(): ReactElement {
             <input
               ref={referenceInputRef}
               type="file"
+              multiple
               accept="image/*"
               className="hidden"
               onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) void uploadReference(file);
-                event.currentTarget.value = "";
+                void uploadReferences(event.target.files);
               }}
             />
             <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-6">
@@ -875,6 +874,45 @@ export function CarouselPage(): ReactElement {
                   </button>
                 );
               })}
+            </div>
+            <div className="mt-3 rounded-lg border border-dashed border-accent/30 bg-surface p-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold text-text">
+                    Загрузить референсы
+                  </p>
+                  <p className="mt-1 text-[11px] text-muted">
+                    Можно выбрать до {MAX_REFERENCES} изображений с компьютера или из файлов проекта.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => referenceInputRef.current?.click()}
+                    disabled={
+                      busy !== null ||
+                      referenceFiles.filter(Boolean).length >= MAX_REFERENCES
+                    }
+                    className="inline-flex items-center gap-1.5 rounded-md bg-accent px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-accent/90 disabled:opacity-50"
+                  >
+                    <Upload size={14} /> С компьютера
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPickerPurpose("reference");
+                      setPickerOpen(true);
+                    }}
+                    disabled={
+                      busy !== null ||
+                      referenceFiles.filter(Boolean).length >= MAX_REFERENCES
+                    }
+                    className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs font-medium text-text hover:border-accent disabled:opacity-50"
+                  >
+                    <FileImage size={14} /> С диска проекта
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -930,7 +968,13 @@ export function CarouselPage(): ReactElement {
                     ) : slide.generationStatus === "queued" ? (
                       <Loader2 size={18} className="animate-spin" />
                     ) : slide.file ? (
-                      <FileImage size={18} />
+                      <FileThumbnail
+                        fileId={slide.file.id}
+                        name={slide.file.name}
+                        mimeType={slide.file.mime_type}
+                        size="sm"
+                        className="absolute inset-0 h-full w-full rounded-md border-0"
+                      />
                     ) : (
                       <span>{index + 1}</span>
                     )}
@@ -1215,6 +1259,11 @@ export function CarouselPage(): ReactElement {
                         <FileThumbnail key={slide.file.id} fileId={slide.file.id} name={slide.file.name} mimeType={slide.file.mime_type} size="sm" className="rounded-sm border-0" />
                       ))}
                     </div>
+                    {carousel.references.length > 0 ? (
+                      <p className="mt-2 truncate text-[10px] text-muted">
+                        Референсов: {carousel.references.length}
+                      </p>
+                    ) : null}
                     <div className="mt-2 flex flex-wrap gap-2">
                       <button
                         type="button"
@@ -1254,10 +1303,13 @@ export function CarouselPage(): ReactElement {
       <WorkspaceMediaPickerModal
         open={pickerOpen}
         mediaKind="image"
+        multiple={pickerPurpose === "reference"}
+        maxSelected={MAX_REFERENCES - referenceFiles.filter(Boolean).length}
         onClose={() => setPickerOpen(false)}
         onSelect={
           pickerPurpose === "reference" ? selectReference : selectBackground
         }
+        onSelectMany={pickerPurpose === "reference" ? selectReferences : undefined}
       />
       {regenerateOpen ? (
         <div
