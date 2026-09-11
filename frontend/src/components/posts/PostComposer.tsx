@@ -226,7 +226,7 @@ const emptyMaxButton = (): MaxEditableButton => ({ text: "", url: "" });
 function channelTextLimit(
   channel: { provider: string; publish_capabilities?: { max_text_length?: number } },
   mediaCount: number,
-  telegramMediaLayout: "separate" | "caption",
+  telegramMediaLayout: "separate" | "caption" | "carousel",
 ) {
   if (
     channel.provider === "telegram" &&
@@ -1293,7 +1293,9 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
   const [telegramPin, setTelegramPin] = useState(false);
   const [telegramSilent, setTelegramSilent] = useState(false);
   const [telegramVideoNote, setTelegramVideoNote] = useState(false);
-  const [telegramMediaLayout, setTelegramMediaLayout] = useState<"separate" | "caption">("separate");
+  const [telegramMediaLayout, setTelegramMediaLayout] = useState<
+    "separate" | "caption" | "carousel"
+  >("separate");
   const [telegramCaptionPosition, setTelegramCaptionPosition] = useState<"above" | "below">("below");
   const [telegramMediaOrder, setTelegramMediaOrder] = useState<"media_first" | "text_first">("media_first");
   const [channelUTM, setChannelUTM] = useState<Record<string, ChannelUTMSettings>>({});
@@ -1746,7 +1748,13 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
     setTelegramPin(Boolean(post.settings.telegram_pin));
     setTelegramSilent(Boolean(post.settings.telegram_silent));
     setTelegramVideoNote(Boolean(post.settings.telegram_video_note));
-    setTelegramMediaLayout(post.settings.telegram_media_layout === "caption" ? "caption" : "separate");
+    setTelegramMediaLayout(
+      post.settings.telegram_media_layout === "caption"
+        ? "caption"
+        : post.settings.telegram_media_layout === "carousel"
+          ? "carousel"
+          : "separate",
+    );
     setTelegramCaptionPosition(
       post.settings.telegram_caption_position === "above" ? "above" : "below",
     );
@@ -3563,9 +3571,22 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
                     >
                       Одним сообщением
                     </SmallButton>
+                    <SmallButton
+                      active={telegramMediaLayout === "carousel"}
+                      onClick={() => {
+                        setTelegramMediaLayout("carousel");
+                        markDirty();
+                      }}
+                    >
+                      Карусель
+                    </SmallButton>
                   </div>
                 </div>
-                {telegramMediaLayout === "caption" ? (
+                {telegramMediaLayout === "carousel" ? (
+                  <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
+                    Карусель отправится как последовательность из 3–6 слайдов. Текст и кнопки будут отправлены отдельным сообщением.
+                  </div>
+                ) : telegramMediaLayout === "caption" ? (
                   <div>
                     <p className="mb-1.5 text-xs font-semibold text-zinc-700">Текст относительно медиа</p>
                     <div className="flex flex-wrap gap-2">

@@ -255,6 +255,26 @@ func TestValidateTelegramComposerMediaRejectsCaptionAboveAlbum(t *testing.T) {
 	}
 }
 
+func TestValidatePostContentAllowsCarouselSettings(t *testing.T) {
+	if err := validatePostSettings(model.PostSettings{
+		TelegramMediaLayout: model.TelegramMediaLayoutCarousel,
+	}); err != nil {
+		t.Fatalf("expected carousel media layout to be valid, got %v", err)
+	}
+}
+
+func TestValidateTelegramComposerMediaAllowsCarouselTextLimit(t *testing.T) {
+	content := model.PostContent{Format: "message", Text: strings.Repeat("a", 1200)}
+	if err := validateTelegramComposerMedia(
+		content,
+		model.PostSettings{TelegramMediaLayout: model.TelegramMediaLayoutCarousel},
+		3,
+		&model.Channel{Provider: model.ChannelProviderTelegram},
+	); err != nil {
+		t.Fatalf("expected carousel text to use message limit, got %v", err)
+	}
+}
+
 func TestTelegramImageMimeAllowed(t *testing.T) {
 	if !TelegramImageMimeAllowed("image/jpeg") || !TelegramImageMimeAllowed("image/webp") {
 		t.Fatal("expected supported telegram image mime")

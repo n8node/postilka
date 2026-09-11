@@ -872,6 +872,26 @@ func (s *PublicationService) publishTarget(
 					}
 					return s.telegramFinishPublish(ctx, token, channel, format, settings, msgID)
 				}
+				if strings.TrimSpace(settings.TelegramMediaLayout) == model.TelegramMediaLayoutCarousel {
+					mediaMsgID, mediaMsgIDs, err := s.telegram.SendMedia(ctx, token, channel.ChatID, media, &TelegramMediaSendOptions{
+						DisableNotification: silent,
+					})
+					if err != nil {
+						return "", err
+					}
+					msgID := mediaMsgID
+					if strings.TrimSpace(content.Text) != "" || hasTelegramButtons(content.Buttons) {
+						msgID, err = s.telegram.SendFormattedMessage(ctx, token, channel.ChatID, TelegramMessageInput{
+							Text: content.Text, ParseMode: parseMode, Entities: content.Entities,
+							Buttons: content.Buttons, LinkPreviewEnabled: preview, DisableNotification: silent,
+						})
+						if err != nil {
+							s.telegram.DeleteMessages(ctx, token, channel.ChatID, mediaMsgIDs)
+							return "", err
+						}
+					}
+					return s.telegramFinishPublish(ctx, token, channel, format, settings, msgID)
+				}
 				if telegramMediaLayoutCombined(settings) {
 					albumWithButtons := len(media) > 1 && hasTelegramButtons(content.Buttons)
 					opts := &TelegramMediaSendOptions{

@@ -445,8 +445,12 @@ func validatePostTargets(ctx context.Context, channels *repository.ChannelReposi
 			return err
 		}
 		content, settings := mergePostTarget(post.Content, post.Settings, targetSettings)
-		if err := ValidatePostContent(content, settings); err != nil {
-			return err
+		if !(strings.TrimSpace(settings.TelegramMediaLayout) == model.TelegramMediaLayoutCarousel &&
+			channel.Provider == model.ChannelProviderTelegram &&
+			len(post.Media) >= 3 && strings.TrimSpace(content.Text) == "") {
+			if err := ValidatePostContent(content, settings); err != nil {
+				return err
+			}
 		}
 		if err := validateContentForChannel(content, channel); err != nil {
 			return err
@@ -573,6 +577,10 @@ func (s *PostService) validate(
 		if channel.Status != model.ChannelStatusActive {
 			return fmt.Errorf("%w: канал «%s» неактивен или требует переподключения", ErrInvalidPost, channel.Name)
 		}
+		if strings.TrimSpace(req.Settings.TelegramMediaLayout) == model.TelegramMediaLayoutCarousel &&
+			channel.Provider != model.ChannelProviderTelegram {
+			return fmt.Errorf("%w: карусель поддерживается только для Telegram", ErrInvalidPost)
+		}
 		targetSettings, err := DecodePostTargetSettings(target.Settings)
 		if err != nil {
 			return err
@@ -612,6 +620,10 @@ func (s *PostService) validate(
 	}
 	if err := s.posts.ValidateFiles(ctx, workspaceID, fileIDs); err != nil {
 		return fmt.Errorf("%w: %s", ErrInvalidPost, err.Error())
+	}
+	if strings.TrimSpace(req.Settings.TelegramMediaLayout) == model.TelegramMediaLayoutCarousel &&
+		(len(req.Media) < 3 || len(req.Media) > 6) {
+		return fmt.Errorf("%w: карусель должна содержать от 3 до 6 слайдов", ErrInvalidPost)
 	}
 	if !validateGlobal {
 		return nil
@@ -793,7 +805,9 @@ func ValidatePostForPublication(post model.Post) error {
 		if format == "" {
 			format = "message"
 		}
-		if isPostContentEmpty(content) && format != "story" && format != "short_video" && format != "video" && format != "shorts" {
+		isCarousel := strings.TrimSpace(settings.TelegramMediaLayout) == model.TelegramMediaLayoutCarousel &&
+			len(post.Media) >= 3 && len(post.Media) <= 6
+		if isPostContentEmpty(content) && !isCarousel && format != "story" && format != "short_video" && format != "video" && format != "shorts" {
 			return fmt.Errorf("%w: введите текст публикации для каждого канала", ErrInvalidPost)
 		}
 		if format == "story" || format == "short_video" || format == "video" || format == "shorts" {
@@ -807,8 +821,10 @@ func ValidatePostForPublication(post model.Post) error {
 		if settings.TelegramVideoNote && format == "message" && len(post.Media) != 1 {
 			return fmt.Errorf("%w: для отправки в круге нужен ровно один видеофайл", ErrInvalidPost)
 		}
-		if err := ValidatePostContent(content, settings); err != nil {
-			return err
+		if !isCarousel {
+			if err := ValidatePostContent(content, settings); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -992,7 +1008,8 @@ func ValidatePostContent(content model.PostContent, settings model.PostSettings)
 
 func validatePostSettings(settings model.PostSettings) error {
 	layout := strings.TrimSpace(settings.TelegramMediaLayout)
-	if layout != "" && layout != model.TelegramMediaLayoutSeparate && layout != model.TelegramMediaLayoutCaption {
+	if layout != "" && layout != model.TelegramMediaLayoutSeparate &&
+		layout != model.TelegramMediaLayoutCaption && layout != model.TelegramMediaLayoutCarousel {
 		return fmt.Errorf("%w: некорректный режим доставки медиа в Telegram", ErrInvalidPost)
 	}
 	captionPos := strings.TrimSpace(settings.TelegramCaptionPosition)

@@ -1,6 +1,6 @@
 "use client";
 
-import { BellOff, ExternalLink, Eye, Loader2, MapPin, Pin, Play } from "lucide-react";
+import { BellOff, ChevronLeft, ChevronRight, ExternalLink, Eye, Loader2, MapPin, Pin, Play } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 import { ChannelAvatar } from "@/components/channels/ChannelAvatar";
 import { channelAvatarCacheKey, channelDisplayName } from "@/lib/channelPresentation";
@@ -71,7 +71,7 @@ export type PostChannelPreviewProps = {
   textPlain: string;
   format: string;
   device: "mobile" | "desktop";
-  mediaLayout: "separate" | "caption";
+  mediaLayout: "separate" | "caption" | "carousel";
   captionPosition: "above" | "below";
   mediaOrder: "media_first" | "text_first";
   videoCircle: boolean;
@@ -340,6 +340,58 @@ function AlbumGrid({ items, className }: { items: PreviewMediaItem[]; className?
   })();
 
   return <div className={cn("overflow-hidden", className)}>{grid}</div>;
+}
+
+function CarouselPreview({ items }: { items: PreviewMediaItem[] }) {
+  const [index, setIndex] = useState(0);
+  if (items.length === 0) return null;
+  const activeIndex = Math.min(index, items.length - 1);
+  const activeItem = items[activeIndex]!;
+
+  return (
+    <div className="relative overflow-hidden bg-zinc-100">
+      <div className="aspect-[4/5]">
+        <PreviewMediaTile item={activeItem} single className="h-full" />
+      </div>
+      {items.length > 1 ? (
+        <>
+          <button
+            type="button"
+            onClick={() => setIndex((current) => (current - 1 + items.length) % items.length)}
+            className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-black/55 p-1 text-white"
+            aria-label="Предыдущий слайд карусели"
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <button
+            type="button"
+            onClick={() => setIndex((current) => (current + 1) % items.length)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-full bg-black/55 p-1 text-white"
+            aria-label="Следующий слайд карусели"
+          >
+            <ChevronRight size={16} />
+          </button>
+          <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1">
+            {items.map((item, itemIndex) => (
+              <button
+                key={item.fileId}
+                type="button"
+                onClick={() => setIndex(itemIndex)}
+                className={cn(
+                  "h-1.5 rounded-full transition-all",
+                  itemIndex === activeIndex ? "w-4 bg-white" : "w-1.5 bg-white/55",
+                )}
+                aria-label={`Открыть слайд ${itemIndex + 1}`}
+              />
+            ))}
+          </div>
+        </>
+      ) : null}
+      <span className="absolute right-2 top-2 rounded bg-black/55 px-1.5 py-0.5 text-[10px] font-medium text-white">
+        {activeIndex + 1} / {items.length}
+      </span>
+    </div>
+  );
 }
 
 function TextContent({
@@ -694,7 +746,7 @@ function renderChannelBody(props: {
   locationName?: string;
   canMedia: boolean;
   canLocation: boolean;
-  effectiveLayout: "separate" | "caption";
+  effectiveLayout: "separate" | "caption" | "carousel";
   captionPosition: "above" | "below";
   mediaOrder: "media_first" | "text_first";
   effectiveVideoCircle: boolean;
@@ -768,6 +820,8 @@ function renderChannelBody(props: {
         )
       : null;
 
+    const carouselBlock = showMedia ? <CarouselPreview items={media} /> : null;
+
   const textInner = (
     <>
       <TextContent
@@ -801,6 +855,20 @@ function renderChannelBody(props: {
 
     const separateDelivery =
       effectiveLayout === "separate" || albumButtonsSeparate;
+
+    if (effectiveLayout === "carousel") {
+      const textStack = (textWithMeta || hasButtons) && (
+        <TelegramMessageStack buttons={hasButtons ? buttons : undefined}>
+          {textWithMeta}
+        </TelegramMessageStack>
+      );
+      return (
+        <div className="flex flex-col gap-1">
+          {carouselBlock && <TelegramMediaMessage time={clock} silent={silent} pinned={pinned}>{carouselBlock}</TelegramMediaMessage>}
+          {textStack}
+        </div>
+      );
+    }
 
     if (effectiveVideoCircle && videoNoteBlock) {
       const textStack = (textWithMeta || hasButtons) && (

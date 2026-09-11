@@ -137,6 +137,7 @@ type PostRecurrenceSettings struct {
 const (
 	TelegramMediaLayoutSeparate = "separate"
 	TelegramMediaLayoutCaption  = "caption"
+	TelegramMediaLayoutCarousel = "carousel"
 
 	TelegramCaptionPositionAbove = "above"
 	TelegramCaptionPositionBelow = "below"

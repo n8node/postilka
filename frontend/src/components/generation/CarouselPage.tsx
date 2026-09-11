@@ -325,7 +325,7 @@ export function CarouselPage(): ReactElement {
     try {
       const post = await createPost({
         content: { format: "message", text: "", parse_mode: "HTML", entities: [], buttons: [] },
-        settings: { telegram_media_layout: "separate", telegram_media_order: "media_first" },
+        settings: { telegram_media_layout: "carousel", telegram_media_order: "media_first" },
         targets: [],
         media: media.map(({ slide, file }) => ({ file_id: file.id, settings: { alt_text: slide.headline } })),
       });

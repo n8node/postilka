@@ -100,7 +100,7 @@ export type PostSettings = {
   approver_user_ids?: string[];
   recurrence?: PostRecurrenceSettings;
   /** separate = media then text; caption = text on media (Telegram only) */
-  telegram_media_layout?: "separate" | "caption";
+  telegram_media_layout?: "separate" | "caption" | "carousel";
   /** above | below — caption position when telegram_media_layout is caption */
   telegram_caption_position?: "above" | "below";
   /** media_first | text_first — message order when telegram_media_layout is separate */
