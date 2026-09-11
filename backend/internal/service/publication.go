@@ -873,11 +873,18 @@ func (s *PublicationService) publishTarget(
 					return s.telegramFinishPublish(ctx, token, channel, format, settings, msgID)
 				}
 				if strings.TrimSpace(settings.TelegramMediaLayout) == model.TelegramMediaLayoutCarousel {
-					mediaMsgID, mediaMsgIDs, err := s.telegram.SendMedia(ctx, token, channel.ChatID, media, &TelegramMediaSendOptions{
-						DisableNotification: silent,
-					})
+					mediaMsgID, err := s.telegram.SendRichMediaSlideshow(ctx, token, channel.ChatID, media, silent)
+					var mediaMsgIDs []string
+					if err != nil && telegramRichMessagesUnsupported(err) {
+						mediaMsgID, mediaMsgIDs, err = s.telegram.SendMedia(ctx, token, channel.ChatID, media, &TelegramMediaSendOptions{
+							DisableNotification: silent,
+						})
+					}
 					if err != nil {
 						return "", err
+					}
+					if len(mediaMsgIDs) == 0 {
+						mediaMsgIDs = []string{mediaMsgID}
 					}
 					msgID := mediaMsgID
 					if strings.TrimSpace(content.Text) != "" || hasTelegramButtons(content.Buttons) {

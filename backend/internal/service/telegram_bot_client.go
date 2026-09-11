@@ -1173,6 +1173,75 @@ func (c *TelegramBotClient) SendRichMessage(
 	return telegramMessageID(raw)
 }
 
+func (c *TelegramBotClient) SendRichMediaSlideshow(
+	ctx context.Context,
+	token, chatID string,
+	media []TelegramMediaInput,
+	disableNotification bool,
+) (string, error) {
+	if len(media) < 2 {
+		return "", fmt.Errorf("%w: slideshow Telegram должен содержать минимум 2 медиафайла", ErrInvalidPost)
+	}
+	if len(media) > 10 {
+		return "", fmt.Errorf("%w: slideshow Telegram не должен содержать более 10 медиафайлов", ErrInvalidPost)
+	}
+
+	blocks := make([]map[string]any, 0, len(media))
+	files := make([]telegramMultipartFile, 0, len(media))
+	for index, item := range media {
+		if err := validateTelegramMediaItem(item); err != nil {
+			return "", err
+		}
+		attachName := fmt.Sprintf("file%d", index)
+		mediaRef := telegramMediaAttachRef(item, index)
+		mediaBlock := map[string]any{
+			"type": item.Type,
+			item.Type: map[string]any{
+				"type":  item.Type,
+				"media": mediaRef,
+			},
+		}
+		blocks = append(blocks, mediaBlock)
+		if len(item.Data) > 0 {
+			files = append(files, telegramMultipartFile{
+				FieldName:   attachName,
+				Filename:    item.Filename,
+				ContentType: item.ContentType,
+				Data:        item.Data,
+			})
+		}
+	}
+
+	richMessage, err := json.Marshal(map[string]any{
+		"blocks": []map[string]any{{
+			"type":   "slideshow",
+			"blocks": blocks,
+		}},
+	})
+	if err != nil {
+		return "", err
+	}
+	fields := map[string]string{
+		"chat_id":      fmt.Sprint(telegramChatIDParam(chatID)),
+		"rich_message": string(richMessage),
+	}
+	if disableNotification {
+		fields["disable_notification"] = "true"
+	}
+	raw, err := c.apiMultipartForm(ctx, token, "sendRichMessage", fields, files)
+	if err != nil {
+		return "", sanitizeTelegramError(err)
+	}
+	return telegramMessageID(raw)
+}
+
+func telegramRichMessagesUnsupported(err error) bool {
+	message := strings.ToLower(strings.TrimSpace(err.Error()))
+	return strings.Contains(message, "method not found") ||
+		strings.Contains(message, "unknown method") ||
+		strings.Contains(message, "sendrichmessage is not available")
+}
+
 func telegramRichAPIBlocks(message model.TelegramRichMessage) ([]any, error) {
 	blocks := make([]model.TelegramRichBlock, 0, len(message.Blocks)+1)
 	if title := strings.TrimSpace(message.Title); title != "" {
