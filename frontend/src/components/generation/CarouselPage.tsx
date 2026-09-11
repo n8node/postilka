@@ -1246,12 +1246,22 @@ export function CarouselPage(): ReactElement {
                 : "border-amber-400 bg-amber-50/60 ring-1 ring-amber-200",
             )}
           >
-            <label
-              className="text-sm font-semibold text-text"
-              htmlFor="carousel-title"
-            >
-              Название карусели
-            </label>
+            <div className="flex items-center justify-between gap-3">
+              <label
+                className="text-sm font-semibold text-text"
+                htmlFor="carousel-title"
+              >
+                Название карусели
+              </label>
+              <button
+                type="button"
+                onClick={createNewCarousel}
+                disabled={busy !== null}
+                className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-accent bg-white px-2.5 py-1.5 text-xs font-semibold text-accent hover:bg-blue-50 disabled:opacity-60"
+              >
+                <Plus size={14} /> Создать карусель
+              </button>
+            </div>
             <input
               id="carousel-title"
               value={title}
@@ -1345,14 +1355,6 @@ export function CarouselPage(): ReactElement {
               <Check size={17} />
               <h2 className="text-sm font-semibold">Сохранение и постинг</h2>
             </div>
-            <button
-              type="button"
-              onClick={createNewCarousel}
-              disabled={busy !== null}
-              className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-md border border-accent bg-white px-3 py-2.5 text-sm font-semibold text-accent hover:bg-blue-50 disabled:opacity-60"
-            >
-              <Plus size={15} /> Создать карусель
-            </button>
             <p className="mt-2 text-xs leading-5 text-muted">
               {pricing
                 ? `Всего: ${slides.reduce((total, slide) => total + (slide.generationCreditCost ?? 0), 0)} кредитов генерации + ${textTokenCost} текстовых токенов.`
