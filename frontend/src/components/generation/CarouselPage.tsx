@@ -34,6 +34,7 @@ import { cn } from "@/lib/utils";
 const MIN_SLIDES = 3;
 const MAX_SLIDES = 6;
 const MAX_REFERENCES = 6;
+const CAROUSEL_HISTORY_KEY = "postilka.carousel.history";
 
 type CarouselSlide = {
   id: string;
@@ -47,6 +48,24 @@ type CarouselSlide = {
   generationJobId?: string;
   generationStatus?: "idle" | "queued" | "succeeded" | "failed";
   generationImageUrl?: string;
+  generationCreditCost?: number;
+};
+
+type SavedCarousel = {
+  id: string;
+  title: string;
+  caption: string;
+  createdAt: string;
+  slides: Array<{
+    role: string;
+    headline: string;
+    body: string;
+    fileId: string;
+    fileName: string;
+    mimeType: string;
+  }>;
+  generationCredits: number;
+  textCredits: number;
 };
 
 type StoryboardResponse = {
@@ -144,6 +163,9 @@ export function CarouselPage(): ReactElement {
   const [notice, setNotice] = useState<string | null>(null);
   const [style, setStyle] = useState<CarouselStyleProfile>(DEFAULT_STYLE);
   const [pricing, setPricing] = useState<GenerationPricing | null>(null);
+  const [history, setHistory] = useState<SavedCarousel[]>([]);
+  const [previewIndex, setPreviewIndex] = useState(0);
+  const [textTokenCost, setTextTokenCost] = useState(0);
 
   useEffect(() => {
     try {
@@ -155,6 +177,15 @@ export function CarouselPage(): ReactElement {
         });
     } catch {
       // Ignore invalid local style data and keep the defaults.
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(CAROUSEL_HISTORY_KEY);
+      if (stored) setHistory(JSON.parse(stored) as SavedCarousel[]);
+    } catch {
+      setHistory([]);
     }
   }, []);
 
@@ -174,6 +205,69 @@ export function CarouselPage(): ReactElement {
 
   const selectedIndex = slides.findIndex((slide) => slide.id === selectedId);
   const selectedSlide = selectedIndex >= 0 ? slides[selectedIndex] : null;
+
+  function slideFile(slide: CarouselSlide): WorkspaceFile | undefined {
+    return slide.file ?? slide.backgroundFile;
+  }
+
+  function saveCarouselHistory(): void {
+    const savedSlides = slides
+      .map((slide) => ({ slide, file: slideFile(slide) }))
+      .filter((item): item is { slide: CarouselSlide; file: WorkspaceFile } => Boolean(item.file))
+      .map(({ slide, file }) => ({
+        role: slide.role,
+        headline: slide.headline,
+        body: slide.body,
+        fileId: file.id,
+        fileName: file.name,
+        mimeType: file.mime_type,
+      }));
+    if (savedSlides.length === 0) {
+      setError("Добавьте хотя бы один готовый слайд или свой фон.");
+      return;
+    }
+    const saved: SavedCarousel = {
+      id: `carousel-${Date.now()}`,
+      title: topic.trim() || "Карусель без названия",
+      caption: caption.trim(),
+      createdAt: new Date().toISOString(),
+      slides: savedSlides,
+      generationCredits: slides.reduce(
+        (total, slide) => total + (slide.generationCreditCost ?? 0),
+        0,
+      ),
+      textCredits: textTokenCost,
+    };
+    const nextHistory = [saved, ...history].slice(0, 20);
+    setHistory(nextHistory);
+    window.localStorage.setItem(CAROUSEL_HISTORY_KEY, JSON.stringify(nextHistory));
+    setNotice("Карусель сохранена в истории.");
+  }
+
+  async function createPostFromCarousel(): Promise<void> {
+    const media = slides
+      .map((slide) => ({ slide, file: slideFile(slide) }))
+      .filter((item): item is { slide: CarouselSlide; file: WorkspaceFile } => Boolean(item.file));
+    if (media.length === 0) {
+      setError("Добавьте хотя бы один готовый слайд или свой фон.");
+      return;
+    }
+    setBusy("draft");
+    setError(null);
+    try {
+      const post = await createPost({
+        content: { format: "message", text: caption.trim() || topic.trim(), parse_mode: "HTML", entities: [], buttons: [] },
+        settings: { telegram_media_layout: "separate", telegram_media_order: "media_first" },
+        targets: [],
+        media: media.map(({ slide, file }) => ({ file_id: file.id, settings: { alt_text: slide.headline } })),
+      });
+      router.push(`/posts/${post.id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Не удалось создать пост");
+    } finally {
+      setBusy(null);
+    }
+  }
 
   function updateSlide(id: string, patch: Partial<CarouselSlide>): void {
     setSlides((current) =>
@@ -375,6 +469,7 @@ export function CarouselPage(): ReactElement {
                 file: { id: workspaceFileID } as WorkspaceFile,
                 generationStatus: "succeeded",
                 generationImageUrl: job.generation?.image_url,
+                generationCreditCost: job.credit_cost ?? job.token_cost ?? pricing?.carousel ?? 0,
               });
               return;
             }
@@ -445,6 +540,7 @@ export function CarouselPage(): ReactElement {
             file: { id: workspaceFileID } as WorkspaceFile,
             generationStatus: "succeeded",
             generationImageUrl: job.generation?.image_url,
+            generationCreditCost: job.credit_cost ?? job.token_cost ?? pricing?.carousel ?? 0,
           });
           setNotice(
             `Слайд ${selectedIndex + 1} перегенерирован. Стоимость списана как новая генерация слайда.`,
@@ -470,15 +566,15 @@ export function CarouselPage(): ReactElement {
   }
 
   async function saveDraft(): Promise<void> {
-    if (slides.some((slide) => slide.generationStatus !== "succeeded")) {
-      setError("Сначала сгенерируйте все слайды через KIE.");
+    if (slides.some((slide) => !slideFile(slide))) {
+      setError("Добавьте готовое изображение или свой фон для каждого слайда.");
       return;
     }
     setBusy("draft");
     setError(null);
     setNotice(null);
     try {
-      const media = slides.filter((slide) => slide.file);
+      const media = slides.map((slide) => ({ slide, file: slideFile(slide)! }));
       if (media.length !== slides.length)
         throw new Error("Дождитесь готовности всех слайдов перед сохранением");
       const post = await createPost({
@@ -494,8 +590,8 @@ export function CarouselPage(): ReactElement {
           telegram_media_order: "media_first",
         },
         targets: [],
-        media: media.map((slide) => ({
-          file_id: slide.file!.id,
+        media: media.map(({ slide, file }) => ({
+          file_id: file.id,
           settings: { alt_text: slide.headline },
         })),
       });
@@ -929,25 +1025,48 @@ export function CarouselPage(): ReactElement {
             </div>
             <p className="mt-2 text-xs leading-5 text-muted">
               {pricing
-                ? `Стоимость генерации: ${pricing.carousel} кредит${pricing.carousel === 1 ? "" : pricing.carousel < 5 ? "а" : "ов"} за слайд, ${pricing.carousel_wallet_rub} ₽ из кошелька.`
+                ? `Всего: ${slides.reduce((total, slide) => total + (slide.generationCreditCost ?? 0), 0)} кредитов генерации + ${textTokenCost} текстовых токенов.`
                 : "Стоимость генерации загружается…"}
             </p>
             <button
               type="button"
-              onClick={() => void saveDraft()}
+              onClick={saveCarouselHistory}
               disabled={
                 busy !== null ||
-                slides.some((slide) => slide.generationStatus !== "succeeded")
+                slides.every((slide) => !slideFile(slide))
               }
               className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-md bg-accent px-3 py-2.5 text-sm font-semibold text-white hover:bg-accent/90 disabled:opacity-60"
             >
-              {busy === "draft" ? (
-                <Loader2 size={15} className="animate-spin" />
-              ) : (
-                <Check size={15} />
-              )}{" "}
-              Сохранить набор в Посты
+              <Check size={15} /> Сохранить Карусель
             </button>
+            <button
+              type="button"
+              onClick={() => void createPostFromCarousel()}
+              disabled={busy !== null || slides.every((slide) => !slideFile(slide))}
+              className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-md border border-accent px-3 py-2.5 text-sm font-semibold text-accent hover:bg-white disabled:opacity-60"
+            >
+              <GalleryHorizontalEnd size={15} /> В пост
+            </button>
+          </div>
+          <div className="rounded-lg border border-border bg-surface p-4">
+            <h2 className="text-sm font-semibold text-text">История каруселей</h2>
+            {history.length === 0 ? (
+              <p className="mt-2 text-xs text-muted">Сохранённых каруселей пока нет.</p>
+            ) : (
+              <div className="mt-3 space-y-3">
+                {history.map((carousel) => (
+                  <div key={carousel.id} className="rounded-md border border-border bg-bg p-2">
+                    <p className="truncate text-xs font-semibold text-text">{carousel.title}</p>
+                    <p className="mt-1 text-[11px] text-muted">{carousel.slides.length} слайд(ов) · {new Date(carousel.createdAt).toLocaleDateString("ru-RU")}</p>
+                    <div className="mt-2 grid grid-cols-4 gap-1">
+                      {carousel.slides.slice(0, 4).map((slide) => (
+                        <FileThumbnail key={slide.fileId} fileId={slide.fileId} name={slide.fileName} mimeType={slide.mimeType} size="sm" className="rounded-sm border-0" />
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           {notice ? (
             <p className="text-xs leading-5 text-emerald-700">{notice}</p>

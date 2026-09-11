@@ -19,12 +19,17 @@ type ComposePostTextInput struct {
 	Length string
 }
 
+type ComposePostTextResult struct {
+	TextTokens int
+	Text       string
+}
+
 func (s *GenerationService) ComposePostText(
 	ctx context.Context,
 	userID string,
 	r *http.Request,
 	in ComposePostTextInput,
-) (string, error) {
+) (ComposePostTextResult, error) {
 	task := strings.TrimSpace(in.Task)
 	if task == "" {
 		task = "generate"
@@ -33,35 +38,35 @@ func (s *GenerationService) ComposePostText(
 	text := strings.TrimSpace(in.Text)
 	if task == "generate" {
 		if prompt == "" {
-			return "", errors.New("prompt is required")
+			return ComposePostTextResult{}, errors.New("prompt is required")
 		}
 		if utf8.RuneCountInString(prompt) > 4000 {
-			return "", errors.New("prompt too long")
+			return ComposePostTextResult{}, errors.New("prompt too long")
 		}
 	} else if text == "" {
-		return "", errors.New("text is required")
+		return ComposePostTextResult{}, errors.New("text is required")
 	}
 	if text != "" && utf8.RuneCountInString(text) > 8000 {
-		return "", errors.New("text too long")
+		return ComposePostTextResult{}, errors.New("text too long")
 	}
 	ws, err := s.resolveWorkspace(ctx, userID, r)
 	if err != nil {
-		return "", err
+		return ComposePostTextResult{}, err
 	}
 	if _, err := s.wsSvc.RequireMembership(ctx, userID, ws.ID, model.RoleEditor); err != nil {
-		return "", err
+		return ComposePostTextResult{}, err
 	}
 
 	client, cfg, err := s.yandexGPT.Client(ctx)
 	if err != nil {
-		return "", err
+		return ComposePostTextResult{}, err
 	}
 	modelID := ModelForTask(cfg, "composer_text")
 	if modelID == "" {
 		modelID = ModelForTask(cfg, "generation_improve")
 	}
 	if modelID == "" {
-		return "", ErrYandexGptNotConfigured
+		return ComposePostTextResult{}, ErrYandexGptNotConfigured
 	}
 
 	userContent := composePostTextUserContent(task, prompt, text)
@@ -70,20 +75,20 @@ func (s *GenerationService) ComposePostText(
 		{Role: "user", Content: userContent},
 	})
 	if err != nil {
-		return "", err
+		return ComposePostTextResult{}, err
 	}
 	out := strings.TrimSpace(result.Content)
 	if out == "" {
-		return "", errors.New("empty ai response")
+		return ComposePostTextResult{}, errors.New("empty ai response")
 	}
 	tokens := estimateTextTokens(userContent) + estimateTextTokens(out)
 	if err := s.quota.RecordTextTokens(ctx, ws.ID, tokens); err != nil {
-		return "", err
+		return ComposePostTextResult{}, err
 	}
 	if s.notify != nil {
 		s.notify.MaybeUsageWarnings(ctx, ws.ID)
 	}
-	return out, nil
+	return ComposePostTextResult{TextTokens: tokens, Text: out}, nil
 }
 
 func composePostTextUserContent(task, prompt, text string) string {

@@ -176,7 +176,7 @@ export type ComposePostTextPayload = {
 };
 
 export function composePostText(payload: ComposePostTextPayload) {
-  return apiFetch<{ text: string }>("/generation/compose-text", {
+  return apiFetch<{ text: string; text_tokens?: number }>("/generation/compose-text", {
     method: "POST",
     body: JSON.stringify(payload),
   });

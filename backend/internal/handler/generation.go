@@ -268,7 +268,7 @@ func (h *GenerationHandler) ComposePostText(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	text, err := h.generation.ComposePostText(r.Context(), userID, r, service.ComposePostTextInput{
+	result, err := h.generation.ComposePostText(r.Context(), userID, r, service.ComposePostTextInput{
 		Task:   req.Task,
 		Text:   req.Text,
 		Prompt: req.Prompt,
@@ -279,7 +279,7 @@ func (h *GenerationHandler) ComposePostText(w http.ResponseWriter, r *http.Reque
 		h.mapError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"text": text})
+	writeJSON(w, http.StatusOK, map[string]any{"text": result.Text, "text_tokens": result.TextTokens})
 }
 
 func (h *GenerationHandler) ImprovePrompt(w http.ResponseWriter, r *http.Request) {
