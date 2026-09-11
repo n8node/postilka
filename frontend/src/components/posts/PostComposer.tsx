@@ -2207,7 +2207,7 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
     if (wordpressChannels.length > 0 && postKind === "post" && !wordpressTitle.trim() && action !== "draft") {
       return "Укажите заголовок статьи для WordPress";
     }
-    if (format === "message" && !plain.trim() && postKind === "post") {
+    if (action !== "draft" && format === "message" && !plain.trim() && postKind === "post") {
       if (!(wordpressChannels.length > 0 && (wordpressTitle.trim() || media.length > 0))) {
         return "Введите текст публикации";
       }

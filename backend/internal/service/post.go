@@ -616,6 +616,11 @@ func (s *PostService) validate(
 	if !validateGlobal {
 		return nil
 	}
+	if strings.TrimSpace(req.Content.Format) == "message" &&
+		strings.TrimSpace(req.Content.Text) == "" &&
+		len(req.Media) > 0 {
+		return validatePostSettings(req.Settings)
+	}
 	if strings.TrimSpace(req.Content.Format) == "" &&
 		strings.TrimSpace(req.Content.Text) == "" &&
 		req.Content.RichMessage == nil &&
