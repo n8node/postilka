@@ -809,10 +809,14 @@ export function CarouselPage(): ReactElement {
             передайте готовый набор в Посты.
           </p>
         </div>
-        <div className="rounded-lg border border-border bg-bg px-3 py-2 text-xs text-muted">
-          <span className="font-semibold text-text">{slides.length}</span> /{" "}
-          {MAX_SLIDES} слайдов
-        </div>
+        <button
+          type="button"
+          onClick={createNewCarousel}
+          disabled={busy !== null}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-accent bg-white px-3 py-2 text-xs font-semibold text-accent hover:bg-blue-50 disabled:opacity-60"
+        >
+          <Plus size={14} /> Создать карусель
+        </button>
       </div>
 
       <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
@@ -1246,22 +1250,12 @@ export function CarouselPage(): ReactElement {
                 : "border-amber-400 bg-amber-50/60 ring-1 ring-amber-200",
             )}
           >
-            <div className="flex items-center justify-between gap-3">
-              <label
-                className="text-sm font-semibold text-text"
-                htmlFor="carousel-title"
-              >
-                Название карусели
-              </label>
-              <button
-                type="button"
-                onClick={createNewCarousel}
-                disabled={busy !== null}
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-accent bg-white px-2.5 py-1.5 text-xs font-semibold text-accent hover:bg-blue-50 disabled:opacity-60"
-              >
-                <Plus size={14} /> Создать карусель
-              </button>
-            </div>
+            <label
+              className="text-sm font-semibold text-text"
+              htmlFor="carousel-title"
+            >
+              Название карусели
+            </label>
             <input
               id="carousel-title"
               value={title}
