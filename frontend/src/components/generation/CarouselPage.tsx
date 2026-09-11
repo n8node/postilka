@@ -26,6 +26,14 @@ import {
   type GenerationJob,
   type GenerationPricing,
 } from "@/lib/generation-api";
+import {
+  createCarousel,
+  deleteCarousel,
+  fetchCarousels,
+  updateCarousel,
+  type Carousel,
+  type CarouselSlide as SavedCarouselSlide,
+} from "@/lib/carousel-api";
 import { uploadFile, type WorkspaceFile } from "@/lib/files-api";
 import { createPost } from "@/lib/posts-api";
 import { mediaUrl } from "@/lib/media-display";
@@ -34,7 +42,6 @@ import { cn } from "@/lib/utils";
 const MIN_SLIDES = 3;
 const MAX_SLIDES = 6;
 const MAX_REFERENCES = 6;
-const CAROUSEL_HISTORY_KEY = "postilka.carousel.history";
 
 type CarouselSlide = {
   id: string;
@@ -47,25 +54,9 @@ type CarouselSlide = {
   textAlignment?: "left" | "center";
   generationJobId?: string;
   generationStatus?: "idle" | "queued" | "succeeded" | "failed";
+  generationError?: string;
   generationImageUrl?: string;
   generationCreditCost?: number;
-};
-
-type SavedCarousel = {
-  id: string;
-  title: string;
-  caption: string;
-  createdAt: string;
-  slides: Array<{
-    role: string;
-    headline: string;
-    body: string;
-    fileId: string;
-    fileName: string;
-    mimeType: string;
-  }>;
-  generationCredits: number;
-  textCredits: number;
 };
 
 type StoryboardResponse = {
@@ -132,10 +123,66 @@ function parseStoryboard(text: string): StoryboardResponse | null {
   }
 }
 
+function toWorkspaceFile(file: SavedCarouselSlide["file"]): WorkspaceFile {
+  return {
+    id: file.id,
+    name: file.name,
+    mime_type: file.mime_type,
+    workspace_id: "",
+    folder_id: null,
+    size: 0,
+    created_at: "",
+    updated_at: "",
+  };
+}
+
+function toSavedSlide(slide: CarouselSlide): SavedCarouselSlide {
+  const file = slide.file ?? slide.backgroundFile;
+  if (!file) {
+    throw new Error("Каждый слайд должен содержать готовое изображение или фон.");
+  }
+  return {
+    role: slide.role,
+    headline: slide.headline,
+    body: slide.body,
+    file: {
+      id: file.id,
+      name: file.name,
+      mime_type: file.mime_type,
+    },
+    background_file: slide.backgroundFile
+      ? {
+          id: slide.backgroundFile.id,
+          name: slide.backgroundFile.name,
+          mime_type: slide.backgroundFile.mime_type,
+        }
+      : null,
+    generation_job_id: slide.generationJobId,
+    generation_credit_cost: slide.generationCreditCost,
+  };
+}
+
+function restoreSlide(slide: SavedCarouselSlide, index: number): CarouselSlide {
+  return {
+    id: `slide-${Date.now()}-${index}`,
+    role: slide.role,
+    headline: slide.headline,
+    body: slide.body,
+    file: toWorkspaceFile(slide.file),
+    backgroundFile: slide.background_file
+      ? toWorkspaceFile(slide.background_file)
+      : undefined,
+    generationJobId: slide.generation_job_id,
+    generationStatus: slide.generation_job_id ? "succeeded" : "idle",
+    generationCreditCost: slide.generation_credit_cost,
+  };
+}
+
 export function CarouselPage(): ReactElement {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const referenceInputRef = useRef<HTMLInputElement>(null);
+  const [title, setTitle] = useState("");
   const [topic, setTopic] = useState("");
   const [caption, setCaption] = useState("");
   const [slides, setSlides] = useState<CarouselSlide[]>(INITIAL_SLIDES);
@@ -163,8 +210,7 @@ export function CarouselPage(): ReactElement {
   const [notice, setNotice] = useState<string | null>(null);
   const [style, setStyle] = useState<CarouselStyleProfile>(DEFAULT_STYLE);
   const [pricing, setPricing] = useState<GenerationPricing | null>(null);
-  const [history, setHistory] = useState<SavedCarousel[]>([]);
-  const [previewIndex, setPreviewIndex] = useState(0);
+  const [history, setHistory] = useState<Carousel[]>([]);
   const [textTokenCost, setTextTokenCost] = useState(0);
 
   useEffect(() => {
@@ -181,12 +227,9 @@ export function CarouselPage(): ReactElement {
   }, []);
 
   useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem(CAROUSEL_HISTORY_KEY);
-      if (stored) setHistory(JSON.parse(stored) as SavedCarousel[]);
-    } catch {
-      setHistory([]);
-    }
+    void fetchCarousels()
+      .then(({ items }) => setHistory(items))
+      .catch(() => setHistory([]));
   }, []);
 
   useEffect(() => {
@@ -205,51 +248,62 @@ export function CarouselPage(): ReactElement {
 
   const selectedIndex = slides.findIndex((slide) => slide.id === selectedId);
   const selectedSlide = selectedIndex >= 0 ? slides[selectedIndex] : null;
+  const loadedCarouselId = useRef<string | null>(null);
 
   function slideFile(slide: CarouselSlide): WorkspaceFile | undefined {
     return slide.file ?? slide.backgroundFile;
   }
 
-  function saveCarouselHistory(): void {
-    const savedSlides = slides
-      .map((slide) => ({ slide, file: slideFile(slide) }))
-      .filter((item): item is { slide: CarouselSlide; file: WorkspaceFile } => Boolean(item.file))
-      .map(({ slide, file }) => ({
-        role: slide.role,
-        headline: slide.headline,
-        body: slide.body,
-        fileId: file.id,
-        fileName: file.name,
-        mimeType: file.mime_type,
-      }));
-    if (savedSlides.length === 0) {
-      setError("Добавьте хотя бы один готовый слайд или свой фон.");
+  function hasCompleteSlides(): boolean {
+    return (
+      slides.length >= MIN_SLIDES &&
+      slides.length <= MAX_SLIDES &&
+      slides.every((slide) => Boolean(slideFile(slide)))
+    );
+  }
+
+  async function saveCarouselHistory(): Promise<void> {
+    if (!title.trim()) {
+      setError("Укажите название карусели.");
       return;
     }
-    const saved: SavedCarousel = {
-      id: `carousel-${Date.now()}`,
-      title: topic.trim() || "Карусель без названия",
-      caption: caption.trim(),
-      createdAt: new Date().toISOString(),
-      slides: savedSlides,
-      generationCredits: slides.reduce(
-        (total, slide) => total + (slide.generationCreditCost ?? 0),
-        0,
-      ),
-      textCredits: textTokenCost,
-    };
-    const nextHistory = [saved, ...history].slice(0, 20);
-    setHistory(nextHistory);
-    window.localStorage.setItem(CAROUSEL_HISTORY_KEY, JSON.stringify(nextHistory));
-    setNotice("Карусель сохранена в истории.");
+    if (!hasCompleteSlides()) {
+      setError("Добавьте готовое изображение или свой фон для каждого слайда.");
+      return;
+    }
+    setBusy("draft");
+    setError(null);
+    try {
+      const input = {
+        title: title.trim(),
+        topic: topic.trim(),
+        caption: caption.trim(),
+        slides: slides.map(toSavedSlide),
+        generation_credits: slides.reduce(
+          (total, slide) => total + (slide.generationCreditCost ?? 0),
+          0,
+        ),
+        text_credits: textTokenCost,
+      };
+      const saved = loadedCarouselId.current
+        ? await updateCarousel(loadedCarouselId.current, input)
+        : await createCarousel(input);
+      loadedCarouselId.current = saved.id;
+      setHistory((current) => [saved, ...current.filter((item) => item.id !== saved.id)]);
+      setNotice("Карусель сохранена в истории.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Не удалось сохранить карусель");
+    } finally {
+      setBusy(null);
+    }
   }
 
   async function createPostFromCarousel(): Promise<void> {
     const media = slides
       .map((slide) => ({ slide, file: slideFile(slide) }))
       .filter((item): item is { slide: CarouselSlide; file: WorkspaceFile } => Boolean(item.file));
-    if (media.length === 0) {
-      setError("Добавьте хотя бы один готовый слайд или свой фон.");
+    if (!hasCompleteSlides()) {
+      setError("Добавьте готовое изображение или свой фон для каждого слайда.");
       return;
     }
     setBusy("draft");
@@ -260,6 +314,59 @@ export function CarouselPage(): ReactElement {
         settings: { telegram_media_layout: "separate", telegram_media_order: "media_first" },
         targets: [],
         media: media.map(({ slide, file }) => ({ file_id: file.id, settings: { alt_text: slide.headline } })),
+      });
+      router.push(`/posts/${post.id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Не удалось создать пост");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  function restoreCarousel(carousel: Carousel): void {
+    const restoredSlides = carousel.slides.map(restoreSlide);
+    setTitle(carousel.title);
+    setTopic(carousel.topic);
+    setCaption(carousel.caption);
+    setSlides(restoredSlides);
+    setSelectedId(restoredSlides[0]?.id ?? null);
+    setTextTokenCost(carousel.text_credits);
+    loadedCarouselId.current = carousel.id;
+    setNotice(`Карусель «${carousel.title}» загружена в редактор.`);
+  }
+
+  async function deleteSavedCarousel(carousel: Carousel): Promise<void> {
+    try {
+      await deleteCarousel(carousel.id);
+      setHistory((current) => current.filter((item) => item.id !== carousel.id));
+      if (loadedCarouselId.current === carousel.id) {
+        loadedCarouselId.current = null;
+      }
+      setNotice("Карусель удалена из истории.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Не удалось удалить карусель");
+    }
+  }
+
+  async function createPostFromSavedCarousel(carousel: Carousel): Promise<void> {
+    restoreCarousel(carousel);
+    setBusy("draft");
+    setError(null);
+    try {
+      const post = await createPost({
+        content: {
+          format: "message",
+          text: carousel.caption || carousel.topic,
+          parse_mode: "HTML",
+          entities: [],
+          buttons: [],
+        },
+        settings: { telegram_media_layout: "separate", telegram_media_order: "media_first" },
+        targets: [],
+        media: carousel.slides.map((slide) => ({
+          file_id: slide.file.id,
+          settings: { alt_text: slide.headline },
+        })),
       });
       router.push(`/posts/${post.id}`);
     } catch (err) {
@@ -332,10 +439,11 @@ export function CarouselPage(): ReactElement {
         length: "long",
         tone: "ясный, живой и профессиональный",
       });
+      setTextTokenCost(result.text_tokens ?? 0);
       const parsed = parseStoryboard(result.text);
-      if (!parsed?.slides?.length)
+      if (!parsed?.slides || parsed.slides.length !== slideCount)
         throw new Error(
-          "Нейросеть вернула неподдерживаемый формат. Повторите запрос.",
+          `Нейросеть вернула не ${slideCount} слайдов. Повторите запрос.`,
         );
       const nextSlides = parsed.slides
         .slice(0, slideCount)
@@ -415,6 +523,70 @@ export function CarouselPage(): ReactElement {
     return `Создай готовый слайд карусели с текстом внутри изображения. Тема: ${topic.trim()}. Это слайд ${index + 1} из ${slides.length}. Роль: ${slide.role}. Заголовок, который нужно точно написать на русском: ${slide.headline}. Основной текст, который нужно точно написать на русском: ${slide.body}. Не добавляй лишние слова, псевдотекст или lorem ipsum. Сохрани единый визуальный стиль серии. Стиль: ${style.name}. Правила: ${style.visualRules}. Выравнивание: ${style.alignment}. Формат: 4:5. Не копируй референсы буквально.`;
   }
 
+  async function waitForSlideJob(slideId: string, jobId: string): Promise<void> {
+    const started = Date.now();
+    while (Date.now() - started < 15 * 60 * 1000) {
+      const result = await fetchGenerationJob(jobId);
+      const job = result.job as GenerationJob;
+      if (job.status === "succeeded") {
+        const workspaceFileID = job.generation?.workspace_file_id;
+        if (!workspaceFileID) {
+          throw new Error("Готовый слайд не привязан к файлу workspace");
+        }
+        updateSlide(slideId, {
+          file: { id: workspaceFileID } as WorkspaceFile,
+          generationStatus: "succeeded",
+          generationError: undefined,
+          generationImageUrl: job.generation?.image_url,
+          generationCreditCost:
+            job.credit_cost ?? job.token_cost ?? pricing?.carousel ?? 0,
+        });
+        return;
+      }
+      if (job.status === "failed") {
+        throw new Error(job.fail_message || "Генерация слайда не удалась");
+      }
+      await new Promise((resolve) => setTimeout(resolve, 2500));
+    }
+    throw new Error("Ожидание генерации слайда превысило лимит времени");
+  }
+
+  async function generateSingleSlide(
+    slide: CarouselSlide,
+    index: number,
+    referenceFilesForSlide: WorkspaceFile[],
+    promptSuffix = "",
+  ): Promise<void> {
+    try {
+      const referenceUploadIDs = await Promise.all(
+        referenceFilesForSlide.slice(0, MAX_REFERENCES).map((file) =>
+          uploadGenerationMediaFromWorkspace(file.id).then(
+            (upload) => upload.id,
+          ),
+        ),
+      );
+      const result = await startGeneration({
+        mode: "carousel",
+        prompt: `${buildSlidePrompt(slide, index)}${promptSuffix}`,
+        aspect_ratio: "4:5",
+        reference_upload_ids: referenceUploadIDs,
+      });
+      updateSlide(slide.id, {
+        generationJobId: result.job.id,
+        generationStatus: "queued",
+        generationError: undefined,
+      });
+      await waitForSlideJob(slide.id, result.job.id);
+    } catch (err) {
+      updateSlide(slide.id, {
+        generationStatus: "failed",
+        generationError:
+          err instanceof Error ? err.message : "Генерация слайда не удалась",
+      });
+      throw err;
+    }
+  }
+
   async function generateSlides(): Promise<void> {
     if (!topic.trim()) {
       setError("Сначала укажите тему карусели.");
@@ -424,67 +596,24 @@ export function CarouselPage(): ReactElement {
     setError(null);
     setNotice(null);
     try {
-      const jobs = await Promise.all(
-        slides.map(async (slide, index) => {
-          const slideReferenceFiles = [
-            ...referenceFiles.filter(
-              (file): file is WorkspaceFile => file !== null,
-            ),
-            ...(slide.backgroundFile ? [slide.backgroundFile] : []),
-          ].slice(0, MAX_REFERENCES);
-          const referenceUploadIDs = await Promise.all(
-            slideReferenceFiles.map((file) =>
-              uploadGenerationMediaFromWorkspace(file.id).then(
-                (upload) => upload.id,
-              ),
-            ),
-          );
-          const result = await startGeneration({
-            mode: "carousel",
-            prompt: buildSlidePrompt(slide, index),
-            aspect_ratio: "4:5",
-            reference_upload_ids: referenceUploadIDs,
-          });
-          updateSlide(slide.id, {
-            generationJobId: result.job.id,
-            generationStatus: "queued",
-          });
-          return { slideId: slide.id, jobId: result.job.id };
-        }),
+      const commonReferences = referenceFiles.filter(
+        (file): file is WorkspaceFile => file !== null,
       );
-      setNotice(
-        "Слайды поставлены в очередь и появятся на своих позициях по мере готовности.",
+      const results = await Promise.allSettled(
+        slides.map((slide, index) =>
+          generateSingleSlide(slide, index, commonReferences),
+        ),
       );
-      await Promise.all(
-        jobs.map(async ({ slideId, jobId }) => {
-          const started = Date.now();
-          while (Date.now() - started < 15 * 60 * 1000) {
-            const result = await fetchGenerationJob(jobId);
-            const job = result.job as GenerationJob;
-            if (job.status === "succeeded") {
-              const workspaceFileID = job.generation?.workspace_file_id;
-              if (!workspaceFileID)
-                throw new Error("Готовый слайд не привязан к файлу workspace");
-              updateSlide(slideId, {
-                file: { id: workspaceFileID } as WorkspaceFile,
-                generationStatus: "succeeded",
-                generationImageUrl: job.generation?.image_url,
-                generationCreditCost: job.credit_cost ?? job.token_cost ?? pricing?.carousel ?? 0,
-              });
-              return;
-            }
-            if (job.status === "failed")
-              throw new Error(
-                job.fail_message || "Генерация слайда не удалась",
-              );
-            await new Promise((resolve) => setTimeout(resolve, 2500));
-          }
-          throw new Error("Ожидание генерации слайда превысило лимит времени");
-        }),
-      );
-      setNotice(
-        "Все слайды готовы. Проверьте карусель и сохраните ее в Посты.",
-      );
+      const failedCount = results.filter(
+        (result) => result.status === "rejected",
+      ).length;
+      if (failedCount > 0) {
+        setError(
+          `${failedCount} слайд(ов) не удалось сгенерировать. Повторите только их через кнопку «Повторить».`,
+        );
+      } else {
+        setNotice("Все слайды готовы. Проверьте карусель и сохраните ее в Посты.");
+      }
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Не удалось сгенерировать слайды",
@@ -496,70 +625,46 @@ export function CarouselPage(): ReactElement {
 
   async function regenerateSelectedSlide(): Promise<void> {
     if (!selectedSlide || !regeneratePrompt.trim()) return;
+    if (!selectedSlide.file) {
+      setError("Для перегенерации нужен готовый слайд с изображением.");
+      return;
+    }
     setBusy("regenerate");
     setError(null);
     setNotice(null);
     try {
-      const referenceUploadIDs = await Promise.all(
-        [
-          ...referenceFiles.filter(
-            (file): file is WorkspaceFile => file !== null,
-          ),
-          ...(selectedSlide.backgroundFile ? [selectedSlide.backgroundFile] : []),
-        ]
-          .slice(0, MAX_REFERENCES)
-          .map((file) =>
-            uploadGenerationMediaFromWorkspace(file.id).then(
-              (upload) => upload.id,
-            ),
-          ),
+      await generateSingleSlide(
+        selectedSlide,
+        selectedIndex,
+        [selectedSlide.file],
+        ` Дополнительная правка пользователя: ${regeneratePrompt.trim()}`,
       );
-      const result = await startGeneration({
-        mode: "carousel",
-        prompt: `${buildSlidePrompt(selectedSlide, selectedIndex)} Дополнительная правка пользователя: ${regeneratePrompt.trim()}`,
-        aspect_ratio: "4:5",
-        reference_upload_ids: referenceUploadIDs,
-      });
-      updateSlide(selectedSlide.id, {
-        generationJobId: result.job.id,
-        generationStatus: "queued",
-      });
       setRegenerateOpen(false);
       setRegeneratePrompt("");
-      const started = Date.now();
-      while (Date.now() - started < 15 * 60 * 1000) {
-        const response = await fetchGenerationJob(result.job.id);
-        const job = response.job as GenerationJob;
-        if (job.status === "succeeded") {
-          const workspaceFileID = job.generation?.workspace_file_id;
-          if (!workspaceFileID)
-            throw new Error(
-              "Перегенерированный слайд не привязан к файлу workspace",
-            );
-          updateSlide(selectedSlide.id, {
-            file: { id: workspaceFileID } as WorkspaceFile,
-            generationStatus: "succeeded",
-            generationImageUrl: job.generation?.image_url,
-            generationCreditCost: job.credit_cost ?? job.token_cost ?? pricing?.carousel ?? 0,
-          });
-          setNotice(
-            `Слайд ${selectedIndex + 1} перегенерирован. Стоимость списана как новая генерация слайда.`,
-          );
-          return;
-        }
-        if (job.status === "failed")
-          throw new Error(
-            job.fail_message || "Не удалось перегенерировать слайд",
-          );
-        await new Promise((resolve) => setTimeout(resolve, 2500));
-      }
-      throw new Error("Ожидание перегенерации превысило лимит времени");
+      setNotice(`Слайд ${selectedIndex + 1} перегенерирован. Стоимость списана как новая генерация слайда.`);
     } catch (err) {
       setError(
         err instanceof Error
           ? err.message
           : "Не удалось перегенерировать слайд",
       );
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function retrySlide(slide: CarouselSlide, index: number): Promise<void> {
+    setBusy("generate");
+    setError(null);
+    setNotice(null);
+    try {
+      const references = referenceFiles.filter(
+        (file): file is WorkspaceFile => file !== null,
+      );
+      await generateSingleSlide(slide, index, references);
+      setNotice(`Слайд ${index + 1} готов.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `Не удалось повторить слайд ${index + 1}`);
     } finally {
       setBusy(null);
     }
@@ -838,8 +943,15 @@ export function CarouselPage(): ReactElement {
                       ? "Генерируется…"
                       : slide.generationStatus === "succeeded"
                         ? "Готово"
+                        : slide.generationStatus === "failed"
+                          ? "Ошибка генерации"
                         : slide.headline}
                   </span>
+                  {slide.generationStatus === "failed" ? (
+                    <span className="mt-1 block truncate text-[10px] text-red-600">
+                      Повторить можно отдельно
+                    </span>
+                  ) : null}
                 </button>
               ))}
             </div>
@@ -874,6 +986,8 @@ export function CarouselPage(): ReactElement {
                       ? "KIE генерирует изображение…"
                       : selectedSlide.generationStatus === "succeeded"
                         ? "Изображение готово"
+                        : selectedSlide.generationStatus === "failed"
+                          ? selectedSlide.generationError || "Генерация не удалась"
                         : "Готов к генерации"}
                   </p>
                 </div>
@@ -916,6 +1030,28 @@ export function CarouselPage(): ReactElement {
                   className="mt-4 max-h-[500px] w-auto max-w-full rounded-md object-contain"
                 />
               ) : null}
+              <div className="mt-4 flex flex-wrap gap-2">
+                {selectedSlide.generationStatus === "failed" ? (
+                  <button
+                    type="button"
+                    onClick={() => void retrySlide(selectedSlide, selectedIndex)}
+                    disabled={busy !== null}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-red-300 px-2.5 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                  >
+                    <Sparkles size={14} /> Повторить слайд
+                  </button>
+                ) : null}
+                {selectedSlide.file ? (
+                  <button
+                    type="button"
+                    onClick={() => setRegenerateOpen(true)}
+                    disabled={busy !== null}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-accent px-2.5 py-1.5 text-xs font-medium text-accent hover:bg-blue-50 disabled:opacity-50"
+                  >
+                    <Sparkles size={14} /> Перегенерировать
+                  </button>
+                ) : null}
+              </div>
               <input
                 value={selectedSlide.headline}
                 onChange={(event) =>
@@ -1006,6 +1142,21 @@ export function CarouselPage(): ReactElement {
           <div className="rounded-lg border border-border bg-surface p-4">
             <label
               className="text-sm font-semibold text-text"
+              htmlFor="carousel-title"
+            >
+              Название карусели
+            </label>
+            <input
+              id="carousel-title"
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder="Например: Контент-план на неделю"
+              className="mt-2 w-full rounded-md border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-accent"
+            />
+          </div>
+          <div className="rounded-lg border border-border bg-surface p-4">
+            <label
+              className="text-sm font-semibold text-text"
               htmlFor="carousel-caption"
             >
               Подпись публикации
@@ -1033,7 +1184,8 @@ export function CarouselPage(): ReactElement {
               onClick={saveCarouselHistory}
               disabled={
                 busy !== null ||
-                slides.every((slide) => !slideFile(slide))
+                !title.trim() ||
+                !hasCompleteSlides()
               }
               className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-md bg-accent px-3 py-2.5 text-sm font-semibold text-white hover:bg-accent/90 disabled:opacity-60"
             >
@@ -1042,7 +1194,7 @@ export function CarouselPage(): ReactElement {
             <button
               type="button"
               onClick={() => void createPostFromCarousel()}
-              disabled={busy !== null || slides.every((slide) => !slideFile(slide))}
+              disabled={busy !== null || !hasCompleteSlides()}
               className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-md border border-accent px-3 py-2.5 text-sm font-semibold text-accent hover:bg-white disabled:opacity-60"
             >
               <GalleryHorizontalEnd size={15} /> В пост
@@ -1057,11 +1209,34 @@ export function CarouselPage(): ReactElement {
                 {history.map((carousel) => (
                   <div key={carousel.id} className="rounded-md border border-border bg-bg p-2">
                     <p className="truncate text-xs font-semibold text-text">{carousel.title}</p>
-                    <p className="mt-1 text-[11px] text-muted">{carousel.slides.length} слайд(ов) · {new Date(carousel.createdAt).toLocaleDateString("ru-RU")}</p>
+                    <p className="mt-1 text-[11px] text-muted">{carousel.slides.length} слайд(ов) · {new Date(carousel.created_at).toLocaleDateString("ru-RU")}</p>
                     <div className="mt-2 grid grid-cols-4 gap-1">
                       {carousel.slides.slice(0, 4).map((slide) => (
-                        <FileThumbnail key={slide.fileId} fileId={slide.fileId} name={slide.fileName} mimeType={slide.mimeType} size="sm" className="rounded-sm border-0" />
+                        <FileThumbnail key={slide.file.id} fileId={slide.file.id} name={slide.file.name} mimeType={slide.file.mime_type} size="sm" className="rounded-sm border-0" />
                       ))}
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => restoreCarousel(carousel)}
+                        className="rounded-md border border-border px-2 py-1 text-[11px] font-medium text-text hover:border-accent"
+                      >
+                        Открыть
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void createPostFromSavedCarousel(carousel)}
+                        className="rounded-md border border-accent px-2 py-1 text-[11px] font-medium text-accent hover:bg-blue-50"
+                      >
+                        В пост
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void deleteSavedCarousel(carousel)}
+                        className="rounded-md border border-border px-2 py-1 text-[11px] font-medium text-red-600 hover:border-red-300"
+                      >
+                        Удалить
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -1123,7 +1298,7 @@ export function CarouselPage(): ReactElement {
                 disabled={!regeneratePrompt.trim() || busy !== null}
                 className="inline-flex items-center gap-2 rounded-md bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent/90 disabled:opacity-50"
               >
-                {busy === "draft" ? (
+                {busy === "regenerate" ? (
                   <Loader2 size={15} className="animate-spin" />
                 ) : (
                   <Sparkles size={15} />

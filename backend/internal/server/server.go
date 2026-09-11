@@ -215,6 +215,9 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	telegramBusinessHandler := handler.NewTelegramBusinessHandler(telegramBusinessSvc)
 	channelConnectHandler := handler.NewChannelConnectHandler(channelConnectSvc, cfg)
 	postHandler := handler.NewPostHandler(postSvc)
+	carouselRepo := repository.NewCarouselRepository(db.Pool)
+	carouselSvc := service.NewCarouselService(carouselRepo, fileStorageRepo)
+	carouselHandler := handler.NewCarouselHandler(carouselSvc, wsSvc)
 	missionRepo := repository.NewMissionRepository(db.Pool)
 	agentTemplateRepo := repository.NewAgentTemplateRepository(db.Pool)
 	missionSvc := service.NewMissionService(
@@ -471,6 +474,16 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Post("/posts/{id}/comments", postHandler.Comment)
 			r.Get("/posts/{id}/approval-events", postHandler.ListApprovalEvents)
 			r.Get("/posts/{id}/analytics", analyticsHandler.PostAnalytics)
+		})
+
+		r.Group(func(r chi.Router) {
+			r.Use(authMW.Required)
+			r.Get("/carousels", carouselHandler.List)
+			r.Post("/carousels", carouselHandler.Create)
+			r.Get("/carousels/{id}", carouselHandler.Get)
+			r.Put("/carousels/{id}", carouselHandler.Update)
+			r.Patch("/carousels/{id}", carouselHandler.Update)
+			r.Delete("/carousels/{id}", carouselHandler.Delete)
 		})
 
 		r.Group(func(r chi.Router) {
