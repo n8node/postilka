@@ -325,11 +325,11 @@ export function PlansWalletPage() {
             Использовано за период: {formatTokenCount(overview?.usage.ai_text_tokens_used ?? 0)}
           </p>
           <p className="mt-1 text-xs text-muted">
-            Yandex GPT: тексты в композере и агентах. Это не рубли.
+            Используются для создания и редактирования текстов с помощью AI.
           </p>
           {!textBalance?.unlimited ? (
             <p className="mt-2 text-xs text-muted">
-              Обновятся {formatPeriodEnd(textBalance?.plan_period_end)}, неиспользованные сгорают.
+              Лимит обновится {formatPeriodEnd(textBalance?.plan_period_end)}. Остаток не переносится.
             </p>
           ) : (
             <p className="mt-2 text-xs text-muted">Без лимита по тарифу.</p>
