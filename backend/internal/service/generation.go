@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"mime/multipart"
 	"net/http"
 	"net/url"
@@ -340,6 +341,33 @@ func lookupYandexModelPricing(cfg model.YandexGptStoredConfig, modelID string) m
 		}
 	}
 	return model.YandexModelPricing{}
+}
+
+func textUsageDetails(result ai.ChatCompletionResult, cfg model.YandexGptStoredConfig, requestedModel string) (TextUsageDetails, error) {
+	promptTokens := result.PromptTokens
+	completionTokens := result.CompletionTokens
+	totalTokens := result.TotalTokens
+	if totalTokens <= 0 {
+		totalTokens = promptTokens + completionTokens
+	}
+	if totalTokens <= 0 || promptTokens < 0 || completionTokens < 0 {
+		return TextUsageDetails{}, errors.New("yandex gpt usage is missing")
+	}
+
+	pricing := lookupYandexModelPricing(cfg, result.Model)
+	if pricing.InputPer1K == 0 && pricing.OutputPer1K == 0 {
+		pricing = lookupYandexModelPricing(cfg, requestedModel)
+	}
+	costRub := float64(promptTokens)/1000*pricing.InputPer1K +
+		float64(completionTokens)/1000*pricing.OutputPer1K
+
+	return TextUsageDetails{
+		TotalTokens:      totalTokens,
+		PromptTokens:     promptTokens,
+		CompletionTokens: completionTokens,
+		CostCents:        int(math.Round(costRub * 100)),
+		Model:            strings.TrimSpace(result.Model),
+	}, nil
 }
 
 func (s *GenerationService) ListHistory(ctx context.Context, userID string, r *http.Request, limit int) ([]model.AIGenerationView, error) {

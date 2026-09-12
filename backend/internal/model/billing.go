@@ -66,12 +66,12 @@ type CheckoutResult struct {
 }
 
 type MediaBalanceView struct {
-	QuotaRemaining      *int   `json:"quota_remaining,omitempty"`
-	QuotaAllowance      *int   `json:"quota_allowance,omitempty"`
-	PurchasedRemaining  int    `json:"purchased_remaining"`
-	Unlimited           bool   `json:"unlimited"`
-	KopecksPerCredit    int    `json:"kopecks_per_credit"`
-	PlanPeriodEnd       string `json:"plan_period_end,omitempty"`
+	QuotaRemaining     *int   `json:"quota_remaining,omitempty"`
+	QuotaAllowance     *int   `json:"quota_allowance,omitempty"`
+	PurchasedRemaining int    `json:"purchased_remaining"`
+	Unlimited          bool   `json:"unlimited"`
+	KopecksPerCredit   int    `json:"kopecks_per_credit"`
+	PlanPeriodEnd      string `json:"plan_period_end,omitempty"`
 }
 
 type BillingOverview struct {
@@ -94,16 +94,17 @@ type BillingUsage struct {
 	PostsUsed          int    `json:"posts_used"`
 	WorkflowsUsed      int    `json:"workflows_used"`
 	AITextTokensUsed   int    `json:"ai_text_tokens_used"`
+	AITextCostCents    int64  `json:"ai_text_cost_cents"`
 	AIMediaCreditsUsed int    `json:"ai_media_credits_used"`
 	PeriodStart        string `json:"period_start"`
 }
 
 type PaymentHistoryItem struct {
-	ID          string    `json:"id"`
-	Kind        string    `json:"kind"`
-	AmountCents int       `json:"amount_cents"`
-	Status      string    `json:"status"`
-	Description string    `json:"description"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID          string     `json:"id"`
+	Kind        string     `json:"kind"`
+	AmountCents int        `json:"amount_cents"`
+	Status      string     `json:"status"`
+	Description string     `json:"description"`
+	CreatedAt   time.Time  `json:"created_at"`
 	PaidAt      *time.Time `json:"paid_at,omitempty"`
 }

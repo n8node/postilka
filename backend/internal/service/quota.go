@@ -9,6 +9,14 @@ import (
 	"github.com/postilka/postilka/internal/repository"
 )
 
+type TextUsageDetails struct {
+	TotalTokens      int
+	PromptTokens     int
+	CompletionTokens int
+	CostCents        int
+	Model            string
+}
+
 var ErrAnalyticsNotAvailable = errors.New("analytics not available on current plan")
 
 type QuotaService struct {
@@ -61,6 +69,10 @@ func (s *QuotaService) GetUsage(ctx context.Context, workspaceID string, planAss
 	if err != nil {
 		return model.BillingUsage{}, err
 	}
+	aiTextCost, err := s.usage.SumCostForPeriod(ctx, workspaceID, "ai_text_tokens", periodStart)
+	if err != nil {
+		return model.BillingUsage{}, err
+	}
 	aiMedia, err := s.usage.SumForPeriod(ctx, workspaceID, "ai_media_credits", periodStart)
 	if err != nil {
 		return model.BillingUsage{}, err
@@ -82,6 +94,7 @@ func (s *QuotaService) GetUsage(ctx context.Context, workspaceID string, planAss
 		PostsUsed:          posts,
 		WorkflowsUsed:      workflowsUsed,
 		AITextTokensUsed:   aiText,
+		AITextCostCents:    aiTextCost,
 		AIMediaCreditsUsed: aiMedia,
 		PeriodStart:        periodStart.Format("2006-01-02"),
 	}, nil
@@ -154,6 +167,27 @@ func (s *QuotaService) RecordTextTokens(ctx context.Context, workspaceID string,
 	}
 	periodStart := s.periodStartForWorkspace(ctx, workspaceID, assignedAt)
 	return s.usage.Record(ctx, workspaceID, "ai_text_tokens", tokens, periodStart)
+}
+
+func (s *QuotaService) RecordTextUsage(ctx context.Context, workspaceID string, usage TextUsageDetails) error {
+	if usage.TotalTokens <= 0 {
+		return nil
+	}
+	_, assignedAt, err := s.getWorkspacePlan(ctx, workspaceID)
+	if err != nil {
+		return err
+	}
+	periodStart := s.periodStartForWorkspace(ctx, workspaceID, assignedAt)
+	return s.usage.RecordTextUsage(
+		ctx,
+		workspaceID,
+		usage.TotalTokens,
+		usage.PromptTokens,
+		usage.CompletionTokens,
+		usage.CostCents,
+		usage.Model,
+		periodStart,
+	)
 }
 
 func (s *QuotaService) RecordPost(ctx context.Context, workspaceID string) error {

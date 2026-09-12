@@ -147,11 +147,13 @@ func (s *MissionService) Chat(ctx context.Context, userID string, r *http.Reques
 		mission = updated
 	}
 
-	tokens := result.TotalTokens
-	if tokens <= 0 {
-		tokens = estimateTextTokens(message) + estimateTextTokens(replyText)
+	usage, usageErr := textUsageDetails(result, cfg, modelID)
+	if usageErr != nil {
+		return nil, usageErr
 	}
-	_ = s.quota.RecordTextTokens(ctx, ws.ID, tokens)
+	if err := s.quota.RecordTextUsage(ctx, ws.ID, usage); err != nil {
+		return nil, err
+	}
 
 	asst, err := s.missions.InsertMessage(ctx, model.MissionMessage{
 		WorkspaceID: ws.ID,
@@ -363,17 +365,17 @@ func (s *MissionService) fileHint(ctx context.Context, workspaceID string) (stri
 
 func missionSnapshot(m *model.Mission) string {
 	raw, err := json.Marshal(map[string]any{
-		"title":          m.Title,
-		"goal":           m.Goal,
-		"metric":         m.Metric,
-		"metric_target":  m.MetricTarget,
-		"status":         m.Status,
-		"channel_ids":    m.ChannelIDs,
-		"starts_at":      m.StartsAt,
-		"ends_at":        m.EndsAt,
-		"frequency":      m.Frequency,
-		"brief":          m.Brief,
-		"measurability":  m.Measurability,
+		"title":           m.Title,
+		"goal":            m.Goal,
+		"metric":          m.Metric,
+		"metric_target":   m.MetricTarget,
+		"status":          m.Status,
+		"channel_ids":     m.ChannelIDs,
+		"starts_at":       m.StartsAt,
+		"ends_at":         m.EndsAt,
+		"frequency":       m.Frequency,
+		"brief":           m.Brief,
+		"measurability":   m.Measurability,
 		"plan_item_count": len(m.Plan.Items),
 	})
 	if err != nil {
@@ -532,4 +534,3 @@ const missionAgentSystemPrompt = `Ты Ai агент внутри Postilka. Ты
   }
 }
 Поле plan заполняй, только когда пользователь просит составить ход или данных уже достаточно. mission_patch — только изменённые поля.`
-

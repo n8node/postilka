@@ -81,14 +81,17 @@ func (s *GenerationService) ComposePostText(
 	if out == "" {
 		return ComposePostTextResult{}, errors.New("empty ai response")
 	}
-	tokens := estimateTextTokens(userContent) + estimateTextTokens(out)
-	if err := s.quota.RecordTextTokens(ctx, ws.ID, tokens); err != nil {
+	usage, err := textUsageDetails(result, cfg, modelID)
+	if err != nil {
+		return ComposePostTextResult{}, err
+	}
+	if err := s.quota.RecordTextUsage(ctx, ws.ID, usage); err != nil {
 		return ComposePostTextResult{}, err
 	}
 	if s.notify != nil {
 		s.notify.MaybeUsageWarnings(ctx, ws.ID)
 	}
-	return ComposePostTextResult{TextTokens: tokens, Text: out}, nil
+	return ComposePostTextResult{TextTokens: usage.TotalTokens, Text: out}, nil
 }
 
 func composePostTextUserContent(task, prompt, text string) string {

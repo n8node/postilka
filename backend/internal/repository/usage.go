@@ -23,6 +23,23 @@ func (r *UsageRepository) Record(ctx context.Context, workspaceID, metric string
 	return err
 }
 
+func (r *UsageRepository) RecordTextUsage(
+	ctx context.Context,
+	workspaceID string,
+	quantity, promptTokens, completionTokens, costCents int,
+	model string,
+	periodStart time.Time,
+) error {
+	_, err := r.pool.Exec(ctx, `
+		INSERT INTO usage_events (
+			workspace_id, metric, quantity, period_start,
+			prompt_tokens, completion_tokens, cost_cents, model
+		)
+		VALUES ($1, 'ai_text_tokens', $2, $3::date, $4, $5, $6, $7)
+	`, workspaceID, quantity, periodStart.Format("2006-01-02"), promptTokens, completionTokens, costCents, model)
+	return err
+}
+
 func (r *UsageRepository) RecordAIGeneration(ctx context.Context, workspaceID, generationID, metric string, quantity int, periodStart time.Time) error {
 	_, err := r.pool.Exec(ctx, `
 		INSERT INTO usage_events (workspace_id, metric, quantity, period_start, reference_type, reference_id)
@@ -38,6 +55,16 @@ func (r *UsageRepository) SumForPeriod(ctx context.Context, workspaceID, metric 
 	var total int
 	err := r.pool.QueryRow(ctx, `
 		SELECT COALESCE(SUM(quantity), 0)
+		FROM usage_events
+		WHERE workspace_id = $1 AND metric = $2 AND period_start = $3::date
+	`, workspaceID, metric, periodStart.Format("2006-01-02")).Scan(&total)
+	return total, err
+}
+
+func (r *UsageRepository) SumCostForPeriod(ctx context.Context, workspaceID, metric string, periodStart time.Time) (int64, error) {
+	var total int64
+	err := r.pool.QueryRow(ctx, `
+		SELECT COALESCE(SUM(cost_cents), 0)
 		FROM usage_events
 		WHERE workspace_id = $1 AND metric = $2 AND period_start = $3::date
 	`, workspaceID, metric, periodStart.Format("2006-01-02")).Scan(&total)

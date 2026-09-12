@@ -67,14 +67,17 @@ func (s *GenerationService) ImprovePrompt(
 	if improved == "" {
 		return ImprovePromptResult{}, errors.New("prompt improvement empty")
 	}
-	tokens := estimateTextTokens(prompt) + estimateTextTokens(improved)
-	if err := s.quota.RecordTextTokens(ctx, ws.ID, tokens); err != nil {
+	usage, err := textUsageDetails(result, cfg, modelID)
+	if err != nil {
+		return ImprovePromptResult{}, err
+	}
+	if err := s.quota.RecordTextUsage(ctx, ws.ID, usage); err != nil {
 		return ImprovePromptResult{}, err
 	}
 	if s.notify != nil {
 		s.notify.MaybeUsageWarnings(ctx, ws.ID)
 	}
-	return ImprovePromptResult{Prompt: improved, TextTokens: tokens}, nil
+	return ImprovePromptResult{Prompt: improved, TextTokens: usage.TotalTokens}, nil
 }
 
 func improveGenerationPromptSystem(mode string) string {

@@ -1834,6 +1834,7 @@ export type BillingUsage = {
   posts_used: number;
   workflows_used: number;
   ai_text_tokens_used: number;
+  ai_text_cost_cents: number;
   ai_media_credits_used: number;
   period_start: string;
 };

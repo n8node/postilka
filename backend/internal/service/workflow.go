@@ -18,11 +18,11 @@ import (
 )
 
 var (
-	ErrWorkflowNotFound       = errors.New("workflow not found")
-	ErrWorkflowCyclicGraph    = errors.New("workflow contains circular dependencies")
-	ErrWorkflowInvalidGraph   = errors.New("workflow graph is invalid")
-	ErrWorkflowNodeFailed     = errors.New("workflow node execution failed")
-	ErrWorkflowQuotaExceeded  = errors.New("workspace workflows limit exceeded")
+	ErrWorkflowNotFound      = errors.New("workflow not found")
+	ErrWorkflowCyclicGraph   = errors.New("workflow contains circular dependencies")
+	ErrWorkflowInvalidGraph  = errors.New("workflow graph is invalid")
+	ErrWorkflowNodeFailed    = errors.New("workflow node execution failed")
+	ErrWorkflowQuotaExceeded = errors.New("workspace workflows limit exceeded")
 )
 
 var varRegex = regexp.MustCompile(`\{\{\s*([a-zA-Z0-9_-]+)\.([a-zA-Z0-9_.-]+)\s*\}\}`)
@@ -514,14 +514,14 @@ func (s *WorkflowService) executeWorkflowGraph(ctx context.Context, runID string
 
 		stepNow := time.Now()
 		step := &model.WorkflowRunStep{
-			RunID:      runID,
-			NodeID:     node.ID,
-			NodeType:   node.Type,
-			NodeTitle:  s.getNodeTitle(node),
-			Status:     model.WorkflowStepStatusRunning,
-			Inputs:     s.resolveNodeData(node.Data, executionOutputs),
-			Outputs:    make(map[string]interface{}),
-			StartedAt:  &stepNow,
+			RunID:     runID,
+			NodeID:    node.ID,
+			NodeType:  node.Type,
+			NodeTitle: s.getNodeTitle(node),
+			Status:    model.WorkflowStepStatusRunning,
+			Inputs:    s.resolveNodeData(node.Data, executionOutputs),
+			Outputs:   make(map[string]interface{}),
+			StartedAt: &stepNow,
 		}
 
 		if node.Type == "trigger" && len(initialInputs) > 0 {
@@ -556,11 +556,11 @@ func (s *WorkflowService) executeWorkflowGraph(ctx context.Context, runID string
 		}
 
 		var (
-			outputs  map[string]interface{}
-			tokens   int
-			credits  int
-			kopecks  int
-			execErr  error
+			outputs map[string]interface{}
+			tokens  int
+			credits int
+			kopecks int
+			execErr error
 		)
 		if isApprovalWorkflowNode(node.Type) {
 			outputs, execErr = s.executeApprovalNode(ctx, workspaceID, userID, run, &graph, node, createdStep.Inputs, executionOutputs)
@@ -763,9 +763,21 @@ func (s *WorkflowService) executeNode(
 					{Role: "user", Content: prompt},
 				})
 				if chatErr == nil && res.Content != "" {
+					usage, usageErr := textUsageDetails(res, cfg, modelID)
+					if usageErr != nil {
+						return nil, 0, 0, 0, usageErr
+					}
+					if s.quota != nil {
+						if recordErr := s.quota.RecordTextUsage(ctx, workspaceID, usage); recordErr != nil {
+							return nil, 0, 0, 0, recordErr
+						}
+					}
 					outputs["text"] = strings.TrimSpace(res.Content)
-					outputs["tokens"] = res.TotalTokens
-					return outputs, res.TotalTokens, 0, 0, nil
+					outputs["tokens"] = usage.TotalTokens
+					outputs["prompt_tokens"] = usage.PromptTokens
+					outputs["completion_tokens"] = usage.CompletionTokens
+					outputs["cost_cents"] = usage.CostCents
+					return outputs, usage.TotalTokens, 0, usage.CostCents, nil
 				}
 			}
 		}
