@@ -24,7 +24,9 @@ import {
   type Workflow,
 } from "@/lib/workflows-api";
 import { WorkflowTemplatesModal } from "@/components/workflows/WorkflowTemplatesModal";
+import { WorkflowsComingSoon } from "@/components/workflows/WorkflowsComingSoon";
 import { ApiError, fetchBillingOverview, type BillingOverview } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 
 function formatWorkflowQuota(overview: BillingOverview | null): string | null {
   const limit = overview?.plan?.max_workflows;
@@ -34,6 +36,14 @@ function formatWorkflowQuota(overview: BillingOverview | null): string | null {
 }
 
 export default function WorkflowsPage() {
+  const { user } = useAuth();
+  if (!user.is_platform_admin) {
+    return <WorkflowsComingSoon />;
+  }
+  return <WorkflowsContent />;
+}
+
+function WorkflowsContent() {
   const router = useRouter();
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [loading, setLoading] = useState(true);

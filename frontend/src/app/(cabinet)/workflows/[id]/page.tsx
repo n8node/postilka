@@ -15,12 +15,22 @@ import {
 import { WorkflowCanvas } from "@/components/workflows/WorkflowCanvas";
 import { WorkflowRunHistoryModal } from "@/components/workflows/WorkflowRunHistoryModal";
 import { WorkflowTemplatesModal } from "@/components/workflows/WorkflowTemplatesModal";
+import { WorkflowsComingSoon } from "@/components/workflows/WorkflowsComingSoon";
+import { useAuth } from "@/context/AuthContext";
 
 interface PageProps {
   params: Promise<{ id: string }>;
 }
 
 export default function WorkflowDetailPage({ params }: PageProps) {
+  const { user } = useAuth();
+  if (!user.is_platform_admin) {
+    return <WorkflowsComingSoon />;
+  }
+  return <WorkflowDetailContent params={params} />;
+}
+
+function WorkflowDetailContent({ params }: PageProps) {
   const resolvedParams = use(params);
   const id = resolvedParams.id;
   const router = useRouter();
