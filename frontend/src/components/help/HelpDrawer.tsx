@@ -9,6 +9,7 @@ import {
   fetchHelpArticle,
   fetchHelpArticleByRoute,
   fetchHelpCatalog,
+  fetchHelpSettings,
   type HelpArticle,
   type HelpArticleSummary,
 } from "@/lib/api";
@@ -20,15 +21,33 @@ export function HelpLauncher() {
   const router = useRouter();
   const params = useSearchParams();
   const [open, setOpen] = useState(false);
+  const [enabled, setEnabled] = useState<boolean | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+    fetchHelpSettings()
+      .then((settings) => {
+        if (!cancelled) setEnabled(settings.enabled);
+      })
+      .catch(() => {
+        if (!cancelled) setEnabled(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!enabled) return;
     if (params.get("help") !== "1") return;
     setOpen(true);
     const next = new URLSearchParams(params.toString());
     next.delete("help");
     const query = next.toString();
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
-  }, [params, pathname, router]);
+  }, [enabled, params, pathname, router]);
+
+  if (enabled !== true) return null;
 
   return (
     <>

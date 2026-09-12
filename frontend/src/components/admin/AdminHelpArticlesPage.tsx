@@ -6,7 +6,9 @@ import {
   ApiError,
   createAdminHelpArticle,
   deleteAdminHelpArticle,
+  fetchAdminHelpSettings,
   fetchAdminHelpArticles,
+  updateAdminHelpSettings,
   updateAdminHelpArticle,
   type HelpArticle,
   type HelpArticleInput,
@@ -46,6 +48,8 @@ export function AdminHelpArticlesPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [helpEnabled, setHelpEnabled] = useState(true);
+  const [settingsSaving, setSettingsSaving] = useState(false);
 
   const selected = useMemo(
     () => articles.find((item) => item.id === selectedId) || null,
@@ -55,8 +59,12 @@ export function AdminHelpArticlesPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const res = await fetchAdminHelpArticles();
+      const [res, settings] = await Promise.all([
+        fetchAdminHelpArticles(),
+        fetchAdminHelpSettings(),
+      ]);
       setArticles(res.articles || []);
+      setHelpEnabled(settings.enabled);
       if (!selectedId && res.articles?.[0]) {
         setSelectedId(res.articles[0].id);
         setForm(toInput(res.articles[0]));
@@ -65,6 +73,19 @@ export function AdminHelpArticlesPage() {
       setError(err instanceof ApiError ? err.message : "Не удалось загрузить статьи");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const saveHelpVisibility = async (enabled: boolean) => {
+    setSettingsSaving(true);
+    setError(null);
+    try {
+      const settings = await updateAdminHelpSettings(enabled);
+      setHelpEnabled(settings.enabled);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Не удалось сохранить настройки справки");
+    } finally {
+      setSettingsSaving(false);
     }
   };
 
@@ -130,6 +151,22 @@ export function AdminHelpArticlesPage() {
           Статьи по разделам. Пользователь видит только опубликованные.
         </p>
       </div>
+
+      <label className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+        <input
+          type="checkbox"
+          checked={helpEnabled}
+          disabled={settingsSaving}
+          onChange={(e) => void saveHelpVisibility(e.target.checked)}
+          className="mt-0.5 rounded border-slate-300"
+        />
+        <span>
+          <span className="block text-sm font-medium text-slate-800">Показывать справку пользователям</span>
+          <span className="mt-0.5 block text-xs text-slate-500">
+            Выключите, чтобы скрыть вопросительный знак и всю справку в кабинете.
+          </span>
+        </span>
+      </label>
 
       <div className="flex min-h-[680px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <aside className="flex w-64 shrink-0 flex-col border-r border-slate-200 bg-slate-50">

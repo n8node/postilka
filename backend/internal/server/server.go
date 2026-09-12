@@ -243,6 +243,9 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	helpArticleRepo := repository.NewHelpArticleRepository(db.Pool)
 	helpArticleSvc := service.NewHelpArticleService(helpArticleRepo, objectStorage)
 	helpArticleHandler := handler.NewHelpArticleHandler(helpArticleSvc)
+	helpSettingsRepo := repository.NewHelpSettingsRepository(db.Pool)
+	helpSettingsSvc := service.NewHelpSettingsService(helpSettingsRepo)
+	helpSettingsHandler := handler.NewHelpSettingsHandler(helpSettingsSvc)
 
 	genRepo := repository.NewAIGenerationRepository(db.Pool)
 	genJobRepo := repository.NewAIGenerationJobRepository(db.Pool)
@@ -610,6 +613,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Get("/help/article", helpArticleHandler.GetByRoute)
 			r.Get("/help/articles/{id}", helpArticleHandler.GetPublished)
 			r.Get("/help/images/{id}", helpArticleHandler.ServeImage)
+			r.Get("/help/settings", helpSettingsHandler.Get)
 		})
 
 		r.Route("/admin", func(r chi.Router) {
@@ -640,6 +644,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Delete("/public-pages/{pageID}", publicPageHandler.DeleteAdmin)
 
 				r.Get("/help-articles", helpArticleHandler.ListAdmin)
+				r.Put("/help-settings", helpSettingsHandler.Update)
 				r.Post("/help-articles", helpArticleHandler.CreateAdmin)
 				r.Post("/help-articles/images", helpArticleHandler.UploadImage)
 				r.Get("/help-articles/{id}", helpArticleHandler.GetAdmin)

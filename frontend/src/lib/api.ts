@@ -1119,6 +1119,15 @@ export function fetchHelpCatalog() {
   return apiFetch<{ articles: HelpArticleSummary[] }>("/help/articles");
 }
 
+export type HelpSettings = {
+  enabled: boolean;
+  updated_at: string;
+};
+
+export function fetchHelpSettings() {
+  return apiFetch<HelpSettings>("/help/settings");
+}
+
 export function fetchHelpArticleByRoute(route: string) {
   return apiFetch<{ article: HelpArticle | null }>(
     `/help/article?route=${encodeURIComponent(route)}`,
@@ -1150,6 +1159,17 @@ export function updateAdminHelpArticle(id: string, body: HelpArticleInput) {
 export function deleteAdminHelpArticle(id: string) {
   return apiFetch<{ status: string }>(`/admin/help-articles/${id}`, {
     method: "DELETE",
+  });
+}
+
+export function fetchAdminHelpSettings() {
+  return apiFetch<HelpSettings>("/admin/help-settings");
+}
+
+export function updateAdminHelpSettings(enabled: boolean) {
+  return apiFetch<HelpSettings>("/admin/help-settings", {
+    method: "PUT",
+    body: JSON.stringify({ enabled }),
   });
 }
 
