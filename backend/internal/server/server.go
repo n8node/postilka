@@ -644,6 +644,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Delete("/public-pages/{pageID}", publicPageHandler.DeleteAdmin)
 
 				r.Get("/help-articles", helpArticleHandler.ListAdmin)
+				r.Get("/help-settings", helpSettingsHandler.Get)
 				r.Put("/help-settings", helpSettingsHandler.Update)
 				r.Post("/help-articles", helpArticleHandler.CreateAdmin)
 				r.Post("/help-articles/images", helpArticleHandler.UploadImage)
