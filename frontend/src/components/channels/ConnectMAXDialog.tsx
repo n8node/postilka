@@ -1,9 +1,8 @@
 "use client";
 
 import { Copy, Eye, EyeOff, ExternalLink, Loader2, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ContextHelpLinks } from "@/components/support/ContextHelpLinks";
-import { SupportSheet } from "@/components/support/SupportSheet";
 import { ChannelAvatar } from "@/components/channels/ChannelAvatar";
 import {
   ApiError,
@@ -24,7 +23,6 @@ type ConnectMAXDialogProps = {
 
 export function ConnectMAXDialog({ open, onClose, onConnected }: ConnectMAXDialogProps) {
   const [providerInfo, setProviderInfo] = useState<ChannelProviderInfo | null>(null);
-  const [supportOpen, setSupportOpen] = useState(false);
   const [showDetailedHelp, setShowDetailedHelp] = useState(false);
   const [postMode, setPostMode] = useState<"own" | "platform">("own");
   const [botToken, setBotToken] = useState("");
@@ -48,7 +46,6 @@ export function ConnectMAXDialog({ open, onClose, onConnected }: ConnectMAXDialo
     setBotResult(null);
     setChannelHint(null);
     setCopied(null);
-    setSupportOpen(false);
     setShowDetailedHelp(false);
   }, []);
 
@@ -136,19 +133,6 @@ export function ConnectMAXDialog({ open, onClose, onConnected }: ConnectMAXDialo
   }
 
   const maxProvider = providerInfo?.providers.find((p) => p.provider === "max");
-  const supportInfo = useMemo((): ChannelProviderInfo | null => {
-    if (!providerInfo || !maxProvider) return providerInfo;
-    return {
-      ...providerInfo,
-      connect_help_text: maxProvider.connect_help_text,
-      connect_help_url: maxProvider.connect_help_url,
-      docs_url: maxProvider.docs_url,
-      support_telegram_username: maxProvider.support_telegram_username,
-      support_telegram_url: maxProvider.support_telegram_url,
-      support_email: maxProvider.support_email,
-      support_hours_text: maxProvider.support_hours_text,
-    };
-  }, [providerInfo, maxProvider]);
   const enabled = maxProvider?.enabled ?? false;
   const platformBotAvailable =
     Boolean(maxProvider?.platform_bot_enabled && maxProvider.platform_bot?.search_query);
@@ -192,7 +176,6 @@ export function ConnectMAXDialog({ open, onClose, onConnected }: ConnectMAXDialo
 
         <ContextHelpLinks
           helpURL={maxProvider?.connect_help_url}
-          onSupportClick={() => setSupportOpen(true)}
         />
 
         {maxProvider?.connect_help_text && (
@@ -490,12 +473,6 @@ export function ConnectMAXDialog({ open, onClose, onConnected }: ConnectMAXDialo
       </div>
     </div>
 
-    <SupportSheet
-      open={supportOpen}
-      onClose={() => setSupportOpen(false)}
-      info={supportInfo}
-      context="max_connect"
-    />
     </>
   );
 }

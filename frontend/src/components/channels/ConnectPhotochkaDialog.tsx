@@ -88,7 +88,23 @@ export function ConnectPhotochkaDialog({
         <h2 id="connect-photochka-title" className="text-lg font-semibold text-foreground">
           Подключить Photochka
         </h2>
-        <p className="mt-2 whitespace-pre-line text-sm text-muted">{helpText}</p>
+        <p className="mt-2 whitespace-pre-line text-sm text-muted">
+          {helpText.split("Photochka").map((part, index, parts) => (
+            <span key={`${part}-${index}`}>
+              {part}
+              {index < parts.length - 1 ? (
+                <a
+                  href="https://photochka.ru/dashboard"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-600 underline"
+                >
+                  Photochka
+                </a>
+              ) : null}
+            </span>
+          ))}
+        </p>
 
         <label className="mt-4 block text-sm font-medium text-foreground">
           API-ключ

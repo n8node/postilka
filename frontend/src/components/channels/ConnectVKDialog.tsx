@@ -1,9 +1,8 @@
 "use client";
 
 import { Loader2, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ContextHelpLinks } from "@/components/support/ContextHelpLinks";
-import { SupportSheet } from "@/components/support/SupportSheet";
 import { ChannelAvatar } from "@/components/channels/ChannelAvatar";
 import {
   ApiError,
@@ -25,6 +24,27 @@ type ConnectVKDialogProps = {
   initialSessionId?: string;
 };
 
+const VK_BUSINESS_CABINET_URL = "https://id.vk.ru/about/business/go";
+
+function renderVKHelpText(text: string) {
+  const parts = text.split(/(vk\.com\/apps(?:\?act=manage)?)/g);
+  return parts.map((part, index) =>
+    part.startsWith("vk.com/apps") ? (
+      <a
+        key={`${part}-${index}`}
+        href={VK_BUSINESS_CABINET_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-blue-600 underline"
+      >
+        личном кабинете VK
+      </a>
+    ) : (
+      <span key={`${part}-${index}`}>{part}</span>
+    ),
+  );
+}
+
 export function ConnectVKDialog({
   open,
   onClose,
@@ -32,7 +52,6 @@ export function ConnectVKDialog({
   initialSessionId,
 }: ConnectVKDialogProps) {
   const [providerInfo, setProviderInfo] = useState<ChannelProviderInfo | null>(null);
-  const [supportOpen, setSupportOpen] = useState(false);
   const [showDetailedHelp, setShowDetailedHelp] = useState(false);
   const [oauthMode, setOauthMode] = useState<"own" | "platform">("own");
   const [vkAppId, setVkAppId] = useState("");
@@ -49,20 +68,6 @@ export function ConnectVKDialog({
   const platformOAuthAvailable = Boolean(vkProvider?.platform_oauth_enabled);
   const enabled = vkProvider?.enabled ?? false;
 
-  const supportInfo = useMemo((): ChannelProviderInfo | null => {
-    if (!providerInfo || !vkProvider) return providerInfo;
-    return {
-      ...providerInfo,
-      connect_help_text: vkProvider.connect_help_text,
-      connect_help_url: vkProvider.connect_help_url,
-      docs_url: vkProvider.docs_url,
-      support_telegram_username: vkProvider.support_telegram_username,
-      support_telegram_url: vkProvider.support_telegram_url,
-      support_email: vkProvider.support_email,
-      support_hours_text: vkProvider.support_hours_text,
-    };
-  }, [providerInfo, vkProvider]);
-
   const reset = useCallback(() => {
     setOauthMode("own");
     setVkAppId("");
@@ -73,7 +78,6 @@ export function ConnectVKDialog({
     setTargets([]);
     setHint(null);
     setSelected({});
-    setSupportOpen(false);
     setShowDetailedHelp(false);
   }, []);
 
@@ -192,7 +196,6 @@ export function ConnectVKDialog({
 
             <ContextHelpLinks
               helpURL={vkProvider?.connect_help_url}
-              onSupportClick={() => setSupportOpen(true)}
             />
 
             {vkProvider?.connect_help_text && step === "start" && (
@@ -206,7 +209,7 @@ export function ConnectVKDialog({
                 </button>
                 {showDetailedHelp && (
                   <div className="mt-2 rounded-lg border border-border bg-zinc-50 px-3 py-2 text-sm whitespace-pre-line text-muted">
-                    {vkProvider.connect_help_text}
+                    {renderVKHelpText(vkProvider.connect_help_text)}
                   </div>
                 )}
               </div>
@@ -265,12 +268,12 @@ export function ConnectVKDialog({
                     <p className="text-sm text-muted">
                       Создайте Standalone-приложение на{" "}
                       <a
-                        href="https://vk.com/apps?act=manage"
+                        href={VK_BUSINESS_CABINET_URL}
                         target="_blank"
                         rel="noreferrer"
                         className="text-accent underline"
                       >
-                        vk.com/apps
+                        личном кабинете VK
                       </a>
                       . Redirect URI:{" "}
                       <code className="rounded bg-zinc-100 px-1 text-xs">
@@ -382,12 +385,6 @@ export function ConnectVKDialog({
         </div>
       </div>
 
-      <SupportSheet
-        open={supportOpen}
-        onClose={() => setSupportOpen(false)}
-        info={supportInfo}
-        context="vk_connect"
-      />
     </>
   );
 }

@@ -5,20 +5,16 @@ import {
   Bot,
   CheckCircle2,
   ExternalLink,
-  MessageCircle,
   Send,
   Sparkles,
   X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { ContextHelpLinks } from "@/components/support/ContextHelpLinks";
-import { SupportSheet } from "@/components/support/SupportSheet";
 import { fetchChannelProviderInfo, type ChannelProviderInfo } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const DZEN_BOT_USERNAME = "zen_sync_bot";
 const DZEN_BOT_URL = "https://t.me/zen_sync_bot";
-const DZEN_HELP_URL = "https://dzen.ru/help/ru/channel/cross-platform.html";
 
 const STEPS = [
   {
@@ -56,7 +52,6 @@ type ConnectDzenDialogProps = {
 
 export function ConnectDzenDialog({ open, onClose, onConnectTelegram }: ConnectDzenDialogProps) {
   const [providerInfo, setProviderInfo] = useState<ChannelProviderInfo | null>(null);
-  const [supportOpen, setSupportOpen] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -194,12 +189,6 @@ export function ConnectDzenDialog({ open, onClose, onConnectTelegram }: ConnectD
               </ul>
             </div>
 
-            <ContextHelpLinks
-              helpURL={dzenProvider?.connect_help_url || DZEN_HELP_URL}
-              helpLabel="Официальная инструкция Дзена"
-              onSupportClick={() => setSupportOpen(true)}
-            />
-
             <div className="flex flex-wrap gap-2 border-t border-border pt-4">
               <button
                 type="button"
@@ -217,7 +206,6 @@ export function ConnectDzenDialog({ open, onClose, onConnectTelegram }: ConnectD
                   }}
                   className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90"
                 >
-                  <MessageCircle className="h-4 w-4" />
                   Подключить Telegram
                 </button>
               )}
@@ -226,25 +214,6 @@ export function ConnectDzenDialog({ open, onClose, onConnectTelegram }: ConnectD
         </div>
       </div>
 
-      <SupportSheet
-        open={supportOpen}
-        onClose={() => setSupportOpen(false)}
-        context="dzen_connect"
-        info={
-          providerInfo && dzenProvider
-            ? {
-                ...providerInfo,
-                connect_help_text: dzenProvider.connect_help_text,
-                connect_help_url: dzenProvider.connect_help_url,
-                docs_url: dzenProvider.docs_url,
-                support_telegram_username: dzenProvider.support_telegram_username,
-                support_telegram_url: dzenProvider.support_telegram_url,
-                support_email: dzenProvider.support_email,
-                support_hours_text: dzenProvider.support_hours_text,
-              }
-            : providerInfo
-        }
-      />
     </>
   );
 }

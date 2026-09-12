@@ -1,10 +1,9 @@
 "use client";
 
 import { Loader2, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ContextHelpLinks } from "@/components/support/ContextHelpLinks";
 import { ConnectHelpSteps } from "@/components/channels/ConnectHelpSteps";
-import { SupportSheet } from "@/components/support/SupportSheet";
 import { ChannelAvatar } from "@/components/channels/ChannelAvatar";
 import {
   ApiError,
@@ -33,7 +32,6 @@ export function ConnectYouTubeDialog({
   initialSessionId,
 }: ConnectYouTubeDialogProps) {
   const [providerInfo, setProviderInfo] = useState<ChannelProviderInfo | null>(null);
-  const [supportOpen, setSupportOpen] = useState(false);
   const [showDetailedHelp, setShowDetailedHelp] = useState(true);
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
@@ -48,20 +46,6 @@ export function ConnectYouTubeDialog({
   const ytProvider = providerInfo?.providers.find((p) => p.provider === "youtube");
   const enabled = ytProvider?.enabled ?? false;
 
-  const supportInfo = useMemo((): ChannelProviderInfo | null => {
-    if (!providerInfo || !ytProvider) return providerInfo;
-    return {
-      ...providerInfo,
-      connect_help_text: ytProvider.connect_help_text,
-      connect_help_url: ytProvider.connect_help_url,
-      docs_url: ytProvider.docs_url,
-      support_telegram_username: ytProvider.support_telegram_username,
-      support_telegram_url: ytProvider.support_telegram_url,
-      support_email: ytProvider.support_email,
-      support_hours_text: ytProvider.support_hours_text,
-    };
-  }, [providerInfo, ytProvider]);
-
   const reset = useCallback(() => {
     setClientId("");
     setClientSecret("");
@@ -71,7 +55,6 @@ export function ConnectYouTubeDialog({
     setTargets([]);
     setHint(null);
     setSelected({});
-    setSupportOpen(false);
     setShowDetailedHelp(false);
   }, []);
 
@@ -179,8 +162,11 @@ export function ConnectYouTubeDialog({
 
             <ContextHelpLinks
               helpURL={ytProvider?.connect_help_url}
-              onSupportClick={() => setSupportOpen(true)}
             />
+
+            <p className="text-sm text-muted">
+              YouTube-канал нужно будет периодически переподключать. Когда это потребуется, вы получите уведомление.
+            </p>
 
             {ytProvider?.connect_help_text && step === "start" && (
               <div>
@@ -302,12 +288,6 @@ export function ConnectYouTubeDialog({
         </div>
       </div>
 
-      <SupportSheet
-        open={supportOpen}
-        onClose={() => setSupportOpen(false)}
-        info={supportInfo}
-        context="youtube_connect"
-      />
     </>
   );
 }

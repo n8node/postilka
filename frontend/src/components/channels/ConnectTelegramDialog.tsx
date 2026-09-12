@@ -3,7 +3,6 @@
 import { Eye, EyeOff, Info, Loader2, RefreshCw, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { ContextHelpLinks } from "@/components/support/ContextHelpLinks";
-import { SupportSheet } from "@/components/support/SupportSheet";
 import { ChannelAvatar } from "@/components/channels/ChannelAvatar";
 import {
   ApiError,
@@ -33,7 +32,6 @@ type ConnectTelegramDialogProps = {
 
 export function ConnectTelegramDialog({ open, onClose, onConnected }: ConnectTelegramDialogProps) {
   const [providerInfo, setProviderInfo] = useState<ChannelProviderInfo | null>(null);
-  const [supportOpen, setSupportOpen] = useState(false);
   const [showDetailedHelp, setShowDetailedHelp] = useState(false);
   const [enabled, setEnabled] = useState(true);
   const [botToken, setBotToken] = useState("");
@@ -69,7 +67,6 @@ export function ConnectTelegramDialog({ open, onClose, onConnected }: ConnectTel
     setManualChatID("");
     setManualName("");
     setError(null);
-    setSupportOpen(false);
     setShowDetailedHelp(false);
   }, []);
 
@@ -165,7 +162,6 @@ export function ConnectTelegramDialog({ open, onClose, onConnected }: ConnectTel
 
             <ContextHelpLinks
               helpURL={providerInfo?.connect_help_url}
-              onSupportClick={() => setSupportOpen(true)}
             />
 
             {providerInfo?.connect_help_text && (
@@ -332,12 +328,6 @@ export function ConnectTelegramDialog({ open, onClose, onConnected }: ConnectTel
         </div>
       </div>
 
-      <SupportSheet
-        open={supportOpen}
-        onClose={() => setSupportOpen(false)}
-        info={providerInfo}
-        context="telegram_connect"
-      />
     </>
   );
 }
