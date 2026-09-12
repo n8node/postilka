@@ -295,7 +295,7 @@ func (h *GenerationHandler) ImprovePrompt(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	improved, err := h.generation.ImprovePrompt(r.Context(), userID, service.ImprovePromptInput{
+	result, err := h.generation.ImprovePrompt(r.Context(), userID, r, service.ImprovePromptInput{
 		Prompt: req.Prompt,
 		Mode:   req.Mode,
 	})
@@ -303,7 +303,10 @@ func (h *GenerationHandler) ImprovePrompt(w http.ResponseWriter, r *http.Request
 		h.mapError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"prompt": improved})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"prompt":      result.Prompt,
+		"text_tokens": result.TextTokens,
+	})
 }
 
 func (h *GenerationHandler) ResultMedia(w http.ResponseWriter, r *http.Request) {

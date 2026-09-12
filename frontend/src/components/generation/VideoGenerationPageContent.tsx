@@ -14,6 +14,7 @@ import { VideoSidebarStats } from "@/components/generation/VideoSidebarStats";
 import { VideoSourcePhotosPanel } from "@/components/generation/VideoSourcePhotosPanel";
 import { Card } from "@/components/ui/Card";
 import { ApiError } from "@/lib/api";
+import { refreshBillingBalances } from "@/lib/billing-balances-store";
 import {
   deleteGenerationHistory,
   fetchGenerationHistory,
@@ -301,6 +302,7 @@ export function VideoGenerationPageContent() {
         mode,
       });
       setPrompt(improved);
+      void refreshBillingBalances().catch(() => undefined);
     } catch (err) {
       setImproveError(
         err instanceof ApiError ? err.message : "Не удалось улучшить промпт",

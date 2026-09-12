@@ -18,6 +18,7 @@ import { FormatParamsPanel } from "@/components/generation/FormatParamsPanel";
 import { SourcePhotosPanel } from "@/components/generation/SourcePhotosPanel";
 import { Card } from "@/components/ui/Card";
 import { ApiError } from "@/lib/api";
+import { refreshBillingBalances } from "@/lib/billing-balances-store";
 import type { GenerationPricing } from "@/lib/generation-api";
 import {
   deleteGenerationHistory,
@@ -233,6 +234,7 @@ export function GenerationPageContent() {
         mode,
       });
       setPrompt(improved);
+      void refreshBillingBalances().catch(() => undefined);
     } catch (err) {
       setImproveError(
         err instanceof ApiError ? err.message : "Не удалось улучшить промпт",

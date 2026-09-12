@@ -321,6 +321,9 @@ export function PlansWalletPage() {
                 ? `${formatTokenCount(textBalance.plan_tokens_remaining)} / ${formatTokenCount(textBalance.plan_tokens_allowance)}`
                 : formatTokenCount(textBalance?.plan_tokens_remaining ?? 0)}
           </p>
+          <p className="mt-2 text-xs font-medium text-teal-800">
+            Использовано за период: {formatTokenCount(overview?.usage.ai_text_tokens_used ?? 0)}
+          </p>
           <p className="mt-1 text-xs text-muted">
             Yandex GPT: тексты в композере и агентах. Это не рубли.
           </p>

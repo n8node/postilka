@@ -3,10 +3,12 @@ package service
 import (
 	"context"
 	"errors"
+	"net/http"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/postilka/postilka/internal/ai"
+	"github.com/postilka/postilka/internal/model"
 )
 
 type ImprovePromptInput struct {
@@ -14,10 +16,20 @@ type ImprovePromptInput struct {
 	Mode   string
 }
 
-func (s *GenerationService) ImprovePrompt(ctx context.Context, userID string, in ImprovePromptInput) (string, error) {
+type ImprovePromptResult struct {
+	Prompt     string
+	TextTokens int
+}
+
+func (s *GenerationService) ImprovePrompt(
+	ctx context.Context,
+	userID string,
+	r *http.Request,
+	in ImprovePromptInput,
+) (ImprovePromptResult, error) {
 	prompt := strings.TrimSpace(in.Prompt)
 	if prompt == "" {
-		return "", errors.New("prompt is required")
+		return ImprovePromptResult{}, errors.New("prompt is required")
 	}
 	maxChars := 4000
 	switch strings.TrimSpace(in.Mode) {
@@ -25,16 +37,23 @@ func (s *GenerationService) ImprovePrompt(ctx context.Context, userID string, in
 		maxChars = ai.KieVideoPromptMaxChars
 	}
 	if utf8.RuneCountInString(prompt) > maxChars {
-		return "", errors.New("prompt too long")
+		return ImprovePromptResult{}, errors.New("prompt too long")
+	}
+	ws, err := s.resolveWorkspace(ctx, userID, r)
+	if err != nil {
+		return ImprovePromptResult{}, err
+	}
+	if _, err := s.wsSvc.RequireMembership(ctx, userID, ws.ID, model.RoleEditor); err != nil {
+		return ImprovePromptResult{}, err
 	}
 
 	client, cfg, err := s.yandexGPT.Client(ctx)
 	if err != nil {
-		return "", err
+		return ImprovePromptResult{}, err
 	}
 	modelID := ModelForTask(cfg, "generation_improve")
 	if modelID == "" {
-		return "", ErrYandexGptNotConfigured
+		return ImprovePromptResult{}, ErrYandexGptNotConfigured
 	}
 
 	result, err := client.Chat(ctx, modelID, []ai.ChatMessage{
@@ -42,13 +61,20 @@ func (s *GenerationService) ImprovePrompt(ctx context.Context, userID string, in
 		{Role: "user", Content: prompt},
 	})
 	if err != nil {
-		return "", err
+		return ImprovePromptResult{}, err
 	}
 	improved := strings.TrimSpace(result.Content)
 	if improved == "" {
-		return "", errors.New("prompt improvement empty")
+		return ImprovePromptResult{}, errors.New("prompt improvement empty")
 	}
-	return improved, nil
+	tokens := estimateTextTokens(prompt) + estimateTextTokens(improved)
+	if err := s.quota.RecordTextTokens(ctx, ws.ID, tokens); err != nil {
+		return ImprovePromptResult{}, err
+	}
+	if s.notify != nil {
+		s.notify.MaybeUsageWarnings(ctx, ws.ID)
+	}
+	return ImprovePromptResult{Prompt: improved, TextTokens: tokens}, nil
 }
 
 func improveGenerationPromptSystem(mode string) string {

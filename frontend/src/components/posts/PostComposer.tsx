@@ -64,6 +64,7 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import { channelAvatarCacheKey, channelDisplayName } from "@/lib/channelPresentation";
 import { composePostText } from "@/lib/generation-api";
+import { refreshBillingBalances } from "@/lib/billing-balances-store";
 import {
   getFileVideoDimensions,
   isVideoMime as isVideoMimeFile,
@@ -2084,6 +2085,7 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
         length: aiLength,
       });
       setAiResult(text);
+      void refreshBillingBalances().catch(() => undefined);
     } catch (aiError) {
       setError(errorText(aiError, "Не удалось сгенерировать текст"));
     } finally {

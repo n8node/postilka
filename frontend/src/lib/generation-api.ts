@@ -186,7 +186,7 @@ export function improveGenerationPrompt(payload: {
   prompt: string;
   mode: GenerationModeId | string;
 }) {
-  return apiFetch<{ prompt: string }>("/generation/improve-prompt", {
+  return apiFetch<{ prompt: string; text_tokens?: number }>("/generation/improve-prompt", {
     method: "POST",
     body: JSON.stringify(payload),
   });
