@@ -67,8 +67,12 @@ export function WalletBalanceBadge({ collapsed }: { collapsed: boolean }) {
         <span className="tabular-nums font-medium text-text">{textLabel}</span>
       </span>
       <span className="mt-0.5 flex items-baseline justify-between gap-2 text-[11px]">
-        <span className="text-muted">Медиа</span>
+        <span className="text-muted">Медиа по тарифу</span>
         <span className="tabular-nums font-medium text-text">{mediaLabel}</span>
+      </span>
+      <span className="mt-0.5 flex items-baseline justify-between gap-2 text-[11px]">
+        <span className="text-muted">Медиа докуплено</span>
+        <span className="tabular-nums font-medium text-text">{formatTokenCount(balances.mediaPurchased)}</span>
       </span>
     </Link>
   );
