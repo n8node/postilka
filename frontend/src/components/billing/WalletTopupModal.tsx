@@ -24,13 +24,11 @@ function formatRub(cents: number) {
 type WalletTopupModalProps = {
   open: boolean;
   onClose: () => void;
-  onBalanceChange?: (cents: number) => void;
 };
 
 export function WalletTopupModal({
   open,
   onClose,
-  onBalanceChange,
 }: WalletTopupModalProps) {
   const { user } = useAuth();
   const emailVerified = isEmailVerified(user);
@@ -48,7 +46,6 @@ export function WalletTopupModal({
     fetchBillingOverview()
       .then((data) => {
         setOverview(data);
-        onBalanceChange?.(data.wallet_balance_cents);
         const minRub = Math.ceil((data.wallet_topup_min_cents ?? 10000) / 100);
         setAmountRub(String(Math.max(minRub, 500)));
       })
@@ -56,7 +53,7 @@ export function WalletTopupModal({
         setError(e instanceof ApiError ? e.message : "Не удалось загрузить данные кошелька");
       })
       .finally(() => setLoading(false));
-  }, [open, onBalanceChange]);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
