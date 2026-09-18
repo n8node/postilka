@@ -155,6 +155,10 @@ export function PlansWalletPage() {
     void reload();
   }, [reload]);
 
+  const handleTopupBalanceChange = useCallback(() => {
+    void reload();
+  }, [reload]);
+
   useEffect(() => {
     if (!overview?.workspace_id || plans.length === 0) return;
     void (async () => {
@@ -371,9 +375,7 @@ export function PlansWalletPage() {
       <WalletTopupModal
         open={topupOpen}
         onClose={() => setTopupOpen(false)}
-        onBalanceChange={() => {
-          void reload();
-        }}
+        onBalanceChange={handleTopupBalanceChange}
       />
 
       <div className="mb-4 flex items-center gap-2">

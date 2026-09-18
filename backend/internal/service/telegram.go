@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"strings"
 	"time"
@@ -92,6 +93,19 @@ func (s *TelegramService) NotifyPayment(ctx context.Context, user *model.User, p
 	}
 	text := applyTelegramTemplate(cfg.PaymentTemplate, vars)
 	s.dispatchAdminNotification(ctx, text, "payment")
+}
+
+func (s *TelegramService) NotifyMediaPackage(ctx context.Context, user *model.User, packageName string, tokens, amountCents int) {
+	if user == nil {
+		return
+	}
+	cfg, err := s.settings.GetEffective(ctx)
+	if err != nil || !cfg.Enabled || !cfg.NotifyPayment {
+		return
+	}
+	text := fmt.Sprintf("Оплата пакета медиа-кредитов\nПользователь: %s (%s)\nПакет: %s\nКредитов: %d\nСумма: %s ₽",
+		displayTelegramName(user.Name, user.Email), user.Email, strings.TrimSpace(packageName), tokens, FormatRubOutSum(amountCents))
+	s.dispatchAdminNotification(ctx, text, "media_package_payment")
 }
 
 func (s *TelegramService) NotifyWalletTopup(ctx context.Context, user *model.User, amountCents int, balanceCents int64) {

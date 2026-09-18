@@ -89,14 +89,15 @@ func (s *SubscriptionService) PreviewSubscribe(
 		return preview, nil
 	}
 
-	credit := CalcProrateCredit(time.Now().UTC(), active.PeriodStart, active.PeriodEnd, active.BaseAmountCents)
-	preview.ProrateCreditCents = credit
-	preview.AmountDueCents = max(minCheckoutCents, listPrice-credit)
-	if listPrice-credit <= 0 {
-		preview.AmountDueCents = 0
-	}
-	if active.PlanID != planID {
-		preview.IsUpgrade = true
+	currentPrice, currentPriceErr := planPriceCents(currentPlan, period)
+	preview.IsUpgrade = currentPriceErr == nil && listPrice > currentPrice
+	if preview.IsUpgrade {
+		credit := CalcProrateCredit(time.Now().UTC(), active.PeriodStart, active.PeriodEnd, active.BaseAmountCents)
+		preview.ProrateCreditCents = credit
+		preview.AmountDueCents = max(minCheckoutCents, listPrice-credit)
+		if listPrice-credit <= 0 {
+			preview.AmountDueCents = 0
+		}
 	}
 	pid := active.PlanID
 	preview.CurrentPlanID = &pid

@@ -413,8 +413,27 @@ func (s *CheckoutService) HandleRobokassaResult(ctx context.Context, invIDStr, o
 	if err := VerifyRobokassaOutSum(pkgCheckout.AmountCents, outSumStr); err != nil {
 		return err
 	}
-	_, err = s.pkgCheckouts.MarkPaid(ctx, pkgCheckout.ID)
-	return err
+	paid, err := s.pkgCheckouts.MarkPaid(ctx, pkgCheckout.ID)
+	if err != nil {
+		return err
+	}
+	if paid.Status != model.CheckoutStatusPaid {
+		return nil
+	}
+
+	pkg, err := s.packages.GetByID(ctx, paid.PackageID)
+	if err != nil {
+		return err
+	}
+	if s.telegram != nil {
+		if user, err := s.users.GetByID(ctx, paid.UserID); err == nil {
+			s.telegram.NotifyMediaPackage(ctx, user, pkg.Name, paid.Tokens, paid.AmountCents)
+		}
+	}
+	if s.notify != nil {
+		s.notify.NotifyMediaPackagePaid(ctx, paid.UserID, pkg.Name, paid.Tokens, paid.AmountCents)
+	}
+	return nil
 }
 
 func (s *CheckoutService) FulfillSubscribe(ctx context.Context, checkoutID string) error {

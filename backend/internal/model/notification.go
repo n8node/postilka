@@ -21,6 +21,7 @@ const (
 	NotifyChannelReconnect  NotificationType = "channel_reconnect"
 	NotifyYouTubeReconnect  NotificationType = "youtube_reconnect"
 	NotifyPlanPaid          NotificationType = "plan_paid"
+	NotifyMediaPackagePaid  NotificationType = "media_package_paid"
 	NotifyWalletTopup       NotificationType = "wallet_topup"
 	NotifyWalletAdminGrant  NotificationType = "wallet_admin_grant"
 	NotifyPlanExpiry7d      NotificationType = "plan_expiry_7d"
@@ -137,7 +138,7 @@ func NotificationPrefKeyForType(t NotificationType) NotificationPrefKey {
 		return NotifyPrefPosts
 	case NotifyChannelReconnect, NotifyYouTubeReconnect:
 		return NotifyPrefChannels
-	case NotifyPlanPaid, NotifyWalletTopup, NotifyWalletAdminGrant,
+	case NotifyPlanPaid, NotifyMediaPackagePaid, NotifyWalletTopup, NotifyWalletAdminGrant,
 		NotifyPlanExpiry7d, NotifyPlanExpiry3d, NotifyPlanPastDue,
 		NotifyPlanRenewed, NotifyPlanDowngraded, NotifyWalletLow:
 		return NotifyPrefBilling

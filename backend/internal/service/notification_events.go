@@ -128,6 +128,18 @@ func (s *NotificationService) NotifyPlanPaid(ctx context.Context, userID, worksp
 	})
 }
 
+func (s *NotificationService) NotifyMediaPackagePaid(ctx context.Context, userID, packageName string, tokens, amountCents int) {
+	s.Create(ctx, NotificationInput{
+		UserID:   userID,
+		Type:     model.NotifyMediaPackagePaid,
+		Category: model.NotificationSuccess,
+		Title:    "Пакет медиа-кредитов оплачен",
+		Body:     fmt.Sprintf("Пакет «%s»: начислено %d медиа-кредитов за %s.", strings.TrimSpace(packageName), tokens, formatRub(int64(amountCents))),
+		Payload:  map[string]any{"package_name": packageName, "tokens": tokens, "amount_cents": amountCents},
+		Href:     "/plans",
+	})
+}
+
 func (s *NotificationService) NotifyWalletTopup(ctx context.Context, userID string, amountCents int) {
 	s.Create(ctx, NotificationInput{
 		UserID:   userID,
