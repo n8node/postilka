@@ -548,6 +548,7 @@ func (s *PublicationService) telegramLinkedDiscussionID(
 
 func (s *PublicationService) publishVKWall(
 	ctx context.Context,
+	post *model.Post,
 	channel *model.Channel,
 	token string,
 	content model.PostContent,
@@ -558,6 +559,14 @@ func (s *PublicationService) publishVKWall(
 		return "", fmt.Errorf("некорректный ID сообщества VK")
 	}
 	in := oauthclient.VKWallPostInput{Message: readableProviderText(content)}
+	if len(post.Media) > 0 {
+		photos, video, err := s.vkMediaSources(ctx, post)
+		if err != nil {
+			return "", err
+		}
+		in.Photos = photos
+		in.Video = video
+	}
 	if loc := settings.Location; loc != nil {
 		lat, lng := loc.Latitude, loc.Longitude
 		in.Latitude = &lat
@@ -580,6 +589,53 @@ func (s *PublicationService) publishVKWall(
 		}
 	}
 	return strconv.FormatInt(postID, 10), nil
+}
+
+func (s *PublicationService) vkMediaSources(
+	ctx context.Context,
+	post *model.Post,
+) ([]oauthclient.VKMediaSource, *oauthclient.VKMediaSource, error) {
+	photos := make([]oauthclient.VKMediaSource, 0, len(post.Media))
+	var video *oauthclient.VKMediaSource
+	for _, attached := range post.Media {
+		file, err := s.files.GetByID(ctx, post.WorkspaceID, attached.FileID, false)
+		if err != nil {
+			return nil, nil, fmt.Errorf("медиафайл не найден или удалён")
+		}
+		body, _, err := s.storage.GetObject(ctx, file.S3Key)
+		if err != nil {
+			return nil, nil, fmt.Errorf("не удалось прочитать медиафайл для публикации в VK")
+		}
+		data, readErr := io.ReadAll(body)
+		closeErr := body.Close()
+		if readErr != nil {
+			return nil, nil, fmt.Errorf("не удалось прочитать медиафайл для публикации в VK")
+		}
+		if closeErr != nil {
+			slog.Debug("vk media source close failed", "file_id", attached.FileID, "error", closeErr)
+		}
+		filename := strings.TrimSpace(file.Name)
+		if filename == "" {
+			filename = "media.bin"
+		}
+		source := oauthclient.VKMediaSource{Data: data, Filename: filename}
+		mime := strings.ToLower(strings.TrimSpace(strings.Split(file.MimeType, ";")[0]))
+		if strings.HasPrefix(mime, "video/") {
+			if video != nil || len(photos) > 0 {
+				return nil, nil, fmt.Errorf("VK поддерживает фото или одно видео в публикации")
+			}
+			video = &source
+			continue
+		}
+		if !strings.HasPrefix(mime, "image/") {
+			return nil, nil, fmt.Errorf("VK поддерживает только изображения и видео")
+		}
+		if video != nil {
+			return nil, nil, fmt.Errorf("VK поддерживает фото или одно видео в публикации")
+		}
+		photos = append(photos, source)
+	}
+	return photos, video, nil
 }
 
 func (s *PublicationService) telegramStoryMediaFile(
@@ -1062,7 +1118,7 @@ func (s *PublicationService) publishTarget(
 		if format != "message" && format != "wall_post" {
 			return "", fmt.Errorf("VK поддерживает только пост на стену")
 		}
-		return s.publishVKWall(ctx, channel, token, content, settings)
+		return s.publishVKWall(ctx, post, channel, token, content, settings)
 	}
 
 	if channel.Provider == model.ChannelProviderYouTube {
