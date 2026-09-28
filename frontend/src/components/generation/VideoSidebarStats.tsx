@@ -15,7 +15,7 @@ import {
   videoModeLabels,
 } from "@/lib/video-generation-data";
 import { Card } from "@/components/ui/Card";
-import { MediaSpendHint, mediaQuotaHeadline } from "@/components/billing/MediaSpendHint";
+import { mediaSpendSource } from "@/components/billing/MediaSpendHint";
 import { useBillingBalancesStore } from "@/lib/billing-balances-store";
 
 type LastRunStats = {
@@ -83,10 +83,7 @@ export function VideoSidebarStats({
         <Zap size={18} className="mt-0.5 shrink-0 text-accent" />
         <div className="min-w-0 flex-1">
           <p className="text-[13px] font-semibold leading-snug text-blue-900">
-            {mediaQuotaHeadline(balances, creditsRemaining)}
-          </p>
-          <p className="mt-1 text-[11px] leading-relaxed text-accent">
-            <MediaSpendHint creditsRemaining={creditsRemaining} />
+            {mediaSpendSource(balances, creditsRemaining, breakdown?.totalCredits ?? null)}
           </p>
         </div>
       </div>
