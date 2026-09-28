@@ -266,7 +266,11 @@ export function ConnectVKDialog({
                 </div>
                 {connectionMethod === "community" ? (
                   <>
-                    <p className="text-xs text-muted">Создайте ключ в настройках сообщества VK: Управление → Дополнительно → Работа с API → Ключи доступа. Нужны права стены и фотографий; для видео — право видео.</p>
+                    <div className="rounded-lg border-2 border-red-300 bg-red-50 px-3 py-3 text-sm text-red-900">
+                      <p className="font-bold">Важно: через ключ сообщества нельзя публиковать никакое медиа — ни фото, ни видео.</p>
+                      <p className="mt-1 font-medium">Доступны только текст и ссылки.</p>
+                    </div>
+                    <p className="text-xs text-muted">Создайте ключ в настройках сообщества VK: Управление → Дополнительно → Работа с API → Ключи доступа. Этот способ подключения подходит только для текстовых публикаций и ссылок.</p>
                     <label className="block space-y-1"><span className="text-sm font-medium">Ключ доступа сообщества</span><input type="password" value={communityToken} onChange={(e) => setCommunityToken(e.target.value)} className="w-full rounded-md border border-border px-3 py-2 text-sm" autoComplete="off" /></label>
                     <label className="block space-y-1"><span className="text-sm font-medium">Ссылка или ID сообщества</span><input type="text" value={community} onChange={(e) => setCommunity(e.target.value)} placeholder="https://vk.com/club123456" className="w-full rounded-md border border-border px-3 py-2 text-sm" /></label>
                     <button type="button" onClick={() => void handleCommunityConnect()} disabled={!enabled || loading} className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-accent px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50">{loading && <Loader2 className="h-4 w-4 animate-spin" />} Проверить и подключить</button>

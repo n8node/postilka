@@ -3557,9 +3557,17 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
               </p>
             )}
             {media.length > 0 && noMediaDelivery.length > 0 && telegramMediaLayout !== "carousel" && (
-              <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
-                Медиа сохранится в черновике, но сейчас не будет доставлено в{" "}
-                {noMediaDelivery.map((channel) => PROVIDER_LABEL[channel.provider]).join(", ")}. Публикация и планирование заблокированы.
+              <div className="mt-3 rounded-lg border-2 border-red-300 bg-red-50 px-3 py-3 text-sm text-red-900">
+                {noMediaDelivery.some((channel) => channel.provider === "vk" && channel.vk_oauth_mode === "community_token") ? (
+                  <>
+                    <p className="font-bold">Вы используете ключ API сообщества!</p>
+                    <p className="mt-1 font-bold">Такой метод подключения НЕ позволяет постить медиа, только текст и ссылки.</p>
+                  </>
+                ) : (
+                  <p className="font-medium">
+                    Медиа не будет доставлено в {noMediaDelivery.map((channel) => PROVIDER_LABEL[channel.provider]).join(", ")}. Публикация и планирование заблокированы.
+                  </p>
+                )}
               </div>
             )}
             {media.length > 0 &&

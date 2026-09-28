@@ -2372,7 +2372,7 @@ export type Channel = {
   chat_type: string;
   bot_username?: string;
   max_post_mode?: "own" | "platform";
-  vk_oauth_mode?: "own" | "platform";
+  vk_oauth_mode?: "own" | "platform" | "community_token";
   status: ChannelStatus;
   last_error?: string;
   metadata?: ChannelMetadata;
