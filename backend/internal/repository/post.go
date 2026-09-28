@@ -690,7 +690,7 @@ func (r *PostRepository) ResetStaleTargets(ctx context.Context, postID string) e
 		SET status = 'delivery_unknown', last_error = 'Процесс завершился после возможной доставки; требуется проверка у провайдера',
 		    next_attempt_at = NULL, finished_at = NOW(), updated_at = NOW()
 		WHERE post_id = $1 AND status = 'publishing'
-		  AND last_attempt_at < NOW() - INTERVAL '5 minutes'
+		  AND last_attempt_at < NOW() - INTERVAL '60 seconds'
 	`, postID)
 	return err
 }

@@ -305,12 +305,12 @@ export async function waitForPostPublish(
   id: string,
   opts?: { timeoutMs?: number; intervalMs?: number },
 ): Promise<Post> {
-  const timeoutMs = opts?.timeoutMs ?? 120_000;
+  const timeoutMs = opts?.timeoutMs ?? 60_000;
   const intervalMs = opts?.intervalMs ?? 2000;
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
     const post = await fetchPost(id);
-    if (post.status === "published" || post.status === "failed") {
+    if (post.status === "published" || post.status === "failed" || post.status === "canceled") {
       return post;
     }
     if (post.status !== "scheduled" && post.status !== "publishing") {
@@ -318,7 +318,10 @@ export async function waitForPostPublish(
     }
     await new Promise((resolve) => setTimeout(resolve, intervalMs));
   }
-  throw new ApiError(504, "Публикация занимает больше времени, чем ожидалось");
+  throw new ApiError(
+    504,
+    "Публикация не завершилась вовремя. Проверьте статус поста в разделе «Посты» и попробуйте снова позже.",
+  );
 }
 
 export async function publishPostAndWait(id: string) {
