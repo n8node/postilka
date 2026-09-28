@@ -7,6 +7,7 @@ import { ChannelAvatar } from "@/components/channels/ChannelAvatar";
 import {
   ApiError,
   connectChannelOAuth,
+  connectVKCommunityToken,
   discoverChannelOAuth,
   fetchChannelProviderInfo,
   startChannelOAuth,
@@ -54,8 +55,11 @@ export function ConnectVKDialog({
   const [providerInfo, setProviderInfo] = useState<ChannelProviderInfo | null>(null);
   const [showDetailedHelp, setShowDetailedHelp] = useState(false);
   const [oauthMode, setOauthMode] = useState<"own" | "platform">("own");
+  const [connectionMethod, setConnectionMethod] = useState<"oauth" | "community">("oauth");
   const [vkAppId, setVkAppId] = useState("");
   const [vkAppSecret, setVkAppSecret] = useState("");
+  const [communityToken, setCommunityToken] = useState("");
+  const [community, setCommunity] = useState("");
   const [step, setStep] = useState<"start" | "pick" | "connecting">("start");
   const [error, setError] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -70,8 +74,11 @@ export function ConnectVKDialog({
 
   const reset = useCallback(() => {
     setOauthMode("own");
+    setConnectionMethod("oauth");
     setVkAppId("");
     setVkAppSecret("");
+    setCommunityToken("");
+    setCommunity("");
     setStep("start");
     setError(null);
     setSessionId(null);
@@ -140,6 +147,24 @@ export function ConnectVKDialog({
     }
   }
 
+  async function handleCommunityConnect() {
+    if (!communityToken.trim() || !community.trim()) {
+      setError("Укажите ключ доступа и ссылку или ID сообщества");
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await connectVKCommunityToken(communityToken.trim(), community.trim());
+      onConnected(result.connected);
+      onClose();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Не удалось проверить ключ сообщества");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function handleConnect() {
     if (!sessionId) return;
     const picked = targets.filter((t) => selected[t.external_id]);
@@ -172,7 +197,9 @@ export function ConnectVKDialog({
             <div>
               <h2 className="text-lg font-semibold">Подключить VK</h2>
               <p className="mt-0.5 text-sm text-muted">
-                {oauthMode === "platform"
+                {connectionMethod === "community"
+                  ? "Ручное подключение ключом сообщества."
+                  : oauthMode === "platform"
                   ? "Вход через приложение Postilka — выберите сообщества, где вы администратор."
                   : "Своё приложение VK — укажите ключи, войдите и выберите сообщества."}
               </p>
@@ -198,7 +225,7 @@ export function ConnectVKDialog({
               helpURL={vkProvider?.connect_help_url}
             />
 
-            {vkProvider?.connect_help_text && step === "start" && (
+            {vkProvider?.connect_help_text && step === "start" && connectionMethod === "oauth" && (
               <div>
                 <button
                   type="button"
@@ -223,47 +250,30 @@ export function ConnectVKDialog({
 
             {step === "start" && (
               <>
-                <div className="grid grid-cols-2 gap-2 rounded-lg border border-border p-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setOauthMode("own");
-                      setError(null);
-                    }}
-                    className={cn(
-                      "rounded-md px-3 py-2 text-sm",
-                      oauthMode === "own" ? "bg-zinc-100 font-medium" : "text-muted hover:text-foreground",
-                    )}
-                  >
-                    Своё приложение
+                <div className="space-y-2">
+                  <button type="button" onClick={() => { setConnectionMethod("oauth"); setOauthMode("own"); setError(null); }} className={cn("w-full rounded-lg border px-3 py-2 text-left text-sm", connectionMethod === "oauth" && oauthMode === "own" ? "border-accent bg-blue-50" : "border-border hover:bg-zinc-50")}>
+                    <span className="block font-medium">Через своё приложение</span>
+                    <span className="block text-xs text-muted">Авторизация через ваше VK-приложение</span>
                   </button>
-                  <button
-                    type="button"
-                    disabled={!platformOAuthAvailable}
-                    onClick={() => {
-                      setOauthMode("platform");
-                      setError(null);
-                    }}
-                    className={cn(
-                      "rounded-md px-3 py-2 text-sm",
-                      oauthMode === "platform"
-                        ? "bg-zinc-100 font-medium"
-                        : "text-muted hover:text-foreground",
-                      !platformOAuthAvailable && "cursor-not-allowed opacity-50",
-                    )}
-                  >
-                    Приложение Postilka
+                  <button type="button" disabled className="w-full rounded-lg border border-border px-3 py-2 text-left text-sm opacity-60">
+                    <span className="block font-medium">Через приложение Postilka</span>
+                    <span className="block text-xs text-muted">Недоступно</span>
+                  </button>
+                  <button type="button" onClick={() => { setConnectionMethod("community"); setError(null); }} className={cn("w-full rounded-lg border px-3 py-2 text-left text-sm", connectionMethod === "community" ? "border-accent bg-blue-50" : "border-border hover:bg-zinc-50")}>
+                    <span className="block font-medium">Через ключ сообщества</span>
+                    <span className="block text-xs text-muted">Ручное подключение из настроек VK</span>
                   </button>
                 </div>
+                {connectionMethod === "community" ? (
+                  <>
+                    <p className="text-xs text-muted">Создайте ключ в настройках сообщества VK: Управление → Дополнительно → Работа с API → Ключи доступа. Нужны права стены и фотографий; для видео — право видео.</p>
+                    <label className="block space-y-1"><span className="text-sm font-medium">Ключ доступа сообщества</span><input type="password" value={communityToken} onChange={(e) => setCommunityToken(e.target.value)} className="w-full rounded-md border border-border px-3 py-2 text-sm" autoComplete="off" /></label>
+                    <label className="block space-y-1"><span className="text-sm font-medium">Ссылка или ID сообщества</span><input type="text" value={community} onChange={(e) => setCommunity(e.target.value)} placeholder="https://vk.com/club123456" className="w-full rounded-md border border-border px-3 py-2 text-sm" /></label>
+                    <button type="button" onClick={() => void handleCommunityConnect()} disabled={!enabled || loading} className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-accent px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50">{loading && <Loader2 className="h-4 w-4 animate-spin" />} Проверить и подключить</button>
+                  </>
+                ) : null}
 
-                {oauthMode === "platform" && !platformOAuthAvailable && (
-                  <p className="text-xs text-muted">
-                    Вход через приложение Postilka пока недоступен — администратор не настроил OAuth
-                    приложение платформы.
-                  </p>
-                )}
-
-                {oauthMode === "own" && (
+                {connectionMethod === "oauth" && oauthMode === "own" && (
                   <>
                     <p className="text-sm text-muted">
                       Создайте Standalone-приложение на{" "}
@@ -305,14 +315,14 @@ export function ConnectVKDialog({
                   </>
                 )}
 
-                {oauthMode === "platform" && platformOAuthAvailable && (
+                {connectionMethod === "oauth" && oauthMode === "platform" && platformOAuthAvailable && (
                   <p className="text-sm text-muted">
                     Нажмите кнопку ниже — откроется окно авторизации VK через приложение Postilka.
                     После входа выберите сообщества для публикации на стене.
                   </p>
                 )}
 
-                <button
+                {connectionMethod === "oauth" ? <button
                   type="button"
                   onClick={() => void handleOAuthStart()}
                   disabled={!enabled || loading || (oauthMode === "platform" && !platformOAuthAvailable)}
@@ -320,7 +330,7 @@ export function ConnectVKDialog({
                 >
                   {loading && <Loader2 className="h-4 w-4 animate-spin" />}
                   Войти через VK
-                </button>
+                </button> : null}
               </>
             )}
 

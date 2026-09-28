@@ -48,6 +48,29 @@ func (h *ChannelConnectHandler) OAuthStart(w http.ResponseWriter, r *http.Reques
 	writeJSON(w, http.StatusOK, result)
 }
 
+func (h *ChannelConnectHandler) ConnectVKCommunityToken(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
+		return
+	}
+	var req model.VKCommunityTokenConnectRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "Некорректное тело запроса")
+		return
+	}
+	result, err := h.connect.ConnectVKCommunityToken(r.Context(), userID, r, req)
+	if err != nil {
+		if errors.Is(err, service.ErrChannelAlreadyConnected) && result != nil {
+			writeJSON(w, http.StatusConflict, result)
+			return
+		}
+		writeChannelConnectError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
 func (h *ChannelConnectHandler) OAuthCallback(w http.ResponseWriter, r *http.Request) {
 	provider, err := parseSocialProvider(chi.URLParam(r, "provider"))
 	if err != nil {

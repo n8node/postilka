@@ -439,6 +439,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Post("/channels/max/connect", channelConnectHandler.ConnectMAX)
 			r.Post("/channels/photochka/connect", channelConnectHandler.ConnectPhotochka)
 			r.Post("/channels/wordpress/connect", channelConnectHandler.ConnectWordPress)
+			r.Post("/channels/vk/community-token/connect", channelConnectHandler.ConnectVKCommunityToken)
 			r.Get("/channels/oauth/{provider}/start", channelConnectHandler.OAuthStart)
 			r.Post("/channels/oauth/{provider}/start", channelConnectHandler.OAuthStart)
 			r.Get("/channels/oauth/{provider}/discover", channelConnectHandler.OAuthDiscover)

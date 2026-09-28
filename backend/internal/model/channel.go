@@ -5,23 +5,23 @@ import "time"
 type ChannelStatus string
 
 const (
-	ChannelStatusActive          ChannelStatus = "active"
-	ChannelStatusNeedsReconnect  ChannelStatus = "needs_reconnect"
-	ChannelStatusDisabled        ChannelStatus = "disabled"
+	ChannelStatusActive         ChannelStatus = "active"
+	ChannelStatusNeedsReconnect ChannelStatus = "needs_reconnect"
+	ChannelStatusDisabled       ChannelStatus = "disabled"
 )
 
 type ChannelProvider string
 
 const (
-	ChannelProviderTelegram ChannelProvider = "telegram"
-	ChannelProviderVK       ChannelProvider = "vk"
-	ChannelProviderOK       ChannelProvider = "ok"
-	ChannelProviderMAX      ChannelProvider = "max"
-	ChannelProviderRutube   ChannelProvider = "rutube"
-	ChannelProviderDzen     ChannelProvider = "dzen"
-	ChannelProviderYouTube  ChannelProvider = "youtube"
-	ChannelProviderPhotochka  ChannelProvider = "photochka"
-	ChannelProviderWordPress  ChannelProvider = "wordpress"
+	ChannelProviderTelegram  ChannelProvider = "telegram"
+	ChannelProviderVK        ChannelProvider = "vk"
+	ChannelProviderOK        ChannelProvider = "ok"
+	ChannelProviderMAX       ChannelProvider = "max"
+	ChannelProviderRutube    ChannelProvider = "rutube"
+	ChannelProviderDzen      ChannelProvider = "dzen"
+	ChannelProviderYouTube   ChannelProvider = "youtube"
+	ChannelProviderPhotochka ChannelProvider = "photochka"
+	ChannelProviderWordPress ChannelProvider = "wordpress"
 )
 
 func (p ChannelProvider) Label() string {
@@ -59,25 +59,26 @@ const (
 type VKOAuthMode string
 
 const (
-	VKOAuthModeOwn      VKOAuthMode = "own"
-	VKOAuthModePlatform VKOAuthMode = "platform"
+	VKOAuthModeOwn            VKOAuthMode = "own"
+	VKOAuthModePlatform       VKOAuthMode = "platform"
+	VKOAuthModeCommunityToken VKOAuthMode = "community_token"
 )
 
 type ChannelMetadata struct {
-	ProviderTitle     string     `json:"provider_title,omitempty"`
-	PublicURL         string     `json:"public_url,omitempty"`
-	AvatarURL         string     `json:"avatar_url,omitempty"`
-	OAuthConnectedAt         *time.Time `json:"oauth_connected_at,omitempty"`
-	OAuthReconnectNotifiedAt *time.Time `json:"oauth_reconnect_notified_at,omitempty"`
-	CanPost           *bool      `json:"can_post,omitempty"`
-	IsAdmin           *bool      `json:"is_admin,omitempty"`
-	BotPermissions    []string   `json:"bot_permissions,omitempty"`
-	ParticipantsCount *int       `json:"participants_count,omitempty"`
-	BusinessUserID              string `json:"business_user_id,omitempty"`
-	BusinessUserChatID          string `json:"business_user_chat_id,omitempty"`
-	CanManageStories            *bool  `json:"can_manage_stories,omitempty"`
-	BusinessConnectionEnabled   *bool  `json:"business_connection_enabled,omitempty"`
-	LinkedChatID                string `json:"linked_chat_id,omitempty"`
+	ProviderTitle             string     `json:"provider_title,omitempty"`
+	PublicURL                 string     `json:"public_url,omitempty"`
+	AvatarURL                 string     `json:"avatar_url,omitempty"`
+	OAuthConnectedAt          *time.Time `json:"oauth_connected_at,omitempty"`
+	OAuthReconnectNotifiedAt  *time.Time `json:"oauth_reconnect_notified_at,omitempty"`
+	CanPost                   *bool      `json:"can_post,omitempty"`
+	IsAdmin                   *bool      `json:"is_admin,omitempty"`
+	BotPermissions            []string   `json:"bot_permissions,omitempty"`
+	ParticipantsCount         *int       `json:"participants_count,omitempty"`
+	BusinessUserID            string     `json:"business_user_id,omitempty"`
+	BusinessUserChatID        string     `json:"business_user_chat_id,omitempty"`
+	CanManageStories          *bool      `json:"can_manage_stories,omitempty"`
+	BusinessConnectionEnabled *bool      `json:"business_connection_enabled,omitempty"`
+	LinkedChatID              string     `json:"linked_chat_id,omitempty"`
 }
 
 const TelegramChatTypeBusiness = "business"
@@ -102,16 +103,16 @@ type Channel struct {
 
 type ChannelListItem struct {
 	Channel
-	BotTokenSet         bool                 `json:"bot_token_set"`
-	BotTokenHint        string               `json:"bot_token_hint,omitempty"`
-	PostModeLabel       string               `json:"post_mode_label,omitempty"`
-	OAuthReconnectBy    *time.Time           `json:"oauth_reconnect_by,omitempty"`
-	PublishCapabilities PublishCapabilities  `json:"publish_capabilities"`
+	BotTokenSet         bool                `json:"bot_token_set"`
+	BotTokenHint        string              `json:"bot_token_hint,omitempty"`
+	PostModeLabel       string              `json:"post_mode_label,omitempty"`
+	OAuthReconnectBy    *time.Time          `json:"oauth_reconnect_by,omitempty"`
+	PublishCapabilities PublishCapabilities `json:"publish_capabilities"`
 }
 
 type ChannelUpdateRequest struct {
-	Name        *string    `json:"name,omitempty"`
-	BotToken    *string    `json:"bot_token,omitempty"`
+	Name        *string      `json:"name,omitempty"`
+	BotToken    *string      `json:"bot_token,omitempty"`
 	MaxPostMode *MAXPostMode `json:"max_post_mode,omitempty"`
 }
 
@@ -147,7 +148,7 @@ type TelegramConnectRequest struct {
 
 type TelegramConnectResult struct {
 	Connected []ChannelListItem `json:"connected"`
-	Skipped   []string        `json:"skipped,omitempty"`
+	Skipped   []string          `json:"skipped,omitempty"`
 }
 
 type TelegramBusinessConnectRequest struct {

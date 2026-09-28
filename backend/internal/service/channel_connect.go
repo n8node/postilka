@@ -22,7 +22,7 @@ import (
 const channelOAuthSessionTTL = 30 * time.Minute
 
 var (
-	ErrChannelOAuthStateInvalid = errors.New("oauth state invalid")
+	ErrChannelOAuthStateInvalid   = errors.New("oauth state invalid")
 	ErrChannelOAuthSessionExpired = errors.New("oauth session expired")
 )
 
@@ -461,22 +461,22 @@ func (s *ChannelConnectService) OAuthConnect(
 				})
 			} else {
 				updated, err = s.channels.SaveChannel(ctx, repository.ChannelSaveParams{
-					WorkspaceID:           ws.ID,
-					ChannelID:             existing.ID,
-					Provider:              provider,
-					Name:                  name,
-					ChatType:              existing.ChatType,
-					BotUsername:           existing.BotUsername,
-					BotTokenEncrypted:     oauthTokens.AccessTokenEncrypted,
-					RefreshTokenEncrypted: oauthTokens.RefreshTokenEncrypted,
-					TokenExpiresAt:        oauthTokens.TokenExpiresAt,
-					MaxPostMode:           existing.MaxPostMode,
-					VKOAuthMode:           existing.VKOAuthMode,
-					OAuthClientID:         youtubeClientID,
+					WorkspaceID:                ws.ID,
+					ChannelID:                  existing.ID,
+					Provider:                   provider,
+					Name:                       name,
+					ChatType:                   existing.ChatType,
+					BotUsername:                existing.BotUsername,
+					BotTokenEncrypted:          oauthTokens.AccessTokenEncrypted,
+					RefreshTokenEncrypted:      oauthTokens.RefreshTokenEncrypted,
+					TokenExpiresAt:             oauthTokens.TokenExpiresAt,
+					MaxPostMode:                existing.MaxPostMode,
+					VKOAuthMode:                existing.VKOAuthMode,
+					OAuthClientID:              youtubeClientID,
 					OAuthClientSecretEncrypted: youtubeClientSecretEnc,
-					Status:                model.ChannelStatusActive,
-					Metadata:              meta,
-					MetadataRefreshedAt:   metaRefreshed,
+					Status:                     model.ChannelStatusActive,
+					Metadata:                   meta,
+					MetadataRefreshedAt:        metaRefreshed,
 				})
 			}
 			if err != nil {
@@ -527,6 +527,114 @@ func (s *ChannelConnectService) OAuthConnect(
 		s.notify.MaybeUsageWarnings(ctx, ws.ID)
 	}
 	return result, nil
+}
+
+func (s *ChannelConnectService) ConnectVKCommunityToken(
+	ctx context.Context,
+	userID string,
+	r *http.Request,
+	req model.VKCommunityTokenConnectRequest,
+) (*model.ChannelConnectResult, error) {
+	ws, err := s.requireAdmin(ctx, userID, r)
+	if err != nil {
+		return nil, err
+	}
+	if s.cipher == nil {
+		return nil, ErrCryptoUnavailable
+	}
+	accessToken := strings.TrimSpace(req.AccessToken)
+	if accessToken == "" {
+		return nil, fmt.Errorf("вставьте ключ доступа сообщества")
+	}
+	groupID, err := parseVKCommunityID(req.Community)
+	if err != nil {
+		return nil, err
+	}
+
+	client := &oauthclient.VKCommunityClient{}
+	community, err := client.GetCommunityInfo(ctx, accessToken, groupID)
+	if err != nil {
+		return nil, fmt.Errorf("не удалось проверить ключ и сообщество: %w", err)
+	}
+	if community.ID != groupID {
+		return nil, fmt.Errorf("ключ не имеет доступа к указанному сообществу")
+	}
+
+	encrypted, err := s.cipher.Encrypt(accessToken)
+	if err != nil {
+		return nil, err
+	}
+	ownerID := oauthclient.VKGroupExternalID(groupID)
+	name := strings.TrimSpace(community.Name)
+	if name == "" {
+		name = ownerID
+	}
+	publicURL := ""
+	if strings.TrimSpace(community.ScreenName) != "" {
+		publicURL = "https://vk.com/" + strings.TrimSpace(community.ScreenName)
+	}
+	canPost := true
+	meta := mergeChannelAvatar(model.ChannelMetadata{
+		ProviderTitle: name,
+		PublicURL:     publicURL,
+		CanPost:       &canPost,
+		IsAdmin:       &canPost,
+	}, community.Photo50)
+
+	existing, err := s.channels.GetByChat(ctx, ws.ID, string(model.ChannelProviderVK), ownerID)
+	if err != nil && !errors.Is(err, repository.ErrNotFound) {
+		return nil, err
+	}
+	var ch *model.Channel
+	if existing != nil {
+		ch, err = s.channels.SaveChannel(ctx, repository.ChannelSaveParams{
+			WorkspaceID: ws.ID, ChannelID: existing.ID, Provider: model.ChannelProviderVK,
+			Name: name, ChatType: existing.ChatType, BotTokenEncrypted: encrypted,
+			VKOAuthMode: model.VKOAuthModeCommunityToken, Status: model.ChannelStatusActive,
+			Metadata: meta, MetadataRefreshedAt: timePtrNow(),
+		})
+	} else {
+		currentCount, countErr := s.channels.CountByWorkspace(ctx, ws.ID)
+		if countErr != nil {
+			return nil, countErr
+		}
+		if err := s.quota.CheckChannelQuota(ctx, ws.ID, currentCount); err != nil {
+			return nil, err
+		}
+		ch, err = s.channels.Create(ctx, repository.ChannelCreateParams{
+			WorkspaceID: ws.ID, Provider: model.ChannelProviderVK, Name: name,
+			ChatID: ownerID, ChatType: "group", BotTokenEncrypted: encrypted,
+			VKOAuthMode: model.VKOAuthModeCommunityToken, Status: model.ChannelStatusActive,
+			Metadata: meta, MetadataRefreshedAt: timePtrNow(),
+		})
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &model.ChannelConnectResult{
+		Connected: []model.ChannelListItem{buildChannelListItem(*ch, encrypted, s.cipher)},
+	}, nil
+}
+
+func parseVKCommunityID(raw string) (int64, error) {
+	value := strings.TrimSpace(raw)
+	value = strings.TrimSuffix(value, "/")
+	if idx := strings.LastIndex(value, "/"); idx >= 0 {
+		value = value[idx+1:]
+	}
+	value = strings.TrimPrefix(value, "club")
+	value = strings.TrimPrefix(value, "public")
+	value = strings.TrimPrefix(value, "group")
+	n, err := strconv.ParseInt(value, 10, 64)
+	if err != nil || n <= 0 {
+		return 0, fmt.Errorf("укажите ссылку вида vk.com/club123456 или ID сообщества")
+	}
+	return n, nil
+}
+
+func timePtrNow() *time.Time {
+	now := time.Now()
+	return &now
 }
 
 func maxDiscoverBotInfo(bot *oauthclient.MAXBotInfo) *model.MAXDiscoverBot {
@@ -652,7 +760,7 @@ func (s *ChannelConnectService) DiscoverMAX(
 				return &model.ChannelDiscoverResult{
 					Provider: model.SocialProviderMAX,
 					Targets:  s.maxTargetsFromChats(ctx, botToken, known),
-					Hint: "Ссылка max.ru не находится через API MAX. Выберите канал из списка или укажите chat_id.",
+					Hint:     "Ссылка max.ru не находится через API MAX. Выберите канал из списка или укажите chat_id.",
 					Bot:      botInfo,
 				}, nil
 			}

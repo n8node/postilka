@@ -21,6 +21,9 @@ func channelPostModeLabel(ch model.Channel) string {
 		if ch.VKOAuthMode == model.VKOAuthModePlatform {
 			return "Приложение Postilka"
 		}
+		if ch.VKOAuthMode == model.VKOAuthModeCommunityToken {
+			return "Ключ сообщества"
+		}
 		return "Своё приложение"
 	}
 	if ch.Provider == model.ChannelProviderYouTube {
@@ -33,12 +36,12 @@ func channelPostModeLabel(ch model.Channel) string {
 		return "Пароль приложения"
 	}
 	if ch.Provider != model.ChannelProviderMAX {
-	if ch.Provider == model.ChannelProviderTelegram {
-		if ch.ChatType == model.TelegramChatTypeBusiness {
-			return "Telegram Business"
+		if ch.Provider == model.ChannelProviderTelegram {
+			if ch.ChatType == model.TelegramChatTypeBusiness {
+				return "Telegram Business"
+			}
+			return "Свой бот"
 		}
-		return "Свой бот"
-	}
 		return "OAuth"
 	}
 	if ch.MaxPostMode == model.MAXPostModePlatform {

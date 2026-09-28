@@ -1671,6 +1671,11 @@ export type PaymentTestResult = {
   message: string;
 };
 
+export type VKCommunityTokenConnectResult = {
+  connected: ChannelListItem[];
+  skipped?: string[];
+};
+
 export function fetchAdminPaymentSettings() {
   return apiFetch<PaymentAdminView>("/admin/payment-settings");
 }
@@ -2649,6 +2654,13 @@ export function connectChannelOAuth(
       body: JSON.stringify(payload),
     },
   );
+}
+
+export function connectVKCommunityToken(accessToken: string, community: string) {
+  return apiFetch<VKCommunityTokenConnectResult>("/channels/vk/community-token/connect", {
+    method: "POST",
+    body: JSON.stringify({ access_token: accessToken, community }),
+  });
 }
 
 export function discoverMAXChannels(

@@ -68,11 +68,11 @@ type ProviderLogoView struct {
 type SocialProvider string
 
 const (
-	SocialProviderVK     SocialProvider = "vk"
-	SocialProviderOK     SocialProvider = "ok"
-	SocialProviderMAX    SocialProvider = "max"
-	SocialProviderRutube SocialProvider = "rutube"
-	SocialProviderDzen   SocialProvider = "dzen"
+	SocialProviderVK      SocialProvider = "vk"
+	SocialProviderOK      SocialProvider = "ok"
+	SocialProviderMAX     SocialProvider = "max"
+	SocialProviderRutube  SocialProvider = "rutube"
+	SocialProviderDzen    SocialProvider = "dzen"
 	SocialProviderYouTube SocialProvider = "youtube"
 )
 
@@ -143,11 +143,11 @@ type SocialProviderSettingsRecord struct {
 }
 
 type SocialProviderAdminView struct {
-	Provider  SocialProvider         `json:"provider"`
-	Label     string                 `json:"label"`
-	ConnectFlow string               `json:"connect_flow"`
-	Settings  SocialProviderSettings `json:"settings"`
-	UpdatedAt time.Time              `json:"updated_at"`
+	Provider    SocialProvider         `json:"provider"`
+	Label       string                 `json:"label"`
+	ConnectFlow string                 `json:"connect_flow"`
+	Settings    SocialProviderSettings `json:"settings"`
+	UpdatedAt   time.Time              `json:"updated_at"`
 }
 
 type SocialProviderAdminListView struct {
@@ -155,22 +155,22 @@ type SocialProviderAdminListView struct {
 }
 
 type SocialProviderPublicInfo struct {
-	Provider                SocialProvider `json:"provider"`
-	Label                   string         `json:"label"`
-	Enabled                 bool           `json:"enabled"`
-	ConnectFlow             string         `json:"connect_flow"`
-	PlatformBotEnabled      bool           `json:"platform_bot_enabled,omitempty"`
-	PlatformOAuthEnabled    bool           `json:"platform_oauth_enabled,omitempty"`
-	PlatformBot             *MAXDiscoverBot `json:"platform_bot,omitempty"`
-	ConnectHelpText         string         `json:"connect_help_text"`
-	ConnectHelpURL          string         `json:"connect_help_url"`
-	DocsURL                 string         `json:"docs_url"`
-	SupportTelegramUsername string         `json:"support_telegram_username"`
-	SupportTelegramURL      string         `json:"support_telegram_url"`
-	SupportEmail            string         `json:"support_email"`
-	SupportHoursText        string               `json:"support_hours_text"`
-	PublishCapabilities     PublishCapabilities  `json:"publish_capabilities"`
-	LogoURL                 string               `json:"logo_url,omitempty"`
+	Provider                SocialProvider      `json:"provider"`
+	Label                   string              `json:"label"`
+	Enabled                 bool                `json:"enabled"`
+	ConnectFlow             string              `json:"connect_flow"`
+	PlatformBotEnabled      bool                `json:"platform_bot_enabled,omitempty"`
+	PlatformOAuthEnabled    bool                `json:"platform_oauth_enabled,omitempty"`
+	PlatformBot             *MAXDiscoverBot     `json:"platform_bot,omitempty"`
+	ConnectHelpText         string              `json:"connect_help_text"`
+	ConnectHelpURL          string              `json:"connect_help_url"`
+	DocsURL                 string              `json:"docs_url"`
+	SupportTelegramUsername string              `json:"support_telegram_username"`
+	SupportTelegramURL      string              `json:"support_telegram_url"`
+	SupportEmail            string              `json:"support_email"`
+	SupportHoursText        string              `json:"support_hours_text"`
+	PublishCapabilities     PublishCapabilities `json:"publish_capabilities"`
+	LogoURL                 string              `json:"logo_url,omitempty"`
 }
 
 type MAXPlatformBotAdminView struct {
@@ -247,10 +247,10 @@ type ChannelDiscoverResult struct {
 }
 
 type MAXDiscoverBot struct {
-	Username   string `json:"username"`
-	Name       string `json:"name"`
-	UserID     int64  `json:"user_id"`
-	ProfileURL string `json:"profile_url"`
+	Username    string `json:"username"`
+	Name        string `json:"name"`
+	UserID      int64  `json:"user_id"`
+	ProfileURL  string `json:"profile_url"`
 	SearchQuery string `json:"search_query"`
 }
 
@@ -296,4 +296,9 @@ type ChannelOAuthCompleteResult struct {
 	SessionID string `json:"session_id"`
 	Provider  string `json:"provider"`
 	Status    string `json:"status"`
+}
+
+type VKCommunityTokenConnectRequest struct {
+	AccessToken string `json:"access_token"`
+	Community   string `json:"community"`
 }

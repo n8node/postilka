@@ -25,11 +25,11 @@ type VKCommunityClient struct {
 }
 
 type VKCommunityTokenResponse struct {
-	AccessToken  string `json:"access_token"`
-	ExpiresIn    int    `json:"expires_in"`
-	UserID       int64  `json:"user_id"`
-	Error        string `json:"error"`
-	ErrorDesc    string `json:"error_description"`
+	AccessToken string `json:"access_token"`
+	ExpiresIn   int    `json:"expires_in"`
+	UserID      int64  `json:"user_id"`
+	Error       string `json:"error"`
+	ErrorDesc   string `json:"error_description"`
 }
 
 type VKAdminGroup struct {
@@ -37,6 +37,13 @@ type VKAdminGroup struct {
 	Name       string `json:"name"`
 	ScreenName string `json:"screen_name"`
 	Type       string `json:"type"`
+	Photo50    string `json:"photo_50"`
+}
+
+type VKCommunityInfo struct {
+	ID         int64  `json:"id"`
+	Name       string `json:"name"`
+	ScreenName string `json:"screen_name"`
 	Photo50    string `json:"photo_50"`
 }
 
@@ -131,6 +138,11 @@ func (c *VKCommunityClient) ListAdminGroups(ctx context.Context, accessToken str
 }
 
 func (c *VKCommunityClient) VerifyGroupAccess(ctx context.Context, accessToken string, groupID int64) error {
+	_, err := c.GetCommunityInfo(ctx, accessToken, groupID)
+	return err
+}
+
+func (c *VKCommunityClient) GetCommunityInfo(ctx context.Context, accessToken string, groupID int64) (*VKCommunityInfo, error) {
 	values := url.Values{}
 	values.Set("access_token", accessToken)
 	values.Set("v", vkAPIVersion)
@@ -138,37 +150,41 @@ func (c *VKCommunityClient) VerifyGroupAccess(ctx context.Context, accessToken s
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, vkAPIBase+"/groups.getById?"+values.Encode(), nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	resp, err := c.http().Do(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	var parsed struct {
 		Response []struct {
-			ID int64 `json:"id"`
+			ID         int64  `json:"id"`
+			Name       string `json:"name"`
+			ScreenName string `json:"screen_name"`
+			Photo50    string `json:"photo_50"`
 		} `json:"response"`
 		Error *struct {
 			ErrorMsg string `json:"error_msg"`
 		} `json:"error"`
 	}
 	if err := json.Unmarshal(body, &parsed); err != nil {
-		return err
+		return nil, err
 	}
 	if parsed.Error != nil {
-		return fmt.Errorf("vk groups.getById: %s", parsed.Error.ErrorMsg)
+		return nil, fmt.Errorf("vk groups.getById: %s", parsed.Error.ErrorMsg)
 	}
 	if len(parsed.Response) == 0 {
-		return fmt.Errorf("сообщество VK не найдено")
+		return nil, fmt.Errorf("сообщество VK не найдено")
 	}
-	return nil
+	item := parsed.Response[0]
+	return &VKCommunityInfo{ID: item.ID, Name: item.Name, ScreenName: item.ScreenName, Photo50: item.Photo50}, nil
 }
 
 func VKGroupExternalID(groupID int64) string {
