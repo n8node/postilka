@@ -164,13 +164,8 @@ func (c *VKCommunityClient) GetCommunityInfo(ctx context.Context, accessToken st
 	}
 
 	var parsed struct {
-		Response []struct {
-			ID         int64  `json:"id"`
-			Name       string `json:"name"`
-			ScreenName string `json:"screen_name"`
-			Photo50    string `json:"photo_50"`
-		} `json:"response"`
-		Error *struct {
+		Response json.RawMessage `json:"response"`
+		Error    *struct {
 			ErrorMsg string `json:"error_msg"`
 		} `json:"error"`
 	}
@@ -180,11 +175,46 @@ func (c *VKCommunityClient) GetCommunityInfo(ctx context.Context, accessToken st
 	if parsed.Error != nil {
 		return nil, fmt.Errorf("vk groups.getById: %s", parsed.Error.ErrorMsg)
 	}
-	if len(parsed.Response) == 0 {
+	items, err := parseVKCommunityInfoResponse(parsed.Response)
+	if err != nil {
+		return nil, err
+	}
+	if len(items) == 0 {
 		return nil, fmt.Errorf("сообщество VK не найдено")
 	}
-	item := parsed.Response[0]
-	return &VKCommunityInfo{ID: item.ID, Name: item.Name, ScreenName: item.ScreenName, Photo50: item.Photo50}, nil
+	return &items[0], nil
+}
+
+type vkCommunityInfoPayload struct {
+	ID         int64  `json:"id"`
+	Name       string `json:"name"`
+	ScreenName string `json:"screen_name"`
+	Photo50    string `json:"photo_50"`
+}
+
+func parseVKCommunityInfoResponse(raw json.RawMessage) ([]VKCommunityInfo, error) {
+	var items []vkCommunityInfoPayload
+	if err := json.Unmarshal(raw, &items); err == nil {
+		return vkCommunityInfoPayloadsToViews(items), nil
+	}
+
+	var wrapped struct {
+		Groups []vkCommunityInfoPayload `json:"groups"`
+	}
+	if err := json.Unmarshal(raw, &wrapped); err != nil {
+		return nil, err
+	}
+	return vkCommunityInfoPayloadsToViews(wrapped.Groups), nil
+}
+
+func vkCommunityInfoPayloadsToViews(items []vkCommunityInfoPayload) []VKCommunityInfo {
+	result := make([]VKCommunityInfo, 0, len(items))
+	for _, item := range items {
+		result = append(result, VKCommunityInfo{
+			ID: item.ID, Name: item.Name, ScreenName: item.ScreenName, Photo50: item.Photo50,
+		})
+	}
+	return result
 }
 
 func VKGroupExternalID(groupID int64) string {

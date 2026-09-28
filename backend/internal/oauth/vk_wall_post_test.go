@@ -52,6 +52,26 @@ func TestPostWall_TextOnly(t *testing.T) {
 	}
 }
 
+func TestGetCommunityInfo_ObjectResponse(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "/groups.getById") {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"response":{"groups":[{"id":123,"name":"Test group","screen_name":"test_group","photo_50":"https://example.test/avatar.jpg"}]}}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	community, err := vkTestClientWithServer(t, srv).GetCommunityInfo(context.Background(), "token", 123)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if community.ID != 123 || community.Name != "Test group" || community.ScreenName != "test_group" {
+		t.Fatalf("unexpected community: %+v", community)
+	}
+}
+
 func TestPostWall_PhotoWithCaption(t *testing.T) {
 	var mu sync.Mutex
 	uploadURL := ""
