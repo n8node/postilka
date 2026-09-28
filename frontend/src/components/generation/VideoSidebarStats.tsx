@@ -118,7 +118,7 @@ export function VideoSidebarStats({
         <div className="mt-2.5 grid grid-cols-[1fr_auto] items-center gap-x-3 border-t border-border/80 pt-2.5 text-[12px]">
           <span className="flex items-center gap-2 text-muted">
             <Clock size={14} className="shrink-0 text-accent" />
-            {generating ? "Время" : "Длительность"}
+            Время генерации
           </span>
           <span className="font-medium tabular-nums text-blue-900">
             {generating
