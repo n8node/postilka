@@ -52,6 +52,8 @@ import {
 } from "@/lib/video-generation-api";
 import { useVideoGenerationJobStore } from "@/lib/video-generation-job-store";
 import { cn } from "@/lib/utils";
+import { refreshBillingBalances, useBillingBalancesStore } from "@/lib/billing-balances-store";
+import { formatGenerationCost } from "@/lib/generation-format";
 
 type FilterId = string;
 
@@ -291,6 +293,7 @@ export function AdStudioPage({ catalog = "studio" }: { catalog?: AdStudioCatalog
   const [imagePricing, setImagePricing] = useState<GenerationPricing | null>(null);
   const [videoPricing, setVideoPricing] = useState<VideoGenerationPricing | null>(null);
   const creditsRemaining = useMediaCreditsRemaining();
+  const balances = useBillingBalancesStore((s) => s.balances);
   const setCreditsRemaining = useGenerationCreditsStore((s) => s.setCreditsRemaining);
 
   const imageGenerating = useGenerationJobStore((s) => s.running);
@@ -347,6 +350,7 @@ export function AdStudioPage({ catalog = "studio" }: { catalog?: AdStudioCatalog
   }, [load]);
 
   useEffect(() => {
+    void refreshBillingBalances().catch(() => undefined);
     void fetchGenerationPricing()
       .then((res) => {
         setImagePricing(res.pricing);
@@ -504,13 +508,30 @@ export function AdStudioPage({ catalog = "studio" }: { catalog?: AdStudioCatalog
   }, [selected, selectedMode, isVideo, imagePricing, videoPricing]);
 
   const walletRub = useMemo(() => {
-    if (!selected || !selectedMode || isVideo || !imagePricing) return 0;
+    if (!selected || !selectedMode) return 0;
+    if (isVideo) {
+      const kopecksPerCredit = balances?.kopecksPerCredit ?? 0;
+      return kopecksPerCredit > 0 ? (creditCost * kopecksPerCredit) / 100 : 0;
+    }
+    if (!imagePricing) return 0;
     if (selectedMode === "combine") return generationWalletRubForMode(imagePricing, "combine");
     if (selectedMode === "image-to-image") {
       return generationWalletRubForMode(imagePricing, "image-to-image");
     }
     return generationWalletRubForMode(imagePricing, "text-to-image");
-  }, [selected, selectedMode, isVideo, imagePricing]);
+  }, [selected, selectedMode, isVideo, imagePricing, creditCost, balances?.kopecksPerCredit]);
+
+  const costLabel = useMemo(
+    () =>
+      formatGenerationCost({
+        creditCost,
+        walletCostRub: walletRub,
+        availableCredits: creditsRemaining,
+        walletBalanceCents: balances?.walletCents ?? 0,
+        unlimitedCredits: balances?.mediaUnlimited ?? false,
+      }),
+    [balances?.mediaUnlimited, balances?.walletCents, creditCost, creditsRemaining, walletRub],
+  );
 
       // `combine` is configurable: it may use only the template, only a model,
   // only a product, or both. Other image/video modes have an intrinsic product input.
@@ -783,8 +804,7 @@ export function AdStudioPage({ catalog = "studio" }: { catalog?: AdStudioCatalog
               {generating ? "Создаём…" : "Создать"}
               {creditCost > 0 ? (
                 <span className="text-[12px] font-normal opacity-80">
-                  · {creditCost} кред.
-                  {walletRub > 0 ? ` / ${walletRub} ₽` : ""}
+                  · {costLabel}
                 </span>
               ) : null}
             </button>

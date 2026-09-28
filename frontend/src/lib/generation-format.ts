@@ -24,3 +24,37 @@ export function formatMediaCreditCost(cost: number): string {
   }
   return `${n} кредитов`;
 }
+
+export type GenerationCostAvailability = {
+  creditCost: number;
+  walletCostRub: number;
+  availableCredits: number | null;
+  walletBalanceCents: number;
+  unlimitedCredits?: boolean;
+};
+
+/**
+ * Shows the payment source that will be used first by the billing service.
+ * Credits are intentionally shown instead of a combined credits/rubles value.
+ */
+export function formatGenerationCost({
+  creditCost,
+  walletCostRub,
+  availableCredits,
+  walletBalanceCents,
+  unlimitedCredits = false,
+}: GenerationCostAvailability): string {
+  if (unlimitedCredits || availableCredits == null || availableCredits > 0) {
+    return formatMediaCreditCost(creditCost);
+  }
+  if (walletBalanceCents > 0 && walletCostRub > 0) {
+    return `${formatRubAmount(walletCostRub)} ₽`;
+  }
+  return "Пополните баланс";
+}
+
+function formatRubAmount(value: number): string {
+  return new Intl.NumberFormat("ru-RU", {
+    maximumFractionDigits: 2,
+  }).format(Math.max(0, value));
+}
