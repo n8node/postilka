@@ -558,6 +558,11 @@ func (s *PublicationService) publishVKWall(
 	if err != nil {
 		return "", fmt.Errorf("некорректный ID сообщества VK")
 	}
+	mediaIDs := make([]string, 0, len(post.Media))
+	for _, attached := range post.Media {
+		mediaIDs = append(mediaIDs, attached.FileID)
+	}
+	slog.Info("vk publish: preparing wall post", "post_id", post.ID, "target_channel_id", channel.ID, "media_count", len(post.Media), "media_file_ids", mediaIDs)
 	in := oauthclient.VKWallPostInput{Message: readableProviderText(content)}
 	if len(post.Media) > 0 {
 		photos, video, err := s.vkMediaSources(ctx, post)
@@ -575,8 +580,10 @@ func (s *PublicationService) publishVKWall(
 	client := &oauthclient.VKCommunityClient{}
 	postID, err := client.PostWall(ctx, token, ownerID, in)
 	if err != nil {
+		slog.Warn("vk publish: wall post failed", "post_id", post.ID, "owner_id", ownerID, "media_count", len(post.Media), "uploaded_photos", len(in.Photos), "uploaded_video", in.Video != nil, "error", err)
 		return "", err
 	}
+	slog.Info("vk publish: wall post delivered", "post_id", post.ID, "owner_id", ownerID, "media_count", len(post.Media), "uploaded_photos", len(in.Photos), "uploaded_video", in.Video != nil, "provider_post_id", postID)
 	comment := strings.TrimSpace(settings.FirstComment)
 	if comment != "" {
 		if err := client.CreateComment(ctx, token, ownerID, postID, comment); err != nil {
