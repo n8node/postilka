@@ -134,6 +134,15 @@ func PublishCapabilitiesForChannel(ch Channel) PublishCapabilities {
 		}
 	}
 	caps := ch.Provider.PublishCapabilities()
+	if ch.Provider == ChannelProviderVK && ch.VKOAuthMode == VKOAuthModeCommunityToken {
+		// VK does not allow photos.getWallUploadServer with a community token.
+		// Text/link posts remain available, but media requires user OAuth.
+		caps.Photo = false
+		caps.Video = false
+		caps.ComposerMedia = false
+		caps.MediaAlbum = false
+		caps.MaxMedia = 0
+	}
 	if ch.Provider == ChannelProviderTelegram {
 		caps.ComposerLocation = true
 		if ch.ChatType == "channel" && strings.TrimSpace(ch.Metadata.LinkedChatID) != "" {

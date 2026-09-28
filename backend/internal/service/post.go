@@ -428,6 +428,9 @@ func validatePostTargets(ctx context.Context, channels *repository.ChannelReposi
 		if channel.Status != model.ChannelStatusActive {
 			return fmt.Errorf("%w: канал «%s» неактивен или требует переподключения", ErrInvalidPost, channel.Name)
 		}
+		if len(post.Media) > 0 && channel.Provider == model.ChannelProviderVK && channel.VKOAuthMode == model.VKOAuthModeCommunityToken {
+			return fmt.Errorf("%w: VK не разрешает публиковать фото и видео через ключ сообщества. Подключите сообщество через «Своё приложение»", ErrInvalidPost)
+		}
 		if len(post.Media) > 0 && channel.Provider == model.ChannelProviderMAX {
 			maxMedia := channel.Provider.PublishCapabilities().MaxMedia
 			if maxMedia <= 0 {

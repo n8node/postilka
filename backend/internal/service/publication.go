@@ -558,6 +558,11 @@ func (s *PublicationService) publishVKWall(
 	if err != nil {
 		return "", fmt.Errorf("некорректный ID сообщества VK")
 	}
+	if channel.VKOAuthMode == model.VKOAuthModeCommunityToken && len(post.Media) > 0 {
+		return "", fmt.Errorf(
+			"VK не разрешает загружать фото и видео через ключ сообщества. Подключите это сообщество через «Своё приложение» для публикации медиа",
+		)
+	}
 	mediaIDs := make([]string, 0, len(post.Media))
 	for _, attached := range post.Media {
 		mediaIDs = append(mediaIDs, attached.FileID)
