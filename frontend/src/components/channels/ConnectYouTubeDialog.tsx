@@ -2,7 +2,6 @@
 
 import { Loader2, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { ContextHelpLinks } from "@/components/support/ContextHelpLinks";
 import { ConnectHelpSteps } from "@/components/channels/ConnectHelpSteps";
 import { ChannelAvatar } from "@/components/channels/ChannelAvatar";
 import {
@@ -159,10 +158,6 @@ export function ConnectYouTubeDialog({
                 Подключение YouTube временно отключено администратором.
               </p>
             )}
-
-            <ContextHelpLinks
-              helpURL={ytProvider?.connect_help_url}
-            />
 
             <p className="text-sm text-muted">
               YouTube-канал нужно будет периодически переподключать. Когда это потребуется, вы получите уведомление.

@@ -2,7 +2,6 @@
 
 import { Loader2, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { ContextHelpLinks } from "@/components/support/ContextHelpLinks";
 import { ChannelAvatar } from "@/components/channels/ChannelAvatar";
 import {
   ApiError,
@@ -220,10 +219,6 @@ export function ConnectVKDialog({
                 Подключение VK временно отключено администратором.
               </p>
             )}
-
-            <ContextHelpLinks
-              helpURL={vkProvider?.connect_help_url}
-            />
 
             {vkProvider?.connect_help_text && step === "start" && connectionMethod === "oauth" && (
               <div>

@@ -2,7 +2,6 @@
 
 import { Eye, EyeOff, Info, Loader2, RefreshCw, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { ContextHelpLinks } from "@/components/support/ContextHelpLinks";
 import { ChannelAvatar } from "@/components/channels/ChannelAvatar";
 import {
   ApiError,
@@ -159,10 +158,6 @@ export function ConnectTelegramDialog({ open, onClose, onConnected }: ConnectTel
             )}
 
             <p className="text-sm text-muted">{INTRO_TEXT}</p>
-
-            <ContextHelpLinks
-              helpURL={providerInfo?.connect_help_url}
-            />
 
             {providerInfo?.connect_help_text && (
               <div>

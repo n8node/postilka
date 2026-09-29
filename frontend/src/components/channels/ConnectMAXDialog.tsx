@@ -2,7 +2,6 @@
 
 import { Copy, Eye, EyeOff, ExternalLink, Loader2, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { ContextHelpLinks } from "@/components/support/ContextHelpLinks";
 import { ChannelAvatar } from "@/components/channels/ChannelAvatar";
 import {
   ApiError,
@@ -173,10 +172,6 @@ export function ConnectMAXDialog({ open, onClose, onConnected }: ConnectMAXDialo
             Подключение MAX временно отключено администратором.
           </p>
         )}
-
-        <ContextHelpLinks
-          helpURL={maxProvider?.connect_help_url}
-        />
 
         {maxProvider?.connect_help_text && (
           <div>
