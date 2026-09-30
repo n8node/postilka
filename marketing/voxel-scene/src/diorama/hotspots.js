@@ -5,7 +5,7 @@ export const JOURNEY_INTRO_VIEW = {
   // Front-facing composition: keep the island and the starting character centered.
   theta: 0,
   phi: 0.68,
-  zoom: 0.82,
+  zoom: 0.70,
   tx: 0,
   ty: 12.0,
   tz: 0,
@@ -25,7 +25,7 @@ export const DEFAULT_VIEW = {
   // Front-facing composition: keep the island and the starting character centered.
   theta: 0,
   phi: 0.68,
-  zoom: 0.82,
+  zoom: 0.70,
   tx: 0,
   ty: 12.0,
   tz: 0,
