@@ -2,8 +2,9 @@ import * as THREE from 'three';
 
 // Initial road start — hero and dog on the road opposite the central bus stop
 export const JOURNEY_INTRO_VIEW = {
-  theta: 0.65,
-  phi: 0.88,
+  // Front-facing composition: keep the island and the starting character centered.
+  theta: 0,
+  phi: 0.68,
   zoom: 0.82,
   tx: 0,
   ty: 12.0,
@@ -21,8 +22,9 @@ export const JOURNEY_ROAD_VIEW = {
 };
 
 export const DEFAULT_VIEW = {
-  theta: 0.65,
-  phi: 0.88,
+  // Front-facing composition: keep the island and the starting character centered.
+  theta: 0,
+  phi: 0.68,
   zoom: 0.82,
   tx: 0,
   ty: 12.0,
