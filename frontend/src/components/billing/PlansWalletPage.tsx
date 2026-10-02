@@ -392,7 +392,7 @@ export function PlansWalletPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
         {displayPlans.map((plan) => {
           const isCurrent = plan.id === currentPlanId;
           const isPopular = plan.is_popular;
