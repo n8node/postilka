@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -10,14 +11,46 @@ import (
 )
 
 type AdminAnalyticsRepository struct {
-	pool *pgxpool.Pool
+	pool     *pgxpool.Pool
+	settings *SettingsRepository
 }
 
-func NewAdminAnalyticsRepository(pool *pgxpool.Pool) *AdminAnalyticsRepository {
-	return &AdminAnalyticsRepository{pool: pool}
+const adminAnalyticsResetAtKey = "admin.analytics.reset_at"
+
+func NewAdminAnalyticsRepository(pool *pgxpool.Pool, settings *SettingsRepository) *AdminAnalyticsRepository {
+	return &AdminAnalyticsRepository{pool: pool, settings: settings}
+}
+
+func (r *AdminAnalyticsRepository) resetAt(ctx context.Context) (time.Time, error) {
+	if r.settings == nil {
+		return time.Time{}, nil
+	}
+	value, err := r.settings.Get(ctx, adminAnalyticsResetAtKey)
+	if errors.Is(err, ErrNotFound) || value == "" {
+		return time.Time{}, nil
+	}
+	if err != nil {
+		return time.Time{}, err
+	}
+	return time.Parse(time.RFC3339Nano, value)
+}
+
+func (r *AdminAnalyticsRepository) Reset(ctx context.Context) error {
+	if r.settings == nil {
+		return fmt.Errorf("settings repository is not configured")
+	}
+	return r.settings.Set(ctx, adminAnalyticsResetAtKey, time.Now().UTC().Format(time.RFC3339Nano))
 }
 
 func (r *AdminAnalyticsRepository) Overview(ctx context.Context, from, to time.Time) (*model.AdminAnalyticsOverview, error) {
+	resetAt, err := r.resetAt(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("admin analytics reset point: %w", err)
+	}
+	if from.Before(resetAt) {
+		from = resetAt
+	}
+
 	out := &model.AdminAnalyticsOverview{
 		DailyRegistrations: []model.AdminAnalyticsDailyCount{},
 		DailyAIGenerations: []model.AdminAnalyticsDailyAI{},
@@ -29,17 +62,17 @@ func (r *AdminAnalyticsRepository) Overview(ctx context.Context, from, to time.T
 		FilesByType:        []model.AdminAnalyticsBreakdownBytes{},
 	}
 
-	err := r.pool.QueryRow(ctx, `
+	err = r.pool.QueryRow(ctx, `
 		SELECT
-			(SELECT COUNT(*) FROM users),
-			(SELECT COUNT(*) FROM users WHERE created_at >= $1 AND created_at <= $2),
-			(SELECT COUNT(*) FROM workspaces),
-			(SELECT COUNT(*) FROM channels),
-			(SELECT COUNT(*) FROM channels WHERE status = 'active'),
-			(SELECT COUNT(*) FROM workspace_files WHERE deleted_at IS NULL),
-			(SELECT COALESCE(SUM(size), 0) FROM workspace_files WHERE deleted_at IS NULL),
-			(SELECT COALESCE(SUM(size), 0) FROM workspace_files WHERE deleted_at IS NOT NULL)
-	`, from, to).Scan(
+			(SELECT COUNT(*) FROM users WHERE created_at >= $1),
+			(SELECT COUNT(*) FROM users WHERE created_at >= $1 AND created_at >= $2 AND created_at <= $3),
+			(SELECT COUNT(*) FROM workspaces WHERE created_at >= $1),
+			(SELECT COUNT(*) FROM channels WHERE created_at >= $1),
+			(SELECT COUNT(*) FROM channels WHERE status = 'active' AND created_at >= $1),
+			(SELECT COUNT(*) FROM workspace_files WHERE deleted_at IS NULL AND created_at >= $1),
+			(SELECT COALESCE(SUM(size), 0) FROM workspace_files WHERE deleted_at IS NULL AND created_at >= $1),
+			(SELECT COALESCE(SUM(size), 0) FROM workspace_files WHERE deleted_at IS NOT NULL AND created_at >= $1)
+	`, resetAt, from, to).Scan(
 		&out.UsersTotal, &out.UsersNew, &out.WorkspacesTotal,
 		&out.ChannelsTotal, &out.ChannelsActive,
 		&out.FilesTotal, &out.StorageBytes, &out.TrashBytes,
@@ -56,8 +89,8 @@ func (r *AdminAnalyticsRepository) Overview(ctx context.Context, from, to time.T
 			COALESCE(SUM(credit_cost) FILTER (WHERE status = 'succeeded' OR generation_id IS NOT NULL), 0),
 			COALESCE(SUM(wallet_cents_charged) FILTER (WHERE status = 'succeeded' OR generation_id IS NOT NULL), 0)
 		FROM ai_generation_jobs
-		WHERE created_at >= $1 AND created_at < $2
-	`, from, to).Scan(
+		WHERE created_at >= $1 AND created_at < $2 AND created_at >= $3
+	`, from, to, resetAt).Scan(
 		&out.AIGenerationsTotal, &out.AIGenerationsSucceeded, &out.AIGenerationsFailed,
 		&out.AICreditsSpent, &out.AIWalletCentsSpent,
 	); err != nil {
@@ -67,16 +100,16 @@ func (r *AdminAnalyticsRepository) Overview(ctx context.Context, from, to time.T
 	if err := r.pool.QueryRow(ctx, `
 		SELECT COALESCE(SUM(amount_cents), 0)
 		FROM wallet_topups
-		WHERE status = 'paid' AND paid_at >= $1 AND paid_at <= $2
-	`, from, to).Scan(&out.TopupsCents); err != nil {
+		WHERE status = 'paid' AND paid_at >= $1 AND paid_at <= $2 AND paid_at >= $3
+	`, from, to, resetAt).Scan(&out.TopupsCents); err != nil {
 		return nil, fmt.Errorf("admin analytics topups: %w", err)
 	}
 
 	if err := r.pool.QueryRow(ctx, `
 		SELECT COALESCE(SUM(amount_cents), 0)
 		FROM plan_checkouts
-		WHERE status = 'paid' AND paid_at >= $1 AND paid_at <= $2
-	`, from, to).Scan(&out.CheckoutsCents); err != nil {
+		WHERE status = 'paid' AND paid_at >= $1 AND paid_at <= $2 AND paid_at >= $3
+	`, from, to, resetAt).Scan(&out.CheckoutsCents); err != nil {
 		return nil, fmt.Errorf("admin analytics checkouts: %w", err)
 	}
 
@@ -85,15 +118,15 @@ func (r *AdminAnalyticsRepository) Overview(ctx context.Context, from, to time.T
 		FROM generate_series($1::date, $2::date, '1 day') d
 		LEFT JOIN (
 			SELECT date_trunc('day', created_at)::date AS day, COUNT(*) AS cnt
-			FROM users WHERE created_at >= $1 AND created_at <= $2
+			FROM users WHERE created_at >= $1 AND created_at >= $2 AND created_at <= $3
 			GROUP BY 1
 		) c ON c.day = d::date
 		ORDER BY d
-	`, from, to); err != nil {
+	`, resetAt, from, to); err != nil {
 		return nil, fmt.Errorf("admin analytics daily registrations: %w", err)
 	}
 
-	if out.DailyAIGenerations, err = r.dailyAI(ctx, from, to); err != nil {
+	if out.DailyAIGenerations, err = r.dailyAI(ctx, from, to, resetAt); err != nil {
 		return nil, fmt.Errorf("admin analytics daily ai: %w", err)
 	}
 
@@ -104,11 +137,11 @@ func (r *AdminAnalyticsRepository) Overview(ctx context.Context, from, to time.T
 			SELECT date_trunc('day', paid_at)::date AS day,
 				SUM(amount_cents)::int AS amount, COUNT(*)::int AS cnt
 			FROM wallet_topups
-			WHERE status = 'paid' AND paid_at >= $1 AND paid_at <= $2
+			WHERE status = 'paid' AND paid_at >= $1 AND paid_at <= $2 AND paid_at >= $3
 			GROUP BY 1
 		) t ON t.day = d::date
 		ORDER BY d
-	`, from, to); err != nil {
+	`, from, to, resetAt); err != nil {
 		return nil, fmt.Errorf("admin analytics daily topups: %w", err)
 	}
 
@@ -119,11 +152,11 @@ func (r *AdminAnalyticsRepository) Overview(ctx context.Context, from, to time.T
 			SELECT date_trunc('day', paid_at)::date AS day,
 				SUM(amount_cents)::int AS amount, COUNT(*)::int AS cnt
 			FROM plan_checkouts
-			WHERE status = 'paid' AND paid_at >= $1 AND paid_at <= $2
+			WHERE status = 'paid' AND paid_at >= $1 AND paid_at <= $2 AND paid_at >= $3
 			GROUP BY 1
 		) t ON t.day = d::date
 		ORDER BY d
-	`, from, to); err != nil {
+	`, from, to, resetAt); err != nil {
 		return nil, fmt.Errorf("admin analytics daily checkouts: %w", err)
 	}
 
@@ -132,37 +165,54 @@ func (r *AdminAnalyticsRepository) Overview(ctx context.Context, from, to time.T
 		FROM generate_series($1::date, $2::date, '1 day') d
 		LEFT JOIN (
 			SELECT date_trunc('day', created_at)::date AS day, COUNT(*) AS cnt
-			FROM workspace_files WHERE created_at >= $1 AND created_at <= $2
+			FROM workspace_files WHERE created_at >= $1 AND created_at >= $2 AND created_at <= $3
 			GROUP BY 1
 		) c ON c.day = d::date
 		ORDER BY d
-	`, from, to); err != nil {
+	`, resetAt, from, to); err != nil {
 		return nil, fmt.Errorf("admin analytics daily files: %w", err)
 	}
 
 	if out.AIByMode, err = r.breakdown(ctx, `
 		SELECT mode, COUNT(*)::int FROM ai_generation_jobs
-		WHERE (status = 'succeeded' OR generation_id IS NOT NULL) AND created_at >= $1 AND created_at < $2
+		WHERE (status = 'succeeded' OR generation_id IS NOT NULL) AND created_at >= $1 AND created_at < $2 AND created_at >= $3
 		GROUP BY mode ORDER BY COUNT(*) DESC
-	`, from, to); err != nil {
+	`, from, to, resetAt); err != nil {
 		return nil, fmt.Errorf("admin analytics ai modes: %w", err)
 	}
 
-	if out.ChannelsByProvider, err = r.breakdownStatic(ctx, `
-		SELECT provider, COUNT(*)::int FROM channels GROUP BY provider ORDER BY COUNT(*) DESC
-	`); err != nil {
+	if out.ChannelsByProvider, err = r.breakdownSince(ctx, `
+		SELECT provider, COUNT(*)::int FROM channels WHERE created_at >= $1 GROUP BY provider ORDER BY COUNT(*) DESC
+	`, resetAt); err != nil {
 		return nil, fmt.Errorf("admin analytics channels: %w", err)
 	}
 
-	if out.FilesByType, err = r.filesByType(ctx); err != nil {
+	if out.FilesByType, err = r.filesByType(ctx, resetAt); err != nil {
 		return nil, fmt.Errorf("admin analytics file types: %w", err)
 	}
 
 	return out, nil
 }
 
-func (r *AdminAnalyticsRepository) dailyCounts(ctx context.Context, q string, from, to time.Time) ([]model.AdminAnalyticsDailyCount, error) {
-	rows, err := r.pool.Query(ctx, q, from, to)
+func (r *AdminAnalyticsRepository) breakdownSince(ctx context.Context, q string, since time.Time) ([]model.AdminAnalyticsBreakdown, error) {
+	rows, err := r.pool.Query(ctx, q, since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []model.AdminAnalyticsBreakdown
+	for rows.Next() {
+		var item model.AdminAnalyticsBreakdown
+		if err := rows.Scan(&item.Label, &item.Count); err != nil {
+			return nil, err
+		}
+		out = append(out, item)
+	}
+	return out, rows.Err()
+}
+
+func (r *AdminAnalyticsRepository) dailyCounts(ctx context.Context, q string, resetAt, from, to time.Time) ([]model.AdminAnalyticsDailyCount, error) {
+	rows, err := r.pool.Query(ctx, q, resetAt, from, to)
 	if err != nil {
 		return nil, err
 	}
@@ -178,8 +228,8 @@ func (r *AdminAnalyticsRepository) dailyCounts(ctx context.Context, q string, fr
 	return out, rows.Err()
 }
 
-func (r *AdminAnalyticsRepository) dailyMoney(ctx context.Context, q string, from, to time.Time) ([]model.AdminAnalyticsDailyMoney, error) {
-	rows, err := r.pool.Query(ctx, q, from, to)
+func (r *AdminAnalyticsRepository) dailyMoney(ctx context.Context, q string, from, to, resetAt time.Time) ([]model.AdminAnalyticsDailyMoney, error) {
+	rows, err := r.pool.Query(ctx, q, from, to, resetAt)
 	if err != nil {
 		return nil, err
 	}
@@ -195,7 +245,7 @@ func (r *AdminAnalyticsRepository) dailyMoney(ctx context.Context, q string, fro
 	return out, rows.Err()
 }
 
-func (r *AdminAnalyticsRepository) dailyAI(ctx context.Context, from, to time.Time) ([]model.AdminAnalyticsDailyAI, error) {
+func (r *AdminAnalyticsRepository) dailyAI(ctx context.Context, from, to, resetAt time.Time) ([]model.AdminAnalyticsDailyAI, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT
 			to_char(d::date, 'YYYY-MM-DD'),
@@ -215,11 +265,11 @@ func (r *AdminAnalyticsRepository) dailyAI(ctx context.Context, from, to time.Ti
 				COALESCE(SUM(quota_credits_used) FILTER (WHERE status = 'succeeded' OR generation_id IS NOT NULL), 0)::int AS quota,
 				COALESCE(SUM(wallet_cents_charged) FILTER (WHERE status = 'succeeded' OR generation_id IS NOT NULL), 0)::int AS wallet
 			FROM ai_generation_jobs
-			WHERE created_at >= $1 AND created_at < $2
+			WHERE created_at >= $1 AND created_at < $2 AND created_at >= $3
 			GROUP BY 1
 		) j ON j.day = d::date
 		ORDER BY d
-	`, from, to)
+	`, from, to, resetAt)
 	if err != nil {
 		return nil, err
 	}
@@ -238,8 +288,8 @@ func (r *AdminAnalyticsRepository) dailyAI(ctx context.Context, from, to time.Ti
 	return out, rows.Err()
 }
 
-func (r *AdminAnalyticsRepository) breakdown(ctx context.Context, q string, from, to time.Time) ([]model.AdminAnalyticsBreakdown, error) {
-	rows, err := r.pool.Query(ctx, q, from, to)
+func (r *AdminAnalyticsRepository) breakdown(ctx context.Context, q string, from, to, resetAt time.Time) ([]model.AdminAnalyticsBreakdown, error) {
+	rows, err := r.pool.Query(ctx, q, from, to, resetAt)
 	if err != nil {
 		return nil, err
 	}
@@ -272,7 +322,7 @@ func (r *AdminAnalyticsRepository) breakdownStatic(ctx context.Context, q string
 	return out, rows.Err()
 }
 
-func (r *AdminAnalyticsRepository) filesByType(ctx context.Context) ([]model.AdminAnalyticsBreakdownBytes, error) {
+func (r *AdminAnalyticsRepository) filesByType(ctx context.Context, resetAt time.Time) ([]model.AdminAnalyticsBreakdownBytes, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT
 			CASE
@@ -284,10 +334,10 @@ func (r *AdminAnalyticsRepository) filesByType(ctx context.Context) ([]model.Adm
 			COALESCE(SUM(size), 0)::bigint,
 			COUNT(*)::int
 		FROM workspace_files
-		WHERE deleted_at IS NULL
+		WHERE deleted_at IS NULL AND created_at >= $1
 		GROUP BY 1
 		ORDER BY SUM(size) DESC
-	`)
+	`, resetAt)
 	if err != nil {
 		return nil, err
 	}

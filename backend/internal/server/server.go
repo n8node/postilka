@@ -170,7 +170,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 		oauthclient.NewMAXBotClient(), logger,
 	)
 	notificationSvc.BindOutbound(userRepo, txEmailSvc, userMessenger, cfg)
-	adminAnalyticsRepo := repository.NewAdminAnalyticsRepository(db.Pool)
+	adminAnalyticsRepo := repository.NewAdminAnalyticsRepository(db.Pool, settingsRepo)
 	adminHandler := handler.NewAdminHandler(userRepo, adminUserSvc, adminWalletSvc, planSvc, oauthSvc, adminWorkspaceSvc, fileStorageRepo, folderStorageRepo, postRepo, adminAnalyticsRepo, objectStorage)
 	inviteHandler := handler.NewInviteHandler(inviteSvc, oauthSvc)
 	adminInviteHandler := handler.NewAdminInviteHandler(inviteSvc, userRepo, oauthSvc)
@@ -775,6 +775,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Get("/posts/{postID}", adminHandler.GetPost)
 
 				r.Get("/analytics", adminHandler.Analytics)
+				r.Post("/analytics/reset", adminHandler.ResetAnalytics)
 				r.Get("/generations/active", adminHandler.ListActiveGenerations)
 				r.Post("/generations/{jobID}/reset", adminHandler.ResetGeneration)
 				r.Delete("/generations/{jobID}", adminHandler.DeleteGeneration)

@@ -237,6 +237,10 @@ export function fetchAdminAnalytics(query?: { from?: string; to?: string }) {
   );
 }
 
+export function resetAdminAnalytics() {
+  return apiFetch<{ status: string }>("/admin/analytics/reset", { method: "POST" });
+}
+
 export type AdminActiveGeneration = {
   id: string;
   user_id: string;

@@ -16,7 +16,12 @@ import {
   YAxis,
   Cell,
 } from "recharts";
-import { ApiError, fetchAdminAnalytics, type AdminAnalyticsOverview } from "@/lib/api";
+import {
+  ApiError,
+  fetchAdminAnalytics,
+  resetAdminAnalytics,
+  type AdminAnalyticsOverview,
+} from "@/lib/api";
 import { formatBytes } from "@/lib/utils";
 
 const CHART_COLORS = ["#2563eb", "#7c3aed", "#059669", "#d97706", "#dc2626", "#64748b"];
@@ -69,6 +74,7 @@ export function AdminAnalyticsPage() {
   const [overview, setOverview] = useState<AdminAnalyticsOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [resetting, setResetting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -86,6 +92,22 @@ export function AdminAnalyticsPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const handleReset = async () => {
+    if (!window.confirm("Сбросить статистику? Данные пользователей, постов, файлов и платежей не будут удалены.")) {
+      return;
+    }
+    setResetting(true);
+    setError(null);
+    try {
+      await resetAdminAnalytics();
+      await load();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Не удалось сбросить статистику");
+    } finally {
+      setResetting(false);
+    }
+  };
 
   const filesPie = useMemo(() => {
     if (!overview) return [];
@@ -116,6 +138,14 @@ export function AdminAnalyticsPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void handleReset()}
+            disabled={resetting}
+            className="rounded-md border border-rose-200 px-3 py-1.5 text-sm font-medium text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {resetting ? "Сброс…" : "Сбросить статистику"}
+          </button>
           <label className="text-xs text-slate-500">
             С
             <input

@@ -22,6 +22,15 @@ func (h *AdminHandler) Analytics(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func (h *AdminHandler) ResetAnalytics(w http.ResponseWriter, r *http.Request) {
+	if err := h.analytics.Reset(r.Context()); err != nil {
+		slog.Error("admin analytics reset failed", "error", err)
+		writeError(w, http.StatusInternalServerError, "Не удалось сбросить статистику")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "reset"})
+}
+
 func parseAnalyticsRange(r *http.Request) (from, to time.Time) {
 	now := time.Now().UTC()
 	to = time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC).AddDate(0, 0, 1)
