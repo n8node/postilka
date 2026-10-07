@@ -119,11 +119,49 @@ export function AdminAnalyticsPage() {
   }, [overview]);
 
   if (loading && !overview) {
-    return <p className="text-sm text-slate-500">Загрузка аналитики…</p>;
+    return (
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Аналитика</h1>
+            <p className="mt-1 text-sm text-slate-500">Загрузка статистики…</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void handleReset()}
+            disabled={resetting}
+            className="rounded-md border border-rose-200 px-3 py-1.5 text-sm font-medium text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {resetting ? "Сброс…" : "Сбросить статистику"}
+          </button>
+        </div>
+        <p className="text-sm text-slate-500">Подождите, идёт загрузка данных…</p>
+      </div>
+    );
   }
 
   if (error && !overview) {
-    return <p className="text-sm text-rose-600">{error}</p>;
+    return (
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Аналитика</h1>
+            <p className="mt-1 text-sm text-rose-600">{error}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void handleReset()}
+            disabled={resetting}
+            className="rounded-md border border-rose-200 px-3 py-1.5 text-sm font-medium text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {resetting ? "Сброс…" : "Сбросить статистику"}
+          </button>
+        </div>
+        <button type="button" onClick={() => void load()} className="text-sm text-blue-700 underline">
+          Повторить загрузку
+        </button>
+      </div>
+    );
   }
 
   if (!overview) return null;

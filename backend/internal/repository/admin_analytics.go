@@ -115,7 +115,7 @@ func (r *AdminAnalyticsRepository) Overview(ctx context.Context, from, to time.T
 
 	if out.DailyRegistrations, err = r.dailyCounts(ctx, `
 		SELECT to_char(d::date, 'YYYY-MM-DD'), COALESCE(c.cnt, 0)
-		FROM generate_series($1::date, $2::date, '1 day') d
+		FROM generate_series($2::date, $3::date, '1 day') d
 		LEFT JOIN (
 			SELECT date_trunc('day', created_at)::date AS day, COUNT(*) AS cnt
 			FROM users WHERE created_at >= $1 AND created_at >= $2 AND created_at <= $3
@@ -162,7 +162,7 @@ func (r *AdminAnalyticsRepository) Overview(ctx context.Context, from, to time.T
 
 	if out.DailyNewFiles, err = r.dailyCounts(ctx, `
 		SELECT to_char(d::date, 'YYYY-MM-DD'), COALESCE(c.cnt, 0)
-		FROM generate_series($1::date, $2::date, '1 day') d
+		FROM generate_series($2::date, $3::date, '1 day') d
 		LEFT JOIN (
 			SELECT date_trunc('day', created_at)::date AS day, COUNT(*) AS cnt
 			FROM workspace_files WHERE created_at >= $1 AND created_at >= $2 AND created_at <= $3
