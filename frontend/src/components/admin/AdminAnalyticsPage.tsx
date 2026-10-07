@@ -39,6 +39,36 @@ function formatShortDate(date: string) {
   return d.toLocaleDateString("ru-RU", { day: "numeric", month: "short" });
 }
 
+function normalizeOverview(overview: AdminAnalyticsOverview | null | undefined): AdminAnalyticsOverview {
+  const value = overview ?? ({} as AdminAnalyticsOverview);
+  return {
+    ...value,
+    users_total: Number(value.users_total) || 0,
+    users_new_in_period: Number(value.users_new_in_period) || 0,
+    workspaces_total: Number(value.workspaces_total) || 0,
+    channels_total: Number(value.channels_total) || 0,
+    channels_active: Number(value.channels_active) || 0,
+    files_total: Number(value.files_total) || 0,
+    storage_bytes: Number(value.storage_bytes) || 0,
+    trash_bytes: Number(value.trash_bytes) || 0,
+    ai_generations_total: Number(value.ai_generations_total) || 0,
+    ai_generations_succeeded: Number(value.ai_generations_succeeded) || 0,
+    ai_generations_failed: Number(value.ai_generations_failed) || 0,
+    ai_credits_spent: Number(value.ai_credits_spent) || 0,
+    ai_wallet_cents_spent: Number(value.ai_wallet_cents_spent) || 0,
+    topups_cents: Number(value.topups_cents) || 0,
+    checkouts_cents: Number(value.checkouts_cents) || 0,
+    daily_registrations: Array.isArray(value.daily_registrations) ? value.daily_registrations : [],
+    daily_ai_generations: Array.isArray(value.daily_ai_generations) ? value.daily_ai_generations : [],
+    daily_topups: Array.isArray(value.daily_topups) ? value.daily_topups : [],
+    daily_checkouts: Array.isArray(value.daily_checkouts) ? value.daily_checkouts : [],
+    daily_new_files: Array.isArray(value.daily_new_files) ? value.daily_new_files : [],
+    ai_by_mode: Array.isArray(value.ai_by_mode) ? value.ai_by_mode : [],
+    channels_by_provider: Array.isArray(value.channels_by_provider) ? value.channels_by_provider : [],
+    files_by_type: Array.isArray(value.files_by_type) ? value.files_by_type : [],
+  };
+}
+
 function StatCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
@@ -81,7 +111,7 @@ export function AdminAnalyticsPage() {
     setError(null);
     try {
       const res = await fetchAdminAnalytics({ from, to });
-      setOverview(res.overview);
+      setOverview(normalizeOverview(res.overview));
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "Не удалось загрузить аналитику");
     } finally {
