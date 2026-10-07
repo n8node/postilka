@@ -69,9 +69,9 @@ func (r *AdminAnalyticsRepository) Overview(ctx context.Context, from, to time.T
 			(SELECT COUNT(*) FROM workspaces WHERE created_at >= $1),
 			(SELECT COUNT(*) FROM channels WHERE created_at >= $1),
 			(SELECT COUNT(*) FROM channels WHERE status = 'active' AND created_at >= $1),
-			(SELECT COUNT(*) FROM workspace_files WHERE deleted_at IS NULL AND created_at >= $1),
-			(SELECT COALESCE(SUM(size), 0) FROM workspace_files WHERE deleted_at IS NULL AND created_at >= $1),
-			(SELECT COALESCE(SUM(size), 0) FROM workspace_files WHERE deleted_at IS NOT NULL AND created_at >= $1)
+			(SELECT COUNT(*) FROM workspace_files WHERE deleted_at IS NULL),
+			(SELECT COALESCE(SUM(size), 0) FROM workspace_files WHERE deleted_at IS NULL),
+			(SELECT COALESCE(SUM(size), 0) FROM workspace_files WHERE deleted_at IS NOT NULL)
 	`, resetAt, from, to).Scan(
 		&out.UsersTotal, &out.UsersNew, &out.WorkspacesTotal,
 		&out.ChannelsTotal, &out.ChannelsActive,
@@ -187,7 +187,7 @@ func (r *AdminAnalyticsRepository) Overview(ctx context.Context, from, to time.T
 		return nil, fmt.Errorf("admin analytics channels: %w", err)
 	}
 
-	if out.FilesByType, err = r.filesByType(ctx, resetAt); err != nil {
+	if out.FilesByType, err = r.filesByType(ctx); err != nil {
 		return nil, fmt.Errorf("admin analytics file types: %w", err)
 	}
 
@@ -322,7 +322,7 @@ func (r *AdminAnalyticsRepository) breakdownStatic(ctx context.Context, q string
 	return out, rows.Err()
 }
 
-func (r *AdminAnalyticsRepository) filesByType(ctx context.Context, resetAt time.Time) ([]model.AdminAnalyticsBreakdownBytes, error) {
+func (r *AdminAnalyticsRepository) filesByType(ctx context.Context) ([]model.AdminAnalyticsBreakdownBytes, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT
 			CASE
@@ -334,10 +334,10 @@ func (r *AdminAnalyticsRepository) filesByType(ctx context.Context, resetAt time
 			COALESCE(SUM(size), 0)::bigint,
 			COUNT(*)::int
 		FROM workspace_files
-		WHERE deleted_at IS NULL AND created_at >= $1
+		WHERE deleted_at IS NULL
 		GROUP BY 1
 		ORDER BY SUM(size) DESC
-	`, resetAt)
+	`)
 	if err != nil {
 		return nil, err
 	}
