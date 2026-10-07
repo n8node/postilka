@@ -64,11 +64,11 @@ func (r *AdminAnalyticsRepository) Overview(ctx context.Context, from, to time.T
 
 	err = r.pool.QueryRow(ctx, `
 		SELECT
-			(SELECT COUNT(*) FROM users WHERE created_at >= $1),
+			(SELECT COUNT(*) FROM users),
 			(SELECT COUNT(*) FROM users WHERE created_at >= $1 AND created_at >= $2 AND created_at <= $3),
-			(SELECT COUNT(*) FROM workspaces WHERE created_at >= $1),
-			(SELECT COUNT(*) FROM channels WHERE created_at >= $1),
-			(SELECT COUNT(*) FROM channels WHERE status = 'active' AND created_at >= $1),
+			(SELECT COUNT(*) FROM workspaces),
+			(SELECT COUNT(*) FROM channels),
+			(SELECT COUNT(*) FROM channels WHERE status = 'active'),
 			(SELECT COUNT(*) FROM workspace_files WHERE deleted_at IS NULL),
 			(SELECT COALESCE(SUM(size), 0) FROM workspace_files WHERE deleted_at IS NULL),
 			(SELECT COALESCE(SUM(size), 0) FROM workspace_files WHERE deleted_at IS NOT NULL)
@@ -100,16 +100,16 @@ func (r *AdminAnalyticsRepository) Overview(ctx context.Context, from, to time.T
 	if err := r.pool.QueryRow(ctx, `
 		SELECT COALESCE(SUM(amount_cents), 0)
 		FROM wallet_topups
-		WHERE status = 'paid' AND paid_at >= $1 AND paid_at <= $2 AND paid_at >= $3
-	`, from, to, resetAt).Scan(&out.TopupsCents); err != nil {
+		WHERE status = 'paid'
+	`).Scan(&out.TopupsCents); err != nil {
 		return nil, fmt.Errorf("admin analytics topups: %w", err)
 	}
 
 	if err := r.pool.QueryRow(ctx, `
 		SELECT COALESCE(SUM(amount_cents), 0)
 		FROM plan_checkouts
-		WHERE status = 'paid' AND paid_at >= $1 AND paid_at <= $2 AND paid_at >= $3
-	`, from, to, resetAt).Scan(&out.CheckoutsCents); err != nil {
+		WHERE status = 'paid'
+	`).Scan(&out.CheckoutsCents); err != nil {
 		return nil, fmt.Errorf("admin analytics checkouts: %w", err)
 	}
 
