@@ -250,7 +250,7 @@ func TestCreateComment(t *testing.T) {
 		if !strings.Contains(s, "post_id=42") {
 			t.Fatalf("missing post_id: %s", s)
 		}
-		if !strings.Contains(s, "from_group=1") {
+		if !strings.Contains(s, "from_group=123") {
 			t.Fatalf("missing from_group: %s", s)
 		}
 		if !strings.Contains(s, "message=first") {

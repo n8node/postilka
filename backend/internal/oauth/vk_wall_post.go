@@ -110,7 +110,7 @@ func (c *VKCommunityClient) CreateComment(
 	values.Set("v", vkAPIVersion)
 	values.Set("owner_id", strconv.FormatInt(ownerID, 10))
 	values.Set("post_id", strconv.FormatInt(postID, 10))
-	values.Set("from_group", "1")
+	values.Set("from_group", strconv.FormatInt(-ownerID, 10))
 	values.Set("message", message)
 	_, err := c.apiPOST(ctx, "wall.createComment", values)
 	return err
