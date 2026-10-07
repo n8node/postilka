@@ -12,12 +12,14 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
-	vkMaxWallPhotos = 10
-	vkMaxPhotoBytes = 25 << 20  // 25 MiB
-	vkMaxVideoBytes = 200 << 20 // 200 MiB
+	vkMaxWallPhotos  = 10
+	vkMaxPhotoBytes  = 25 << 20  // 25 MiB
+	vkMaxVideoBytes  = 200 << 20 // 200 MiB
+	vkUploadAttempts = 3
 )
 
 // VKMediaSource is a photo or video payload for wall.post.
@@ -382,19 +384,48 @@ func (c *VKCommunityClient) uploadMultipart(
 	}
 	req.Header.Set("Content-Type", w.FormDataContentType())
 
-	resp, err := c.http().Do(req)
-	if err != nil {
-		return nil, err
+	for attempt := 1; attempt <= vkUploadAttempts; attempt++ {
+		if attempt > 1 {
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(time.Duration(attempt-1) * time.Second):
+			}
+		}
+		// The request body is rebuilt for each attempt because an HTTP request
+		// consumes its body while sending it.
+		retryReq := req.Clone(ctx)
+		retryReq.Body = io.NopCloser(bytes.NewReader(buf.Bytes()))
+		resp, err := c.http().Do(retryReq)
+		if err != nil {
+			if attempt < vkUploadAttempts && IsNetworkError(err) {
+				continue
+			}
+			return nil, err
+		}
+		body, readErr := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+		resp.Body.Close()
+		if readErr != nil {
+			if attempt < vkUploadAttempts && IsNetworkError(readErr) {
+				continue
+			}
+			return nil, readErr
+		}
+		if resp.StatusCode >= 400 {
+			if attempt < vkUploadAttempts && isRetryableVKUploadStatus(resp.StatusCode) {
+				continue
+			}
+			return nil, fmt.Errorf("vk upload: HTTP %d: %s", resp.StatusCode, string(body))
+		}
+		return body, nil
 	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if err != nil {
-		return nil, err
-	}
-	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("vk upload: HTTP %d: %s", resp.StatusCode, string(body))
-	}
-	return body, nil
+	return nil, fmt.Errorf("vk upload: не удалось загрузить файл после %d попыток", vkUploadAttempts)
+}
+
+func isRetryableVKUploadStatus(statusCode int) bool {
+	return statusCode == http.StatusBadGateway ||
+		statusCode == http.StatusServiceUnavailable ||
+		statusCode == http.StatusGatewayTimeout
 }
 
 func (c *VKCommunityClient) apiGET(ctx context.Context, method string, values url.Values) ([]byte, error) {

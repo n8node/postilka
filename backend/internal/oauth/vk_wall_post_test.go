@@ -119,6 +119,44 @@ func TestPostWall_PhotoWithCaption(t *testing.T) {
 	}
 }
 
+func TestPostWall_RetriesTemporaryUploadFailure(t *testing.T) {
+	var uploadAttempts int
+	uploadURL := ""
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/photos.getWallUploadServer"):
+			_, _ = w.Write([]byte(`{"response":{"upload_url":"` + uploadURL + `"}}`))
+		case r.URL.Path == "/upload-photo-retry":
+			uploadAttempts++
+			if uploadAttempts < 3 {
+				w.WriteHeader(http.StatusGatewayTimeout)
+				return
+			}
+			_, _ = w.Write([]byte(`{"server":1,"photo":"abc","hash":"def"}`))
+		case strings.HasSuffix(r.URL.Path, "/photos.saveWallPhoto"):
+			_, _ = w.Write([]byte(`{"response":[{"id":99,"owner_id":-123}]}`))
+		case strings.HasSuffix(r.URL.Path, "/wall.post"):
+			_, _ = w.Write([]byte(`{"response":{"post_id":7}}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(srv.Close)
+	uploadURL = srv.URL + "/upload-photo-retry"
+
+	postID, err := vkTestClientWithServer(t, srv).PostWall(context.Background(), "token", -123, VKWallPostInput{
+		Message: "caption",
+		Photos:  []VKMediaSource{{Data: []byte("fake-image"), Filename: "pic.jpg"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if postID != 7 || uploadAttempts != 3 {
+		t.Fatalf("postID=%d uploadAttempts=%d", postID, uploadAttempts)
+	}
+}
+
 func TestPostWall_VideoWithDescription(t *testing.T) {
 	var mu sync.Mutex
 	baseURL := ""

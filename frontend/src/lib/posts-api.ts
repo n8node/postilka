@@ -305,7 +305,7 @@ export async function waitForPostPublish(
   id: string,
   opts?: { timeoutMs?: number; intervalMs?: number },
 ): Promise<Post> {
-  const timeoutMs = opts?.timeoutMs ?? 60_000;
+  const timeoutMs = opts?.timeoutMs ?? 180_000;
   const intervalMs = opts?.intervalMs ?? 2000;
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
