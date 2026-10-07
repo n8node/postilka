@@ -111,11 +111,13 @@ func (s *ChannelConnectService) OAuthStart(
 	if provider == model.SocialProviderVK {
 		oauthAppMode = normalizeVKOAuthMode(req.OAuthAppMode)
 		sessionMeta["oauth_app_mode"] = string(oauthAppMode)
-		codeVerifier, err := oauthclient.CodeVerifier()
-		if err != nil {
-			return nil, err
+		if oauthAppMode == model.VKOAuthModePlatform {
+			codeVerifier, err := oauthclient.CodeVerifier()
+			if err != nil {
+				return nil, err
+			}
+			sessionMeta["code_verifier"] = codeVerifier
 		}
-		sessionMeta["code_verifier"] = codeVerifier
 	}
 	appID, appSecret, err := s.resolveOAuthAppCredentials(provider, cfg, req, oauthAppMode)
 	if err != nil {
@@ -161,16 +163,23 @@ func (s *ChannelConnectService) OAuthStart(
 	var authURL string
 	switch provider {
 	case model.SocialProviderVK:
-		client := &oauthclient.VKClient{
-			ClientID: appID, ClientSecret: appSecret, RedirectURI: redirectURI,
+		if oauthAppMode == model.VKOAuthModePlatform {
+			client := &oauthclient.VKClient{
+				ClientID: appID, ClientSecret: appSecret, RedirectURI: redirectURI,
+			}
+			verifier, _ := sessionMeta["code_verifier"].(string)
+			authURL = client.AuthorizeURLWithScope(
+				state,
+				oauthclient.CodeChallenge(verifier),
+				redirectURI,
+				oauthclient.VKCommunityIDScope,
+			)
+		} else {
+			client := &oauthclient.VKCommunityClient{
+				AppID: appID, AppSecret: appSecret, RedirectURI: redirectURI,
+			}
+			authURL = client.AuthorizeURL(state)
 		}
-		verifier, _ := sessionMeta["code_verifier"].(string)
-		authURL = client.AuthorizeURLWithScope(
-			state,
-			oauthclient.CodeChallenge(verifier),
-			redirectURI,
-			oauthclient.VKCommunityIDScope,
-		)
 	case model.SocialProviderOK:
 		client := &oauthclient.OKClient{
 			AppID: cfg.OAuthClientID, AppSecret: cfg.OAuthClientSecret, RedirectURI: redirectURI,
@@ -236,21 +245,36 @@ func (s *ChannelConnectService) OAuthCallback(
 		if err != nil {
 			return nil, err
 		}
-		client := &oauthclient.VKClient{
-			ClientID: appID, ClientSecret: appSecret, RedirectURI: redirectURI,
-		}
-		codeVerifier, _ := session.Metadata["code_verifier"].(string)
-		if strings.TrimSpace(codeVerifier) == "" || strings.TrimSpace(deviceID) == "" {
-			return nil, ErrChannelOAuthStateInvalid
-		}
-		token, err := client.ExchangeCode(ctx, code, codeVerifier, deviceID, state, redirectURI)
-		if err != nil {
-			return nil, err
-		}
-		accessToken = token.AccessToken
-		if token.ExpiresIn > 0 {
-			t := time.Now().Add(time.Duration(token.ExpiresIn) * time.Second)
-			expiresAt = &t
+		if sessionOAuthAppMode(session) == model.VKOAuthModePlatform {
+			client := &oauthclient.VKClient{
+				ClientID: appID, ClientSecret: appSecret, RedirectURI: redirectURI,
+			}
+			codeVerifier, _ := session.Metadata["code_verifier"].(string)
+			if strings.TrimSpace(codeVerifier) == "" || strings.TrimSpace(deviceID) == "" {
+				return nil, ErrChannelOAuthStateInvalid
+			}
+			token, err := client.ExchangeCode(ctx, code, codeVerifier, deviceID, state, redirectURI)
+			if err != nil {
+				return nil, err
+			}
+			accessToken = token.AccessToken
+			if token.ExpiresIn > 0 {
+				t := time.Now().Add(time.Duration(token.ExpiresIn) * time.Second)
+				expiresAt = &t
+			}
+		} else {
+			client := &oauthclient.VKCommunityClient{
+				AppID: appID, AppSecret: appSecret, RedirectURI: redirectURI,
+			}
+			token, err := client.ExchangeCode(ctx, code)
+			if err != nil {
+				return nil, err
+			}
+			accessToken = token.AccessToken
+			if token.ExpiresIn > 0 {
+				t := time.Now().Add(time.Duration(token.ExpiresIn) * time.Second)
+				expiresAt = &t
+			}
 		}
 	case model.SocialProviderOK:
 		client := &oauthclient.OKClient{
