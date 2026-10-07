@@ -9,6 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/postilka/postilka/internal/middleware"
 	"github.com/postilka/postilka/internal/model"
+	oauthclient "github.com/postilka/postilka/internal/oauth"
 	"github.com/postilka/postilka/internal/repository"
 	"github.com/postilka/postilka/internal/service"
 )
@@ -78,7 +79,13 @@ func (h *ChannelConnectHandler) OAuthCallback(w http.ResponseWriter, r *http.Req
 		return
 	}
 	q := r.URL.Query()
-	result, err := h.connect.OAuthCallback(r.Context(), provider, q.Get("state"), q.Get("code"), q.Get("error"))
+	state, code, deviceID := q.Get("state"), q.Get("code"), q.Get("device_id")
+	if code == "" || state == "" || deviceID == "" {
+		if c, s, d, ok := oauthclient.CallbackParams(r); ok {
+			code, state, deviceID = c, s, d
+		}
+	}
+	result, err := h.connect.OAuthCallback(r.Context(), provider, state, code, deviceID, q.Get("error"))
 	if err != nil {
 		redirectFail(w, r, h.cfg.PublicAppURLNormalized(), string(provider), err.Error())
 		return

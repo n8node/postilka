@@ -15,6 +15,7 @@ const vkAuthURL = "https://id.vk.ru/authorize"
 const vkTokenURL = "https://id.vk.ru/oauth2/auth"
 const vkUserInfoURL = "https://id.vk.ru/oauth2/user_info"
 const vkIDScope = "email vkid.personal_info"
+const VKCommunityIDScope = "wall photos video groups offline"
 
 type VKClient struct {
 	ClientID     string
@@ -25,6 +26,7 @@ type VKClient struct {
 
 type VKTokenResponse struct {
 	AccessToken string `json:"access_token"`
+	ExpiresIn   int    `json:"expires_in"`
 	UserID      int64  `json:"user_id"`
 	State       string `json:"state"`
 	Email       string `json:"email"`
@@ -48,6 +50,10 @@ type VKProfile struct {
 }
 
 func (c *VKClient) AuthorizeURL(state, codeChallenge, redirectURI string) string {
+	return c.AuthorizeURLWithScope(state, codeChallenge, redirectURI, vkIDScope)
+}
+
+func (c *VKClient) AuthorizeURLWithScope(state, codeChallenge, redirectURI, scope string) string {
 	values := url.Values{}
 	values.Set("response_type", "code")
 	values.Set("client_id", c.ClientID)
@@ -55,7 +61,9 @@ func (c *VKClient) AuthorizeURL(state, codeChallenge, redirectURI string) string
 	values.Set("state", state)
 	values.Set("code_challenge", codeChallenge)
 	values.Set("code_challenge_method", "S256")
-	values.Set("scope", vkIDScope)
+	if strings.TrimSpace(scope) != "" {
+		values.Set("scope", strings.TrimSpace(scope))
+	}
 	return vkAuthURL + "?" + values.Encode()
 }
 

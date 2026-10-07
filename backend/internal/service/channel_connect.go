@@ -111,6 +111,11 @@ func (s *ChannelConnectService) OAuthStart(
 	if provider == model.SocialProviderVK {
 		oauthAppMode = normalizeVKOAuthMode(req.OAuthAppMode)
 		sessionMeta["oauth_app_mode"] = string(oauthAppMode)
+		codeVerifier, err := oauthclient.CodeVerifier()
+		if err != nil {
+			return nil, err
+		}
+		sessionMeta["code_verifier"] = codeVerifier
 	}
 	appID, appSecret, err := s.resolveOAuthAppCredentials(provider, cfg, req, oauthAppMode)
 	if err != nil {
@@ -156,10 +161,16 @@ func (s *ChannelConnectService) OAuthStart(
 	var authURL string
 	switch provider {
 	case model.SocialProviderVK:
-		client := &oauthclient.VKCommunityClient{
-			AppID: appID, AppSecret: appSecret, RedirectURI: redirectURI,
+		client := &oauthclient.VKClient{
+			ClientID: appID, ClientSecret: appSecret, RedirectURI: redirectURI,
 		}
-		authURL = client.AuthorizeURL(state)
+		verifier, _ := sessionMeta["code_verifier"].(string)
+		authURL = client.AuthorizeURLWithScope(
+			state,
+			oauthclient.CodeChallenge(verifier),
+			redirectURI,
+			oauthclient.VKCommunityIDScope,
+		)
 	case model.SocialProviderOK:
 		client := &oauthclient.OKClient{
 			AppID: cfg.OAuthClientID, AppSecret: cfg.OAuthClientSecret, RedirectURI: redirectURI,
@@ -188,7 +199,7 @@ func (s *ChannelConnectService) OAuthStart(
 func (s *ChannelConnectService) OAuthCallback(
 	ctx context.Context,
 	provider model.SocialProvider,
-	state, code, oauthError string,
+	state, code, deviceID, oauthError string,
 ) (*model.ChannelOAuthCompleteResult, error) {
 	if oauthError != "" {
 		return nil, fmt.Errorf("oauth: %s", oauthError)
@@ -225,10 +236,14 @@ func (s *ChannelConnectService) OAuthCallback(
 		if err != nil {
 			return nil, err
 		}
-		client := &oauthclient.VKCommunityClient{
-			AppID: appID, AppSecret: appSecret, RedirectURI: redirectURI,
+		client := &oauthclient.VKClient{
+			ClientID: appID, ClientSecret: appSecret, RedirectURI: redirectURI,
 		}
-		token, err := client.ExchangeCode(ctx, code)
+		codeVerifier, _ := session.Metadata["code_verifier"].(string)
+		if strings.TrimSpace(codeVerifier) == "" || strings.TrimSpace(deviceID) == "" {
+			return nil, ErrChannelOAuthStateInvalid
+		}
+		token, err := client.ExchangeCode(ctx, code, codeVerifier, deviceID, state, redirectURI)
 		if err != nil {
 			return nil, err
 		}
