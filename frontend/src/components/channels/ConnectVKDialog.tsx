@@ -250,9 +250,29 @@ export function ConnectVKDialog({
                     <span className="block font-medium">Через своё приложение</span>
                     <span className="block text-xs text-muted">Авторизация через ваше VK-приложение</span>
                   </button>
-                  <button type="button" disabled className="w-full rounded-lg border border-border px-3 py-2 text-left text-sm opacity-60">
+                  <button
+                    type="button"
+                    disabled={!enabled || !platformOAuthAvailable}
+                    onClick={() => {
+                      setConnectionMethod("oauth");
+                      setOauthMode("platform");
+                      setError(null);
+                    }}
+                    className={cn(
+                      "w-full rounded-lg border px-3 py-2 text-left text-sm",
+                      connectionMethod === "oauth" && oauthMode === "platform"
+                        ? "border-accent bg-blue-50"
+                        : platformOAuthAvailable && enabled
+                          ? "border-border hover:bg-zinc-50"
+                          : "border-border opacity-60",
+                    )}
+                  >
                     <span className="block font-medium">Через приложение Postilka</span>
-                    <span className="block text-xs text-muted">Недоступно</span>
+                    <span className="block text-xs text-muted">
+                      {platformOAuthAvailable && enabled
+                        ? "Авторизация через приложение Postilka"
+                        : "Недоступно"}
+                    </span>
                   </button>
                   <button type="button" onClick={() => { setConnectionMethod("community"); setError(null); }} className={cn("w-full rounded-lg border px-3 py-2 text-left text-sm", connectionMethod === "community" ? "border-accent bg-blue-50" : "border-border hover:bg-zinc-50")}>
                     <span className="block font-medium">Через ключ сообщества</span>
