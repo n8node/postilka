@@ -323,8 +323,8 @@ func (r *InviteRepository) GetInviteRelationsForUser(ctx context.Context, userID
 	err := r.pool.QueryRow(ctx, invitedByQ, userID).Scan(&inviteID, &inviteCode, &ownerID, &ownerEmail, &ownerName)
 	if err == nil {
 		result.InvitedBy = &struct {
-			InviteID   string           `json:"invite_id"`
-			InviteCode string           `json:"invite_code"`
+			InviteID   string                 `json:"invite_id"`
+			InviteCode string                 `json:"invite_code"`
 			User       *model.InviteUserBrief `json:"user,omitempty"`
 		}{
 			InviteID:   inviteID,
@@ -391,7 +391,14 @@ func (r *InviteRepository) ListPublicSystem(ctx context.Context, limit int) ([]m
 		       used_by_user_id, used_at, expires_at, created_at
 		FROM invites
 		WHERE scope = 'SYSTEM'
-		ORDER BY created_at ASC
+		  AND status <> 'REVOKED'
+		ORDER BY CASE
+			WHEN status = 'ACTIVE' AND (expires_at IS NULL OR expires_at > NOW()) THEN 0
+			WHEN status = 'USED' THEN 2
+			ELSE 1
+		END,
+		created_at ASC,
+		id ASC
 		LIMIT $1
 	`
 	rows, err := r.pool.Query(ctx, q, limit)
