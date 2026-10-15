@@ -124,7 +124,7 @@ export function RegisterForm() {
         isWorkspaceInviteRegistration ? workspaceInviteToken : undefined,
       );
       if ("pending_approval" in result && result.pending_approval) {
-        router.push("/auth/registration-pending");
+        router.push("/auth/registration-pending?stage=verify-email");
       } else {
         router.push(nextPath || "/dashboard");
       }

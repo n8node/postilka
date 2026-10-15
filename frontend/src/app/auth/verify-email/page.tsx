@@ -33,7 +33,7 @@ function VerifyEmailContent() {
         if (cancelled) return;
         setStatus("success");
         if ("pending_approval" in result && result.pending_approval) {
-          router.replace("/auth/registration-pending");
+          router.replace("/auth/registration-pending?stage=approval");
           return;
         }
         setMessage("Email подтверждён. Переходим…");
