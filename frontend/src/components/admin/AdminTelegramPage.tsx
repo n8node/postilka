@@ -42,6 +42,10 @@ const DEFAULT_SETTINGS: TelegramSettings = {
   digest_chat_id: "",
   digest_topic_id: 0,
   digest_hour: 9,
+  kie_credits_enabled: true,
+  kie_credits_alert_1: 3000,
+  kie_credits_alert_2: 2000,
+  kie_credits_alert_3: 1000,
 };
 
 const DEFAULT_RUNTIME: TelegramRuntimeStatus = {
@@ -121,6 +125,10 @@ export function AdminTelegramPage({ embedded = false }: { embedded?: boolean }) 
         data.settings.digest_hour <= 23
           ? data.settings.digest_hour
           : 9,
+      kie_credits_enabled: data.settings.kie_credits_enabled ?? true,
+      kie_credits_alert_1: data.settings.kie_credits_alert_1 ?? 3000,
+      kie_credits_alert_2: data.settings.kie_credits_alert_2 ?? 2000,
+      kie_credits_alert_3: data.settings.kie_credits_alert_3 ?? 1000,
     });
     setTokenSet(data.bot_token_set);
     setTokenHint(data.bot_token_hint || "");
@@ -578,6 +586,48 @@ export function AdminTelegramPage({ embedded = false }: { embedded?: boolean }) 
           <Send className="h-4 w-4" />
           {digestTesting ? "Отправка…" : "Отправить сводку сейчас"}
         </button>
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-4">
+        <h2 className="font-medium text-slate-900">Остаток кредитов KIE.ai</h2>
+        <p className="text-xs text-slate-500">
+          Отдельное сообщение с общим остатком отправляется в основной чат Telegram каждые 30 минут.
+          Каждый пороговый alert отправляется один раз при переходе ниже порога и повторится после
+          восстановления баланса и нового снижения.
+        </p>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={settings.kie_credits_enabled}
+            onChange={(e) => patch({ kie_credits_enabled: e.target.checked })}
+            className="rounded border-slate-300"
+          />
+          Отправлять уведомления об остатке кредитов KIE.ai
+        </label>
+        <div className="grid gap-4 sm:grid-cols-3">
+          {([
+            ["kie_credits_alert_1", "Alert 1: менее кредитов", settings.kie_credits_alert_1],
+            ["kie_credits_alert_2", "Alert 2: менее кредитов", settings.kie_credits_alert_2],
+            ["kie_credits_alert_3", "Alert 3: менее кредитов", settings.kie_credits_alert_3],
+          ] as const).map(([key, label, value]) => (
+            <div key={key}>
+              <label className="mb-1 block text-sm font-medium text-slate-700">{label}</label>
+              <input
+                type="number"
+                min={0}
+                step={1}
+                value={value}
+                onChange={(e) =>
+                  patch({
+                    [key]: Math.max(0, Number.parseInt(e.target.value, 10) || 0),
+                  } as Partial<TelegramSettings>)
+                }
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm"
+              />
+            </div>
+          ))}
+        </div>
+        <p className="text-xs text-slate-400">Значение 0 отключает конкретный alert.</p>
       </section>
 
       <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-6">

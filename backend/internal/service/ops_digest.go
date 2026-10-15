@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"html"
 	"log/slog"
 	"net/http"
@@ -18,11 +19,12 @@ import (
 )
 
 const (
-	opsDigestProbeTimeout     = 8 * time.Second
-	opsDigestCollectTimeout   = 50 * time.Second
-	opsWorkerHeartbeatStale   = 3 * time.Minute
-	opsDigestDefaultHour      = 9
-	opsMoscowLocation         = "Europe/Moscow"
+	opsDigestProbeTimeout    = 8 * time.Second
+	opsDigestCollectTimeout  = 50 * time.Second
+	opsWorkerHeartbeatStale  = 3 * time.Minute
+	opsDigestDefaultHour     = 9
+	opsMoscowLocation        = "Europe/Moscow"
+	kieCreditsNotifyInterval = 30 * time.Minute
 )
 
 var moscowLocation = func() *time.Location {
@@ -145,6 +147,61 @@ func (s *OpsDigestService) ProcessDue(ctx context.Context) error {
 	}
 	s.logger.Info("ops digest sent", "chat_id", cfg.DigestChatID, "topic_id", cfg.DigestTopicID)
 	return nil
+}
+
+// ProcessKieCredits sends the regular KIE balance report and threshold alerts.
+// It is deliberately separate from the daily monitoring digest and uses the regular admin chat.
+func (s *OpsDigestService) ProcessKieCredits(ctx context.Context) error {
+	if s == nil || s.settings == nil || s.telegram == nil || s.kie == nil || s.opsState == nil {
+		return nil
+	}
+	cfg, err := s.settings.GetEffective(ctx)
+	if err != nil || !cfg.KieCreditsEnabled || !cfg.Enabled {
+		return err
+	}
+	result, err := s.kie.TestConnection(ctx, model.KieTestRequest{})
+	if err != nil {
+		return err
+	}
+	if !result.OK {
+		return errors.New(result.Message)
+	}
+	credits := result.CreditsRemaining
+
+	thresholds := []int{cfg.KieCreditsAlert1, cfg.KieCreditsAlert2, cfg.KieCreditsAlert3}
+	for i, threshold := range thresholds {
+		if threshold <= 0 {
+			continue
+		}
+		below := credits < float64(threshold)
+		claimed, claimErr := s.opsState.TryClaimKieCreditsAlert(ctx, i+1, below)
+		if claimErr != nil {
+			return claimErr
+		}
+		if below && claimed {
+			text := fmt.Sprintf("⚠️ KIE.ai: осталось менее %d кредитов\nТекущий остаток: %s", threshold, formatKieCredits(credits))
+			if sendErr := s.telegram.SendDirectAdminMessage(ctx, text); sendErr != nil {
+				_ = s.opsState.ClearKieCreditsAlertClaim(ctx, i+1)
+				return sendErr
+			}
+		}
+	}
+
+	now := time.Now()
+	claimed, err := s.opsState.TryClaimKieCreditsReport(ctx, now)
+	if err != nil || !claimed {
+		return err
+	}
+	text := fmt.Sprintf("💳 KIE.ai — остаток кредитов\nТекущий остаток: %s", formatKieCredits(credits))
+	if err := s.telegram.SendDirectAdminMessage(ctx, text); err != nil {
+		_ = s.opsState.ClearKieCreditsReportClaim(ctx, now)
+		return err
+	}
+	return nil
+}
+
+func formatKieCredits(credits float64) string {
+	return strconv.FormatFloat(credits, 'f', 2, 64)
 }
 
 func (s *OpsDigestService) SendNow(ctx context.Context) (bool, string) {

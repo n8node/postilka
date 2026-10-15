@@ -2087,6 +2087,10 @@ export type TelegramSettings = {
   digest_chat_id: string;
   digest_topic_id: number;
   digest_hour: number;
+  kie_credits_enabled: boolean;
+  kie_credits_alert_1: number;
+  kie_credits_alert_2: number;
+  kie_credits_alert_3: number;
 };
 
 export type TelegramAdminView = {

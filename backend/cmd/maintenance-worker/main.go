@@ -140,6 +140,7 @@ func main() {
 		ticker := time.NewTicker(30 * time.Second)
 		defer ticker.Stop()
 		var lastMetricsRun time.Time
+		var lastKieCreditsRun time.Time
 		var backupRunning bool
 
 		for {
@@ -158,6 +159,12 @@ func main() {
 				// Обработка due задач
 				if err := opsDigestSvc.ProcessDue(ctx); err != nil {
 					logger.Warn("ops digest tick failed", "error", err)
+				}
+				if lastKieCreditsRun.IsZero() || time.Since(lastKieCreditsRun) >= 5*time.Minute {
+					if err := opsDigestSvc.ProcessKieCredits(ctx); err != nil {
+						logger.Warn("KIE credits notification tick failed", "error", err)
+					}
+					lastKieCreditsRun = time.Now()
 				}
 
 				// Обработка бэкапов

@@ -27,6 +27,10 @@ type TelegramSettings struct {
 	DigestChatID          string   `json:"digest_chat_id"`
 	DigestTopicID         int      `json:"digest_topic_id"`
 	DigestHour            int      `json:"digest_hour"`
+	KieCreditsEnabled     bool     `json:"kie_credits_enabled"`
+	KieCreditsAlert1      int      `json:"kie_credits_alert_1"`
+	KieCreditsAlert2      int      `json:"kie_credits_alert_2"`
+	KieCreditsAlert3      int      `json:"kie_credits_alert_3"`
 }
 
 type TelegramSettingsRecord struct {
@@ -91,6 +95,10 @@ func DefaultTelegramSettings() TelegramSettings {
 		DigestChatID:          "",
 		DigestTopicID:         0,
 		DigestHour:            9,
+		KieCreditsEnabled:     true,
+		KieCreditsAlert1:      3000,
+		KieCreditsAlert2:      2000,
+		KieCreditsAlert3:      1000,
 	}
 }
 
@@ -101,5 +109,14 @@ func NormalizeTelegramDigestSettings(cfg *TelegramSettings) {
 	cfg.DigestChatID = strings.TrimSpace(cfg.DigestChatID)
 	if cfg.DigestHour < 0 || cfg.DigestHour > 23 {
 		cfg.DigestHour = 9
+	}
+	if cfg.KieCreditsAlert1 < 0 {
+		cfg.KieCreditsAlert1 = 0
+	}
+	if cfg.KieCreditsAlert2 < 0 {
+		cfg.KieCreditsAlert2 = 0
+	}
+	if cfg.KieCreditsAlert3 < 0 {
+		cfg.KieCreditsAlert3 = 0
 	}
 }
