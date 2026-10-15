@@ -744,6 +744,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Post("/telegram/restart", telegramHandler.Restart)
 				r.Post("/telegram/test", telegramHandler.SendTest)
 				r.Post("/telegram/digest/test", telegramHandler.SendDigestTest)
+				r.Post("/telegram/kie-credits/test", telegramHandler.SendKieCreditsTest)
 				r.Get("/telegram/queue", telegramHandler.ListQueue)
 				r.Post("/telegram/queue/{id}/retry", telegramHandler.RetryQueueItem)
 				r.Get("/invites", adminInviteHandler.List)

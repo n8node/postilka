@@ -2172,6 +2172,12 @@ export function sendAdminTelegramDigestTest() {
   });
 }
 
+export function sendAdminTelegramKieCreditsTest() {
+  return apiFetch<TelegramTestResult>("/admin/telegram/kie-credits/test", {
+    method: "POST",
+  });
+}
+
 export function fetchAdminTelegramQueue(params?: {
   status?: TelegramNotificationStatus;
   limit?: number;

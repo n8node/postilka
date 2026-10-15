@@ -90,6 +90,18 @@ func (h *TelegramSettingsHandler) SendDigestTest(w http.ResponseWriter, r *http.
 	writeJSON(w, http.StatusOK, model.TelegramTestResult{OK: ok, Message: msg})
 }
 
+func (h *TelegramSettingsHandler) SendKieCreditsTest(w http.ResponseWriter, r *http.Request) {
+	if h.digest == nil {
+		writeError(w, http.StatusServiceUnavailable, "Уведомления KIE недоступны")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 90*time.Second)
+	defer cancel()
+
+	ok, msg := h.digest.SendKieCreditsTest(ctx)
+	writeJSON(w, http.StatusOK, model.TelegramTestResult{OK: ok, Message: msg})
+}
+
 func (h *TelegramSettingsHandler) ListQueue(w http.ResponseWriter, r *http.Request) {
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))

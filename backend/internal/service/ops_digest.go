@@ -204,6 +204,35 @@ func formatKieCredits(credits float64) string {
 	return strconv.FormatFloat(credits, 'f', 2, 64)
 }
 
+// SendKieCreditsTest sends one test message for each configured KIE threshold.
+// It does not change the scheduler claims used by regular notifications.
+func (s *OpsDigestService) SendKieCreditsTest(ctx context.Context) (bool, string) {
+	if s == nil || s.settings == nil || s.telegram == nil || s.kie == nil {
+		return false, "Уведомления KIE недоступны"
+	}
+	cfg, err := s.settings.GetEffective(ctx)
+	if err != nil {
+		return false, err.Error()
+	}
+	result, err := s.kie.TestConnection(ctx, model.KieTestRequest{})
+	if err != nil {
+		return false, err.Error()
+	}
+	if !result.OK {
+		return false, result.Message
+	}
+
+	credits := formatKieCredits(result.CreditsRemaining)
+	thresholds := []int{cfg.KieCreditsAlert1, cfg.KieCreditsAlert2, cfg.KieCreditsAlert3}
+	for i, threshold := range thresholds {
+		text := fmt.Sprintf("🧪 Тест KIE.ai — Alert %d\nНастроенный порог: %d кредитов\nТекущий остаток: %s", i+1, threshold, credits)
+		if err := s.telegram.SendDirectAdminMessage(ctx, text); err != nil {
+			return false, fmt.Sprintf("Отправлено сообщений: %d из 3. Ошибка: %s", i, err)
+		}
+	}
+	return true, "Отправлены 3 тестовых сообщения KIE.ai"
+}
+
 func (s *OpsDigestService) SendNow(ctx context.Context) (bool, string) {
 	if s == nil || s.settings == nil || s.telegram == nil {
 		return false, "Сервис сводки недоступен"

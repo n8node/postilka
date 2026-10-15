@@ -10,6 +10,7 @@ import {
   restartAdminTelegramBot,
   retryAdminTelegramQueueItem,
   sendAdminTelegramDigestTest,
+  sendAdminTelegramKieCreditsTest,
   sendAdminTelegramTest,
   updateAdminTelegramSettings,
   type TelegramAdminView,
@@ -89,6 +90,9 @@ export function AdminTelegramPage({ embedded = false }: { embedded?: boolean }) 
   const [digestTesting, setDigestTesting] = useState(false);
   const [digestTestMessage, setDigestTestMessage] = useState<string | null>(null);
   const [digestTestOk, setDigestTestOk] = useState<boolean | null>(null);
+  const [kieCreditsTesting, setKieCreditsTesting] = useState(false);
+  const [kieCreditsTestMessage, setKieCreditsTestMessage] = useState<string | null>(null);
+  const [kieCreditsTestOk, setKieCreditsTestOk] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [testMessage, setTestMessage] = useState<string | null>(null);
@@ -273,6 +277,32 @@ export function AdminTelegramPage({ embedded = false }: { embedded?: boolean }) 
       setError(err instanceof ApiError ? err.message : "Не удалось отправить сводку");
     } finally {
       setDigestTesting(false);
+    }
+  }
+
+  async function handleKieCreditsTest() {
+    setKieCreditsTesting(true);
+    setError(null);
+    setKieCreditsTestMessage(null);
+    setKieCreditsTestOk(null);
+    try {
+      const saved = await updateAdminTelegramSettings({
+        settings,
+        ...(tokenInput.trim() ? { bot_token: tokenInput.trim() } : {}),
+      });
+      applyView(saved);
+      setTokenInput("");
+      const result = await sendAdminTelegramKieCreditsTest();
+      setKieCreditsTestOk(result.ok);
+      setKieCreditsTestMessage(result.message);
+      if (!result.ok) setError(result.message);
+    } catch (err) {
+      setKieCreditsTestOk(false);
+      setKieCreditsTestMessage(
+        err instanceof ApiError ? err.message : "Не удалось отправить тестовые сообщения KIE.ai",
+      );
+    } finally {
+      setKieCreditsTesting(false);
     }
   }
 
@@ -628,6 +658,20 @@ export function AdminTelegramPage({ embedded = false }: { embedded?: boolean }) 
           ))}
         </div>
         <p className="text-xs text-slate-400">Значение 0 отключает конкретный alert.</p>
+        {kieCreditsTestMessage && (
+          <p className={cn("text-sm", kieCreditsTestOk ? "text-emerald-700" : "text-red-600")}>
+            {kieCreditsTestMessage}
+          </p>
+        )}
+        <button
+          type="button"
+          onClick={() => void handleKieCreditsTest()}
+          disabled={kieCreditsTesting}
+          className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-4 py-2 text-sm hover:bg-slate-50 disabled:opacity-50"
+        >
+          <Send className="h-4 w-4" />
+          {kieCreditsTesting ? "Отправка…" : "Отправить 3 тестовых сообщения"}
+        </button>
       </section>
 
       <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm space-y-6">
