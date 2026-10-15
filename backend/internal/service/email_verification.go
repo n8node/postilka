@@ -164,7 +164,20 @@ func (s *EmailVerificationService) Verify(ctx context.Context, rawToken string) 
 			s.telegram.NotifyEmailVerified(ctx, verified)
 		}
 	}
+	if verified, err := s.users.GetByID(ctx, rec.UserID); err == nil && verified.PendingApproval && s.email != nil {
+		if sendErr := s.email.Send(ctx, verified.Email, "Postilka — заявка принята", PendingApprovalEmailBody(verified.Name)); sendErr != nil && s.logger != nil {
+			s.logger.Warn("pending approval email failed", "user_id", verified.ID, "error", sendErr)
+		}
+	}
 	return rec.UserID, nil
+}
+
+func PendingApprovalEmailBody(name string) EmailBody {
+	displayName := strings.TrimSpace(name)
+	if displayName == "" {
+		displayName = "друг"
+	}
+	return EmailBody{Preheader: "Заявка на вступление в Postilka принята", ContentHTML: emailGreetingRow(displayName) + emailParagraphRow("Email подтверждён. Ваша заявка на вступление в Postilka принята и находится на рассмотрении. Мы сообщим вам по email, когда доступ будет открыт.")}
 }
 
 func newVerificationToken() (string, []byte, error) {

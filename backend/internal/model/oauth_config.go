@@ -19,11 +19,11 @@ type AdminVKLoginConfig struct {
 }
 
 type AdminMAXLoginConfig struct {
-	BotUsername       string `json:"bot_username"`
-	BotTokenSet       bool   `json:"bot_token_set"`
-	WebhookSecretSet  bool   `json:"webhook_secret_set"`
-	WebhookURL        string `json:"webhook_url"`
-	Configured        bool   `json:"configured"`
+	BotUsername      string `json:"bot_username"`
+	BotTokenSet      bool   `json:"bot_token_set"`
+	WebhookSecretSet bool   `json:"webhook_secret_set"`
+	WebhookURL       string `json:"webhook_url"`
+	Configured       bool   `json:"configured"`
 }
 
 type AdminOAuthLoginSettings struct {
@@ -32,18 +32,20 @@ type AdminOAuthLoginSettings struct {
 }
 
 type AdminAuthSettingsInput struct {
-	InviteRegistrationEnabled bool            `json:"invite_registration_enabled"`
-	VKLoginEnabled            bool            `json:"vk_login_enabled"`
-	MAXLoginEnabled           bool            `json:"max_login_enabled"`
-	VK                        *VKLoginConfig  `json:"vk,omitempty"`
-	MAX                       *MAXLoginConfig `json:"max,omitempty"`
+	InviteRegistrationEnabled   bool            `json:"invite_registration_enabled"`
+	RegistrationApprovalEnabled bool            `json:"registration_approval_enabled"`
+	VKLoginEnabled              bool            `json:"vk_login_enabled"`
+	MAXLoginEnabled             bool            `json:"max_login_enabled"`
+	VK                          *VKLoginConfig  `json:"vk,omitempty"`
+	MAX                         *MAXLoginConfig `json:"max,omitempty"`
 }
 
 type AdminAuthSettingsResponse struct {
-	InviteRegistrationEnabled bool                   `json:"invite_registration_enabled"`
-	VKLoginEnabled            bool                   `json:"vk_login_enabled"`
-	MAXLoginEnabled           bool                   `json:"max_login_enabled"`
-	OAuth                     AdminOAuthLoginSettings `json:"oauth"`
-	MAXWebhookRegistered      bool                   `json:"max_webhook_registered,omitempty"`
-	MAXWebhookError           string                 `json:"max_webhook_error,omitempty"`
+	InviteRegistrationEnabled   bool                    `json:"invite_registration_enabled"`
+	RegistrationApprovalEnabled bool                    `json:"registration_approval_enabled"`
+	VKLoginEnabled              bool                    `json:"vk_login_enabled"`
+	MAXLoginEnabled             bool                    `json:"max_login_enabled"`
+	OAuth                       AdminOAuthLoginSettings `json:"oauth"`
+	MAXWebhookRegistered        bool                    `json:"max_webhook_registered,omitempty"`
+	MAXWebhookError             string                  `json:"max_webhook_error,omitempty"`
 }

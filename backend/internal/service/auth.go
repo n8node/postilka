@@ -24,6 +24,7 @@ var (
 	ErrEmailNotVerified   = errors.New("email not verified")
 	ErrEmailNotBound      = errors.New("email not bound")
 	ErrUserBlocked        = errors.New("account blocked")
+	ErrPendingApproval    = errors.New("registration pending approval")
 	ErrInvalidInput       = errors.New("invalid input")
 )
 
@@ -66,10 +67,11 @@ func NewAuthService(
 }
 
 type AuthResult struct {
-	Token      string
-	User       *model.User
-	Workspace  *model.Workspace
-	Workspaces []model.Workspace
+	Token           string
+	User            *model.User
+	Workspace       *model.Workspace
+	Workspaces      []model.Workspace
+	PendingApproval bool
 }
 
 func RequireVerifiedEmail(user *model.User) error {
@@ -86,9 +88,14 @@ func (s *AuthService) Register(ctx context.Context, email, password, name, invit
 	}
 
 	inviteEnabled := false
+	approvalEnabled := false
 	if s.invites != nil {
 		var err error
 		inviteEnabled, err = s.invites.IsRegistrationEnabled(ctx)
+		if err != nil {
+			return nil, err
+		}
+		approvalEnabled, err = s.invites.IsRegistrationApprovalEnabled(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -103,7 +110,9 @@ func (s *AuthService) Register(ctx context.Context, email, password, name, invit
 		}
 	}
 	if inviteEnabled && strings.TrimSpace(inviteCode) == "" && !workspaceInviteBypass {
-		return nil, ErrInviteRequired
+		if !approvalEnabled {
+			return nil, ErrInviteRequired
+		}
 	}
 
 	exists, err := s.users.ExistsByEmail(ctx, email)
@@ -168,6 +177,13 @@ func (s *AuthService) Register(ctx context.Context, email, password, name, invit
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
+	list := []model.Workspace{*ws}
+	if inviteEnabled && strings.TrimSpace(inviteCode) == "" && approvalEnabled {
+		if _, err := s.users.SetPendingApproval(ctx, user.ID, true); err != nil {
+			return nil, err
+		}
+		user.PendingApproval = true
+	}
 
 	if s.verification != nil {
 		s.verification.SendRegistrationConfirmationBestEffort(ctx, user.ID, user.Email, user.Name)
@@ -179,12 +195,14 @@ func (s *AuthService) Register(ctx context.Context, email, password, name, invit
 
 	_ = s.users.TouchActive(ctx, user.ID)
 
+	if user.PendingApproval {
+		return &AuthResult{User: user, Workspace: ws, Workspaces: list, PendingApproval: true}, nil
+	}
 	token, err := s.auth.IssueToken(user.ID, tokenTTL)
 	if err != nil {
 		return nil, err
 	}
 
-	list := []model.Workspace{*ws}
 	return &AuthResult{Token: token, User: user, Workspace: ws, Workspaces: list}, nil
 }
 
@@ -248,6 +266,17 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (*AuthR
 	}
 	if user.IsBlocked {
 		return nil, ErrUserBlocked
+	}
+	if user.PendingApproval {
+		list, err := s.workspaces.ListForUser(ctx, user.ID)
+		if err != nil {
+			return nil, err
+		}
+		var ws *model.Workspace
+		if len(list) > 0 {
+			ws = &list[0]
+		}
+		return &AuthResult{User: user, Workspace: ws, Workspaces: list, PendingApproval: true}, nil
 	}
 	if hash == "" {
 		return nil, ErrInvalidCredentials
@@ -346,6 +375,17 @@ func (s *AuthService) VerifyEmail(ctx context.Context, token string) (*AuthResul
 	if user.IsBlocked {
 		return nil, ErrUserBlocked
 	}
+	if user.PendingApproval {
+		list, err := s.workspaces.ListForUser(ctx, user.ID)
+		if err != nil {
+			return nil, err
+		}
+		var ws *model.Workspace
+		if len(list) > 0 {
+			ws = &list[0]
+		}
+		return &AuthResult{User: user, Workspace: ws, Workspaces: list, PendingApproval: true}, nil
+	}
 
 	list, err := s.workspaces.ListForUser(ctx, user.ID)
 	if err != nil {
@@ -361,6 +401,9 @@ func (s *AuthService) VerifyEmail(ctx context.Context, token string) (*AuthResul
 		return nil, err
 	}
 
+	if user.PendingApproval {
+		return &AuthResult{User: user, Workspace: ws, Workspaces: list, PendingApproval: true}, nil
+	}
 	return &AuthResult{Token: jwtToken, User: user, Workspace: ws, Workspaces: list}, nil
 }
 
@@ -507,6 +550,9 @@ func (s *AuthService) ResetPassword(ctx context.Context, token, password string)
 	user, err := s.users.GetByID(ctx, userID)
 	if err != nil {
 		return nil, err
+	}
+	if user.PendingApproval {
+		return nil, ErrPendingApproval
 	}
 
 	list, err := s.workspaces.ListForUser(ctx, user.ID)

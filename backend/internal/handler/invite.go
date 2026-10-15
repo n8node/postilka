@@ -36,6 +36,12 @@ func (h *InviteHandler) AuthMethods(w http.ResponseWriter, r *http.Request) {
 	payload := map[string]any{
 		"invite_registration_enabled": enabled,
 	}
+	approvalEnabled, err := h.invites.IsRegistrationApprovalEnabled(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Внутренняя ошибка")
+		return
+	}
+	payload["registration_approval_enabled"] = approvalEnabled && enabled
 	if h.oauth != nil {
 		oauthMethods, err := h.oauth.AuthMethods(r.Context())
 		if err != nil {

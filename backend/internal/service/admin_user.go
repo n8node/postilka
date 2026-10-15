@@ -9,12 +9,38 @@ import (
 )
 
 var (
-	ErrCannotModifySelf      = errors.New("cannot modify own account")
-	ErrCannotDeleteAdmin     = errors.New("cannot delete platform admin")
+	ErrCannotModifySelf  = errors.New("cannot modify own account")
+	ErrCannotDeleteAdmin = errors.New("cannot delete platform admin")
 )
 
 type AdminUserService struct {
-	users *repository.UserRepository
+	users         *repository.UserRepository
+	passwordReset *PasswordResetService
+}
+
+func (s *AdminUserService) BindPasswordReset(passwordReset *PasswordResetService) {
+	s.passwordReset = passwordReset
+}
+
+func (s *AdminUserService) Approve(ctx context.Context, actorID, targetID string) (*model.User, error) {
+	if actorID == targetID {
+		return nil, ErrCannotModifySelf
+	}
+	user, err := s.users.GetByID(ctx, targetID)
+	if err != nil {
+		return nil, err
+	}
+	if !user.PendingApproval {
+		return user, nil
+	}
+	user, err = s.users.SetPendingApproval(ctx, targetID, false)
+	if err != nil {
+		return nil, err
+	}
+	if s.passwordReset != nil {
+		_ = s.passwordReset.SendApprovalLink(ctx, user)
+	}
+	return user, nil
 }
 
 func NewAdminUserService(users *repository.UserRepository) *AdminUserService {

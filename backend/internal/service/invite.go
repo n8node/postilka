@@ -14,17 +14,17 @@ import (
 )
 
 const (
-	InviteCodePrefix           = "Postilka_"
-	InviteRandomLength         = 12
-	DefaultInvitesOnRegister   = 3
-	SettingInviteRegistration  = "auth.invite_registration_enabled"
+	InviteCodePrefix          = "Postilka_"
+	InviteRandomLength        = 12
+	DefaultInvitesOnRegister  = 3
+	SettingInviteRegistration = "auth.invite_registration_enabled"
 )
 
 var (
-	ErrInvalidInviteCode   = errors.New("invalid invite code")
-	ErrInviteNotActive     = errors.New("invite not active")
-	ErrInviteAlreadyUsed   = errors.New("invite already consumed")
-	ErrInviteRequired      = errors.New("invite required")
+	ErrInvalidInviteCode = errors.New("invalid invite code")
+	ErrInviteNotActive   = errors.New("invite not active")
+	ErrInviteAlreadyUsed = errors.New("invite already consumed")
+	ErrInviteRequired    = errors.New("invite required")
 )
 
 var inviteCodeRegex = regexp.MustCompile(`^Postilka_[A-Z0-9]{8,64}$`)
@@ -73,6 +73,10 @@ func (s *InviteService) IsRegistrationEnabled(ctx context.Context) (bool, error)
 
 func (s *InviteService) SetRegistrationEnabled(ctx context.Context, enabled bool) error {
 	return s.settings.SetInviteRegistrationEnabled(ctx, enabled)
+}
+
+func (s *InviteService) IsRegistrationApprovalEnabled(ctx context.Context) (bool, error) {
+	return s.settings.IsRegistrationApprovalEnabled(ctx)
 }
 
 func (s *InviteService) VerifyInvite(ctx context.Context, rawCode string) (string, error) {

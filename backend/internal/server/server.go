@@ -67,6 +67,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	emailVerificationSvc := service.NewEmailVerificationService(emailVerificationRepo, userRepo, emailSvc, cfg, logger)
 	passwordResetRepo := repository.NewPasswordResetRepository(db.Pool)
 	passwordResetSvc := service.NewPasswordResetService(passwordResetRepo, userRepo, emailSvc, cfg, logger)
+	adminUserSvc.BindPasswordReset(passwordResetSvc)
 
 	paymentSettingsRepo := repository.NewPaymentSettingsRepository(db.Pool)
 	paymentSettingsSvc := service.NewPaymentSettingsService(paymentSettingsRepo, cfg)
@@ -624,6 +625,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Get("/users", adminHandler.ListUsers)
 				r.Put("/users/{userID}/plan", adminHandler.AssignUserPlan)
 				r.Put("/users/{userID}/blocked", adminHandler.SetUserBlocked)
+				r.Put("/users/{userID}/approve", adminHandler.ApproveUser)
 				r.Post("/users/{userID}/wallet/credit", adminHandler.GrantUserWalletCredit)
 				r.Delete("/users/{userID}", adminHandler.DeleteUser)
 

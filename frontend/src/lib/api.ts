@@ -50,6 +50,7 @@ export type AdminUser = {
   locale: string;
   timezone: string;
   is_blocked: boolean;
+  pending_approval: boolean;
   is_platform_admin: boolean;
   wallet_balance_cents: number;
   created_at: string;
@@ -120,6 +121,7 @@ export type AdminUsersQuery = {
   q?: string;
   is_blocked?: boolean;
   is_platform_admin?: boolean;
+  pending_approval?: boolean;
 };
 
 export type AdminFile = {
@@ -375,7 +377,7 @@ export function register(
   inviteCode?: string,
   workspaceInviteToken?: string,
 ) {
-  return apiFetch<MeResponse>("/auth/register", {
+  return apiFetch<MeResponse | { pending_approval: boolean; message: string }>("/auth/register", {
     method: "POST",
     body: JSON.stringify({
       email,
@@ -388,7 +390,7 @@ export function register(
 }
 
 export function verifyEmail(token: string) {
-  return apiFetch<MeResponse>("/auth/verify-email", {
+  return apiFetch<MeResponse | { pending_approval: boolean; message: string }>("/auth/verify-email", {
     method: "POST",
     body: JSON.stringify({ token }),
   });
@@ -626,6 +628,7 @@ export function resetPassword(token: string, password: string) {
 
 export type AuthMethods = {
   invite_registration_enabled: boolean;
+  registration_approval_enabled?: boolean;
   vk_login_enabled?: boolean;
   max_login_enabled?: boolean;
 };
@@ -721,6 +724,7 @@ export type LoginIdentity = {
 
 export type AdminAuthSettings = {
   invite_registration_enabled: boolean;
+  registration_approval_enabled?: boolean;
   vk_login_enabled?: boolean;
   max_login_enabled?: boolean;
   max_webhook_registered?: boolean;
@@ -744,6 +748,7 @@ export type AdminAuthSettings = {
 
 export type AdminAuthSettingsInput = {
   invite_registration_enabled: boolean;
+  registration_approval_enabled?: boolean;
   vk_login_enabled?: boolean;
   max_login_enabled?: boolean;
   vk?: {
@@ -1005,6 +1010,9 @@ export function fetchAdminUsers(query: AdminUsersQuery = {}) {
   if (typeof query.is_platform_admin === "boolean") {
     params.set("is_platform_admin", String(query.is_platform_admin));
   }
+  if (typeof query.pending_approval === "boolean") {
+    params.set("pending_approval", String(query.pending_approval));
+  }
   const qs = params.toString();
   return apiFetch<AdminUsersResponse>(`/admin/users${qs ? `?${qs}` : ""}`);
 }
@@ -1213,6 +1221,10 @@ export function setAdminUserBlocked(userId: string, blocked: boolean) {
     method: "PUT",
     body: JSON.stringify({ blocked }),
   });
+}
+
+export function approveAdminUser(userId: string) {
+  return apiFetch<{ user: AdminUser }>(`/admin/users/${userId}/approve`, { method: "PUT" });
 }
 
 export function deleteAdminUser(userId: string) {

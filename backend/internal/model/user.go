@@ -18,6 +18,7 @@ type User struct {
 	Locale          string     `json:"locale"`
 	Timezone        string     `json:"timezone"`
 	IsBlocked       bool       `json:"is_blocked"`
+	PendingApproval bool       `json:"pending_approval"`
 	IsPlatformAdmin bool       `json:"is_platform_admin"`
 	EmailVerifiedAt *time.Time `json:"email_verified_at,omitempty"`
 	PendingEmail    string     `json:"pending_email,omitempty"`

@@ -56,6 +56,25 @@ func (r *SettingsRepository) SetInviteRegistrationEnabled(ctx context.Context, e
 	return r.Set(ctx, "auth.invite_registration_enabled", v)
 }
 
+func (r *SettingsRepository) IsRegistrationApprovalEnabled(ctx context.Context) (bool, error) {
+	value, err := r.Get(ctx, "auth.registration_approval_enabled")
+	if errors.Is(err, ErrNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return value == "true", nil
+}
+
+func (r *SettingsRepository) SetRegistrationApprovalEnabled(ctx context.Context, enabled bool) error {
+	v := "false"
+	if enabled {
+		v = "true"
+	}
+	return r.Set(ctx, "auth.registration_approval_enabled", v)
+}
+
 func (r *SettingsRepository) IsOAuthLoginEnabled(ctx context.Context, provider string) (bool, error) {
 	value, err := r.Get(ctx, "auth."+provider+"_login_enabled")
 	if errors.Is(err, ErrNotFound) {
@@ -68,10 +87,10 @@ func (r *SettingsRepository) IsOAuthLoginEnabled(ctx context.Context, provider s
 }
 
 const (
-	adStudioHiddenCategoriesKey  = "ad_studio.hidden_categories"
-	adStudioShuffleTemplatesKey  = "ad_studio.shuffle_templates"
-	adTrendsHiddenCategoriesKey  = "ad_trends.hidden_categories"
-	adTrendsShuffleTemplatesKey  = "ad_trends.shuffle_templates"
+	adStudioHiddenCategoriesKey = "ad_studio.hidden_categories"
+	adStudioShuffleTemplatesKey = "ad_studio.shuffle_templates"
+	adTrendsHiddenCategoriesKey = "ad_trends.hidden_categories"
+	adTrendsShuffleTemplatesKey = "ad_trends.shuffle_templates"
 )
 
 func catalogHiddenCategoriesKey(catalog string) string {
@@ -166,4 +185,3 @@ func (r *SettingsRepository) SetOAuthLoginEnabled(ctx context.Context, provider 
 	}
 	return r.Set(ctx, "auth."+provider+"_login_enabled", v)
 }
-

@@ -59,7 +59,7 @@ func NewOAuthLoginService(
 	return &OAuthLoginService{
 		users: users, identities: identities, sessions: sessions,
 		oauthSettings: oauthSettings,
-		workspaces: workspaces, plans: plans, settings: settings,
+		workspaces:    workspaces, plans: plans, settings: settings,
 		pool: pool, auth: auth, cfg: cfg,
 	}
 }
@@ -123,6 +123,10 @@ func (s *OAuthLoginService) GetAdminSettings(ctx context.Context) (*model.AdminA
 	if err != nil {
 		return nil, err
 	}
+	approvalEnabled, err := s.settings.IsRegistrationApprovalEnabled(ctx)
+	if err != nil {
+		return nil, err
+	}
 	oauthAdmin, err := s.buildAdminOAuthSettings(ctx)
 	if err != nil {
 		return nil, err
@@ -136,15 +140,19 @@ func (s *OAuthLoginService) GetAdminSettings(ctx context.Context) (*model.AdminA
 		return nil, err
 	}
 	return &model.AdminAuthSettingsResponse{
-		InviteRegistrationEnabled: inviteEnabled,
-		VKLoginEnabled:            vkEnabled,
-		MAXLoginEnabled:           maxEnabled,
-		OAuth:                     oauthAdmin,
+		InviteRegistrationEnabled:   inviteEnabled,
+		RegistrationApprovalEnabled: approvalEnabled,
+		VKLoginEnabled:              vkEnabled,
+		MAXLoginEnabled:             maxEnabled,
+		OAuth:                       oauthAdmin,
 	}, nil
 }
 
 func (s *OAuthLoginService) SaveAdminSettings(ctx context.Context, input model.AdminAuthSettingsInput) (string, error) {
 	if err := s.settings.SetInviteRegistrationEnabled(ctx, input.InviteRegistrationEnabled); err != nil {
+		return "", err
+	}
+	if err := s.settings.SetRegistrationApprovalEnabled(ctx, input.RegistrationApprovalEnabled && input.InviteRegistrationEnabled); err != nil {
 		return "", err
 	}
 	if err := s.SetProviderEnabled(ctx, model.LoginProviderVK, input.VKLoginEnabled); err != nil {

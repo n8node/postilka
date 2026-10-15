@@ -4,13 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"html"
 	"log/slog"
 	"strings"
 	"time"
 
 	"github.com/postilka/postilka/internal/config"
-	"github.com/postilka/postilka/internal/repository"
+	"github.com/postilka/postilka/internal/model"
 	pwdpolicy "github.com/postilka/postilka/internal/password"
+	"github.com/postilka/postilka/internal/repository"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -24,6 +26,33 @@ type PasswordResetService struct {
 	email  *EmailService
 	cfg    *config.Config
 	logger *slog.Logger
+}
+
+func (s *PasswordResetService) SendApprovalLink(ctx context.Context, user *model.User) error {
+	if s == nil || user == nil || s.email == nil || !user.HasDeliverableEmail() {
+		return nil
+	}
+	token, tokenHash, err := newVerificationToken()
+	if err != nil {
+		return err
+	}
+	if err := s.tokens.InvalidateActiveForUser(ctx, user.ID); err != nil {
+		return err
+	}
+	if err := s.tokens.Create(ctx, user.ID, tokenHash, time.Now().Add(passwordResetTTL)); err != nil {
+		return err
+	}
+	url := passwordResetURL(s.cfg.PublicAppURLNormalized(), token)
+	return s.email.Send(ctx, user.Email, "Postilka — доступ открыт", ApprovalEmailBody(user.Name, user.Email, url))
+}
+
+func ApprovalEmailBody(name, email, url string) EmailBody {
+	displayName := strings.TrimSpace(name)
+	if displayName == "" {
+		displayName = "друг"
+	}
+	content := emailGreetingRow(displayName) + emailParagraphRow("Спасибо за ожидание — доступ к Postilka открыт.") + emailParagraphRow("Ваш логин: <strong>"+html.EscapeString(email)+"</strong>") + emailParagraphRow("Создайте пароль по безопасной одноразовой ссылке ниже.")
+	return EmailBody{Preheader: "Доступ к Postilka открыт", ContentHTML: content, CTALabel: "Создать пароль и войти", CTAURL: url}
 }
 
 func NewPasswordResetService(

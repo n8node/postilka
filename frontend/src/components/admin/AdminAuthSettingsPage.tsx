@@ -13,6 +13,7 @@ export function AdminAuthSettingsPage() {
   const [settingsSaving, setSettingsSaving] = useState(false);
 
   const [inviteEnabled, setInviteEnabled] = useState(false);
+  const [approvalEnabled, setApprovalEnabled] = useState(false);
   const [vkLoginEnabled, setVkLoginEnabled] = useState(false);
   const [maxLoginEnabled, setMaxLoginEnabled] = useState(false);
   const [vkClientId, setVkClientId] = useState("");
@@ -34,6 +35,7 @@ export function AdminAuthSettingsPage() {
     try {
       const data = await fetchAdminAuthSettings();
       setInviteEnabled(data.invite_registration_enabled);
+      setApprovalEnabled(Boolean(data.registration_approval_enabled));
       setVkLoginEnabled(Boolean(data.vk_login_enabled));
       setMaxLoginEnabled(Boolean(data.max_login_enabled));
       setVkClientId(data.oauth?.vk.client_id ?? "");
@@ -67,6 +69,7 @@ export function AdminAuthSettingsPage() {
     try {
       const data = await updateAdminAuthSettings({
         invite_registration_enabled: inviteEnabled,
+        registration_approval_enabled: approvalEnabled,
         vk_login_enabled: vkLoginEnabled,
         max_login_enabled: maxLoginEnabled,
         vk: {
@@ -139,6 +142,10 @@ export function AdminAuthSettingsPage() {
                 <span className="text-sm text-slate-700">
                   Регистрация по инвайтам
                 </span>
+              </label>
+              <label className={`flex cursor-pointer items-start gap-3 rounded-lg border border-slate-100 p-3 ${!inviteEnabled ? "opacity-50" : ""}`}>
+                <input type="checkbox" checked={approvalEnabled} disabled={settingsSaving || !inviteEnabled} onChange={(e) => setApprovalEnabled(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-slate-300" />
+                <span className="text-sm text-slate-700">Заявки на вступление<span className="mt-1 block text-xs text-slate-500">Регистрация без инвайта с ожиданием одобрения администратора</span></span>
               </label>
               <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-100 p-3">
                 <input

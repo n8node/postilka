@@ -135,6 +135,9 @@ func (h *AdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	if v, ok := parseOptionalBool(q.Get("is_platform_admin")); ok {
 		filter.IsPlatformAdmin = &v
 	}
+	if v, ok := parseOptionalBool(q.Get("pending_approval")); ok {
+		filter.PendingApproval = &v
+	}
 
 	items, total, err := h.users.ListForAdmin(r.Context(), filter)
 	if err != nil {
@@ -146,6 +149,20 @@ func (h *AdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 		"total": total,
 		"users": items,
 	})
+}
+
+func (h *AdminHandler) ApproveUser(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Не авторизован")
+		return
+	}
+	user, err := h.adminUsers.Approve(r.Context(), actorID, chi.URLParam(r, "userID"))
+	if err != nil {
+		h.writeUserManageError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"user": user})
 }
 
 func (h *AdminHandler) ListPlans(w http.ResponseWriter, r *http.Request) {

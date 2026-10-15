@@ -66,6 +66,10 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		h.writeAuthError(w, err)
 		return
 	}
+	if result.PendingApproval {
+		writeJSON(w, http.StatusAccepted, map[string]any{"pending_approval": true, "message": "Заявка принята. Подтвердите email — после этого она попадёт на рассмотрение."})
+		return
+	}
 
 	h.mw.SetTokenCookie(w, result.Token, h.cfg.IsProduction())
 
@@ -139,6 +143,10 @@ func (h *AuthHandler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 		h.writeAuthError(w, err)
 		return
 	}
+	if result.PendingApproval {
+		writeJSON(w, http.StatusOK, map[string]any{"pending_approval": true, "message": "Email подтверждён. Ваша заявка находится на рассмотрении."})
+		return
+	}
 
 	h.mw.SetTokenCookie(w, result.Token, h.cfg.IsProduction())
 	if result.Workspace != nil {
@@ -202,6 +210,10 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		h.writeAuthError(w, err)
 		return
 	}
+	if result.PendingApproval {
+		writeJSON(w, http.StatusForbidden, map[string]any{"pending_approval": true, "message": "Заявка на вступление находится на рассмотрении"})
+		return
+	}
 
 	h.mw.SetTokenCookie(w, result.Token, h.cfg.IsProduction())
 
@@ -250,6 +262,8 @@ func (h *AuthHandler) writeAuthError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusUnauthorized, "Неверный email или пароль")
 	case errors.Is(err, service.ErrUserBlocked):
 		writeError(w, http.StatusForbidden, "Аккаунт заблокирован")
+	case errors.Is(err, service.ErrPendingApproval):
+		writeError(w, http.StatusForbidden, "Заявка на вступление находится на рассмотрении")
 	case errors.Is(err, service.ErrInvalidInput):
 		writeError(w, http.StatusBadRequest, "Проверьте email и пароль (мин. 8 символов, заглавные, цифры, спецсимвол)")
 	case errors.Is(err, service.ErrInviteRequired):

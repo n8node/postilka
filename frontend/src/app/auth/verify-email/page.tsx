@@ -29,9 +29,13 @@ function VerifyEmailContent() {
     let cancelled = false;
 
     verifyEmail(token)
-      .then(() => {
+      .then((result) => {
         if (cancelled) return;
         setStatus("success");
+        if ("pending_approval" in result && result.pending_approval) {
+          router.replace("/auth/registration-pending");
+          return;
+        }
         setMessage("Email подтверждён. Переходим…");
 
         const pendingInvite = getPendingWorkspaceInvite();

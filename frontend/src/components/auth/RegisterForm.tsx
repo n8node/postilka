@@ -42,6 +42,7 @@ export function RegisterForm() {
   const [loading, setLoading] = useState(false);
 
   const [inviteEnabled, setInviteEnabled] = useState(false);
+  const [approvalEnabled, setApprovalEnabled] = useState(false);
   const [methodsLoading, setMethodsLoading] = useState(true);
   const [inviteCodeInput, setInviteCodeInput] = useState("");
   const [inviteVerifiedCode, setInviteVerifiedCode] = useState("");
@@ -49,7 +50,10 @@ export function RegisterForm() {
 
   useEffect(() => {
     fetchAuthMethods()
-      .then((data) => setInviteEnabled(data.invite_registration_enabled))
+      .then((data) => {
+        setInviteEnabled(data.invite_registration_enabled);
+        setApprovalEnabled(Boolean(data.registration_approval_enabled));
+      })
       .catch(() => setInviteEnabled(false))
       .finally(() => setMethodsLoading(false));
   }, []);
@@ -60,7 +64,7 @@ export function RegisterForm() {
     confirmPassword.length > 0 && password === confirmPassword;
 
   const inviteStepDone =
-    isWorkspaceInviteRegistration || !inviteEnabled || inviteVerifiedCode.length > 0;
+    isWorkspaceInviteRegistration || !inviteEnabled || approvalEnabled || inviteVerifiedCode.length > 0;
   const canSubmit = inviteStepDone && passwordOk && passwordsMatch && policyAccepted;
 
   async function handleVerifyInvite(e: React.FormEvent) {
@@ -88,7 +92,7 @@ export function RegisterForm() {
     e.preventDefault();
     setError("");
 
-    if (inviteEnabled && !inviteVerifiedCode && !isWorkspaceInviteRegistration) {
+    if (inviteEnabled && !approvalEnabled && !inviteVerifiedCode && !isWorkspaceInviteRegistration) {
       setError("Сначала активируйте регистрацию по инвайт-ключу");
       return;
     }
@@ -109,7 +113,7 @@ export function RegisterForm() {
 
     setLoading(true);
     try {
-      await register(
+      const result = await register(
         email,
         password,
         undefined,
@@ -118,7 +122,11 @@ export function RegisterForm() {
           : undefined,
         isWorkspaceInviteRegistration ? workspaceInviteToken : undefined,
       );
-      router.push(nextPath || "/dashboard");
+      if ("pending_approval" in result && result.pending_approval) {
+        router.push("/auth/registration-pending");
+      } else {
+        router.push(nextPath || "/dashboard");
+      }
       router.refresh();
     } catch (err) {
       setError(
@@ -135,7 +143,7 @@ export function RegisterForm() {
     );
   }
 
-  if (inviteEnabled && !inviteVerifiedCode && !isWorkspaceInviteRegistration) {
+  if (inviteEnabled && !approvalEnabled && !inviteVerifiedCode && !isWorkspaceInviteRegistration) {
     return (
       <form onSubmit={handleVerifyInvite} className="space-y-4">
         {error && (

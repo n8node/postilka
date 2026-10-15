@@ -14,6 +14,7 @@ import {
   fetchAdminUserLoginIdentities,
   fetchAdminUserWorkspaces,
   fetchAdminUsers,
+  approveAdminUser,
   setAdminUserBlocked,
   type AdminUser,
   type AdminUsersQuery,
@@ -98,6 +99,9 @@ export function AdminUsersPage() {
     "all",
   );
   const [roleFilter, setRoleFilter] = useState<"all" | "admin" | "user">("all");
+  const [approvalFilter, setApprovalFilter] = useState<"all" | "pending">("all");
+  const [selectedPending, setSelectedPending] = useState<string[]>([]);
+  const [approving, setApproving] = useState(false);
   const [selected, setSelected] = useState<AdminUser | null>(null);
   const [grantUser, setGrantUser] = useState<AdminUser | null>(null);
 
@@ -123,6 +127,7 @@ export function AdminUsersPage() {
     if (accountFilter === "blocked") query.is_blocked = true;
     if (roleFilter === "admin") query.is_platform_admin = true;
     if (roleFilter === "user") query.is_platform_admin = false;
+    if (approvalFilter === "pending") query.pending_approval = true;
 
     try {
       const data = await fetchAdminUsers(query);
@@ -135,7 +140,20 @@ export function AdminUsersPage() {
     } finally {
       setLoading(false);
     }
-  }, [q, accountFilter, roleFilter]);
+  }, [q, accountFilter, roleFilter, approvalFilter]);
+
+  async function approveSelected() {
+    if (selectedPending.length === 0) return;
+    if (!window.confirm(`Открыть доступ пользователям: ${selectedPending.length}?`)) return;
+    setApproving(true);
+    try {
+      await Promise.all(selectedPending.map((id) => approveAdminUser(id)));
+      setSelectedPending([]);
+      await load();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Не удалось запустить пользователей");
+    } finally { setApproving(false); }
+  }
 
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -186,6 +204,14 @@ export function AdminUsersPage() {
             <option value="blocked">Заблокирован</option>
           </select>
         </label>
+        <label className="text-xs font-medium text-slate-500">
+          Заявки
+          <select value={approvalFilter} onChange={(e) => setApprovalFilter(e.target.value as typeof approvalFilter)} className="mt-1 block w-40 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm">
+            <option value="all">Все</option>
+            <option value="pending">Ожидают запуска</option>
+          </select>
+        </label>
+        {selectedPending.length > 0 && <button type="button" disabled={approving} onClick={() => void approveSelected()} className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50">{approving ? "Запуск…" : `Запустить выбранных (${selectedPending.length})`}</button>}
         <label className="text-xs font-medium text-slate-500">
           Роль
           <select
@@ -248,6 +274,7 @@ export function AdminUsersPage() {
                 users.map((u) => (
                   <tr key={u.id} className="hover:bg-slate-50/80">
                     <td className="px-4 py-3">
+                      {u.pending_approval && <input type="checkbox" checked={selectedPending.includes(u.id)} onChange={(e) => setSelectedPending((prev) => e.target.checked ? [...prev, u.id] : prev.filter((id) => id !== u.id))} className="mr-2 rounded border-slate-300" />}
                       <div className="font-medium text-slate-900">
                         {u.name || "—"}
                       </div>
@@ -257,7 +284,9 @@ export function AdminUsersPage() {
                       {u.id}
                     </td>
                     <td className="px-4 py-3">
-                      {u.is_blocked ? (
+                      {u.pending_approval ? (
+                        <Badge tone="blue">Ожидает одобрения</Badge>
+                      ) : u.is_blocked ? (
                         <Badge tone="red">Заблокирован</Badge>
                       ) : (
                         <Badge tone="green">Активен</Badge>

@@ -22,7 +22,7 @@ func NewUserRepository(pool *pgxpool.Pool) *UserRepository {
 	return &UserRepository{pool: pool}
 }
 
-const userColumns = `id, email, name, locale, timezone, is_blocked, is_platform_admin, email_verified_at, pending_email, created_at, avatar_s3_key, (password_hash IS NOT NULL AND password_hash <> '')`
+const userColumns = `id, email, name, locale, timezone, is_blocked, is_platform_admin, pending_approval, email_verified_at, pending_email, created_at, avatar_s3_key, (password_hash IS NOT NULL AND password_hash <> '')`
 
 func (r *UserRepository) Create(ctx context.Context, email, passwordHash, name string) (*model.User, error) {
 	const q = `
@@ -193,7 +193,7 @@ func (r *UserRepository) GetPasswordHash(ctx context.Context, userID string) (st
 
 func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*model.User, string, error) {
 	const q = `
-		SELECT id, email, password_hash, name, locale, timezone, is_blocked, is_platform_admin, email_verified_at, pending_email, created_at, avatar_s3_key
+		SELECT id, email, password_hash, name, locale, timezone, is_blocked, is_platform_admin, pending_approval, email_verified_at, pending_email, created_at, avatar_s3_key
 		FROM users WHERE email = $1
 	`
 	var hash *string
@@ -319,6 +319,15 @@ func (r *UserRepository) SetBlocked(ctx context.Context, userID string, blocked 
 	return u, err
 }
 
+func (r *UserRepository) SetPendingApproval(ctx context.Context, userID string, pending bool) (*model.User, error) {
+	const q = `UPDATE users SET pending_approval = $2, updated_at = NOW() WHERE id = $1 RETURNING ` + userColumns
+	u, err := scanUser(r.pool.QueryRow(ctx, q, userID, pending))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	return u, err
+}
+
 func (r *UserRepository) Delete(ctx context.Context, userID string) error {
 	tag, err := r.pool.Exec(ctx, `DELETE FROM users WHERE id = $1`, userID)
 	if err != nil {
@@ -334,6 +343,7 @@ type ListUsersFilter struct {
 	Query           string
 	IsBlocked       *bool
 	IsPlatformAdmin *bool
+	PendingApproval *bool
 	Limit           int
 	Offset          int
 }
@@ -361,6 +371,10 @@ func (r *UserRepository) ListForAdmin(ctx context.Context, f ListUsersFilter) ([
 		args = append(args, *f.IsPlatformAdmin)
 		where = append(where, fmt.Sprintf("u.is_platform_admin = $%d", len(args)))
 	}
+	if f.PendingApproval != nil {
+		args = append(args, *f.PendingApproval)
+		where = append(where, fmt.Sprintf("u.pending_approval = $%d", len(args)))
+	}
 
 	whereSQL := ""
 	if len(where) > 0 {
@@ -380,7 +394,7 @@ func (r *UserRepository) ListForAdmin(ctx context.Context, f ListUsersFilter) ([
 	listQ := fmt.Sprintf(`
 		SELECT
 			u.id, u.email, u.name, u.locale, u.timezone,
-			u.is_blocked, u.is_platform_admin, u.wallet_balance_cents, u.created_at, u.updated_at,
+			u.is_blocked, u.is_platform_admin, u.pending_approval, u.wallet_balance_cents, u.created_at, u.updated_at,
 			ws.id, ws.name, ws.slug, ws.role,
 			p.id, p.slug, p.name, p.is_free
 		FROM users u
@@ -412,7 +426,7 @@ func (r *UserRepository) ListForAdmin(ctx context.Context, f ListUsersFilter) ([
 		var planIsFree *bool
 		if err := rows.Scan(
 			&item.ID, &item.Email, &item.Name, &item.Locale, &item.Timezone,
-			&item.IsBlocked, &item.IsPlatformAdmin, &item.WalletBalanceCents,
+			&item.IsBlocked, &item.IsPlatformAdmin, &item.PendingApproval, &item.WalletBalanceCents,
 			&item.CreatedAt, &item.UpdatedAt,
 			&wsID, &wsName, &wsSlug, &wsRole,
 			&planID, &planSlug, &planName, &planIsFree,
@@ -478,7 +492,7 @@ func scanUser(row pgx.Row) (*model.User, error) {
 	var pendingEmail, avatarKey *string
 	err := row.Scan(
 		&u.ID, &u.Email, &u.Name, &u.Locale, &u.Timezone,
-		&u.IsBlocked, &u.IsPlatformAdmin, &u.EmailVerifiedAt, &pendingEmail, &createdAt, &avatarKey, &u.HasPassword,
+		&u.IsBlocked, &u.IsPlatformAdmin, &u.PendingApproval, &u.EmailVerifiedAt, &pendingEmail, &createdAt, &avatarKey, &u.HasPassword,
 	)
 	if err != nil {
 		return nil, err
@@ -493,7 +507,7 @@ func scanUserWithHash(row pgx.Row, hash **string) (*model.User, error) {
 	var pendingEmail, avatarKey *string
 	err := row.Scan(
 		&u.ID, &u.Email, hash, &u.Name, &u.Locale, &u.Timezone,
-		&u.IsBlocked, &u.IsPlatformAdmin, &u.EmailVerifiedAt, &pendingEmail, &createdAt, &avatarKey,
+		&u.IsBlocked, &u.IsPlatformAdmin, &u.PendingApproval, &u.EmailVerifiedAt, &pendingEmail, &createdAt, &avatarKey,
 	)
 	if err != nil {
 		return nil, err
