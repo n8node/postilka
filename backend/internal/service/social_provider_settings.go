@@ -161,11 +161,6 @@ func (s *SocialProviderSettingsService) PublicInfo(ctx context.Context, provider
 func (s *SocialProviderSettingsService) AllPublicInfo(ctx context.Context) []model.SocialProviderPublicInfo {
 	out := make([]model.SocialProviderPublicInfo, 0, len(model.AllSocialProviders))
 	for _, p := range model.AllSocialProviders {
-		// Pinterest is configured in admin first; expose it to users only after
-		// its channel OAuth and publishing adapter are enabled.
-		if p == model.SocialProviderPinterest {
-			continue
-		}
 		out = append(out, s.PublicInfo(ctx, p))
 	}
 	return out

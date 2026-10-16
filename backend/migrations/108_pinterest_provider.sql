@@ -29,6 +29,16 @@ ALTER TABLE provider_logos
         provider IN ('telegram', 'telegram_business', 'vk', 'max', 'rutube', 'dzen', 'youtube', 'photochka', 'wordpress', 'pinterest')
     );
 
+ALTER TABLE channels DROP CONSTRAINT IF EXISTS channels_provider_check;
+ALTER TABLE channels ADD CONSTRAINT channels_provider_check CHECK (
+    provider IN ('telegram', 'vk', 'ok', 'max', 'rutube', 'dzen', 'youtube', 'photochka', 'wordpress', 'pinterest')
+);
+
+ALTER TABLE channel_oauth_sessions DROP CONSTRAINT IF EXISTS channel_oauth_sessions_provider_check;
+ALTER TABLE channel_oauth_sessions ADD CONSTRAINT channel_oauth_sessions_provider_check CHECK (
+    provider IN ('vk', 'ok', 'rutube', 'dzen', 'youtube', 'pinterest')
+);
+
 -- +goose Down
 DELETE FROM social_provider_settings WHERE provider = 'pinterest';
 ALTER TABLE social_provider_settings DROP CONSTRAINT IF EXISTS social_provider_settings_provider_check;
@@ -38,4 +48,12 @@ ALTER TABLE social_provider_settings ADD CONSTRAINT social_provider_settings_pro
 ALTER TABLE provider_logos DROP CONSTRAINT IF EXISTS provider_logos_provider_check;
 ALTER TABLE provider_logos ADD CONSTRAINT provider_logos_provider_check CHECK (
     provider IN ('telegram', 'telegram_business', 'vk', 'max', 'rutube', 'dzen', 'youtube', 'photochka', 'wordpress')
+);
+ALTER TABLE channels DROP CONSTRAINT IF EXISTS channels_provider_check;
+ALTER TABLE channels ADD CONSTRAINT channels_provider_check CHECK (
+    provider IN ('telegram', 'vk', 'ok', 'max', 'rutube', 'dzen', 'youtube', 'photochka', 'wordpress')
+);
+ALTER TABLE channel_oauth_sessions DROP CONSTRAINT IF EXISTS channel_oauth_sessions_provider_check;
+ALTER TABLE channel_oauth_sessions ADD CONSTRAINT channel_oauth_sessions_provider_check CHECK (
+    provider IN ('vk', 'ok', 'rutube', 'dzen', 'youtube')
 );

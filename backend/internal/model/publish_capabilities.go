@@ -113,6 +113,13 @@ func (p ChannelProvider) PublishCapabilities() PublishCapabilities {
 			MaxMedia:      10,
 			MaxTextLength: 50000,
 		}
+	case ChannelProviderPinterest:
+		return PublishCapabilities{
+			Text: true, Photo: true, Video: false,
+			Formats: []string{"pin", "carousel"},
+			ComposerMedia: true,
+			MediaAlbum: true, MaxMedia: 5, MaxTextLength: 800,
+		}
 	default:
 		return PublishCapabilities{}
 	}

@@ -603,6 +603,51 @@ func (s *PublicationService) publishVKWall(
 	return strconv.FormatInt(postID, 10), nil
 }
 
+func (s *PublicationService) publishPinterestPin(ctx context.Context, post *model.Post, channel *model.Channel, token string, content model.PostContent) (string, error) {
+	if s.files == nil || s.storage == nil {
+		return "", fmt.Errorf("хранилище медиа недоступно")
+	}
+	type pinterestMedia struct {
+		ContentType string
+		Data        []byte
+	}
+	media := make([]struct {
+		ContentType string
+		Data        []byte
+	}, 0, len(post.Media))
+	for _, attached := range post.Media {
+		file, err := s.files.GetByID(ctx, post.WorkspaceID, attached.FileID, false)
+		if err != nil {
+			return "", fmt.Errorf("медиафайл Pinterest не найден")
+		}
+		mime := strings.ToLower(strings.TrimSpace(strings.Split(file.MimeType, ";")[0]))
+		if mime != "image/jpeg" && mime != "image/png" {
+			return "", fmt.Errorf("Pinterest поддерживает изображения JPEG и PNG")
+		}
+		body, _, err := s.storage.GetObject(ctx, file.S3Key)
+		if err != nil {
+			return "", err
+		}
+		data, readErr := io.ReadAll(body)
+		_ = body.Close()
+		if readErr != nil {
+			return "", readErr
+		}
+		media = append(media, struct {
+			ContentType string
+			Data        []byte
+		}{ContentType: mime, Data: data})
+	}
+	client := &oauthclient.PinterestClient{}
+	link := ""
+	if post.Settings.Link != nil {
+		link = strings.TrimSpace(post.Settings.Link.URL)
+	}
+	title := strings.TrimSpace(content.Title)
+	description := strings.TrimSpace(readableProviderText(content))
+	return client.CreatePin(ctx, token, strings.TrimSpace(channel.ChatID), title, description, link, description, media)
+}
+
 func (s *PublicationService) vkMediaSources(
 	ctx context.Context,
 	post *model.Post,
@@ -1131,6 +1176,19 @@ func (s *PublicationService) publishTarget(
 			return "", fmt.Errorf("VK поддерживает только пост на стену")
 		}
 		return s.publishVKWall(ctx, post, channel, token, content, settings)
+	}
+
+	if channel.Provider == model.ChannelProviderPinterest {
+		if format != "pin" && format != "carousel" && format != "message" {
+			return "", fmt.Errorf("Pinterest поддерживает только Pin или карусель")
+		}
+		if len(post.Media) == 0 {
+			return "", fmt.Errorf("для Pinterest нужен минимум один файл изображения")
+		}
+		if len(post.Media) > 5 {
+			return "", fmt.Errorf("Pinterest поддерживает не более 5 изображений в карусели")
+		}
+		return s.publishPinterestPin(ctx, post, channel, token, content)
 	}
 
 	if channel.Provider == model.ChannelProviderYouTube {

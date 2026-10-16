@@ -22,6 +22,7 @@ const (
 	ChannelProviderYouTube   ChannelProvider = "youtube"
 	ChannelProviderPhotochka ChannelProvider = "photochka"
 	ChannelProviderWordPress ChannelProvider = "wordpress"
+	ChannelProviderPinterest ChannelProvider = "pinterest"
 )
 
 func (p ChannelProvider) Label() string {

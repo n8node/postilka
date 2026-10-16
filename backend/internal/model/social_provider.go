@@ -127,7 +127,7 @@ func (p SocialProvider) ConnectFlow() string {
 }
 
 func (p SocialProvider) UsesUserOAuthApp() bool {
-	return p == SocialProviderVK || p == SocialProviderYouTube || p == SocialProviderPinterest
+	return p == SocialProviderVK || p == SocialProviderYouTube
 }
 
 type SocialProviderSettings struct {

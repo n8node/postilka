@@ -7,7 +7,7 @@ import { ConnectVKDialog } from "@/components/channels/ConnectVKDialog";
 import { ConnectYouTubeDialog } from "@/components/channels/ConnectYouTubeDialog";
 import type { SocialProviderKey } from "@/lib/api";
 
-const OAUTH_PROVIDERS: SocialProviderKey[] = ["vk", "rutube", "dzen", "youtube"];
+const OAUTH_PROVIDERS: SocialProviderKey[] = ["vk", "rutube", "dzen", "youtube", "pinterest"];
 
 const LABELS: Record<SocialProviderKey, string> = {
   vk: "VK",

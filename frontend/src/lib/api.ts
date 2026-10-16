@@ -2307,9 +2307,9 @@ export type ProviderLogoKey =
   | "rutube"
   | "dzen"
   | "youtube"
+  | "pinterest"
   | "photochka"
-  | "wordpress"
-  | "pinterest";
+  | "wordpress";
 
 export type ProviderLogoView = {
   provider: ProviderLogoKey;
@@ -2371,8 +2371,10 @@ export type ChannelProvider =
   | "rutube"
   | "dzen"
   | "youtube"
+  | "pinterest"
   | "photochka"
-  | "wordpress";
+  | "wordpress"
+  | "pinterest";
 
 export type ChannelMetadata = {
   provider_title?: string;

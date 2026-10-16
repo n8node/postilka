@@ -27,6 +27,7 @@ const PROVIDER_LABELS: Partial<Record<ChannelProvider, string>> = {
   rutube: "Rutube",
   dzen: "Дзен",
   youtube: "YouTube",
+  pinterest: "Pinterest",
   photochka: "Photochka",
   wordpress: "WordPress",
 };
@@ -199,6 +200,16 @@ function ConnectChannelDialogs({
 
       {activeProvider === "youtube" && (
         <ConnectYouTubeDialog open onClose={onClose} onConnected={onConnected} />
+      )}
+
+      {activeProvider === "pinterest" && (
+        <ConnectOAuthProviderDialog
+          open
+          provider="pinterest"
+          label="Pinterest"
+          onClose={onClose}
+          onConnected={onConnected}
+        />
       )}
 
       <ConnectPhotochkaDialog
