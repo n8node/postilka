@@ -17,7 +17,7 @@ const (
 	pinterestAuthorizeURL = "https://www.pinterest.com/oauth/"
 	pinterestTokenURL     = "https://api.pinterest.com/v5/oauth/token"
 	pinterestAPIBaseURL   = "https://api.pinterest.com/v5"
-	PinterestScope        = "user_accounts:read,boards:read,pins:read,pins:write"
+	PinterestScope        = "user_accounts:read,boards:read,boards:write,pins:read,pins:write"
 )
 
 type PinterestClient struct {
@@ -177,7 +177,7 @@ func (c *PinterestClient) getJSON(ctx context.Context, token, path string, out a
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("pinterest API: HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return pinterestAPIError(resp.StatusCode, body)
 	}
 	return json.Unmarshal(body, out)
 }
@@ -200,9 +200,17 @@ func (c *PinterestClient) postJSON(ctx context.Context, token, path string, payl
 	defer resp.Body.Close()
 	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 	if resp.StatusCode >= 400 {
-		return fmt.Errorf("pinterest API: HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return pinterestAPIError(resp.StatusCode, body)
 	}
 	return json.Unmarshal(body, out)
+}
+
+func pinterestAPIError(status int, body []byte) error {
+	detail := strings.TrimSpace(string(body))
+	if strings.Contains(detail, "boards:write") || strings.Contains(detail, "sufficient permissions") {
+		return fmt.Errorf("pinterest API: HTTP %d: токен не имеет нужных прав. Переподключите Pinterest после добавления boards:write", status)
+	}
+	return fmt.Errorf("pinterest API: HTTP %d: %s", status, detail)
 }
 
 func (c *PinterestClient) http() *http.Client {

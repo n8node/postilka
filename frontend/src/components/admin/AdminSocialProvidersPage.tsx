@@ -949,7 +949,7 @@ function SocialSettingsForm({
             </p>
             {provider === "pinterest" && (
               <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                Redirect URI добавьте в Pinterest Developer Portal точно в таком виде. Для первой версии нужны права user_accounts:read, boards:read, pins:read и pins:write. Trial access подходит для подготовки и Sandbox; production-публикация требует Standard access.
+                Redirect URI добавьте в Pinterest Developer Portal точно в таком виде. Нужны права user_accounts:read, boards:read, boards:write, pins:read и pins:write. После изменения прав переподключите Pinterest. Trial access подходит для подготовки и Sandbox; production-публикация требует Standard access.
               </p>
             )}
             {provider === "rutube" && (

@@ -12,7 +12,7 @@ VALUES ('pinterest', '{
   "enabled": false,
   "oauth_client_id": "",
   "oauth_client_secret": "",
-  "connect_help_text": "1. Создайте приложение Pinterest Developer.\n2. Добавьте Redirect URI из Postilka.\n3. Укажите App ID и Secret Key ниже.\n4. Для первой версии запросите права user_accounts:read, boards:read, pins:read и pins:write.\n5. Production-публикация Pins требует Standard access Pinterest.",
+  "connect_help_text": "1. Создайте приложение Pinterest Developer.\n2. Добавьте Redirect URI из Postilka.\n3. Укажите App ID и Secret Key ниже.\n4. Запросите права user_accounts:read, boards:read, boards:write, pins:read и pins:write.\n5. После изменения прав переподключите Pinterest.\n6. Production-публикация Pins требует Standard access Pinterest.",
   "connect_help_url": "https://developers.pinterest.com/docs/getting-started/authentication/",
   "docs_url": "https://developers.pinterest.com/docs/reference/pins/",
   "support_telegram_username": "postilka_support",

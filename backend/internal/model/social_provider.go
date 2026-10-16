@@ -222,7 +222,7 @@ func DefaultSocialProviderSettings(provider SocialProvider) SocialProviderSettin
 		def.ConnectHelpText = "1. В Google Cloud Console создайте OAuth Client (Web) и включите YouTube Data API v3.\n\n2. Redirect URI: https://postilka.ru/app/api/v1/channels/oauth/youtube/callback\n\n3. В Postilka укажите Client ID и Client Secret своего проекта Google.\n\n4. Войдите через Google под аккаунтом владельца YouTube-канала и выберите канал.\n\n5. Квоты YouTube API расходуются с вашего Google Cloud проекта; запросы к API идут через прокси Postilka."
 	case SocialProviderPinterest:
 		def.ConnectHelpURL = "https://developers.pinterest.com/docs/getting-started/authentication/"
-		def.ConnectHelpText = "Pinterest сейчас на этапе подготовки интеграции. Включите Trial access, укажите Redirect URI и запросите права user_accounts:read, boards:read, pins:read и pins:write. Для production-публикации потребуется Standard access Pinterest."
+		def.ConnectHelpText = "Pinterest сейчас на этапе подготовки интеграции. Включите Trial access, укажите Redirect URI и запросите права user_accounts:read, boards:read, boards:write, pins:read и pins:write. После изменения прав переподключите Pinterest. Для production-публикации потребуется Standard access Pinterest."
 	}
 	return def
 }
