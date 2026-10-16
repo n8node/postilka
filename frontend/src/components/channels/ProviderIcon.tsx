@@ -11,6 +11,7 @@ export const PROVIDER_LABEL: Record<ChannelProvider, string> = {
   youtube: "YouTube",
   photochka: "Photochka",
   wordpress: "WordPress",
+  pinterest: "Pinterest",
 };
 
 export function formatProviderLabel(provider: ChannelProvider, chatType?: string) {
@@ -28,6 +29,7 @@ export const PROVIDER_BRAND_COLOR: Record<ChannelProvider, string> = {
   youtube: "#FF0000",
   photochka: "#7C3AED",
   wordpress: "#21759B",
+  pinterest: "#E60023",
 };
 
 export function ProviderIcon({

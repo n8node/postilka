@@ -21,6 +21,7 @@ const PROVIDER_LABEL: Record<ChannelProvider, string> = {
   youtube: "YouTube",
   photochka: "Photochka",
   wordpress: "WordPress",
+  pinterest: "Pinterest",
 };
 
 const TELEGRAM_PREVIEW_BG = "/app/telegram-chat-bg.png";
