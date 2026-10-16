@@ -15,6 +15,7 @@ const LABELS: Record<SocialProviderKey, string> = {
   rutube: "Rutube",
   dzen: "Дзен",
   youtube: "YouTube",
+  pinterest: "Pinterest",
 };
 
 export default function ChannelOAuthCallbackPage({
