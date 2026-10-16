@@ -2264,7 +2264,7 @@ export function updateAdminYouTubeProviderSettings(settings: YouTubeProviderSett
   });
 }
 
-export type SocialProviderKey = "vk" | "max" | "rutube" | "dzen" | "youtube";
+export type SocialProviderKey = "vk" | "max" | "rutube" | "dzen" | "youtube" | "pinterest";
 
 export type SocialProviderSettings = {
   enabled: boolean;
@@ -2308,7 +2308,8 @@ export type ProviderLogoKey =
   | "dzen"
   | "youtube"
   | "photochka"
-  | "wordpress";
+  | "wordpress"
+  | "pinterest";
 
 export type ProviderLogoView = {
   provider: ProviderLogoKey;

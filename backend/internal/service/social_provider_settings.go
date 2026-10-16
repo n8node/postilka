@@ -161,6 +161,11 @@ func (s *SocialProviderSettingsService) PublicInfo(ctx context.Context, provider
 func (s *SocialProviderSettingsService) AllPublicInfo(ctx context.Context) []model.SocialProviderPublicInfo {
 	out := make([]model.SocialProviderPublicInfo, 0, len(model.AllSocialProviders))
 	for _, p := range model.AllSocialProviders {
+		// Pinterest is configured in admin first; expose it to users only after
+		// its channel OAuth and publishing adapter are enabled.
+		if p == model.SocialProviderPinterest {
+			continue
+		}
 		out = append(out, s.PublicInfo(ctx, p))
 	}
 	return out
@@ -174,7 +179,7 @@ func (s *SocialProviderSettingsService) EnsureReady(ctx context.Context, provide
 	if !cfg.Enabled {
 		return cfg, ErrSocialProviderDisabled
 	}
-	if provider == model.SocialProviderVK || provider == model.SocialProviderYouTube {
+	if provider == model.SocialProviderVK || provider == model.SocialProviderYouTube || provider == model.SocialProviderPinterest {
 		return cfg, nil
 	}
 	if provider.ConnectFlow() == "oauth" && strings.TrimSpace(cfg.OAuthClientID) == "" {
@@ -187,7 +192,7 @@ func normalizeSocialProviderAdminSettings(
 	provider model.SocialProvider,
 	cfg model.SocialProviderSettings,
 ) model.SocialProviderSettings {
-	if provider == model.SocialProviderVK || provider == model.SocialProviderYouTube {
+	if provider == model.SocialProviderVK || provider == model.SocialProviderYouTube || provider == model.SocialProviderPinterest {
 		def := model.DefaultSocialProviderSettings(provider)
 		if strings.TrimSpace(cfg.ConnectHelpURL) == "" {
 			cfg.ConnectHelpURL = def.ConnectHelpURL

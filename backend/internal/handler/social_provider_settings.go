@@ -139,7 +139,8 @@ func writeProviderLogoError(w http.ResponseWriter, err error) {
 func parseSocialProvider(raw string) (model.SocialProvider, error) {
 	switch model.SocialProvider(raw) {
 	case model.SocialProviderVK, model.SocialProviderMAX,
-		model.SocialProviderRutube, model.SocialProviderDzen, model.SocialProviderYouTube:
+		model.SocialProviderRutube, model.SocialProviderDzen, model.SocialProviderYouTube,
+		model.SocialProviderPinterest:
 		return model.SocialProvider(raw), nil
 	default:
 		return "", errors.New("неизвестный провайдер")

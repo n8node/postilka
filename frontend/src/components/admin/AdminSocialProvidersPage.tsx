@@ -34,6 +34,7 @@ const PROVIDER_MENU: { key: ProviderKey; label: string; connectFlow: string }[] 
   { key: "max", label: "MAX", connectFlow: "bot_token" },
   { key: "rutube", label: "Rutube", connectFlow: "oauth" },
   { key: "youtube", label: "YouTube", connectFlow: "user_oauth" },
+  { key: "pinterest", label: "Pinterest", connectFlow: "oauth" },
   { key: "dzen", label: "Дзен", connectFlow: "telegram_crosspost" },
   { key: "photochka", label: "Photochka", connectFlow: "api_key" },
   { key: "wordpress", label: "WordPress", connectFlow: "app_password" },
@@ -223,7 +224,7 @@ export function AdminSocialProvidersPage() {
         setSuccess("Настройки MAX сохранены");
       } else {
         const updated = await updateAdminSocialProvider(
-          selected as "vk" | "max" | "rutube" | "dzen" | "youtube",
+          selected as "vk" | "max" | "rutube" | "dzen" | "youtube" | "pinterest",
           socialForm,
         );
         setSocialProviders((prev) =>
@@ -787,7 +788,9 @@ function SocialSettingsForm({
       <div>
         <h2 className="text-lg font-medium text-slate-900">{label}</h2>
         <p className="text-sm text-slate-500">
-          {isVK
+             {provider === "pinterest"
+            ? "Pinterest OAuth-приложение для подключения аккаунтов и публикации Pins. На текущем этапе доступна настройка приложения; пользовательское подключение будет включено после реализации Pinterest OAuth."
+            : isVK
             ? "Пользователи подключают сообщества через своё приложение VK или OAuth Postilka."
             : isUserOAuthApp
               ? "Пользователи подключают сообщества через своё приложение VK."
@@ -944,6 +947,11 @@ function SocialSettingsForm({
                 https://postilka.ru/app/api/v1/channels/oauth/{provider}/callback
               </code>
             </p>
+            {provider === "pinterest" && (
+              <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                Redirect URI добавьте в Pinterest Developer Portal точно в таком виде. Для первой версии нужны права user_accounts:read, boards:read, pins:read и pins:write. Trial access подходит для подготовки и Sandbox; production-публикация требует Standard access.
+              </p>
+            )}
             {provider === "rutube" && (
               <p className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900">
                 OAuth-приложение Rutube выдаётся через партнёрскую программу Rutube (studio.rutube.ru

@@ -9,6 +9,7 @@ type ProviderLogoKey string
 
 const (
 	ProviderLogoTelegram         ProviderLogoKey = "telegram"
+	ProviderLogoPinterest        ProviderLogoKey = "pinterest"
 	ProviderLogoTelegramBusiness ProviderLogoKey = "telegram_business"
 	ProviderLogoVK               ProviderLogoKey = "vk"
 	ProviderLogoMAX              ProviderLogoKey = "max"
@@ -29,6 +30,7 @@ var AllProviderLogoKeys = []ProviderLogoKey{
 	ProviderLogoYouTube,
 	ProviderLogoPhotochka,
 	ProviderLogoWordPress,
+	ProviderLogoPinterest,
 }
 
 func ParseProviderLogoKey(raw string) (ProviderLogoKey, bool) {
@@ -68,12 +70,13 @@ type ProviderLogoView struct {
 type SocialProvider string
 
 const (
-	SocialProviderVK      SocialProvider = "vk"
-	SocialProviderOK      SocialProvider = "ok"
-	SocialProviderMAX     SocialProvider = "max"
-	SocialProviderRutube  SocialProvider = "rutube"
-	SocialProviderDzen    SocialProvider = "dzen"
-	SocialProviderYouTube SocialProvider = "youtube"
+	SocialProviderVK        SocialProvider = "vk"
+	SocialProviderOK        SocialProvider = "ok"
+	SocialProviderMAX       SocialProvider = "max"
+	SocialProviderRutube    SocialProvider = "rutube"
+	SocialProviderDzen      SocialProvider = "dzen"
+	SocialProviderYouTube   SocialProvider = "youtube"
+	SocialProviderPinterest SocialProvider = "pinterest"
 )
 
 var AllSocialProviders = []SocialProvider{
@@ -82,6 +85,7 @@ var AllSocialProviders = []SocialProvider{
 	SocialProviderRutube,
 	SocialProviderDzen,
 	SocialProviderYouTube,
+	SocialProviderPinterest,
 }
 
 func (p SocialProvider) Label() string {
@@ -98,6 +102,8 @@ func (p SocialProvider) Label() string {
 		return "Дзен"
 	case SocialProviderYouTube:
 		return "YouTube"
+	case SocialProviderPinterest:
+		return "Pinterest"
 	default:
 		return string(p)
 	}
@@ -113,13 +119,15 @@ func (p SocialProvider) ConnectFlow() string {
 		return "telegram_crosspost"
 	case SocialProviderYouTube:
 		return "user_oauth"
+	case SocialProviderPinterest:
+		return "oauth"
 	default:
 		return "oauth"
 	}
 }
 
 func (p SocialProvider) UsesUserOAuthApp() bool {
-	return p == SocialProviderVK || p == SocialProviderYouTube
+	return p == SocialProviderVK || p == SocialProviderYouTube || p == SocialProviderPinterest
 }
 
 type SocialProviderSettings struct {
@@ -212,6 +220,9 @@ func DefaultSocialProviderSettings(provider SocialProvider) SocialProviderSettin
 	case SocialProviderYouTube:
 		def.ConnectHelpURL = "https://postilka.ru/docs/youtube"
 		def.ConnectHelpText = "1. В Google Cloud Console создайте OAuth Client (Web) и включите YouTube Data API v3.\n\n2. Redirect URI: https://postilka.ru/app/api/v1/channels/oauth/youtube/callback\n\n3. В Postilka укажите Client ID и Client Secret своего проекта Google.\n\n4. Войдите через Google под аккаунтом владельца YouTube-канала и выберите канал.\n\n5. Квоты YouTube API расходуются с вашего Google Cloud проекта; запросы к API идут через прокси Postilka."
+	case SocialProviderPinterest:
+		def.ConnectHelpURL = "https://developers.pinterest.com/docs/getting-started/authentication/"
+		def.ConnectHelpText = "Pinterest сейчас на этапе подготовки интеграции. Включите Trial access, укажите Redirect URI и запросите права user_accounts:read, boards:read, pins:read и pins:write. Для production-публикации потребуется Standard access Pinterest."
 	}
 	return def
 }
