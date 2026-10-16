@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 )
 
 const (
@@ -208,5 +209,5 @@ func (c *PinterestClient) http() *http.Client {
 	if c.HTTP != nil {
 		return c.HTTP
 	}
-	return &http.Client{}
+	return &http.Client{Timeout: 45 * time.Second}
 }

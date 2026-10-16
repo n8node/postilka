@@ -267,7 +267,13 @@ func (s *PublicationService) Publish(ctx context.Context, postID string, allowRe
 		publishWG.Add(1)
 		go func(target model.PostTarget) {
 			defer publishWG.Done()
-			started, err := s.posts.StartTarget(ctx, target.ID)
+			targetCtx := ctx
+			var targetCancel context.CancelFunc
+			if channel, channelErr := s.channels.GetByID(ctx, post.WorkspaceID, target.ChannelID); channelErr == nil && channel.Provider == model.ChannelProviderPinterest {
+				targetCtx, targetCancel = context.WithTimeout(ctx, 90*time.Second)
+				defer targetCancel()
+			}
+			started, err := s.posts.StartTarget(targetCtx, target.ID)
 			if err != nil {
 				publishMu.Lock()
 				if lastPublishErr == nil {
@@ -279,7 +285,7 @@ func (s *PublicationService) Publish(ctx context.Context, postID string, allowRe
 			if !started {
 				return
 			}
-			providerID, publishErr := s.publishTarget(ctx, post, target)
+			providerID, publishErr := s.publishTarget(targetCtx, post, target)
 			if publishErr == nil {
 				if err := s.posts.CompleteTarget(ctx, target.ID, providerID); err != nil {
 					_ = s.posts.MarkDeliveryUnknown(ctx, target.ID, err.Error())
