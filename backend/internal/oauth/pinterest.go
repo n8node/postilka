@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -25,6 +26,7 @@ type PinterestClient struct {
 	ClientSecret string
 	RedirectURI  string
 	HTTP         *http.Client
+	BaseURL      string
 }
 
 type PinterestTokenResponse struct {
@@ -125,10 +127,22 @@ func (c *PinterestClient) CreatePin(ctx context.Context, token, boardID, title, 
 	ContentType string
 	Data        []byte
 }) (string, error) {
+	if strings.TrimSpace(boardID) == "" {
+		return "", fmt.Errorf("pinterest: board id is required")
+	}
+	if len(media) == 0 {
+		return "", fmt.Errorf("pinterest: at least one image is required")
+	}
 	items := make([]map[string]any, 0, len(media))
 	for _, item := range media {
 		if item.ContentType != "image/jpeg" && item.ContentType != "image/png" {
 			return "", fmt.Errorf("pinterest: поддерживаются только JPEG и PNG")
+		}
+		if len(item.Data) == 0 {
+			return "", fmt.Errorf("pinterest: image is empty")
+		}
+		if len(item.Data) > 32<<20 {
+			return "", fmt.Errorf("pinterest: image must not exceed 32 MB")
 		}
 		items = append(items, map[string]any{"content_type": item.ContentType, "data": base64.StdEncoding.EncodeToString(item.Data)})
 	}
@@ -164,7 +178,7 @@ func (c *PinterestClient) CreatePin(ctx context.Context, token, boardID, title, 
 }
 
 func (c *PinterestClient) getJSON(ctx context.Context, token, path string, out any) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, pinterestAPIBaseURL+path, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL()+path, nil)
 	if err != nil {
 		return err
 	}
@@ -187,7 +201,8 @@ func (c *PinterestClient) postJSON(ctx context.Context, token, path string, payl
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, pinterestAPIBaseURL+path, bytes.NewReader(raw))
+	slog.InfoContext(ctx, "pinterest API request", "method", http.MethodPost, "path", path, "payload_bytes", len(raw))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.baseURL()+path, bytes.NewReader(raw))
 	if err != nil {
 		return err
 	}
@@ -202,13 +217,24 @@ func (c *PinterestClient) postJSON(ctx context.Context, token, path string, payl
 	if resp.StatusCode >= 400 {
 		return pinterestAPIError(resp.StatusCode, body)
 	}
+	slog.InfoContext(ctx, "pinterest API response", "method", http.MethodPost, "path", path, "status", resp.StatusCode, "response_bytes", len(body))
 	return json.Unmarshal(body, out)
+}
+
+func (c *PinterestClient) baseURL() string {
+	if strings.TrimSpace(c.BaseURL) != "" {
+		return strings.TrimRight(strings.TrimSpace(c.BaseURL), "/")
+	}
+	return pinterestAPIBaseURL
 }
 
 func pinterestAPIError(status int, body []byte) error {
 	detail := strings.TrimSpace(string(body))
 	if strings.Contains(detail, "boards:write") || strings.Contains(detail, "sufficient permissions") {
 		return fmt.Errorf("pinterest API: HTTP %d: токен не имеет нужных прав. Переподключите Pinterest после добавления boards:write", status)
+	}
+	if strings.Contains(strings.ToLower(detail), "trial") || strings.Contains(strings.ToLower(detail), "standard access") {
+		return fmt.Errorf("pinterest API: HTTP %d: приложение Pinterest Trial access не может создавать Pins в production API; требуется Standard access или API Sandbox", status)
 	}
 	return fmt.Errorf("pinterest API: HTTP %d: %s", status, detail)
 }

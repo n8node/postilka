@@ -639,6 +639,13 @@ func (s *PublicationService) publishPinterestPin(ctx context.Context, post *mode
 		if readErr != nil {
 			return "", readErr
 		}
+		if len(data) == 0 {
+			return "", fmt.Errorf("%w: пустой файл изображения Pinterest", ErrInvalidPost)
+		}
+		if len(data) > 32<<20 {
+			return "", fmt.Errorf("%w: изображение Pinterest не должно превышать 32 МБ", ErrInvalidPost)
+		}
+		slog.InfoContext(ctx, "pinterest publish: media loaded", "post_id", post.ID, "file_id", attached.FileID, "mime", mime, "bytes", len(data))
 		media = append(media, struct {
 			ContentType string
 			Data        []byte
@@ -651,7 +658,14 @@ func (s *PublicationService) publishPinterestPin(ctx context.Context, post *mode
 	}
 	title := strings.TrimSpace(content.Title)
 	description := strings.TrimSpace(readableProviderText(content))
-	return client.CreatePin(ctx, token, strings.TrimSpace(channel.ChatID), title, description, link, description, media)
+	slog.InfoContext(ctx, "pinterest publish: payload ready", "post_id", post.ID, "board_id", strings.TrimSpace(channel.ChatID), "media_count", len(media), "title_bytes", len(title), "description_bytes", len(description))
+	providerID, err := client.CreatePin(ctx, token, strings.TrimSpace(channel.ChatID), title, description, link, description, media)
+	if err != nil {
+		slog.WarnContext(ctx, "pinterest publish: pin creation failed", "post_id", post.ID, "board_id", strings.TrimSpace(channel.ChatID), "media_count", len(media), "error", err)
+		return "", err
+	}
+	slog.InfoContext(ctx, "pinterest publish: pin delivered", "post_id", post.ID, "board_id", strings.TrimSpace(channel.ChatID), "provider_post_id", providerID)
+	return providerID, nil
 }
 
 func (s *PublicationService) vkMediaSources(
