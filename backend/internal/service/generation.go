@@ -200,7 +200,7 @@ func (s *GenerationService) StartGenerate(ctx context.Context, userID string, r 
 	}
 
 	providerID := "kie"
-	if s.mediaProviders != nil && mode == "text-to-image" {
+	if s.mediaProviders != nil {
 		if selected, selectErr := s.mediaProviders.PrimaryIDForUser(ctx, "image", userID, s.providerUsers); selectErr == nil {
 			providerID = selected
 		}
@@ -1187,6 +1187,51 @@ func (s *GenerationService) submitPendingJob(ctx context.Context, jobID string, 
 			}
 		}
 	}
+	if s.mediaProviders != nil && jobRow.ProviderID == "onefast" && mode != "text-to-image" {
+		runtime, runtimeErr := s.mediaProviders.ResolveRuntime(ctx, "onefast")
+		if runtimeErr == nil {
+			ids := []string{}
+			if mode == "image-to-image" || mode == generationModeFilter || mode == "sketch" {
+				ids = append(ids, jobRow.SourceUploadID)
+			}
+			if mode == "combine" {
+				ids = append(ids, jobRow.CombineUploadIDs...)
+			}
+			if mode == "carousel" {
+				ids = append(ids, jobRow.ReferenceUploadIDs...)
+			}
+			ids = nonEmptyUploadIDs(ids)
+			if len(ids) > 0 {
+				data, names, types, readErr := s.readSourceImages(ctx, jobRow.UserID, jobRow.WorkspaceID, ids)
+				if readErr != nil {
+					_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
+					s.markJobFailed(ctx, jobID, readErr.Error())
+					return readErr
+				}
+				oneFastModel := "gpt-image-2.5"
+				if configured, ok := runtime.Settings["image_model"].(string); ok && strings.TrimSpace(configured) != "" {
+					oneFastModel = strings.TrimSpace(configured)
+				}
+				result, editErr := ai.NewOneFastClient(runtime.BaseURL, runtime.APIKey, "").EditImages(ctx, oneFastModel, prompt, data, names, types)
+				if editErr == nil {
+					key := generationResultS3Key(jobRow.WorkspaceID, jobRow.Mode, ".png")
+					if putErr := s.objectStore.PutObject(ctx, key, result.ContentType, result.Data); putErr == nil {
+						if setErr := s.jobRepo.SetProviderResult(ctx, jobID, key, result.ContentType); setErr == nil {
+							_, setErr = s.jobRepo.SetProviderTask(ctx, jobID, "onefast", "inline-image", model.GenJobStatusGenerating, ai.KieProgressNearDone)
+							if setErr == nil {
+								return nil
+							}
+							return setErr
+						}
+					}
+				} else {
+					_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
+					s.markJobFailed(ctx, jobID, editErr.Error())
+					return editErr
+				}
+			}
+		}
+	}
 
 	baseURL, apiKey, err := s.kieConfig.ResolveCredentials(ctx)
 	if err != nil {
@@ -1320,6 +1365,34 @@ func (s *GenerationService) submitPendingJob(ctx context.Context, jobID string, 
 	}
 	_ = s.jobRepo.UpdateProgress(ctx, jobID, model.GenJobStatusWaiting, "waiting", p, "", time.Now())
 	return nil
+}
+
+func (s *GenerationService) readSourceImages(ctx context.Context, userID, workspaceID string, ids []string) ([][]byte, []string, []string, error) {
+	data := make([][]byte, 0, len(ids))
+	names := make([]string, 0, len(ids))
+	types := make([]string, 0, len(ids))
+	for _, id := range ids {
+		upload, err := s.uploadRepo.GetByID(ctx, id, userID, workspaceID)
+		if err != nil {
+			return nil, nil, nil, ErrGenerationUploadNotFound
+		}
+		body, ct, err := s.objectStore.GetObject(ctx, upload.S3Key)
+		if err != nil {
+			return nil, nil, nil, ErrGenerationSourceRead
+		}
+		raw, err := io.ReadAll(io.LimitReader(body, 30<<20))
+		_ = body.Close()
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		if ct == "" {
+			ct = upload.ContentType
+		}
+		data = append(data, raw)
+		names = append(names, path.Base(upload.S3Key))
+		types = append(types, ct)
+	}
+	return data, names, types, nil
 }
 
 func oneFastImageSize(aspectRatio string) string {

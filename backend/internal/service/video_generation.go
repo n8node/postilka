@@ -139,9 +139,11 @@ func (s *GenerationService) StartGenerateVideo(ctx context.Context, userID strin
 		return StartGenerateResult{}, err
 	}
 
-	if _, _, err := s.kieVideoConfig.ResolveCredentials(ctx); err != nil {
-		slog.Warn("video generation credentials unavailable", "user_id", userID, "err", err)
-		return StartGenerateResult{}, fmt.Errorf("%w: %v", ErrVideoGenerationNotConfigured, err)
+	if s.mediaProviders == nil {
+		if _, _, err := s.kieVideoConfig.ResolveCredentials(ctx); err != nil {
+			slog.Warn("video generation credentials unavailable", "user_id", userID, "err", err)
+			return StartGenerateResult{}, fmt.Errorf("%w: %v", ErrVideoGenerationNotConfigured, err)
+		}
 	}
 
 	modelID := ai.NormalizeKieVideoModelID(settings.ModelForMode(mode))
@@ -153,7 +155,7 @@ func (s *GenerationService) StartGenerateVideo(ctx context.Context, userID strin
 	refVideoIDs := append([]string(nil), in.ReferenceVideoUploadIDs...)
 	refAudioIDs := append([]string(nil), in.ReferenceAudioUploadIDs...)
 	providerID := "kie"
-	if s.mediaProviders != nil && mode == model.KieVideoModeTextToVideo {
+	if s.mediaProviders != nil {
 		if selected, selectErr := s.mediaProviders.PrimaryIDForUser(ctx, "video", userID, s.providerUsers); selectErr == nil {
 			providerID = selected
 		}
@@ -315,11 +317,30 @@ func (s *GenerationService) submitPendingVideoJob(ctx context.Context, jobID str
 	mode := normalizeVideoGenerationMode(jobRow.Mode)
 	startedAt := jobRow.CreatedAt
 
-	if s.mediaProviders != nil && jobRow.ProviderID == "onefast" && mode == model.KieVideoModeTextToVideo {
+	if s.mediaProviders != nil && jobRow.ProviderID == "onefast" {
 		if providerID := jobRow.ProviderID; providerID == "onefast" {
 			runtime, runtimeErr := s.mediaProviders.ResolveRuntime(ctx, providerID)
 			if runtimeErr == nil {
 				content := []map[string]any{{"type": "text", "text": jobRow.Prompt}}
+				if mode == model.KieVideoModeImageToVideo || mode == model.KieVideoModeReferenceToVideo {
+					ids := append([]string{}, jobRow.ReferenceUploadIDs...)
+					if mode == model.KieVideoModeImageToVideo {
+						ids = append(ids, jobRow.SourceUploadID)
+					}
+					urls, urlErr := s.oneFastSourceURLs(ctx, jobRow.UserID, jobRow.WorkspaceID, ids)
+					if urlErr != nil {
+						_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
+						s.markJobFailed(ctx, jobID, urlErr.Error())
+						return urlErr
+					}
+					for i, sourceURL := range urls {
+						role := "reference_image"
+						if mode == model.KieVideoModeImageToVideo && i == 0 {
+							role = "first_frame"
+						}
+						content = append(content, map[string]any{"type": "image_url", "image_url": map[string]any{"url": sourceURL}, "role": role})
+					}
+				}
 				oneFastModel := "dreamina-seedance-2-0-260128"
 				if configured, ok := runtime.Settings["video_model"].(string); ok && strings.TrimSpace(configured) != "" {
 					oneFastModel = strings.TrimSpace(configured)
@@ -495,6 +516,22 @@ func (s *GenerationService) submitPendingVideoJob(ctx context.Context, jobID str
 	}
 	_ = s.jobRepo.UpdateProgress(ctx, jobID, model.GenJobStatusWaiting, "waiting", p, "", time.Now())
 	return nil
+}
+
+func (s *GenerationService) oneFastSourceURLs(ctx context.Context, userID, workspaceID string, ids []string) ([]string, error) {
+	out := []string{}
+	for _, id := range nonEmptyUploadIDs(ids) {
+		upload, err := s.uploadRepo.GetByID(ctx, id, userID, workspaceID)
+		if err != nil {
+			return nil, ErrGenerationUploadNotFound
+		}
+		signed, err := s.objectStore.PresignGet(ctx, upload.S3Key, 2*time.Hour, "")
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, signed)
+	}
+	return out, nil
 }
 
 func (s *GenerationService) pollKieVideoJob(ctx context.Context, job model.AIGenerationJob) (got429 bool, terminal bool, err error) {

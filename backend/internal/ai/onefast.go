@@ -148,18 +148,28 @@ func (c *OneFastClient) GenerateImage(ctx context.Context, modelID, prompt, size
 }
 
 func (c *OneFastClient) EditImage(ctx context.Context, modelID, prompt string, image []byte, filename, contentType string) (OneFastImageResult, error) {
+	return c.EditImages(ctx, modelID, prompt, [][]byte{image}, []string{filename}, []string{contentType})
+}
+
+func (c *OneFastClient) EditImages(ctx context.Context, modelID, prompt string, images [][]byte, filenames, contentTypes []string) (OneFastImageResult, error) {
 	var buf bytes.Buffer
 	mw := multipart.NewWriter(&buf)
 	_ = mw.WriteField("model", modelID)
 	_ = mw.WriteField("prompt", prompt)
-	part, err := mw.CreateFormFile("image", filename)
-	if err != nil {
-		return OneFastImageResult{}, err
+	for i, image := range images {
+		filename := fmt.Sprintf("reference-%d.jpg", i+1)
+		if i < len(filenames) && strings.TrimSpace(filenames[i]) != "" {
+			filename = filenames[i]
+		}
+		part, err := mw.CreateFormFile("image[]", filename)
+		if err != nil {
+			return OneFastImageResult{}, err
+		}
+		if _, err = part.Write(image); err != nil {
+			return OneFastImageResult{}, err
+		}
 	}
-	if _, err = part.Write(image); err != nil {
-		return OneFastImageResult{}, err
-	}
-	if err = mw.Close(); err != nil {
+	if err := mw.Close(); err != nil {
 		return OneFastImageResult{}, err
 	}
 	_, raw, err := c.request(ctx, http.MethodPost, "/v1/images/edits", &buf, mw.FormDataContentType())
@@ -181,8 +191,9 @@ func (c *OneFastClient) EditImage(ctx context.Context, modelID, prompt string, i
 	if err != nil {
 		return OneFastImageResult{}, err
 	}
-	if contentType == "" {
-		contentType = "image/png"
+	contentType := "image/png"
+	if len(contentTypes) > 0 && strings.TrimSpace(contentTypes[0]) != "" {
+		contentType = contentTypes[0]
 	}
 	return OneFastImageResult{Data: data, ContentType: contentType}, nil
 }
@@ -212,6 +223,10 @@ func (c *OneFastClient) CreateVideo(ctx context.Context, modelID string, content
 		return OneFastVideoTask{}, fmt.Errorf("onefast returned empty video task id")
 	}
 	return OneFastVideoTask{ID: p.ID, Status: strings.ToLower(p.Status)}, nil
+}
+
+func (c *OneFastClient) CreateVideoWithContent(ctx context.Context, modelID string, content []map[string]any, ratio string, duration int, resolution string, audio bool) (OneFastVideoTask, error) {
+	return c.CreateVideo(ctx, modelID, content, ratio, duration, resolution, audio)
 }
 
 func (c *OneFastClient) GetVideo(ctx context.Context, taskID string) (OneFastVideoTask, error) {
