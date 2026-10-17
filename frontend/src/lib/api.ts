@@ -3000,6 +3000,49 @@ export function deleteAdminKieVideoExample(id: string) {
   });
 }
 
+export type MediaProvider = {
+  id: string;
+  display_name: string;
+  api_base_url: string;
+  api_key_set: boolean;
+  enabled: boolean;
+  test_only: boolean;
+  capabilities: string[];
+  updated_at?: string;
+};
+
+export type MediaProviderRoute = {
+  media_type: "image" | "video";
+  provider_id: string;
+  priority: number;
+  enabled: boolean;
+};
+
+export function fetchAdminMediaProviders() {
+  return apiFetch<{ providers: MediaProvider[] }>("/admin/media-providers");
+}
+
+export function updateAdminMediaProvider(
+  providerId: string,
+  payload: Partial<Pick<MediaProvider, "display_name" | "api_base_url" | "enabled" | "test_only" | "capabilities">> & { api_key?: string },
+) {
+  return apiFetch<{ provider: MediaProvider }>(`/admin/media-providers/${providerId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function fetchAdminMediaProviderRoutes() {
+  return apiFetch<{ routes: MediaProviderRoute[] }>("/admin/media-providers/routes");
+}
+
+export function updateAdminMediaProviderRoutes(routes: MediaProviderRoute[]) {
+  return apiFetch<{ routes: MediaProviderRoute[] }>("/admin/media-providers/routes", {
+    method: "PUT",
+    body: JSON.stringify({ routes }),
+  });
+}
+
 export function fetchVideoGenerationExamples() {
   return apiFetch<{ examples: KieVideoExample[] }>("/generation/video-examples");
 }

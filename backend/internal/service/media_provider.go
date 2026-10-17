@@ -1,0 +1,124 @@
+package service
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"strings"
+
+	"github.com/postilka/postilka/internal/model"
+	"github.com/postilka/postilka/internal/repository"
+)
+
+type MediaProviderService struct {
+	repo   *repository.MediaProviderRepository
+	cipher *SecretCipher
+}
+
+func NewMediaProviderService(repo *repository.MediaProviderRepository, cipher *SecretCipher) *MediaProviderService {
+	return &MediaProviderService{repo: repo, cipher: cipher}
+}
+
+func providerView(p model.MediaProvider) model.MediaProviderView {
+	v := model.MediaProviderView{ID: p.ID, DisplayName: p.DisplayName, APIBaseURL: p.APIBaseURL, APIKeySet: p.APIKeySet, Enabled: p.Enabled, TestOnly: p.TestOnly, Capabilities: p.Capabilities}
+	if !p.UpdatedAt.IsZero() {
+		v.UpdatedAt = p.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z")
+	}
+	return v
+}
+
+func (s *MediaProviderService) List(ctx context.Context) ([]model.MediaProviderView, error) {
+	items, err := s.repo.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]model.MediaProviderView, 0, len(items))
+	for _, p := range items {
+		out = append(out, providerView(p))
+	}
+	return out, nil
+}
+
+func (s *MediaProviderService) Get(ctx context.Context, id string) (model.MediaProviderView, error) {
+	p, err := s.repo.Get(ctx, id)
+	if err != nil {
+		return model.MediaProviderView{}, err
+	}
+	return providerView(p), nil
+}
+
+func (s *MediaProviderService) Update(ctx context.Context, id string, in model.MediaProviderUpdateRequest) (model.MediaProviderView, error) {
+	p, err := s.repo.Get(ctx, id)
+	if err != nil {
+		return model.MediaProviderView{}, err
+	}
+	if in.DisplayName != nil {
+		p.DisplayName = strings.TrimSpace(*in.DisplayName)
+		if p.DisplayName == "" {
+			return model.MediaProviderView{}, errors.New("display name is required")
+		}
+	}
+	if in.APIBaseURL != nil {
+		p.APIBaseURL = strings.TrimRight(strings.TrimSpace(*in.APIBaseURL), "/")
+		if p.APIBaseURL == "" {
+			return model.MediaProviderView{}, errors.New("api base url is required")
+		}
+	}
+	if in.Enabled != nil {
+		p.Enabled = *in.Enabled
+	}
+	if in.TestOnly != nil {
+		p.TestOnly = *in.TestOnly
+	}
+	if in.Capabilities != nil {
+		p.Capabilities = *in.Capabilities
+	}
+	key := ""
+	if in.APIKey != nil && strings.TrimSpace(*in.APIKey) != "" {
+		if s.cipher == nil {
+			return model.MediaProviderView{}, ErrCryptoUnavailable
+		}
+		key, err = s.cipher.Encrypt(strings.TrimSpace(*in.APIKey))
+		if err != nil {
+			return model.MediaProviderView{}, err
+		}
+	}
+	if err = s.repo.Upsert(ctx, p, key); err != nil {
+		return model.MediaProviderView{}, err
+	}
+	return s.Get(ctx, id)
+}
+
+func (s *MediaProviderService) Models(ctx context.Context, id string) ([]model.MediaProviderModel, error) {
+	return s.repo.ListModels(ctx, id)
+}
+func (s *MediaProviderService) Pricing(ctx context.Context, id string) ([]model.MediaProviderPricing, error) {
+	return s.repo.ListPricing(ctx, id)
+}
+func (s *MediaProviderService) Routes(ctx context.Context) ([]model.MediaProviderRoute, error) {
+	return s.repo.ListRoutes(ctx)
+}
+func (s *MediaProviderService) UpdateRoutes(ctx context.Context, in model.MediaProviderRoutesUpdateRequest) error {
+	return s.repo.ReplaceRoutes(ctx, in.Routes)
+}
+
+func (s *MediaProviderService) IsAvailableForUser(ctx context.Context, id string, isPlatformAdmin bool) (bool, error) {
+	p, err := s.repo.Get(ctx, id)
+	if err != nil {
+		return false, err
+	}
+	if !p.Enabled {
+		return false, nil
+	}
+	if p.TestOnly && !isPlatformAdmin {
+		return false, nil
+	}
+	return true, nil
+}
+
+func ValidateProviderID(id string) error {
+	if strings.TrimSpace(id) == "" {
+		return fmt.Errorf("provider id is required")
+	}
+	return nil
+}

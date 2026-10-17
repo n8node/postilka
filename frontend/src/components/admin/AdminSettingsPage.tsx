@@ -18,6 +18,7 @@ import { AdminPaymentSettingsPage } from "@/components/admin/AdminPaymentSetting
 import { AdminTelegramPage } from "@/components/admin/AdminTelegramPage";
 import { AdminMetrikaPage } from "@/components/admin/AdminMetrikaPage";
 import { AdminYandexGptPage } from "@/components/admin/AdminYandexGptPage";
+import { AdminMediaProvidersPage } from "@/components/admin/AdminMediaProvidersPage";
 import { AdminAdStudioPage } from "@/components/admin/AdminAdStudioPage";
 import { AdminAdStudioPromptsPage } from "@/components/admin/AdminAdStudioPromptsPage";
 import { AdminSketchStylesPage } from "@/components/admin/AdminSketchStylesPage";
@@ -38,6 +39,7 @@ type SettingsKey =
   | "ai-agents" // Hidden until agents return
   | "ai-kie"
   | "ai-kie-video"
+  | "ai-providers"
   | "ai-ad-studio"
   | "ai-ad-trends"
   | "ai-ad-prompts"
@@ -97,6 +99,11 @@ const SETTINGS_MENU: { key: SettingsKey; label: string; description: string }[] 
     key: "ai-kie-video",
     label: "AI — KIE.ai (видео)",
     description: "Видео, модели и примеры",
+  },
+  {
+    key: "ai-providers",
+    label: "AI — Провайдеры",
+    description: "Маршрутизация и доступность",
   },
   {
     key: "ai-ad-studio",
@@ -293,6 +300,9 @@ function SettingsSectionContent({
   }
   if (selected === "ai-kie-video") {
     return <AdminKieVideoPage embedded />;
+  }
+  if (selected === "ai-providers") {
+    return <AdminMediaProvidersPage embedded />;
   }
   if (selected === "ai-ad-studio") {
     return <AdminAdStudioPage embedded catalog="studio" />;
