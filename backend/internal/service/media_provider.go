@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/postilka/postilka/internal/ai"
 	"github.com/postilka/postilka/internal/model"
 	"github.com/postilka/postilka/internal/repository"
 )
@@ -31,7 +32,7 @@ func NewMediaProviderService(repo *repository.MediaProviderRepository, cipher *S
 }
 
 func providerView(p model.MediaProvider) model.MediaProviderView {
-	v := model.MediaProviderView{ID: p.ID, DisplayName: p.DisplayName, APIBaseURL: p.APIBaseURL, APIKeySet: p.APIKeySet, Enabled: p.Enabled, TestOnly: p.TestOnly, Capabilities: p.Capabilities}
+	v := model.MediaProviderView{ID: p.ID, DisplayName: p.DisplayName, APIBaseURL: p.APIBaseURL, APIKeySet: p.APIKeySet, Enabled: p.Enabled, TestOnly: p.TestOnly, Capabilities: p.Capabilities, Settings: p.Settings}
 	if !p.UpdatedAt.IsZero() {
 		v.UpdatedAt = p.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z")
 	}
@@ -84,6 +85,9 @@ func (s *MediaProviderService) Update(ctx context.Context, id string, in model.M
 	if in.Capabilities != nil {
 		p.Capabilities = *in.Capabilities
 	}
+	if in.Settings != nil {
+		p.Settings = in.Settings
+	}
 	key := ""
 	if in.APIKey != nil && strings.TrimSpace(*in.APIKey) != "" {
 		if s.cipher == nil {
@@ -105,6 +109,16 @@ func (s *MediaProviderService) Models(ctx context.Context, id string) ([]model.M
 }
 func (s *MediaProviderService) Pricing(ctx context.Context, id string) ([]model.MediaProviderPricing, error) {
 	return s.repo.ListPricing(ctx, id)
+}
+
+func (s *MediaProviderService) TestOneFast(ctx context.Context, baseURL, apiKey string) (map[string]any, error) {
+	if strings.TrimSpace(baseURL) == "" || strings.TrimSpace(apiKey) == "" {
+		return nil, fmt.Errorf("onefast api base url and api key are required")
+	}
+	if err := ai.NewOneFastClient(baseURL, apiKey, "").TestConnection(ctx); err != nil {
+		return nil, err
+	}
+	return map[string]any{"ok": true, "message": "Соединение OneFast успешно проверено"}, nil
 }
 func (s *MediaProviderService) Routes(ctx context.Context) ([]model.MediaProviderRoute, error) {
 	return s.repo.ListRoutes(ctx)

@@ -89,3 +89,17 @@ func (h *MediaProviderHandler) UpdateRoutes(w http.ResponseWriter, r *http.Reque
 	}
 	h.Routes(w, r)
 }
+
+func (h *MediaProviderHandler) TestOneFast(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		APIBaseURL string `json:"api_base_url"`
+		APIKey     string `json:"api_key"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&in)
+	result, err := h.svc.TestOneFast(r.Context(), in.APIBaseURL, in.APIKey)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось проверить соединение OneFast")
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}

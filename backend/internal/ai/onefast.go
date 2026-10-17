@@ -23,6 +23,11 @@ type OneFastClient struct {
 	http    *http.Client
 }
 
+func (c *OneFastClient) TestConnection(ctx context.Context) error {
+	_, _, err := c.request(ctx, http.MethodGet, "/v1/dashboard/billing/subscription", nil, "")
+	return err
+}
+
 func NewOneFastClient(baseURL, apiKey, group string) *OneFastClient {
 	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
 	if baseURL == "" {

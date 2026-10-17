@@ -48,23 +48,25 @@ type MediaProviderRoute struct {
 }
 
 type MediaProviderView struct {
-	ID           string   `json:"id"`
-	DisplayName  string   `json:"display_name"`
-	APIBaseURL   string   `json:"api_base_url"`
-	APIKeySet    bool     `json:"api_key_set"`
-	Enabled      bool     `json:"enabled"`
-	TestOnly     bool     `json:"test_only"`
-	Capabilities []string `json:"capabilities"`
-	UpdatedAt    string   `json:"updated_at,omitempty"`
+	ID           string         `json:"id"`
+	DisplayName  string         `json:"display_name"`
+	APIBaseURL   string         `json:"api_base_url"`
+	APIKeySet    bool           `json:"api_key_set"`
+	Enabled      bool           `json:"enabled"`
+	TestOnly     bool           `json:"test_only"`
+	Capabilities []string       `json:"capabilities"`
+	Settings     map[string]any `json:"settings,omitempty"`
+	UpdatedAt    string         `json:"updated_at,omitempty"`
 }
 
 type MediaProviderUpdateRequest struct {
-	DisplayName  *string   `json:"display_name"`
-	APIBaseURL   *string   `json:"api_base_url"`
-	APIKey       *string   `json:"api_key"`
-	Enabled      *bool     `json:"enabled"`
-	TestOnly     *bool     `json:"test_only"`
-	Capabilities *[]string `json:"capabilities"`
+	DisplayName  *string        `json:"display_name"`
+	APIBaseURL   *string        `json:"api_base_url"`
+	APIKey       *string        `json:"api_key"`
+	Enabled      *bool          `json:"enabled"`
+	TestOnly     *bool          `json:"test_only"`
+	Capabilities *[]string      `json:"capabilities"`
+	Settings     map[string]any `json:"settings,omitempty"`
 }
 
 type MediaProviderRoutesUpdateRequest struct {

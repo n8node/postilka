@@ -19,6 +19,8 @@ import { AdminTelegramPage } from "@/components/admin/AdminTelegramPage";
 import { AdminMetrikaPage } from "@/components/admin/AdminMetrikaPage";
 import { AdminYandexGptPage } from "@/components/admin/AdminYandexGptPage";
 import { AdminMediaProvidersPage } from "@/components/admin/AdminMediaProvidersPage";
+import { AdminOneFastPage } from "@/components/admin/AdminOneFastPage";
+import { AdminOneFastVideoPage } from "@/components/admin/AdminOneFastVideoPage";
 import { AdminAdStudioPage } from "@/components/admin/AdminAdStudioPage";
 import { AdminAdStudioPromptsPage } from "@/components/admin/AdminAdStudioPromptsPage";
 import { AdminSketchStylesPage } from "@/components/admin/AdminSketchStylesPage";
@@ -40,6 +42,8 @@ type SettingsKey =
   | "ai-kie"
   | "ai-kie-video"
   | "ai-providers"
+  | "ai-onefast"
+  | "ai-onefast-video"
   | "ai-ad-studio"
   | "ai-ad-trends"
   | "ai-ad-prompts"
@@ -104,6 +108,16 @@ const SETTINGS_MENU: { key: SettingsKey; label: string; description: string }[] 
     key: "ai-providers",
     label: "AI — Провайдеры",
     description: "Маршрутизация и доступность",
+  },
+  {
+    key: "ai-onefast",
+    label: "AI — OneFast",
+    description: "Изображения, модели и цены",
+  },
+  {
+    key: "ai-onefast-video",
+    label: "AI — OneFast (видео)",
+    description: "Видео, модели и цены",
   },
   {
     key: "ai-ad-studio",
@@ -303,6 +317,12 @@ function SettingsSectionContent({
   }
   if (selected === "ai-providers") {
     return <AdminMediaProvidersPage embedded />;
+  }
+  if (selected === "ai-onefast") {
+    return <AdminOneFastPage embedded />;
+  }
+  if (selected === "ai-onefast-video") {
+    return <AdminOneFastVideoPage embedded />;
   }
   if (selected === "ai-ad-studio") {
     return <AdminAdStudioPage embedded catalog="studio" />;

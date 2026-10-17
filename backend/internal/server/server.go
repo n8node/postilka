@@ -708,6 +708,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Get("/media-providers/{providerID}/pricing", mediaProviderHandler.Pricing)
 				r.Get("/media-providers/{providerID}", mediaProviderHandler.Get)
 				r.Put("/media-providers/{providerID}", mediaProviderHandler.Update)
+				r.Post("/media-providers/onefast/test", mediaProviderHandler.TestOneFast)
 				r.Get("/generation-nav", generationNavHandler.GetAdmin)
 				r.Put("/generation-nav/settings", generationNavHandler.UpdateSettings)
 				r.Post("/generation-nav/items", generationNavHandler.CreateItem)

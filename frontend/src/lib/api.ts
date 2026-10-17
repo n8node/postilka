@@ -3008,6 +3008,7 @@ export type MediaProvider = {
   enabled: boolean;
   test_only: boolean;
   capabilities: string[];
+  settings?: Record<string, unknown>;
   updated_at?: string;
 };
 
@@ -3024,10 +3025,21 @@ export function fetchAdminMediaProviders() {
 
 export function updateAdminMediaProvider(
   providerId: string,
-  payload: Partial<Pick<MediaProvider, "display_name" | "api_base_url" | "enabled" | "test_only" | "capabilities">> & { api_key?: string },
+  payload: Partial<Pick<MediaProvider, "display_name" | "api_base_url" | "enabled" | "test_only" | "capabilities" | "settings">> & { api_key?: string },
 ) {
   return apiFetch<{ provider: MediaProvider }>(`/admin/media-providers/${providerId}`, {
     method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function fetchAdminMediaProvider(providerId: string) {
+  return apiFetch<{ provider: MediaProvider }>(`/admin/media-providers/${providerId}`);
+}
+
+export function testAdminOneFastConnection(payload: { api_base_url?: string; api_key?: string }) {
+  return apiFetch<{ ok: boolean; message?: string }>("/admin/media-providers/onefast/test", {
+    method: "POST",
     body: JSON.stringify(payload),
   });
 }
