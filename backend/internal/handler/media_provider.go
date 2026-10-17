@@ -98,7 +98,7 @@ func (h *MediaProviderHandler) TestOneFast(w http.ResponseWriter, r *http.Reques
 	_ = json.NewDecoder(r.Body).Decode(&in)
 	result, err := h.svc.TestOneFast(r.Context(), in.APIBaseURL, in.APIKey)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Не удалось проверить соединение OneFast")
+		writeError(w, http.StatusBadGateway, err.Error())
 		return
 	}
 	writeJSON(w, http.StatusOK, result)

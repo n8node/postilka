@@ -112,6 +112,26 @@ func (s *MediaProviderService) Pricing(ctx context.Context, id string) ([]model.
 }
 
 func (s *MediaProviderService) TestOneFast(ctx context.Context, baseURL, apiKey string) (map[string]any, error) {
+	provider, err := s.repo.Get(ctx, "onefast")
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(baseURL) == "" {
+		baseURL = provider.APIBaseURL
+	}
+	if strings.TrimSpace(apiKey) == "" {
+		stored, keyErr := s.repo.GetStoredKey(ctx, "onefast")
+		if keyErr != nil {
+			return nil, keyErr
+		}
+		if strings.TrimSpace(stored) == "" || s.cipher == nil {
+			return nil, fmt.Errorf("onefast api key is not configured")
+		}
+		apiKey, err = s.cipher.Decrypt(stored)
+		if err != nil {
+			return nil, fmt.Errorf("onefast api key decrypt failed: %w", err)
+		}
+	}
 	if strings.TrimSpace(baseURL) == "" || strings.TrimSpace(apiKey) == "" {
 		return nil, fmt.Errorf("onefast api base url and api key are required")
 	}
