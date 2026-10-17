@@ -17,6 +17,10 @@ type MediaProviderRuntime struct {
 	Settings map[string]any
 }
 
+type MediaProviderUserLookup interface {
+	GetByID(context.Context, string) (*model.User, error)
+}
+
 type MediaProviderService struct {
 	repo   *repository.MediaProviderRepository
 	cipher *SecretCipher
@@ -164,6 +168,52 @@ func (s *MediaProviderService) Primary(ctx context.Context, mediaType string) (M
 		}
 	}
 	return MediaProviderRuntime{}, fmt.Errorf("no configured media provider for %s", mediaType)
+}
+
+func (s *MediaProviderService) PrimaryID(ctx context.Context, mediaType string) (string, error) {
+	routes, err := s.repo.ListRoutes(ctx)
+	if err != nil {
+		return "", err
+	}
+	for _, route := range routes {
+		if route.MediaType != mediaType || !route.Enabled {
+			continue
+		}
+		p, getErr := s.repo.Get(ctx, route.ProviderID)
+		if getErr != nil || !p.Enabled || p.TestOnly {
+			continue
+		}
+		if _, runtimeErr := s.ResolveRuntime(ctx, route.ProviderID); runtimeErr == nil {
+			return p.ID, nil
+		}
+	}
+	return "", fmt.Errorf("no configured media provider for %s", mediaType)
+}
+
+func (s *MediaProviderService) PrimaryIDForUser(ctx context.Context, mediaType, userID string, users MediaProviderUserLookup) (string, error) {
+	isAdmin := false
+	if users != nil {
+		if user, err := users.GetByID(ctx, userID); err == nil && user != nil {
+			isAdmin = user.IsPlatformAdmin
+		}
+	}
+	routes, err := s.repo.ListRoutes(ctx)
+	if err != nil {
+		return "", err
+	}
+	for _, route := range routes {
+		if route.MediaType != mediaType || !route.Enabled {
+			continue
+		}
+		p, getErr := s.repo.Get(ctx, route.ProviderID)
+		if getErr != nil || !p.Enabled || (p.TestOnly && !isAdmin) {
+			continue
+		}
+		if _, runtimeErr := s.ResolveRuntime(ctx, p.ID); runtimeErr == nil {
+			return p.ID, nil
+		}
+	}
+	return "", fmt.Errorf("no configured media provider for %s", mediaType)
 }
 
 func ValidateProviderID(id string) error {

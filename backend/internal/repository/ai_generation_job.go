@@ -93,7 +93,7 @@ func (r *AIGenerationJobRepository) scanJob(row pgx.Row) (model.AIGenerationJob,
 	var combineRaw, refRaw, refVideoRaw, refAudioRaw []byte
 	var genID *string
 	err := row.Scan(
-		&job.ID, &job.UserID, &job.WorkspaceID, &job.ProviderID, &job.ProviderTaskID, &job.KieTaskID, &job.Status, &job.KieState, &job.Progress, &job.FailMessage,
+		&job.ID, &job.UserID, &job.WorkspaceID, &job.ProviderID, &job.ProviderTaskID, &job.ProviderResultS3Key, &job.ProviderResultContentType, &job.KieTaskID, &job.Status, &job.KieState, &job.Progress, &job.FailMessage,
 		&job.Mode, &job.Prompt, &job.Model, &job.AspectRatio, &job.SourceUploadID, &job.LastFrameUploadID, &combineRaw,
 		&job.VideoDurationSeconds, &refRaw, &refVideoRaw, &refAudioRaw,
 		&job.CreditCost, &job.QuotaCreditsUsed, &job.WalletCentsCharged, &job.DurationMs, &genID, &job.PollAfter, &job.LastPolledAt, &job.LeaseOwner, &job.LeaseUntil, &job.Attempts, &job.LastError, &job.CreatedAt, &job.UpdatedAt,
@@ -111,7 +111,7 @@ func (r *AIGenerationJobRepository) scanJob(row pgx.Row) (model.AIGenerationJob,
 
 func (r *AIGenerationJobRepository) GetByID(ctx context.Context, id, userID string) (model.AIGenerationJob, error) {
 	job, err := r.scanJob(r.pool.QueryRow(ctx, `
-		SELECT id, user_id, workspace_id, provider_id, provider_task_id, kie_task_id, status, kie_state, progress, fail_message,
+		SELECT id, user_id, workspace_id, provider_id, provider_task_id, provider_result_s3_key, provider_result_content_type, kie_task_id, status, kie_state, progress, fail_message,
 			mode, prompt, model, aspect_ratio, source_upload_id, last_frame_upload_id, combine_upload_ids,
 			video_duration_seconds, reference_upload_ids, reference_video_upload_ids, reference_audio_upload_ids,
 			credit_cost, quota_credits_used, wallet_cents_charged, duration_ms, generation_id, poll_after, last_polled_at, lease_owner, lease_until, attempts, last_error, created_at, updated_at
@@ -129,7 +129,7 @@ func (r *AIGenerationJobRepository) GetByID(ctx context.Context, id, userID stri
 
 func (r *AIGenerationJobRepository) GetByIDInternal(ctx context.Context, id string) (model.AIGenerationJob, error) {
 	job, err := r.scanJob(r.pool.QueryRow(ctx, `
-		SELECT id, user_id, workspace_id, provider_id, provider_task_id, kie_task_id, status, kie_state, progress, fail_message,
+		SELECT id, user_id, workspace_id, provider_id, provider_task_id, provider_result_s3_key, provider_result_content_type, kie_task_id, status, kie_state, progress, fail_message,
 			mode, prompt, model, aspect_ratio, source_upload_id, last_frame_upload_id, combine_upload_ids,
 			video_duration_seconds, reference_upload_ids, reference_video_upload_ids, reference_audio_upload_ids,
 			credit_cost, quota_credits_used, wallet_cents_charged, duration_ms, generation_id, poll_after, last_polled_at, lease_owner, lease_until, attempts, last_error, created_at, updated_at

@@ -152,9 +152,16 @@ func (s *GenerationService) StartGenerateVideo(ctx context.Context, userID strin
 	refIDs := append([]string(nil), in.ReferenceUploadIDs...)
 	refVideoIDs := append([]string(nil), in.ReferenceVideoUploadIDs...)
 	refAudioIDs := append([]string(nil), in.ReferenceAudioUploadIDs...)
+	providerID := "kie"
+	if s.mediaProviders != nil && mode == model.KieVideoModeTextToVideo {
+		if selected, selectErr := s.mediaProviders.PrimaryIDForUser(ctx, "video", userID, s.providerUsers); selectErr == nil {
+			providerID = selected
+		}
+	}
 	job, err := s.jobRepo.Create(ctx, model.AIGenerationJob{
 		UserID:                  userID,
 		WorkspaceID:             ws.ID,
+		ProviderID:              providerID,
 		Status:                  model.GenJobStatusPreparing,
 		Progress:                5,
 		Mode:                    mode,
@@ -282,6 +289,9 @@ func (s *GenerationService) submitPendingVideoJob(ctx context.Context, jobID str
 		return err
 	}
 	if strings.TrimSpace(jobRow.KieTaskID) != "" {
+		if strings.TrimSpace(jobRow.ProviderTaskID) != "" {
+			return nil
+		}
 		return nil
 	}
 	if jobRow.Status != model.GenJobStatusPreparing {
@@ -304,6 +314,29 @@ func (s *GenerationService) submitPendingVideoJob(ctx context.Context, jobID str
 	workspaceID := jobRow.WorkspaceID
 	mode := normalizeVideoGenerationMode(jobRow.Mode)
 	startedAt := jobRow.CreatedAt
+
+	if s.mediaProviders != nil && jobRow.ProviderID == "onefast" && mode == model.KieVideoModeTextToVideo {
+		if providerID := jobRow.ProviderID; providerID == "onefast" {
+			runtime, runtimeErr := s.mediaProviders.ResolveRuntime(ctx, providerID)
+			if runtimeErr == nil {
+				content := []map[string]any{{"type": "text", "text": jobRow.Prompt}}
+				oneFastModel := "dreamina-seedance-2-0-260128"
+				if configured, ok := runtime.Settings["video_model"].(string); ok && strings.TrimSpace(configured) != "" {
+					oneFastModel = strings.TrimSpace(configured)
+				}
+				task, createErr := ai.NewOneFastClient(runtime.BaseURL, runtime.APIKey, "").CreateVideo(ctx, oneFastModel, content, jobRow.AspectRatio, modelClampVideoDuration(jobRow.VideoDurationSeconds), "720p", false)
+				if createErr == nil {
+					p := ai.NextJobProgress(jobRow.Progress, model.GenJobStatusWaiting, "queued", 0, startedAt)
+					_, setErr := s.jobRepo.SetProviderTask(ctx, jobID, providerID, task.ID, model.GenJobStatusWaiting, p)
+					if setErr == nil {
+						return nil
+					}
+					return setErr
+				}
+				// Safe fallback: no task is persisted when OneFast submit fails.
+			}
+		}
+	}
 
 	deferSubmit := func(rateLimited bool) {
 		_ = s.jobRepo.ReleaseKieSubmitClaim(ctx, jobID)
@@ -452,7 +485,7 @@ func (s *GenerationService) submitPendingVideoJob(ctx context.Context, jobID str
 
 	jobRow, _ = s.jobRepo.GetByIDInternal(ctx, jobID)
 	p := ai.NextJobProgress(jobRow.Progress, model.GenJobStatusWaiting, "waiting", 0, startedAt)
-	set, err := s.jobRepo.SetKieTask(ctx, jobID, taskID, model.GenJobStatusWaiting, p)
+	set, err := s.jobRepo.SetProviderTask(ctx, jobID, "kie", taskID, model.GenJobStatusWaiting, p)
 	if err != nil {
 		return err
 	}
@@ -542,7 +575,40 @@ func (s *GenerationService) finalizeVideoJob(ctx context.Context, jobID string) 
 	if settings.KopecksPerMediaCredit > 0 {
 		kopecks = settings.KopecksPerMediaCredit
 	}
-	if existing != nil {
+	if job.ProviderID == "onefast" {
+		if strings.TrimSpace(job.ProviderResultS3Key) == "" {
+			return fmt.Errorf("onefast video result is missing")
+		}
+		streaming := s.StreamingSettings(ctx)
+		reservationMB := streaming.MultipartPartMB * 2
+		if err := s.streamingLimiter.acquire(ctx, streaming.VideoUploadConcurrency, streaming.MemoryBudgetMB, reservationMB); err != nil {
+			return err
+		}
+		defer s.streamingLimiter.release(reservationMB)
+		videoPath, contentType, downloadedSize, downloadErr := downloadToTempFile(ctx, job.ProviderResultS3Key, int64(streaming.VideoMaxMB)<<20)
+		if downloadErr != nil {
+			return fmt.Errorf("%w: %v", ErrGenerationFailed, downloadErr)
+		}
+		defer os.Remove(videoPath)
+		videoSize = downloadedSize
+		ext := ".mp4"
+		if strings.Contains(contentType, "webm") {
+			ext = ".webm"
+		}
+		key := videoGenerationResultS3Key(job.WorkspaceID, ext)
+		if err := s.objectStore.PutObjectFromFile(ctx, key, contentType, videoPath); err != nil {
+			return err
+		}
+		previewKey := ""
+		if previewData, previewErr := extractVideoPreviewFromPath(videoPath); previewErr == nil && len(previewData) > 0 {
+			previewKey = videoGenerationPreviewS3Key(job.WorkspaceID)
+			_ = s.objectStore.PutObject(ctx, previewKey, "image/jpeg", previewData)
+		}
+		record, err = s.genRepo.Create(ctx, model.AIGeneration{SourceJobID: &job.ID, UserID: job.UserID, WorkspaceID: job.WorkspaceID, Mode: job.Mode, Prompt: job.Prompt, Model: job.Model, AspectRatio: job.AspectRatio, ResultS3Key: key, ResultContentType: contentType, PreviewS3Key: previewKey, VideoDurationSeconds: job.VideoDurationSeconds})
+		if err != nil {
+			return err
+		}
+	} else if existing != nil {
 		record = *existing
 	} else {
 

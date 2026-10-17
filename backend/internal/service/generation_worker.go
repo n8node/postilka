@@ -98,7 +98,7 @@ func (s *GenerationService) pollDueJobs(ctx context.Context, owner string, pollG
 			_ = s.jobRepo.ReleaseLease(ctx, id, owner)
 			continue
 		}
-		if job.Status == model.GenJobStatusPreparing && strings.TrimSpace(job.KieTaskID) == "" {
+		if job.Status == model.GenJobStatusPreparing && strings.TrimSpace(job.ProviderTaskID) == "" {
 			var err error
 			if model.IsVideoGenerationMode(job.Mode) {
 				err = s.submitPendingVideoJob(ctx, id, createGate)
@@ -129,7 +129,7 @@ func (s *GenerationService) pollDueJobs(ctx context.Context, owner string, pollG
 			_ = s.jobRepo.ReleaseLease(ctx, id, owner)
 			continue
 		}
-		if job.KieTaskID == "" {
+		if job.ProviderTaskID == "" {
 			_ = s.jobRepo.ReleaseLease(ctx, id, owner)
 			continue
 		}
@@ -175,10 +175,52 @@ func (s *GenerationService) pollDueJobs(ctx context.Context, owner string, pollG
 }
 
 func (s *GenerationService) pollGenerationJob(ctx context.Context, job model.AIGenerationJob) (got429 bool, terminal bool, err error) {
+	if job.ProviderID == "onefast" {
+		return s.pollOneFastJob(ctx, job)
+	}
 	if model.IsVideoGenerationMode(job.Mode) {
 		return s.pollKieVideoJob(ctx, job)
 	}
 	return s.pollKieJob(ctx, job)
+}
+
+func (s *GenerationService) pollOneFastJob(ctx context.Context, job model.AIGenerationJob) (bool, bool, error) {
+	if s.mediaProviders == nil {
+		return false, false, errors.New("media provider service is not configured")
+	}
+	runtime, err := s.mediaProviders.ResolveRuntime(ctx, "onefast")
+	if err != nil {
+		return false, false, err
+	}
+	if !model.IsVideoGenerationMode(job.Mode) && strings.TrimSpace(job.ProviderResultS3Key) != "" {
+		_ = s.jobRepo.UpdateProgress(ctx, job.ID, model.GenJobStatusGenerating, "succeeded", ai.KieProgressNearDone, "", time.Now())
+		return false, true, nil
+	}
+	detail, err := ai.NewOneFastClient(runtime.BaseURL, runtime.APIKey, "").GetVideo(ctx, job.ProviderTaskID)
+	if err != nil {
+		return strings.Contains(err.Error(), "429"), false, err
+	}
+	switch detail.Status {
+	case "succeeded", "completed":
+		if detail.ResultURL == "" {
+			return false, false, fmt.Errorf("onefast video has no result url")
+		}
+		if err := s.jobRepo.SetProviderResult(ctx, job.ID, detail.ResultURL, "video/mp4"); err != nil {
+			return false, false, err
+		}
+		_ = s.jobRepo.UpdateProgress(ctx, job.ID, model.GenJobStatusGenerating, "succeeded", ai.KieProgressNearDone, "", time.Now())
+		return false, true, nil
+	case "failed", "error":
+		msg := detail.FailMessage
+		if msg == "" {
+			msg = "onefast video generation failed"
+		}
+		s.markJobFailed(ctx, job.ID, msg)
+		return false, true, nil
+	default:
+		_ = s.jobRepo.UpdateProgress(ctx, job.ID, model.GenJobStatusGenerating, detail.Status, job.Progress, "", time.Now().Add(8*time.Second))
+		return false, false, nil
+	}
 }
 
 func (s *GenerationService) finalizeGenerationJob(ctx context.Context, jobID string) error {
@@ -260,60 +302,79 @@ func (s *GenerationService) finalizeJob(ctx context.Context, jobID string) error
 
 	var record model.AIGeneration
 	var resultSize int64
-	if existing != nil {
-		record = *existing
+	if job.ProviderID == "onefast" {
+		if strings.TrimSpace(job.ProviderResultS3Key) == "" {
+			return fmt.Errorf("onefast image result is missing")
+		}
+		resultSize = int64(len(job.ProviderResultS3Key))
+		if info, headErr := s.objectStore.HeadObject(ctx, job.ProviderResultS3Key); headErr == nil {
+			resultSize = info.Size
+		}
+		contentType := job.ProviderResultContentType
+		if contentType == "" {
+			contentType = "image/png"
+		}
+		key := job.ProviderResultS3Key
+		record, err = s.genRepo.Create(ctx, model.AIGeneration{SourceJobID: &job.ID, UserID: job.UserID, WorkspaceID: job.WorkspaceID, Mode: job.Mode, Prompt: job.Prompt, Model: job.Model, AspectRatio: job.AspectRatio, ResultS3Key: key, ResultContentType: contentType})
+		if err != nil {
+			return err
+		}
 	} else {
-		baseURL, apiKey, err := s.kieConfig.ResolveCredentials(ctx)
-		if err != nil {
-			return err
-		}
-		client := ai.NewKieClient(baseURL, apiKey)
-		detail, err := client.GetTask(ctx, job.KieTaskID)
-		if err != nil {
-			return err
-		}
-		if detail.State != "success" || detail.ResultURL == "" {
-			return fmt.Errorf("%w: no result", ErrGenerationFailed)
-		}
+		if existing != nil {
+			record = *existing
+		} else {
+			baseURL, apiKey, err := s.kieConfig.ResolveCredentials(ctx)
+			if err != nil {
+				return err
+			}
+			client := ai.NewKieClient(baseURL, apiKey)
+			detail, err := client.GetTask(ctx, job.KieTaskID)
+			if err != nil {
+				return err
+			}
+			if detail.State != "success" || detail.ResultURL == "" {
+				return fmt.Errorf("%w: no result", ErrGenerationFailed)
+			}
 
-		_ = s.jobRepo.SetDuration(ctx, job.ID, int(time.Since(job.CreatedAt).Milliseconds()))
-		streaming := s.StreamingSettings(ctx)
-		reservationMB := streaming.MultipartPartMB * 2
-		if err := s.streamingLimiter.acquire(ctx, streaming.ImageUploadConcurrency, streaming.MemoryBudgetMB, reservationMB); err != nil {
-			return err
-		}
-		defer s.streamingLimiter.release(reservationMB)
-		resultPath, contentType, size, err := downloadToTempFile(ctx, detail.ResultURL, int64(streaming.ImageMaxMB)<<20)
-		if err != nil {
-			return fmt.Errorf("%w: %v", ErrGenerationFailed, err)
-		}
-		defer os.Remove(resultPath)
-		resultSize = size
+			_ = s.jobRepo.SetDuration(ctx, job.ID, int(time.Since(job.CreatedAt).Milliseconds()))
+			streaming := s.StreamingSettings(ctx)
+			reservationMB := streaming.MultipartPartMB * 2
+			if err := s.streamingLimiter.acquire(ctx, streaming.ImageUploadConcurrency, streaming.MemoryBudgetMB, reservationMB); err != nil {
+				return err
+			}
+			defer s.streamingLimiter.release(reservationMB)
+			resultPath, contentType, size, err := downloadToTempFile(ctx, detail.ResultURL, int64(streaming.ImageMaxMB)<<20)
+			if err != nil {
+				return fmt.Errorf("%w: %v", ErrGenerationFailed, err)
+			}
+			defer os.Remove(resultPath)
+			resultSize = size
 
-		ext := ".jpg"
-		switch contentType {
-		case "image/png":
-			ext = ".png"
-		case "image/webp":
-			ext = ".webp"
-		}
-		key := generationResultS3Key(job.WorkspaceID, job.Mode, ext)
-		if err := s.objectStore.PutObjectFromFile(ctx, key, contentType, resultPath); err != nil {
-			return fmt.Errorf("%w: %v", ErrGenerationFailed, err)
-		}
-		record, err = s.genRepo.Create(ctx, model.AIGeneration{
-			SourceJobID:       &job.ID,
-			UserID:            job.UserID,
-			WorkspaceID:       job.WorkspaceID,
-			Mode:              job.Mode,
-			Prompt:            job.Prompt,
-			Model:             job.Model,
-			AspectRatio:       job.AspectRatio,
-			ResultS3Key:       key,
-			ResultContentType: contentType,
-		})
-		if err != nil {
-			return err
+			ext := ".jpg"
+			switch contentType {
+			case "image/png":
+				ext = ".png"
+			case "image/webp":
+				ext = ".webp"
+			}
+			key := generationResultS3Key(job.WorkspaceID, job.Mode, ext)
+			if err := s.objectStore.PutObjectFromFile(ctx, key, contentType, resultPath); err != nil {
+				return fmt.Errorf("%w: %v", ErrGenerationFailed, err)
+			}
+			record, err = s.genRepo.Create(ctx, model.AIGeneration{
+				SourceJobID:       &job.ID,
+				UserID:            job.UserID,
+				WorkspaceID:       job.WorkspaceID,
+				Mode:              job.Mode,
+				Prompt:            job.Prompt,
+				Model:             job.Model,
+				AspectRatio:       job.AspectRatio,
+				ResultS3Key:       key,
+				ResultContentType: contentType,
+			})
+			if err != nil {
+				return err
+			}
 		}
 	}
 

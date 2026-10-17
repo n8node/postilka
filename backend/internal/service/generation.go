@@ -48,6 +48,7 @@ type GenerationService struct {
 	yandexGPT        *YandexGptConfigService
 	quota            *QuotaService
 	mediaProviders   *MediaProviderService
+	providerUsers    MediaProviderUserLookup
 	streaming        func(context.Context) model.StreamingSettings
 	streamingLimiter streamingLimiter
 	createGate       *kieCreateGate
@@ -93,6 +94,10 @@ func (s *GenerationService) SetStreamingSettingsProvider(fn func(context.Context
 
 func (s *GenerationService) SetMediaProviderService(providers *MediaProviderService) {
 	s.mediaProviders = providers
+}
+
+func (s *GenerationService) SetMediaProviderUserLookup(users MediaProviderUserLookup) {
+	s.providerUsers = users
 }
 
 func (s *GenerationService) StreamingSettings(ctx context.Context) model.StreamingSettings {
@@ -194,9 +199,16 @@ func (s *GenerationService) StartGenerate(ctx context.Context, userID string, r 
 		modelID = ai.DefaultModelForMode(mode)
 	}
 
+	providerID := "kie"
+	if s.mediaProviders != nil && mode == "text-to-image" {
+		if selected, selectErr := s.mediaProviders.PrimaryIDForUser(ctx, "image", userID, s.providerUsers); selectErr == nil {
+			providerID = selected
+		}
+	}
 	job, err := s.jobRepo.Create(ctx, model.AIGenerationJob{
 		UserID:             userID,
 		WorkspaceID:        ws.ID,
+		ProviderID:         providerID,
 		Status:             model.GenJobStatusPreparing,
 		Progress:           5,
 		Mode:               mode,
@@ -1105,6 +1117,9 @@ func (s *GenerationService) submitPendingJob(ctx context.Context, jobID string, 
 		return err
 	}
 	if strings.TrimSpace(jobRow.KieTaskID) != "" {
+		if strings.TrimSpace(jobRow.ProviderTaskID) != "" {
+			return nil
+		}
 		return nil
 	}
 	if jobRow.Status != model.GenJobStatusPreparing {
@@ -1146,6 +1161,32 @@ func (s *GenerationService) submitPendingJob(ctx context.Context, jobID string, 
 
 	p := ai.NextJobProgress(jobRow.Progress, model.GenJobStatusPreparing, "", 0, startedAt)
 	_ = s.jobRepo.UpdateProgress(ctx, jobID, model.GenJobStatusPreparing, "", p, "", time.Now())
+
+	if s.mediaProviders != nil && jobRow.ProviderID == "onefast" && mode == "text-to-image" {
+		if providerID := jobRow.ProviderID; providerID == "onefast" {
+			runtime, runtimeErr := s.mediaProviders.ResolveRuntime(ctx, providerID)
+			if runtimeErr == nil {
+				oneFastModel := "gpt-image-2.5"
+				if configured, ok := runtime.Settings["image_model"].(string); ok && strings.TrimSpace(configured) != "" {
+					oneFastModel = strings.TrimSpace(configured)
+				}
+				result, imageErr := ai.NewOneFastClient(runtime.BaseURL, runtime.APIKey, "").GenerateImage(ctx, oneFastModel, prompt, oneFastImageSize(in.AspectRatio))
+				if imageErr == nil {
+					key := generationResultS3Key(jobRow.WorkspaceID, jobRow.Mode, ".png")
+					if putErr := s.objectStore.PutObject(ctx, key, result.ContentType, result.Data); putErr == nil {
+						if setErr := s.jobRepo.SetProviderResult(ctx, jobID, key, result.ContentType); setErr == nil {
+							_, setErr = s.jobRepo.SetProviderTask(ctx, jobID, providerID, "inline-image", model.GenJobStatusGenerating, ai.KieProgressNearDone)
+							if setErr == nil {
+								return nil
+							}
+							return setErr
+						}
+					}
+				}
+				// A transient OneFast failure before a task/result exists is safe to fall back to KIE.
+			}
+		}
+	}
 
 	baseURL, apiKey, err := s.kieConfig.ResolveCredentials(ctx)
 	if err != nil {
@@ -1266,7 +1307,7 @@ func (s *GenerationService) submitPendingJob(ctx context.Context, jobID string, 
 
 	jobRow, _ = s.jobRepo.GetByIDInternal(ctx, jobID)
 	p = ai.NextJobProgress(jobRow.Progress, model.GenJobStatusWaiting, "waiting", 0, startedAt)
-	set, err := s.jobRepo.SetKieTask(ctx, jobID, taskID, model.GenJobStatusWaiting, p)
+	set, err := s.jobRepo.SetProviderTask(ctx, jobID, "kie", taskID, model.GenJobStatusWaiting, p)
 	if err != nil {
 		// KIE уже принял задачу, но запись task ID не сохранилась. Освобождаем
 		// claim, чтобы job не завис навсегда в состоянии submitting.
@@ -1279,6 +1320,21 @@ func (s *GenerationService) submitPendingJob(ctx context.Context, jobID string, 
 	}
 	_ = s.jobRepo.UpdateProgress(ctx, jobID, model.GenJobStatusWaiting, "waiting", p, "", time.Now())
 	return nil
+}
+
+func oneFastImageSize(aspectRatio string) string {
+	switch strings.TrimSpace(aspectRatio) {
+	case "9:16":
+		return "1024x1536"
+	case "16:9":
+		return "1536x1024"
+	case "4:3":
+		return "1365x1024"
+	case "3:4":
+		return "1024x1365"
+	default:
+		return "1024x1024"
+	}
 }
 
 func generationFailMessage(err error) string {
