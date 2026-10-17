@@ -47,6 +47,7 @@ type GenerationService struct {
 	wsSvc            *WorkspaceService
 	yandexGPT        *YandexGptConfigService
 	quota            *QuotaService
+	mediaProviders   *MediaProviderService
 	streaming        func(context.Context) model.StreamingSettings
 	streamingLimiter streamingLimiter
 	createGate       *kieCreateGate
@@ -88,6 +89,10 @@ func (s *GenerationService) SetNotifier(n *NotificationService) {
 
 func (s *GenerationService) SetStreamingSettingsProvider(fn func(context.Context) model.StreamingSettings) {
 	s.streaming = fn
+}
+
+func (s *GenerationService) SetMediaProviderService(providers *MediaProviderService) {
+	s.mediaProviders = providers
 }
 
 func (s *GenerationService) StreamingSettings(ctx context.Context) model.StreamingSettings {

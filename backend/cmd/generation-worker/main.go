@@ -107,6 +107,9 @@ func main() {
 	generationSvc := service.NewGenerationService(
 		kieConfigSvc, kieVideoConfigSvc, genRepo, genJobRepo, genUploadRepo, aiBillingSvc, objectStorage, fileStorageSvc, wsSvc, yandexGptConfigSvc, quotaSvc,
 	)
+	mediaProviderRepo := repository.NewMediaProviderRepository(db.Pool)
+	mediaProviderSvc := service.NewMediaProviderService(mediaProviderRepo, secretCipher)
+	generationSvc.SetMediaProviderService(mediaProviderSvc)
 	generationSvc.SetNotifier(notificationSvc)
 
 	logger.Info("generation worker started",

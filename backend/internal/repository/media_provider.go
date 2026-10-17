@@ -58,6 +58,15 @@ func (r *MediaProviderRepository) Get(ctx context.Context, id string) (model.Med
 	return p, nil
 }
 
+func (r *MediaProviderRepository) GetStoredKey(ctx context.Context, id string) (string, error) {
+	var key string
+	err := r.pool.QueryRow(ctx, `SELECT api_key_encrypted FROM media_providers WHERE id = $1`, id).Scan(&key)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	return key, err
+}
+
 func (r *MediaProviderRepository) Upsert(ctx context.Context, p model.MediaProvider, encryptedKey string) error {
 	caps, _ := json.Marshal(p.Capabilities)
 	_, err := r.pool.Exec(ctx, `INSERT INTO media_providers (id, display_name, api_base_url, api_key_encrypted, enabled, test_only, capabilities, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,now()) ON CONFLICT (id) DO UPDATE SET display_name=EXCLUDED.display_name, api_base_url=EXCLUDED.api_base_url, api_key_encrypted=CASE WHEN EXCLUDED.api_key_encrypted = '' THEN media_providers.api_key_encrypted ELSE EXCLUDED.api_key_encrypted END, enabled=EXCLUDED.enabled, test_only=EXCLUDED.test_only, capabilities=EXCLUDED.capabilities, updated_at=now()`, p.ID, p.DisplayName, p.APIBaseURL, encryptedKey, p.Enabled, p.TestOnly, caps)

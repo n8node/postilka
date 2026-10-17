@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -13,6 +14,20 @@ import (
 
 type AIGenerationJobRepository struct {
 	pool *pgxpool.Pool
+}
+
+func providerID(job model.AIGenerationJob) string {
+	if strings.TrimSpace(job.ProviderID) != "" {
+		return strings.TrimSpace(job.ProviderID)
+	}
+	return "kie"
+}
+
+func providerTaskID(job model.AIGenerationJob) string {
+	if strings.TrimSpace(job.ProviderTaskID) != "" {
+		return strings.TrimSpace(job.ProviderTaskID)
+	}
+	return strings.TrimSpace(job.KieTaskID)
 }
 
 func NewAIGenerationJobRepository(pool *pgxpool.Pool) *AIGenerationJobRepository {
@@ -53,19 +68,19 @@ func (r *AIGenerationJobRepository) Create(ctx context.Context, job model.AIGene
 	}
 	err = r.pool.QueryRow(ctx, `
 		INSERT INTO ai_generation_jobs (
-			id, user_id, workspace_id, kie_task_id, status, kie_state, progress, fail_message,
+			id, user_id, workspace_id, provider_id, provider_task_id, kie_task_id, status, kie_state, progress, fail_message,
 			mode, prompt, model, aspect_ratio, source_upload_id, last_frame_upload_id, combine_upload_ids,
 			video_duration_seconds, reference_upload_ids, reference_video_upload_ids, reference_audio_upload_ids,
 			credit_cost, wallet_cents_charged, generation_id, poll_after, created_at, updated_at
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8,
-			$9, $10, $11, $12, $13, $14, $15,
-			$16, $17, $18, $19,
-			$20, $21, $22, $23, now(), now()
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+			$11, $12, $13, $14, $15, $16, $17,
+			$18, $19, $20, $21,
+			$22, $23, $24, $25, now(), now()
 		)
 		RETURNING created_at, updated_at
 	`,
-		job.ID, job.UserID, job.WorkspaceID, job.KieTaskID, job.Status, job.KieState, job.Progress, job.FailMessage,
+		job.ID, job.UserID, job.WorkspaceID, providerID(job), providerTaskID(job), job.KieTaskID, job.Status, job.KieState, job.Progress, job.FailMessage,
 		job.Mode, job.Prompt, job.Model, job.AspectRatio, job.SourceUploadID, job.LastFrameUploadID, combineJSON,
 		job.VideoDurationSeconds, refJSON, refVideoJSON, refAudioJSON,
 		job.CreditCost, job.WalletCentsCharged, job.GenerationID, job.PollAfter,
@@ -78,7 +93,7 @@ func (r *AIGenerationJobRepository) scanJob(row pgx.Row) (model.AIGenerationJob,
 	var combineRaw, refRaw, refVideoRaw, refAudioRaw []byte
 	var genID *string
 	err := row.Scan(
-		&job.ID, &job.UserID, &job.WorkspaceID, &job.KieTaskID, &job.Status, &job.KieState, &job.Progress, &job.FailMessage,
+		&job.ID, &job.UserID, &job.WorkspaceID, &job.ProviderID, &job.ProviderTaskID, &job.KieTaskID, &job.Status, &job.KieState, &job.Progress, &job.FailMessage,
 		&job.Mode, &job.Prompt, &job.Model, &job.AspectRatio, &job.SourceUploadID, &job.LastFrameUploadID, &combineRaw,
 		&job.VideoDurationSeconds, &refRaw, &refVideoRaw, &refAudioRaw,
 		&job.CreditCost, &job.QuotaCreditsUsed, &job.WalletCentsCharged, &job.DurationMs, &genID, &job.PollAfter, &job.LastPolledAt, &job.LeaseOwner, &job.LeaseUntil, &job.Attempts, &job.LastError, &job.CreatedAt, &job.UpdatedAt,
@@ -96,7 +111,7 @@ func (r *AIGenerationJobRepository) scanJob(row pgx.Row) (model.AIGenerationJob,
 
 func (r *AIGenerationJobRepository) GetByID(ctx context.Context, id, userID string) (model.AIGenerationJob, error) {
 	job, err := r.scanJob(r.pool.QueryRow(ctx, `
-		SELECT id, user_id, workspace_id, kie_task_id, status, kie_state, progress, fail_message,
+		SELECT id, user_id, workspace_id, provider_id, provider_task_id, kie_task_id, status, kie_state, progress, fail_message,
 			mode, prompt, model, aspect_ratio, source_upload_id, last_frame_upload_id, combine_upload_ids,
 			video_duration_seconds, reference_upload_ids, reference_video_upload_ids, reference_audio_upload_ids,
 			credit_cost, quota_credits_used, wallet_cents_charged, duration_ms, generation_id, poll_after, last_polled_at, lease_owner, lease_until, attempts, last_error, created_at, updated_at
@@ -114,7 +129,7 @@ func (r *AIGenerationJobRepository) GetByID(ctx context.Context, id, userID stri
 
 func (r *AIGenerationJobRepository) GetByIDInternal(ctx context.Context, id string) (model.AIGenerationJob, error) {
 	job, err := r.scanJob(r.pool.QueryRow(ctx, `
-		SELECT id, user_id, workspace_id, kie_task_id, status, kie_state, progress, fail_message,
+		SELECT id, user_id, workspace_id, provider_id, provider_task_id, kie_task_id, status, kie_state, progress, fail_message,
 			mode, prompt, model, aspect_ratio, source_upload_id, last_frame_upload_id, combine_upload_ids,
 			video_duration_seconds, reference_upload_ids, reference_video_upload_ids, reference_audio_upload_ids,
 			credit_cost, quota_credits_used, wallet_cents_charged, duration_ms, generation_id, poll_after, last_polled_at, lease_owner, lease_until, attempts, last_error, created_at, updated_at
@@ -133,7 +148,7 @@ func (r *AIGenerationJobRepository) GetByIDInternal(ctx context.Context, id stri
 func (r *AIGenerationJobRepository) ListActiveForAdmin(ctx context.Context) ([]model.AdminAIGenerationJob, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT j.id, j.user_id, COALESCE(u.email, ''), j.workspace_id, COALESCE(w.name, ''),
-			j.status, COALESCE(j.kie_state, ''), COALESCE(j.kie_task_id, ''), j.progress,
+			j.status, COALESCE(j.kie_state, ''), COALESCE(j.provider_id, 'kie'), COALESCE(j.provider_task_id, j.kie_task_id, ''), j.progress,
 			COALESCE(j.mode, ''), COALESCE(j.model, ''), COALESCE(j.prompt, ''), j.attempts,
 			COALESCE(j.last_error, ''), COALESCE(j.fail_message, ''), j.generation_id,
 			j.created_at, j.updated_at, j.last_polled_at, j.poll_after, COALESCE(j.lease_owner, ''), j.lease_until
@@ -151,7 +166,7 @@ func (r *AIGenerationJobRepository) ListActiveForAdmin(ctx context.Context) ([]m
 	for rows.Next() {
 		var item model.AdminAIGenerationJob
 		if err := rows.Scan(&item.ID, &item.UserID, &item.UserEmail, &item.WorkspaceID, &item.WorkspaceName,
-			&item.Status, &item.KieState, &item.KieTaskID, &item.Progress, &item.Mode, &item.Model, &item.Prompt,
+			&item.Status, &item.KieState, &item.ProviderID, &item.ProviderTaskID, &item.Progress, &item.Mode, &item.Model, &item.Prompt,
 			&item.Attempts, &item.LastError, &item.FailMessage, &item.GenerationID, &item.CreatedAt, &item.UpdatedAt,
 			&item.LastPolledAt, &item.PollAfter, &item.LeaseOwner, &item.LeaseUntil); err != nil {
 			return nil, err
@@ -374,6 +389,28 @@ func (r *AIGenerationJobRepository) SetKieTask(ctx context.Context, id, kieTaskI
 		return false, err
 	}
 	return tag.RowsAffected() == 1, nil
+}
+
+// SetProviderTask stores the provider-neutral task identity while keeping the
+// legacy KIE columns populated for old workers and existing KIE jobs.
+func (r *AIGenerationJobRepository) SetProviderTask(ctx context.Context, id, providerID, taskID, status string, progress int) (bool, error) {
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE ai_generation_jobs
+		SET provider_id = $2, provider_task_id = $3,
+		    kie_task_id = CASE WHEN $2 = 'kie' THEN $3 ELSE kie_task_id END,
+		    status = $4, progress = $5, kie_state = 'waiting',
+		    poll_after = now(), updated_at = now()
+		WHERE id = $1 AND COALESCE(TRIM(provider_task_id), '') = ''
+	`, id, providerID, taskID, status, progress)
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() == 1, nil
+}
+
+func (r *AIGenerationJobRepository) SetProviderResult(ctx context.Context, id, s3Key, contentType string) error {
+	_, err := r.pool.Exec(ctx, `UPDATE ai_generation_jobs SET provider_result_s3_key=$2, provider_result_content_type=$3, updated_at=now() WHERE id=$1`, id, s3Key, contentType)
+	return err
 }
 
 func (r *AIGenerationJobRepository) ListDueForPoll(ctx context.Context, limit int) ([]string, error) {

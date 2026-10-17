@@ -12,38 +12,42 @@ const (
 )
 
 type AIGenerationJob struct {
-	ID                      string
-	UserID                  string
-	WorkspaceID             string
-	KieTaskID               string
-	Status                  string
-	KieState                string
-	Progress                int
-	FailMessage             string
-	Mode                    string
-	Prompt                  string
-	Model                   string
-	AspectRatio             string
-	SourceUploadID          string
-	LastFrameUploadID       string
-	CombineUploadIDs        []string
-	ReferenceUploadIDs      []string
-	ReferenceVideoUploadIDs []string
-	ReferenceAudioUploadIDs []string
-	VideoDurationSeconds    int
-	CreditCost              int
-	QuotaCreditsUsed        int
-	WalletCentsCharged      int
-	DurationMs              int
-	GenerationID            *string
-	PollAfter               time.Time
-	LastPolledAt            *time.Time
-	LeaseOwner              string
-	LeaseUntil              *time.Time
-	Attempts                int
-	LastError               string
-	CreatedAt               time.Time
-	UpdatedAt               time.Time
+	ID                        string
+	UserID                    string
+	WorkspaceID               string
+	ProviderID                string
+	ProviderTaskID            string
+	ProviderResultS3Key       string
+	ProviderResultContentType string
+	KieTaskID                 string
+	Status                    string
+	KieState                  string
+	Progress                  int
+	FailMessage               string
+	Mode                      string
+	Prompt                    string
+	Model                     string
+	AspectRatio               string
+	SourceUploadID            string
+	LastFrameUploadID         string
+	CombineUploadIDs          []string
+	ReferenceUploadIDs        []string
+	ReferenceVideoUploadIDs   []string
+	ReferenceAudioUploadIDs   []string
+	VideoDurationSeconds      int
+	CreditCost                int
+	QuotaCreditsUsed          int
+	WalletCentsCharged        int
+	DurationMs                int
+	GenerationID              *string
+	PollAfter                 time.Time
+	LastPolledAt              *time.Time
+	LeaseOwner                string
+	LeaseUntil                *time.Time
+	Attempts                  int
+	LastError                 string
+	CreatedAt                 time.Time
+	UpdatedAt                 time.Time
 }
 
 type AIGenerationJobView struct {
@@ -62,30 +66,32 @@ type AIGenerationJobView struct {
 }
 
 type AdminAIGenerationJob struct {
-	ID            string     `json:"id"`
-	UserID        string     `json:"user_id"`
-	UserEmail     string     `json:"user_email"`
-	WorkspaceID   string     `json:"workspace_id"`
-	WorkspaceName string     `json:"workspace_name"`
-	Status        string     `json:"status"`
-	KieState      string     `json:"kie_state"`
-	KieTaskID     string     `json:"kie_task_id"`
-	Progress      int        `json:"progress"`
-	Mode          string     `json:"mode"`
-	Model         string     `json:"model"`
-	Prompt        string     `json:"prompt"`
-	Attempts      int        `json:"attempts"`
-	LastError     string     `json:"last_error"`
-	FailMessage   string     `json:"fail_message"`
-	GenerationID  *string    `json:"generation_id,omitempty"`
-	CreatedAt     time.Time  `json:"created_at"`
-	UpdatedAt     time.Time  `json:"updated_at"`
-	LastPolledAt  *time.Time `json:"last_polled_at,omitempty"`
-	PollAfter     time.Time  `json:"poll_after"`
-	LeaseOwner    string     `json:"lease_owner"`
-	LeaseUntil    *time.Time `json:"lease_until,omitempty"`
-	Stale         bool       `json:"stale"`
-	StaleReason   string     `json:"stale_reason,omitempty"`
+	ID             string     `json:"id"`
+	UserID         string     `json:"user_id"`
+	UserEmail      string     `json:"user_email"`
+	WorkspaceID    string     `json:"workspace_id"`
+	WorkspaceName  string     `json:"workspace_name"`
+	ProviderID     string     `json:"provider_id"`
+	ProviderTaskID string     `json:"provider_task_id"`
+	Status         string     `json:"status"`
+	KieState       string     `json:"kie_state"`
+	KieTaskID      string     `json:"kie_task_id"`
+	Progress       int        `json:"progress"`
+	Mode           string     `json:"mode"`
+	Model          string     `json:"model"`
+	Prompt         string     `json:"prompt"`
+	Attempts       int        `json:"attempts"`
+	LastError      string     `json:"last_error"`
+	FailMessage    string     `json:"fail_message"`
+	GenerationID   *string    `json:"generation_id,omitempty"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+	LastPolledAt   *time.Time `json:"last_polled_at,omitempty"`
+	PollAfter      time.Time  `json:"poll_after"`
+	LeaseOwner     string     `json:"lease_owner"`
+	LeaseUntil     *time.Time `json:"lease_until,omitempty"`
+	Stale          bool       `json:"stale"`
+	StaleReason    string     `json:"stale_reason,omitempty"`
 }
 
 type VideoGenerationPricingView struct {

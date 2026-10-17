@@ -10,6 +10,13 @@ import (
 	"github.com/postilka/postilka/internal/repository"
 )
 
+type MediaProviderRuntime struct {
+	ID       string
+	BaseURL  string
+	APIKey   string
+	Settings map[string]any
+}
+
 type MediaProviderService struct {
 	repo   *repository.MediaProviderRepository
 	cipher *SecretCipher
@@ -114,6 +121,49 @@ func (s *MediaProviderService) IsAvailableForUser(ctx context.Context, id string
 		return false, nil
 	}
 	return true, nil
+}
+
+func (s *MediaProviderService) ResolveRuntime(ctx context.Context, id string) (MediaProviderRuntime, error) {
+	p, err := s.repo.Get(ctx, id)
+	if err != nil {
+		return MediaProviderRuntime{}, err
+	}
+	if !p.Enabled {
+		return MediaProviderRuntime{}, fmt.Errorf("media provider %s is disabled", id)
+	}
+	if s.cipher == nil {
+		return MediaProviderRuntime{}, ErrCryptoUnavailable
+	}
+	stored, err := s.repo.GetStoredKey(ctx, id)
+	if err != nil {
+		return MediaProviderRuntime{}, err
+	}
+	key, err := s.cipher.Decrypt(stored)
+	if err != nil || strings.TrimSpace(key) == "" {
+		return MediaProviderRuntime{}, fmt.Errorf("media provider %s api key is not configured", id)
+	}
+	return MediaProviderRuntime{ID: p.ID, BaseURL: p.APIBaseURL, APIKey: strings.TrimSpace(key), Settings: p.Settings}, nil
+}
+
+func (s *MediaProviderService) Primary(ctx context.Context, mediaType string) (MediaProviderRuntime, error) {
+	routes, err := s.repo.ListRoutes(ctx)
+	if err != nil {
+		return MediaProviderRuntime{}, err
+	}
+	for _, route := range routes {
+		if route.MediaType != mediaType || !route.Enabled {
+			continue
+		}
+		p, getErr := s.repo.Get(ctx, route.ProviderID)
+		if getErr != nil || !p.Enabled || p.TestOnly {
+			continue
+		}
+		runtime, runtimeErr := s.ResolveRuntime(ctx, route.ProviderID)
+		if runtimeErr == nil {
+			return runtime, nil
+		}
+	}
+	return MediaProviderRuntime{}, fmt.Errorf("no configured media provider for %s", mediaType)
 }
 
 func ValidateProviderID(id string) error {
