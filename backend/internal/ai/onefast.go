@@ -28,6 +28,38 @@ func (c *OneFastClient) TestConnection(ctx context.Context) error {
 	return err
 }
 
+type OneFastModel struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+func (c *OneFastClient) ListModels(ctx context.Context) ([]OneFastModel, error) {
+	_, raw, err := c.request(ctx, http.MethodGet, "/v1/models", nil, "")
+	if err != nil {
+		return nil, err
+	}
+	var payload struct {
+		Data []struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		return nil, err
+	}
+	out := make([]OneFastModel, 0, len(payload.Data))
+	for _, item := range payload.Data {
+		if strings.TrimSpace(item.ID) != "" {
+			name := item.Name
+			if strings.TrimSpace(name) == "" {
+				name = item.ID
+			}
+			out = append(out, OneFastModel{ID: item.ID, Name: name})
+		}
+	}
+	return out, nil
+}
+
 func NewOneFastClient(baseURL, apiKey, group string) *OneFastClient {
 	baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
 	if baseURL == "" {

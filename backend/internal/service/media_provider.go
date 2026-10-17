@@ -135,10 +135,42 @@ func (s *MediaProviderService) TestOneFast(ctx context.Context, baseURL, apiKey 
 	if strings.TrimSpace(baseURL) == "" || strings.TrimSpace(apiKey) == "" {
 		return nil, fmt.Errorf("onefast api base url and api key are required")
 	}
-	if err := ai.NewOneFastClient(baseURL, apiKey, "").TestConnection(ctx); err != nil {
+	client := ai.NewOneFastClient(baseURL, apiKey, "")
+	if err := client.TestConnection(ctx); err != nil {
 		return nil, err
 	}
-	return map[string]any{"ok": true, "message": "Соединение OneFast успешно проверено"}, nil
+	models, modelsErr := client.ListModels(ctx)
+	if modelsErr != nil || len(models) == 0 {
+		models = oneFastFallbackModels()
+	}
+	imageModels, videoModels := make([]map[string]string, 0), make([]map[string]string, 0)
+	for _, item := range models {
+		entry := map[string]string{"id": item.ID, "name": item.Name}
+		if isOneFastImageModel(item.ID) {
+			imageModels = append(imageModels, entry)
+		}
+		if isOneFastVideoModel(item.ID) {
+			videoModels = append(videoModels, entry)
+		}
+	}
+	return map[string]any{"ok": true, "message": "Соединение OneFast успешно проверено", "image_models": imageModels, "video_models": videoModels}, nil
+}
+
+func oneFastFallbackModels() []ai.OneFastModel {
+	return []ai.OneFastModel{{ID: "gpt-image-2.5", Name: "GPT Image 2.5"}, {ID: "gemini-3.1-flash-image-preview", Name: "Gemini 3.1 Flash Image"}, {ID: "gemini-3-pro-image-preview", Name: "Gemini 3 Pro Image"}, {ID: "dreamina-seedance-2-0-260128", Name: "Seedance 2.0"}, {ID: "grok-imagine-video", Name: "Grok Imagine Video"}, {ID: "wan-2-7-video", Name: "Wan 2.7 Video"}}
+}
+func isOneFastImageModel(id string) bool {
+	s := strings.ToLower(id)
+	return strings.Contains(s, "image") || strings.Contains(s, "nano-banana") || strings.HasPrefix(s, "gpt-image")
+}
+func isOneFastVideoModel(id string) bool {
+	s := strings.ToLower(id)
+	for _, part := range []string{"video", "seedance", "wan-", "grok-imagine", "happyhorse", "gemini-omni", "minimax-h3"} {
+		if strings.Contains(s, part) {
+			return true
+		}
+	}
+	return false
 }
 func (s *MediaProviderService) Routes(ctx context.Context) ([]model.MediaProviderRoute, error) {
 	return s.repo.ListRoutes(ctx)

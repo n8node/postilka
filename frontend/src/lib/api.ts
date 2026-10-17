@@ -3038,11 +3038,13 @@ export function fetchAdminMediaProvider(providerId: string) {
 }
 
 export function testAdminOneFastConnection(payload: { api_base_url?: string; api_key?: string }) {
-  return apiFetch<{ ok: boolean; message?: string }>("/admin/media-providers/onefast/test", {
+  return apiFetch<{ ok: boolean; message?: string; image_models?: OneFastModel[]; video_models?: OneFastModel[] }>("/admin/media-providers/onefast/test", {
     method: "POST",
     body: JSON.stringify(payload),
   });
 }
+
+export type OneFastModel = { id: string; name: string };
 
 export function fetchAdminMediaProviderRoutes() {
   return apiFetch<{ routes: MediaProviderRoute[] }>("/admin/media-providers/routes");
