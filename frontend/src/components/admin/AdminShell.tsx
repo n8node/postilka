@@ -52,6 +52,7 @@ const nav: NavSection[] = [
       { href: "/admin/public-pages", label: "Публичные страницы" },
       { href: "/admin/help", label: "Справка кабинета" },
       { href: "/admin/generation-nav", label: "Меню генерации" },
+      { href: "/admin/header-buttons", label: "Кнопки верхней панели" },
     ],
   },
 ];
@@ -79,6 +80,7 @@ function breadcrumbLabel(pathname: string) {
   if (pathname.startsWith("/admin/public-pages")) return "Публичные страницы";
   if (pathname.startsWith("/admin/help")) return "Справка кабинета";
   if (pathname.startsWith("/admin/generation-nav")) return "Меню генерации";
+  if (pathname.startsWith("/admin/header-buttons")) return "Кнопки верхней панели";
   if (pathname.startsWith("/admin/telegram")) return "Telegram";
   if (pathname.startsWith("/admin/plans")) return "Тарифы";
   if (pathname.startsWith("/admin/token-packages")) return "Пакеты медиа-кредитов";

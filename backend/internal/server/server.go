@@ -273,6 +273,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	generationNavRepo := repository.NewGenerationNavRepository(db.Pool)
 	generationNavSvc := service.NewGenerationNavService(generationNavRepo, objectStorage)
 	generationNavHandler := handler.NewGenerationNavHandler(generationNavSvc)
+	headerButtonsHandler := handler.NewHeaderButtonsHandler(settingsRepo)
 
 	workflowSvc := service.NewWorkflowService(
 		workflowRepo, channelRepo, postSvc, generationSvc, aiBillingSvc, yandexGptConfigSvc, wsSvc, fileStorageSvc, planRepo, quotaSvc, notificationSvc, logger,
@@ -584,6 +585,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Get("/media/ai-generations/{id}", generationHandler.ResultMedia)
 			r.Get("/media/ai-generations/{id}/preview", generationHandler.ResultPreviewMedia)
 			r.Get("/generation-nav", generationNavHandler.GetCabinet)
+			r.Get("/header-buttons", headerButtonsHandler.Get)
 			r.Get("/generation-nav/items/{id}/icon", generationNavHandler.ServeIcon)
 			r.Get("/ad-studio/templates", adStudioHandler.List)
 			r.Get("/ad-studio/templates/{id}", adStudioHandler.Get)
@@ -710,6 +712,8 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Put("/media-providers/{providerID}", mediaProviderHandler.Update)
 				r.Post("/media-providers/onefast/test", mediaProviderHandler.TestOneFast)
 				r.Get("/generation-nav", generationNavHandler.GetAdmin)
+				r.Get("/header-buttons", headerButtonsHandler.GetAdmin)
+				r.Put("/header-buttons", headerButtonsHandler.Update)
 				r.Put("/generation-nav/settings", generationNavHandler.UpdateSettings)
 				r.Post("/generation-nav/items", generationNavHandler.CreateItem)
 				r.Put("/generation-nav/items/{id}", generationNavHandler.UpdateItem)

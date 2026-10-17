@@ -3424,6 +3424,31 @@ export function fetchAdminGenerationNav() {
   return apiFetch<GenerationNavView>("/admin/generation-nav");
 }
 
+export type HeaderButton = {
+  id: string;
+  text: string;
+  icon?: string;
+  href: string;
+  color: string;
+  radius: number;
+  shadow: "none" | "sm" | "md" | "lg";
+};
+
+export function fetchHeaderButtons() {
+  return apiFetch<{ buttons: HeaderButton[] }>("/header-buttons");
+}
+
+export function fetchAdminHeaderButtons() {
+  return apiFetch<{ buttons: HeaderButton[] }>("/admin/header-buttons");
+}
+
+export function updateAdminHeaderButtons(buttons: HeaderButton[]) {
+  return apiFetch<{ buttons: HeaderButton[] }>("/admin/header-buttons", {
+    method: "PUT",
+    body: JSON.stringify({ buttons }),
+  });
+}
+
 export function updateAdminGenerationNavSettings(settings: GenerationNavSettings) {
   return apiFetch<GenerationNavSettings>("/admin/generation-nav/settings", {
     method: "PUT",

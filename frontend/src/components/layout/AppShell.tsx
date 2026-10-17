@@ -35,6 +35,7 @@ import { VideoGenerationJobSync } from "@/components/generation/VideoGenerationJ
 import { SketchJobSync } from "@/components/sketch/SketchJobSync";
 import { cn } from "@/lib/utils";
 import { userAvatarSrc } from "@/lib/user-avatar";
+import { HeaderQuickButtons } from "@/components/layout/HeaderQuickButtons";
 
 type NavItem = {
   href: string;
@@ -258,7 +259,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-40 flex h-14 items-center justify-end gap-2 border-b border-border bg-surface/95 px-4 backdrop-blur-md sm:px-6">
+        <header className="sticky top-0 z-40 flex h-14 items-center gap-2 border-b border-border bg-surface/95 px-0 backdrop-blur-md">
+          <HeaderQuickButtons />
           <Suspense fallback={null}>
             <HelpLauncher />
           </Suspense>
