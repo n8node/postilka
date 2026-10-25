@@ -2133,6 +2133,8 @@ export type TelegramNotificationStatus =
 export type TelegramNotificationRecord = {
   id: string;
   kind: string;
+  target?: string;
+  proxy?: string;
   message_text: string;
   status: TelegramNotificationStatus;
   attempt_count: number;

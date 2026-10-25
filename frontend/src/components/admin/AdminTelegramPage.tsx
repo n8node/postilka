@@ -803,6 +803,9 @@ export function AdminTelegramPage({ embedded = false }: { embedded?: boolean }) 
                 <th className="px-2 py-2">Создано</th>
                 <th className="px-2 py-2">Тип</th>
                 <th className="px-2 py-2">Статус</th>
+                <th className="px-2 py-2">Куда</th>
+                <th className="px-2 py-2">Прокси</th>
+                <th className="px-2 py-2">Содержание</th>
                 <th className="px-2 py-2">Попытки</th>
                 <th className="px-2 py-2">Последняя ошибка</th>
                 <th className="px-2 py-2">Действия</th>
@@ -811,18 +814,39 @@ export function AdminTelegramPage({ embedded = false }: { embedded?: boolean }) 
             <tbody>
               {queueItems.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-2 py-6 text-center text-slate-400">
+                  <td colSpan={9} className="px-2 py-6 text-center text-slate-400">
                     {queueLoading ? "Загрузка…" : "Записей пока нет"}
                   </td>
                 </tr>
               ) : (
                 queueItems.map((item) => (
-                  <tr key={item.id} className="border-b border-slate-100">
+                  <tr
+                    key={item.id}
+                    className={cn(
+                      "border-b border-slate-100 align-top",
+                      item.status === "failed" && "bg-red-50",
+                    )}
+                  >
                     <td className="px-2 py-2 whitespace-nowrap text-xs">
                       {formatDateTime(item.created_at)}
                     </td>
                     <td className="px-2 py-2">{item.kind}</td>
-                    <td className="px-2 py-2">{item.status}</td>
+                    <td
+                      className={cn(
+                        "px-2 py-2 font-medium",
+                        item.status === "failed" ? "text-red-700" :
+                          item.status === "sent" ? "text-emerald-700" : "text-amber-700",
+                      )}
+                    >
+                      {item.status}
+                    </td>
+                    <td className="px-2 py-2 text-xs">{item.target || "—"}</td>
+                    <td className="max-w-xs px-2 py-2 text-xs text-slate-500">
+                      {item.proxy || "direct/не указан"}
+                    </td>
+                    <td className="max-w-sm whitespace-pre-wrap px-2 py-2 text-xs">
+                      {item.message_text}
+                    </td>
                     <td className="px-2 py-2">{item.attempt_count}</td>
                     <td className="max-w-xs truncate px-2 py-2 text-xs text-red-600">
                       {item.last_error || "—"}

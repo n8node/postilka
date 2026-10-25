@@ -25,6 +25,8 @@ func (r *TelegramNotificationQueueRepository) Enqueue(
 	ctx context.Context,
 	kind string,
 	messageText string,
+	target string,
+	proxy string,
 	payload map[string]any,
 ) (*model.TelegramNotificationRecord, error) {
 	if payload == nil {
@@ -35,13 +37,13 @@ func (r *TelegramNotificationQueueRepository) Enqueue(
 		return nil, err
 	}
 	const q = `
-		INSERT INTO telegram_notification_queue (kind, payload, message_text, status, next_attempt_at)
-		VALUES ($1, $2, $3, 'pending', NOW())
-		RETURNING id, kind, payload, message_text, status, attempt_count, next_attempt_at,
+		INSERT INTO telegram_notification_queue (kind, payload, message_text, target, proxy, status, next_attempt_at)
+		VALUES ($1, $2, $3, $4, $5, 'pending', NOW())
+		RETURNING id, kind, payload, message_text, target, proxy, status, attempt_count, next_attempt_at,
 		          last_error, last_attempt_at, sent_at, created_at, updated_at
 	`
 	rec, err := scanTelegramNotification(
-		r.pool.QueryRow(ctx, q, kind, rawPayload, messageText),
+		r.pool.QueryRow(ctx, q, kind, rawPayload, messageText, target, proxy),
 	)
 	if err != nil {
 		return nil, err
@@ -76,7 +78,7 @@ func (r *TelegramNotificationQueueRepository) ClaimPending(
 		    updated_at = NOW()
 		FROM picked
 		WHERE n.id = picked.id
-		RETURNING n.id, n.kind, n.payload, n.message_text, n.status, n.attempt_count, n.next_attempt_at,
+		RETURNING n.id, n.kind, n.payload, n.message_text, n.target, n.proxy, n.status, n.attempt_count, n.next_attempt_at,
 			       COALESCE(n.last_error, ''), n.last_attempt_at, n.sent_at, n.created_at, n.updated_at
 	`
 	rows, err := r.pool.Query(ctx, q, limit, staleProcessingBefore)
@@ -174,7 +176,7 @@ func (r *TelegramNotificationQueueRepository) List(
 	filterByStatus := status != ""
 
 	const q = `
-		SELECT id, kind, payload, message_text, status, attempt_count, next_attempt_at,
+		SELECT id, kind, payload, message_text, target, proxy, status, attempt_count, next_attempt_at,
 		       last_error, last_attempt_at, sent_at, created_at, updated_at
 		FROM telegram_notification_queue
 		WHERE ($1::boolean = false OR status = $2)
@@ -230,6 +232,8 @@ func scanTelegramNotification(row telegramNotificationScanner) (*model.TelegramN
 		&rec.Kind,
 		&payloadRaw,
 		&rec.MessageText,
+		&rec.Target,
+		&rec.Proxy,
 		&status,
 		&rec.AttemptCount,
 		&rec.NextAttemptAt,

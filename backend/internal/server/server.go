@@ -747,6 +747,8 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Put("/telegram", telegramHandler.UpdateAdmin)
 				r.Get("/telegram/notifications", telegramHandler.GetAdmin)
 				r.Put("/telegram/notifications", telegramHandler.UpdateAdmin)
+				r.Get("/telegram/queue", telegramHandler.ListQueue)
+				r.Post("/telegram/queue/{id}/retry", telegramHandler.RetryQueueItem)
 				r.Get("/telegram/provider", telegramProviderHandler.GetAdmin)
 				r.Put("/telegram/provider", telegramProviderHandler.UpdateAdmin)
 				r.Get("/youtube/provider", youtubeProviderHandler.GetAdmin)

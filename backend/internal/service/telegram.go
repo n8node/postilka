@@ -136,24 +136,16 @@ func (s *TelegramService) dispatchAdminNotification(ctx context.Context, text, k
 		defer cancel()
 
 		cfg, cfgErr := s.settings.GetEffective(ctx)
-		if cfgErr == nil && cfg.Enabled {
-			if err := s.send(ctx, cfg, text); err == nil {
-				return
-			} else {
-				slog.Warn("telegram direct send failed, enqueueing for retry", "kind", kind, "err", err)
-			}
+		if cfgErr != nil {
+			slog.Warn("telegram settings unavailable", "kind", kind, "err", cfgErr)
+			return
 		}
-
-		if err := s.enqueueTelegramNotification(ctx, kind, text, map[string]any{"kind": kind}); err != nil {
-			if errors.Is(err, ErrTelegramQueueUnavailable) {
-				if cfgErr == nil && cfg.Enabled {
-					if sendErr := s.send(ctx, cfg, text); sendErr != nil {
-						slog.Warn("telegram notification failed", "kind", kind, "err", sendErr)
-					}
-				}
-			} else {
-				slog.Warn("telegram queue enqueue failed", "kind", kind, "err", err)
-			}
+		proxy := s.localProxy
+		if cfg.ProxyEnabled && cfg.ProxyActiveURL != "" {
+			proxy = cfg.ProxyActiveURL
+		}
+		if err := s.enqueueTelegramNotification(ctx, kind, text, cfg.ChatID, proxy, map[string]any{"kind": kind}); err != nil {
+			slog.Warn("telegram queue enqueue failed", "kind", kind, "err", err)
 		}
 	}()
 }

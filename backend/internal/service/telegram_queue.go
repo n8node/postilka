@@ -119,6 +119,7 @@ func queueRetryDelay(attempt int) time.Duration {
 func (s *TelegramService) enqueueTelegramNotification(
 	ctx context.Context,
 	kind, text string,
+	target, proxy string,
 	payload map[string]any,
 ) error {
 	if s.queue == nil {
@@ -128,7 +129,7 @@ func (s *TelegramService) enqueueTelegramNotification(
 	if text == "" {
 		return fmt.Errorf("empty notification text")
 	}
-	if _, err := s.queue.Enqueue(ctx, kind, text, payload); err != nil {
+	if _, err := s.queue.Enqueue(ctx, kind, text, target, proxy, payload); err != nil {
 		return err
 	}
 	s.triggerQueueDelivery()

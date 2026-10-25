@@ -16,6 +16,8 @@ type TelegramNotificationRecord struct {
 	Kind          string                     `json:"kind"`
 	Payload       map[string]any             `json:"payload,omitempty"`
 	MessageText   string                     `json:"message_text"`
+	Target        string                     `json:"target,omitempty"`
+	Proxy         string                     `json:"proxy,omitempty"`
 	Status        TelegramNotificationStatus `json:"status"`
 	AttemptCount  int                        `json:"attempt_count"`
 	NextAttemptAt time.Time                  `json:"next_attempt_at"`
