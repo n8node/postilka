@@ -122,7 +122,20 @@ export type AdminUsersQuery = {
   is_blocked?: boolean;
   is_platform_admin?: boolean;
   pending_approval?: boolean;
+  limit?: number | "all";
+  offset?: number;
+  sort?: AdminUsersSort;
+  order?: "asc" | "desc";
 };
+
+export type AdminUsersSort =
+  | "name"
+  | "email"
+  | "status"
+  | "role"
+  | "wallet_balance_cents"
+  | "created_at"
+  | "updated_at";
 
 export type AdminFile = {
   id: string;
@@ -1013,6 +1026,10 @@ export function fetchAdminUsers(query: AdminUsersQuery = {}) {
   if (typeof query.pending_approval === "boolean") {
     params.set("pending_approval", String(query.pending_approval));
   }
+  if (query.limit != null) params.set("limit", String(query.limit));
+  if (query.offset != null) params.set("offset", String(query.offset));
+  if (query.sort) params.set("sort", query.sort);
+  if (query.order) params.set("order", query.order);
   const qs = params.toString();
   return apiFetch<AdminUsersResponse>(`/admin/users${qs ? `?${qs}` : ""}`);
 }

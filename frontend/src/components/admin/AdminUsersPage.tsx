@@ -18,6 +18,7 @@ import {
   setAdminUserBlocked,
   type AdminUser,
   type AdminUsersQuery,
+  type AdminUsersSort,
   type AdminUserWorkspaceItem,
   type LoginIdentity,
   type Plan,
@@ -100,6 +101,10 @@ export function AdminUsersPage() {
   );
   const [roleFilter, setRoleFilter] = useState<"all" | "admin" | "user">("all");
   const [approvalFilter, setApprovalFilter] = useState<"all" | "pending">("all");
+  const [pageSize, setPageSize] = useState<number | "all">(50);
+  const [pageOffset, setPageOffset] = useState(0);
+  const [sort, setSort] = useState<AdminUsersSort>("created_at");
+  const [order, setOrder] = useState<"asc" | "desc">("desc");
   const [selectedPending, setSelectedPending] = useState<string[]>([]);
   const [approving, setApproving] = useState(false);
   const [selected, setSelected] = useState<AdminUser | null>(null);
@@ -128,6 +133,10 @@ export function AdminUsersPage() {
     if (roleFilter === "admin") query.is_platform_admin = true;
     if (roleFilter === "user") query.is_platform_admin = false;
     if (approvalFilter === "pending") query.pending_approval = true;
+    query.limit = pageSize;
+    query.offset = pageOffset;
+    query.sort = sort;
+    query.order = order;
 
     try {
       const data = await fetchAdminUsers(query);
@@ -140,7 +149,37 @@ export function AdminUsersPage() {
     } finally {
       setLoading(false);
     }
-  }, [q, accountFilter, roleFilter, approvalFilter]);
+  }, [q, accountFilter, roleFilter, approvalFilter, pageSize, pageOffset, sort, order]);
+
+  function changeSort(nextSort: AdminUsersSort) {
+    setPageOffset(0);
+    if (sort === nextSort) {
+      setOrder((prev) => (prev === "asc" ? "desc" : "asc"));
+      return;
+    }
+    setSort(nextSort);
+    setOrder("asc");
+  }
+
+  function sortIndicator(column: AdminUsersSort) {
+    if (sort !== column) return null;
+    return <span className="ml-1 text-blue-600">{order === "asc" ? "↑" : "↓"}</span>;
+  }
+
+  function SortHeader({ column, children }: { column: AdminUsersSort; children: React.ReactNode }) {
+    return (
+      <th className="px-4 py-3">
+        <button
+          type="button"
+          onClick={() => changeSort(column)}
+          className="whitespace-nowrap text-left hover:text-blue-600"
+          title="Изменить порядок сортировки"
+        >
+          {children}{sortIndicator(column)}
+        </button>
+      </th>
+    );
+  }
 
   async function approveSelected() {
     if (selectedPending.length === 0) return;
@@ -224,6 +263,21 @@ export function AdminUsersPage() {
             <option value="user">Пользователь</option>
           </select>
         </label>
+        <label className="text-xs font-medium text-slate-500">
+          На странице
+          <select
+            value={pageSize}
+            onChange={(e) => {
+              const value = e.target.value === "all" ? "all" : Number(e.target.value);
+              setPageSize(value);
+              setPageOffset(0);
+            }}
+            className="mt-1 block w-32 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-blue-400"
+          >
+            {[10, 25, 50, 100, 250, 500].map((value) => <option key={value} value={value}>{value}</option>)}
+            <option value="all">Все</option>
+          </select>
+        </label>
       </div>
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -231,18 +285,18 @@ export function AdminUsersPage() {
           <table className="min-w-full text-left text-sm">
             <thead className="border-b border-slate-200 bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
               <tr>
-                <th className="px-4 py-3">Пользователь</th>
+                <SortHeader column="name">Пользователь</SortHeader>
                 <th className="px-4 py-3">ID</th>
-                <th className="px-4 py-3">Статус аккаунта</th>
-                <th className="px-4 py-3">Роль</th>
+                <SortHeader column="status">Статус аккаунта</SortHeader>
+                <SortHeader column="role">Роль</SortHeader>
                 <th className="px-4 py-3">Тариф</th>
-                <th className="px-4 py-3">Кошелёк</th>
+                <SortHeader column="wallet_balance_cents">Кошелёк</SortHeader>
                 <th className="px-4 py-3">Workspace</th>
                 <th className="px-4 py-3">Роль WS</th>
                 <th className="px-4 py-3">Язык</th>
                 <th className="px-4 py-3">Таймзона</th>
-                <th className="px-4 py-3">Зарегистрирован</th>
-                <th className="px-4 py-3">Обновлён</th>
+                <SortHeader column="created_at">Зарегистрирован</SortHeader>
+                <SortHeader column="updated_at">Обновлён</SortHeader>
                 <th className="px-4 py-3">Файлы</th>
                 <th className="px-4 py-3" />
               </tr>
@@ -365,6 +419,16 @@ export function AdminUsersPage() {
           </table>
         </div>
       </div>
+
+      {total > 0 && pageSize !== "all" && (
+        <div className="flex items-center justify-between text-sm text-slate-500">
+          <span>{pageOffset + 1}–{Math.min(pageOffset + pageSize, total)} из {total}</span>
+          <div className="flex gap-2">
+            <button type="button" disabled={pageOffset === 0} onClick={() => setPageOffset((value) => Math.max(0, value - pageSize))} className="rounded-md border border-slate-200 bg-white px-3 py-1.5 disabled:opacity-50">Назад</button>
+            <button type="button" disabled={pageOffset + pageSize >= total} onClick={() => setPageOffset((value) => value + pageSize)} className="rounded-md border border-slate-200 bg-white px-3 py-1.5 disabled:opacity-50">Вперёд</button>
+          </div>
+        </div>
+      )}
 
       {selected && (
         <UserDrawer

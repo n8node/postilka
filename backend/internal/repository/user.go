@@ -346,10 +346,12 @@ type ListUsersFilter struct {
 	PendingApproval *bool
 	Limit           int
 	Offset          int
+	Sort            string
+	Order           string
 }
 
 func (r *UserRepository) ListForAdmin(ctx context.Context, f ListUsersFilter) ([]model.AdminUserListItem, int, error) {
-	if f.Limit <= 0 || f.Limit > 200 {
+	if f.Limit == 0 || f.Limit > 500 {
 		f.Limit = 50
 	}
 	if f.Offset < 0 {
@@ -387,9 +389,14 @@ func (r *UserRepository) ListForAdmin(ctx context.Context, f ListUsersFilter) ([
 		return nil, 0, err
 	}
 
-	args = append(args, f.Limit, f.Offset)
-	limitIdx := len(args) - 1
-	offsetIdx := len(args)
+	orderSQL := adminUserOrderSQL(f.Sort, f.Order)
+	limitSQL := ""
+	if f.Limit >= 0 {
+		args = append(args, f.Limit, f.Offset)
+		limitIdx := len(args) - 1
+		offsetIdx := len(args)
+		limitSQL = fmt.Sprintf("LIMIT $%d OFFSET $%d", limitIdx, offsetIdx)
+	}
 
 	listQ := fmt.Sprintf(`
 		SELECT
@@ -408,9 +415,9 @@ func (r *UserRepository) ListForAdmin(ctx context.Context, f ListUsersFilter) ([
 		) AS ws ON true
 		LEFT JOIN plans p ON p.id = ws.plan_id
 		%s
-		ORDER BY u.created_at DESC
-		LIMIT $%d OFFSET $%d
-	`, whereSQL, limitIdx, offsetIdx)
+		%s
+		%s
+	`, whereSQL, orderSQL, limitSQL)
 
 	rows, err := r.pool.Query(ctx, listQ, args...)
 	if err != nil {
@@ -455,6 +462,27 @@ func (r *UserRepository) ListForAdmin(ctx context.Context, f ListUsersFilter) ([
 		return nil, 0, err
 	}
 	return items, total, nil
+}
+
+func adminUserOrderSQL(sort, order string) string {
+	columns := map[string]string{
+		"name":                 "u.name",
+		"email":                "u.email",
+		"status":               "u.is_blocked",
+		"role":                 "u.is_platform_admin",
+		"wallet_balance_cents": "u.wallet_balance_cents",
+		"created_at":           "u.created_at",
+		"updated_at":           "u.updated_at",
+	}
+	column, ok := columns[strings.TrimSpace(sort)]
+	if !ok {
+		column = "u.created_at"
+	}
+	direction := "DESC"
+	if strings.EqualFold(strings.TrimSpace(order), "asc") {
+		direction = "ASC"
+	}
+	return "ORDER BY " + column + " " + direction + ", u.id DESC"
 }
 
 func (r *UserRepository) UpdateAvatarS3Key(ctx context.Context, userID string, key *string) (*model.User, error) {

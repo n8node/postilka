@@ -127,6 +127,11 @@ func (h *AdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 		Query:  strings.TrimSpace(q.Get("q")),
 		Limit:  parseIntDefault(q.Get("limit"), 50),
 		Offset: parseIntDefault(q.Get("offset"), 0),
+		Sort:   strings.TrimSpace(q.Get("sort")),
+		Order:  strings.TrimSpace(q.Get("order")),
+	}
+	if strings.EqualFold(strings.TrimSpace(q.Get("limit")), "all") {
+		filter.Limit = -1
 	}
 
 	if v, ok := parseOptionalBool(q.Get("is_blocked")); ok {
