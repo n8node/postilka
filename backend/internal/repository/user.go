@@ -401,7 +401,7 @@ func (r *UserRepository) ListForAdmin(ctx context.Context, f ListUsersFilter) ([
 	listQ := fmt.Sprintf(`
 		SELECT
 			u.id, u.email, u.name, u.locale, u.timezone,
-			u.is_blocked, u.is_platform_admin, u.pending_approval, u.wallet_balance_cents, u.created_at, u.updated_at,
+		u.is_blocked, u.email_verified_at IS NOT NULL, u.is_platform_admin, u.pending_approval, u.wallet_balance_cents, u.created_at, u.updated_at,
 			ws.id, ws.name, ws.slug, ws.role,
 			p.id, p.slug, p.name, p.is_free
 		FROM users u
@@ -433,7 +433,7 @@ func (r *UserRepository) ListForAdmin(ctx context.Context, f ListUsersFilter) ([
 		var planIsFree *bool
 		if err := rows.Scan(
 			&item.ID, &item.Email, &item.Name, &item.Locale, &item.Timezone,
-			&item.IsBlocked, &item.IsPlatformAdmin, &item.PendingApproval, &item.WalletBalanceCents,
+			&item.IsBlocked, &item.EmailVerified, &item.IsPlatformAdmin, &item.PendingApproval, &item.WalletBalanceCents,
 			&item.CreatedAt, &item.UpdatedAt,
 			&wsID, &wsName, &wsSlug, &wsRole,
 			&planID, &planSlug, &planName, &planIsFree,

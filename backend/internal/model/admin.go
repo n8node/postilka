@@ -10,6 +10,7 @@ type AdminUserListItem struct {
 	Locale             string              `json:"locale"`
 	Timezone           string              `json:"timezone"`
 	IsBlocked          bool                `json:"is_blocked"`
+	EmailVerified      bool                `json:"email_verified"`
 	PendingApproval    bool                `json:"pending_approval"`
 	IsPlatformAdmin    bool                `json:"is_platform_admin"`
 	WalletBalanceCents int64               `json:"wallet_balance_cents"`

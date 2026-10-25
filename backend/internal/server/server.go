@@ -68,6 +68,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	passwordResetRepo := repository.NewPasswordResetRepository(db.Pool)
 	passwordResetSvc := service.NewPasswordResetService(passwordResetRepo, userRepo, emailSvc, cfg, logger)
 	adminUserSvc.BindPasswordReset(passwordResetSvc)
+	adminUserSvc.BindEmailVerification(emailVerificationSvc)
 
 	paymentSettingsRepo := repository.NewPaymentSettingsRepository(db.Pool)
 	paymentSettingsSvc := service.NewPaymentSettingsService(paymentSettingsRepo, cfg)
@@ -630,6 +631,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Use(authMW.Required, middleware.RequirePlatformAdmin(userRepo))
 				r.Get("/me", adminHandler.Me)
 				r.Get("/users", adminHandler.ListUsers)
+				r.Post("/users/resend-verification", adminHandler.ResendUserVerification)
 				r.Put("/users/{userID}/plan", adminHandler.AssignUserPlan)
 				r.Put("/users/{userID}/blocked", adminHandler.SetUserBlocked)
 				r.Put("/users/{userID}/approve", adminHandler.ApproveUser)

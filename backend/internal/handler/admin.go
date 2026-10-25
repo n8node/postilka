@@ -156,6 +156,32 @@ func (h *AdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+type resendVerificationBody struct {
+	UserIDs []string `json:"user_ids"`
+}
+
+func (h *AdminHandler) ResendUserVerification(w http.ResponseWriter, r *http.Request) {
+	var body resendVerificationBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || len(body.UserIDs) == 0 {
+		writeError(w, http.StatusBadRequest, "Выберите хотя бы одного пользователя")
+		return
+	}
+
+	sent, skipped, failed := 0, 0, 0
+	for _, userID := range body.UserIDs {
+		err := h.adminUsers.ResendVerification(r.Context(), strings.TrimSpace(userID))
+		switch {
+		case err == nil:
+			sent++
+		case errors.Is(err, service.ErrEmailNotBound), errors.Is(err, service.ErrEmailVerificationInvalid):
+			skipped++
+		default:
+			failed++
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]int{"sent": sent, "skipped": skipped, "failed": failed})
+}
+
 func (h *AdminHandler) ApproveUser(w http.ResponseWriter, r *http.Request) {
 	actorID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {

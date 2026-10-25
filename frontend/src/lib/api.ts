@@ -5,6 +5,7 @@ export type User = {
   locale: string;
   timezone: string;
   is_blocked: boolean;
+  email_verified: boolean;
   is_platform_admin: boolean;
   avatar_url?: string;
   email_verified_at?: string | null;
@@ -50,6 +51,7 @@ export type AdminUser = {
   locale: string;
   timezone: string;
   is_blocked: boolean;
+  email_verified: boolean;
   pending_approval: boolean;
   is_platform_admin: boolean;
   wallet_balance_cents: number;
@@ -1032,6 +1034,19 @@ export function fetchAdminUsers(query: AdminUsersQuery = {}) {
   if (query.order) params.set("order", query.order);
   const qs = params.toString();
   return apiFetch<AdminUsersResponse>(`/admin/users${qs ? `?${qs}` : ""}`);
+}
+
+export type AdminResendVerificationResult = {
+  sent: number;
+  skipped: number;
+  failed: number;
+};
+
+export function resendAdminUserVerification(userIds: string[]) {
+  return apiFetch<AdminResendVerificationResult>("/admin/users/resend-verification", {
+    method: "POST",
+    body: JSON.stringify({ user_ids: userIds }),
+  });
 }
 
 export function fetchAdminPlans() {

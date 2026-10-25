@@ -16,10 +16,39 @@ var (
 type AdminUserService struct {
 	users         *repository.UserRepository
 	passwordReset *PasswordResetService
+	verification  *EmailVerificationService
 }
 
 func (s *AdminUserService) BindPasswordReset(passwordReset *PasswordResetService) {
 	s.passwordReset = passwordReset
+}
+
+func (s *AdminUserService) BindEmailVerification(verification *EmailVerificationService) {
+	s.verification = verification
+}
+
+func (s *AdminUserService) ResendVerification(ctx context.Context, userID string) error {
+	if s.verification == nil {
+		return ErrEmailVerificationInvalid
+	}
+	user, err := s.users.GetByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if user.IsBlocked || user.EmailVerifiedAt != nil {
+		return nil
+	}
+	target := user.Email
+	if user.PendingEmail != "" {
+		target = user.PendingEmail
+	}
+	if !model.IsDeliverableEmail(target) {
+		return ErrEmailNotBound
+	}
+	if user.PendingEmail != "" {
+		return s.verification.SendEmailConfirmation(ctx, user.ID, target, user.Name)
+	}
+	return s.verification.SendRegistrationConfirmation(ctx, user.ID, target, user.Name)
 }
 
 func (s *AdminUserService) Approve(ctx context.Context, actorID, targetID string) (*model.User, error) {
