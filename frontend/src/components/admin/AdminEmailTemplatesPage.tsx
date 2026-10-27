@@ -4,6 +4,7 @@ import { Eye, Plus, Save, Send, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { EmailRichEditor } from "@/components/admin/EmailRichEditor";
 import {
   adminEmailTemplatePreviewURL,
   ApiError,
@@ -125,7 +126,7 @@ function CommunityPromoSection({
         </label>
         <label className="block text-xs font-medium text-slate-500 md:col-span-2">
           HTML-содержимое письма
-          <textarea rows={7} value={promo.content_html} onChange={(e) => update({ content_html: e.target.value })} className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 font-mono text-xs" />
+          <EmailRichEditor value={promo.content_html} onChange={(content_html) => update({ content_html })} placeholder="Введите текст рекламного письма…" />
         </label>
         <label className="block text-xs font-medium text-slate-500">
           Текст кнопки
