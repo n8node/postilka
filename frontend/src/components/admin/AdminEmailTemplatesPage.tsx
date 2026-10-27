@@ -2,6 +2,8 @@
 
 import { Eye, Plus, Save, Send, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { cn } from "@/lib/utils";
 import {
   adminEmailTemplatePreviewURL,
   ApiError,
@@ -56,7 +58,68 @@ function emptySocialLink(): EmailSocialLink {
   return { label: "", url: "", icon_url: "" };
 }
 
+type EmailTemplateSection = "general" | "community-promo";
+
+const EMAIL_TEMPLATE_MENU: { key: EmailTemplateSection; label: string; description: string }[] = [
+  { key: "general", label: "Общий шаблон", description: "Оформление и тестовая отправка" },
+  { key: "community-promo", label: "Telegram-сообщество", description: "Рекламное письмо и пауза отправки" },
+];
+
+function CommunityPromoSection({
+  settings,
+  patch,
+}: {
+  settings: EmailTemplateSettings;
+  patch: (partial: Partial<EmailTemplateSettings>) => void;
+}) {
+  const promo = settings.community_promo;
+  const update = (partial: Partial<typeof promo>) =>
+    patch({ community_promo: { ...promo, ...partial } });
+
+  return (
+    <section className="rounded-xl border border-blue-200 bg-blue-50/40 p-4 shadow-sm">
+      <h2 className="text-sm font-semibold text-slate-900">Реклама Telegram-сообщества</h2>
+      <p className="mt-1 text-xs text-slate-500">
+        Этот шаблон используется кнопкой массовой отправки в разделе пользователей.
+      </p>
+      <div className="mt-3 grid gap-4 md:grid-cols-2">
+        <label className="block text-xs font-medium text-slate-500">
+          Тема письма
+          <input type="text" value={promo.subject} onChange={(e) => update({ subject: e.target.value })} className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm" />
+        </label>
+        <label className="block text-xs font-medium text-slate-500">
+          Прехедер
+          <input type="text" value={promo.preheader} onChange={(e) => update({ preheader: e.target.value })} className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm" />
+        </label>
+        <label className="block text-xs font-medium text-slate-500 md:col-span-2">
+          HTML-содержимое письма
+          <textarea rows={7} value={promo.content_html} onChange={(e) => update({ content_html: e.target.value })} className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 font-mono text-xs" />
+        </label>
+        <label className="block text-xs font-medium text-slate-500">
+          Текст кнопки
+          <input type="text" value={promo.cta_label} onChange={(e) => update({ cta_label: e.target.value })} className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm" />
+        </label>
+        <label className="block text-xs font-medium text-slate-500">
+          URL кнопки
+          <input type="url" value={promo.cta_url} onChange={(e) => update({ cta_url: e.target.value })} className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm" />
+        </label>
+        <label className="block text-xs font-medium text-slate-500">
+          Пауза между письмами, секунд
+          <input type="number" min={1} max={3600} value={promo.send_interval_seconds} onChange={(e) => update({ send_interval_seconds: Number(e.target.value) })} className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm" />
+          <span className="mt-1 block text-[11px] font-normal text-slate-400">По умолчанию: 5 секунд</span>
+        </label>
+      </div>
+    </section>
+  );
+}
+
 export function AdminEmailTemplatesPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const querySection = searchParams.get("section") as EmailTemplateSection | null;
+  const [selected, setSelected] = useState<EmailTemplateSection>(
+    querySection === "community-promo" ? "community-promo" : "general",
+  );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
@@ -85,6 +148,17 @@ export function AdminEmailTemplatesPage() {
   useEffect(() => {
     void loadSettings();
   }, [loadSettings]);
+
+  useEffect(() => {
+    setSelected(querySection === "community-promo" ? "community-promo" : "general");
+  }, [querySection]);
+
+  function selectSection(section: EmailTemplateSection) {
+    setSelected(section);
+    router.replace(`/admin/email-templates?section=${section}`, { scroll: false });
+    setSuccess(null);
+    setError(null);
+  }
 
   function patch(partial: Partial<EmailTemplateSettings>) {
     setSettings((prev) => ({ ...prev, ...partial }));
@@ -177,7 +251,28 @@ export function AdminEmailTemplatesPage() {
       {loading ? (
         <p className="text-sm text-slate-500">Загрузка…</p>
       ) : (
-        <>
+        <div className="flex min-h-[620px] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          <aside className="flex w-56 shrink-0 flex-col border-r border-slate-200 bg-slate-50">
+            <div className="border-b border-slate-200 px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Разделы</p>
+            </div>
+            <nav className="flex-1 p-2">
+              <ul className="space-y-0.5">
+                {EMAIL_TEMPLATE_MENU.map((item) => (
+                  <li key={item.key}>
+                    <button type="button" onClick={() => selectSection(item.key)} className={cn("w-full rounded-md px-3 py-2 text-left text-sm transition-colors", selected === item.key ? "bg-white font-medium text-slate-900 shadow-sm" : "text-slate-600 hover:bg-white/70 hover:text-slate-900")}>
+                      <span>{item.label}</span>
+                      <span className="mt-0.5 block text-xs text-slate-400">{item.description}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+          </aside>
+          <div className="flex min-w-0 flex-1 flex-col">
+            <div className="flex-1 space-y-4 overflow-y-auto p-6">
+              {selected === "community-promo" && <CommunityPromoSection settings={settings} patch={patch} />}
+              {selected === "general" && <>
           <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <h2 className="text-sm font-semibold text-slate-900">Логотип</h2>
             <div className="mt-3 grid gap-4 md:grid-cols-2">
@@ -212,19 +307,6 @@ export function AdminEmailTemplatesPage() {
                 />
               </div>
             )}
-          </section>
-
-          <section className="rounded-xl border border-blue-200 bg-blue-50/40 p-4 shadow-sm">
-            <h2 className="text-sm font-semibold text-slate-900">Реклама Telegram-сообщества</h2>
-            <p className="mt-1 text-xs text-slate-500">Этот шаблон используется кнопкой массовой отправки в разделе пользователей.</p>
-            <div className="mt-3 grid gap-4 md:grid-cols-2">
-              <label className="block text-xs font-medium text-slate-500">Тема письма<input type="text" value={settings.community_promo.subject} onChange={(e) => patch({ community_promo: { ...settings.community_promo, subject: e.target.value } })} className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm" /></label>
-              <label className="block text-xs font-medium text-slate-500">Прехедер<input type="text" value={settings.community_promo.preheader} onChange={(e) => patch({ community_promo: { ...settings.community_promo, preheader: e.target.value } })} className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm" /></label>
-              <label className="block text-xs font-medium text-slate-500 md:col-span-2">HTML-содержимое письма<textarea rows={7} value={settings.community_promo.content_html} onChange={(e) => patch({ community_promo: { ...settings.community_promo, content_html: e.target.value } })} className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 font-mono text-xs" /></label>
-              <label className="block text-xs font-medium text-slate-500">Текст кнопки<input type="text" value={settings.community_promo.cta_label} onChange={(e) => patch({ community_promo: { ...settings.community_promo, cta_label: e.target.value } })} className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm" /></label>
-              <label className="block text-xs font-medium text-slate-500">URL кнопки<input type="url" value={settings.community_promo.cta_url} onChange={(e) => patch({ community_promo: { ...settings.community_promo, cta_url: e.target.value } })} className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm" /></label>
-              <label className="block text-xs font-medium text-slate-500">Пауза между письмами, секунд<input type="number" min={1} max={3600} value={settings.community_promo.send_interval_seconds} onChange={(e) => patch({ community_promo: { ...settings.community_promo, send_interval_seconds: Number(e.target.value) } })} className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm" /><span className="mt-1 block text-[11px] font-normal text-slate-400">По умолчанию: 5 секунд</span></label>
-            </div>
           </section>
 
           <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -533,6 +615,8 @@ export function AdminEmailTemplatesPage() {
             )}
           </section>
 
+              </>}
+            </div>
           <button
             type="button"
             disabled={saving}
@@ -540,9 +624,10 @@ export function AdminEmailTemplatesPage() {
             className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
           >
             <Save className="h-4 w-4" />
-            {saving ? "Сохранение…" : "Сохранить шаблоны писем"}
+            {saving ? "Сохранение…" : "Сохранить"}
           </button>
-        </>
+          </div>
+        </div>
       )}
     </div>
   );
