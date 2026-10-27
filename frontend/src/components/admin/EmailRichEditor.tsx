@@ -20,7 +20,7 @@ import {
   Underline,
   Undo2,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 type Props = {
   value: string;
@@ -58,6 +58,13 @@ function sanitizeEmailHTML(value: string) {
       }
     }
   }
+  for (const child of Array.from(doc.body.children)) {
+    if (child.tagName === "DIV") {
+      const paragraph = doc.createElement("p");
+      paragraph.innerHTML = child.innerHTML;
+      child.replaceWith(paragraph);
+    }
+  }
   return doc.body.innerHTML;
 }
 
@@ -76,21 +83,26 @@ export function EmailRichEditor({ value, onChange, placeholder }: Props) {
   const editorRef = useRef<HTMLDivElement>(null);
   const rangeRef = useRef<Range | null>(null);
   const [htmlMode, setHTMLMode] = useState(false);
-  const [htmlValue, setHTMLValue] = useState(value);
+  const [draft, setDraft] = useState(value);
+  const draftRef = useRef(value);
 
   useEffect(() => {
-    const editor = editorRef.current;
-    if (!editor || document.activeElement === editor) return;
-    const next = htmlForEditor(value);
-    if (editor.innerHTML === next) return;
-    editor.innerHTML = next;
-    setHTMLValue(value);
+    draftRef.current = value;
+    setDraft(value);
   }, [value]);
+
+  useLayoutEffect(() => {
+    const editor = editorRef.current;
+    if (!editor || htmlMode) return;
+    editor.innerHTML = htmlForEditor(draftRef.current);
+    document.execCommand("defaultParagraphSeparator", false, "p");
+  }, [htmlMode]);
 
   function emit() {
     const html = sanitizeEmailHTML(editorRef.current?.innerHTML ?? "");
+    draftRef.current = html;
+    setDraft(html);
     onChange(html);
-    setHTMLValue(html);
   }
 
   function command(name: string, argument?: string) {
@@ -130,10 +142,14 @@ export function EmailRichEditor({ value, onChange, placeholder }: Props) {
 
   function toggleHTMLMode() {
     if (!htmlMode) {
-      setHTMLValue(sanitizeEmailHTML(editorRef.current?.innerHTML ?? ""));
+      const next = sanitizeEmailHTML(editorRef.current?.innerHTML ?? "");
+      draftRef.current = next;
+      setDraft(next);
+      onChange(next);
     } else {
-      const next = sanitizeEmailHTML(htmlValue);
-      if (editorRef.current) editorRef.current.innerHTML = htmlForEditor(next);
+      const next = sanitizeEmailHTML(draftRef.current);
+      draftRef.current = next;
+      setDraft(next);
       onChange(next);
     }
     setHTMLMode((current) => !current);
@@ -173,9 +189,9 @@ export function EmailRichEditor({ value, onChange, placeholder }: Props) {
         </button>
       </div>
       {htmlMode ? (
-        <textarea value={htmlValue} onChange={(event) => { setHTMLValue(event.target.value); onChange(event.target.value); }} rows={12} className="min-h-[280px] w-full resize-y px-4 py-3 font-mono text-xs leading-5 outline-none" placeholder={placeholder} />
+        <textarea value={draft} onChange={(event) => { draftRef.current = event.target.value; setDraft(event.target.value); onChange(event.target.value); }} rows={12} className="min-h-[280px] w-full resize-y px-4 py-3 font-mono text-xs leading-5 outline-none" placeholder={placeholder} />
       ) : (
-        <div ref={editorRef} contentEditable suppressContentEditableWarning data-placeholder={placeholder ?? "Введите текст письма…"} onInput={emit} onBlur={emit} className="min-h-[280px] px-4 py-3 text-sm leading-6 outline-none empty:before:pointer-events-none empty:before:text-slate-400 empty:before:content-[attr(data-placeholder)] [&_a]:text-blue-600 [&_a]:underline [&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-blue-300 [&_blockquote]:pl-3 [&_h2]:text-xl [&_h2]:font-semibold [&_h3]:text-lg [&_h3]:font-semibold [&_img]:max-w-full [&_img]:rounded-lg [&_li]:ml-5 [&_ol]:list-decimal [&_ul]:list-disc [&_pre]:rounded-md [&_pre]:bg-slate-100 [&_pre]:p-3" />
+        <div key="visual-editor" ref={editorRef} contentEditable suppressContentEditableWarning data-placeholder={placeholder ?? "Введите текст письма…"} onInput={emit} onBlur={emit} className="min-h-[280px] px-4 py-3 text-sm leading-6 outline-none empty:before:pointer-events-none empty:before:text-slate-400 empty:before:content-[attr(data-placeholder)] [&_a]:text-blue-600 [&_a]:underline [&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-blue-300 [&_blockquote]:pl-3 [&_h2]:text-xl [&_h2]:font-semibold [&_h3]:text-lg [&_h3]:font-semibold [&_img]:max-w-full [&_img]:rounded-lg [&_li]:ml-5 [&_ol]:list-decimal [&_ul]:list-disc [&_pre]:rounded-md [&_pre]:bg-slate-100 [&_pre]:p-3" />
       )}
       <div className="border-t border-slate-200 px-3 py-1.5 text-[11px] text-slate-400">
         Можно редактировать визуально или переключиться в HTML-режим.
