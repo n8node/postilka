@@ -1,48 +1,25 @@
 "use client";
 
-import { Bold, Eraser, Heading2, Heading3, Italic, Link2, List, ListOrdered, Quote, Redo2, Strikethrough, Underline, Undo2 } from "lucide-react";
+import { AlignCenter, AlignLeft, AlignRight, Bold, Eraser, Heading2, Heading3, ImagePlus, Italic, Link2, List, ListOrdered, Minus, Quote, Redo2, Strikethrough, Table2, Underline, Undo2, Unlink } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 type Props = { value: string; onChange: (value: string) => void; placeholder?: string };
-
-function escapeHTML(value: string) { return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;"); }
-function safeURL(value: string) { try { const url = new URL(value.trim()); return url.protocol === "http:" || url.protocol === "https:" ? url.toString() : ""; } catch { return ""; } }
-function plainTextFromHTML(value: string) {
-  if (typeof window === "undefined") return value;
-  const doc = new DOMParser().parseFromString(value || "", "text/html");
-  const cells = Array.from(doc.querySelectorAll("tr td, tr th"));
-  const source = cells.length ? cells.map((cell) => cell.innerHTML).join("\n") : doc.body.innerHTML;
-  const textDoc = new DOMParser().parseFromString(source, "text/html");
-  return (textDoc.body.innerText || textDoc.body.textContent || "").replace(/\u00a0/g, " ").replace(/\n{3,}/g, "\n\n").trim();
-}
-function sanitizeHTML(value: string) {
-  if (typeof window === "undefined") return value;
-  const doc = new DOMParser().parseFromString(value, "text/html");
-  for (const node of Array.from(doc.querySelectorAll("script,iframe,object,embed,form,video,audio"))) node.remove();
-  for (const node of Array.from(doc.body.querySelectorAll("*"))) for (const attr of Array.from(node.attributes)) {
-    const name = attr.name.toLowerCase();
-    if (name.startsWith("on") || ((name === "href" || name === "src") && attr.value.trim().toLowerCase().startsWith("javascript:"))) node.removeAttribute(attr.name);
-  }
-  return doc.body.innerHTML;
-}
-function initialDraft(value: string) { return /<\s*(tr|td|th)\b/i.test(value) ? plainTextFromHTML(value) : value; }
+const esc = (v: string) => v.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+const url = (v: string) => { try { const u = new URL(v.trim()); return u.protocol === "http:" || u.protocol === "https:" ? u.toString() : ""; } catch { return ""; } };
+function textFromHTML(v: string) { if (typeof window === "undefined") return v; const d = new DOMParser().parseFromString(v || "", "text/html"); const cells = [...d.querySelectorAll("tr td,tr th")]; const x = new DOMParser().parseFromString(cells.length ? cells.map((c) => c.innerHTML).join("\n") : d.body.innerHTML, "text/html"); return (x.body.innerText || x.body.textContent || "").replace(/\u00a0/g, " ").replace(/\n{3,}/g, "\n\n").trim(); }
+function cleanHTML(v: string) { if (typeof window === "undefined") return v; const d = new DOMParser().parseFromString(v, "text/html"); for (const n of [...d.querySelectorAll("script,iframe,object,embed,form,video,audio")]) n.remove(); for (const n of [...d.body.querySelectorAll("*")]) for (const a of [...n.attributes]) if (a.name.toLowerCase().startsWith("on") || ((a.name === "href" || a.name === "src") && a.value.toLowerCase().startsWith("javascript:"))) n.removeAttribute(a.name); return d.body.innerHTML; }
+const initial = (v: string) => /<\s*(tr|td|th)\b/i.test(v) ? textFromHTML(v) : v;
 
 export function EmailRichEditor({ value, onChange, placeholder }: Props) {
-  const [htmlMode, setHTMLMode] = useState(false);
-  const [draft, setDraft] = useState(() => initialDraft(value));
-  const lastValue = useRef(value);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const history = useRef<string[]>([]);
-  const future = useRef<string[]>([]);
-
-  useEffect(() => { if (value !== lastValue.current) { const next = initialDraft(value); setDraft(next); lastValue.current = value; } }, [value]);
-  function emit(next: string, remember = true) { if (remember && next !== draft) { history.current.push(draft); future.current = []; } setDraft(next); lastValue.current = next; onChange(next); }
-  function range() { const area = textareaRef.current; return area ? { start: area.selectionStart, end: area.selectionEnd } : null; }
-  function wrap(open: string, close = open) { const selected = range(); if (!selected) return; const text = draft.slice(selected.start, selected.end) || "текст"; emit(`${draft.slice(0, selected.start)}${open}${text}${close}${draft.slice(selected.end)}`); }
-  function link() { const selected = range(); const url = safeURL(window.prompt("Адрес ссылки", "https://") || ""); if (!selected || !url) return; const text = draft.slice(selected.start, selected.end) || url; emit(`${draft.slice(0, selected.start)}<a href="${escapeHTML(url)}">${escapeHTML(text)}</a>${draft.slice(selected.end)}`); }
-  function undo() { const previous = history.current.pop(); if (!previous) return; future.current.push(draft); emit(previous, false); }
-  function redo() { const next = future.current.pop(); if (!next) return; history.current.push(draft); emit(next, false); }
-  function toggleHTML() { if (htmlMode) emit(sanitizeHTML(draft), false); setHTMLMode((current) => !current); }
-  const tools = [["Заголовок", Heading2, () => wrap("<h2>", "</h2>")], ["Подзаголовок", Heading3, () => wrap("<h3>", "</h3>")], ["Жирный", Bold, () => wrap("<strong>", "</strong>")], ["Курсив", Italic, () => wrap("<em>", "</em>")], ["Подчёркнутый", Underline, () => wrap("<u>", "</u>")], ["Зачёркнутый", Strikethrough, () => wrap("<s>", "</s>")], ["Маркированный список", List, () => wrap("<ul><li>", "</li></ul>")], ["Нумерованный список", ListOrdered, () => wrap("<ol><li>", "</li></ol>")], ["Цитата", Quote, () => wrap("<blockquote>", "</blockquote>")], ["Ссылка", Link2, link], ["Очистить форматирование", Eraser, () => { const selected = range(); if (selected) emit(`${draft.slice(0, selected.start)}${plainTextFromHTML(draft.slice(selected.start, selected.end))}${draft.slice(selected.end)}`); }], ["Отменить", Undo2, undo], ["Повторить", Redo2, redo]] as const;
-  return <div className="mt-1 overflow-hidden rounded-md border border-slate-200 bg-white"><div className="flex flex-wrap items-center gap-1 border-b border-slate-200 bg-slate-50 p-2">{tools.map(([title, Icon, action]) => <button key={title} type="button" title={title} onClick={action} className="rounded-md p-1.5 text-slate-600 hover:bg-white hover:text-slate-900"><Icon className="h-4 w-4" /></button>)}<button type="button" onClick={toggleHTML} className={`rounded-md px-2 py-1 text-xs font-medium ${htmlMode ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-white"}`}>HTML</button></div><textarea ref={textareaRef} value={draft} onChange={(event) => emit(event.target.value)} rows={htmlMode ? 12 : 10} className={`min-h-[280px] w-full resize-y px-4 py-3 text-sm leading-6 outline-none ${htmlMode ? "font-mono text-xs" : ""}`} placeholder={placeholder} /><div className="border-t border-slate-200 px-3 py-1.5 text-[11px] text-slate-400">Обычный текст сохраняется без тегов. Форматирование добавляется кнопками или в HTML-режиме.</div></div>;
+  const [html, setHtml] = useState(false); const [draft, setDraft] = useState(() => initial(value)); const last = useRef(value); const area = useRef<HTMLTextAreaElement>(null); const undoStack = useRef<string[]>([]); const redoStack = useRef<string[]>([]);
+  useEffect(() => { if (value !== last.current) { setDraft(initial(value)); last.current = value; } }, [value]);
+  const emit = (v: string, remember = true) => { if (remember && v !== draft) undoStack.current.push(draft); if (remember) redoStack.current = []; setDraft(v); last.current = v; onChange(v); };
+  const selection = () => area.current ? { start: area.current.selectionStart, end: area.current.selectionEnd } : null;
+  const insert = (v: string) => { const s = selection(); if (!s) return; emit(draft.slice(0, s.start) + v + draft.slice(s.end)); };
+  const wrap = (a: string, b = a) => { const s = selection(); if (!s) return; insert(`${a}${draft.slice(s.start, s.end) || "текст"}${b}`); };
+  const link = () => { const u = url(window.prompt("Адрес ссылки", "https://") || ""); if (!u) return; const s = selection(); if (!s) return; insert(`<a href="${esc(u)}">${esc(draft.slice(s.start, s.end) || u)}</a>`); };
+  const table = () => { const r = Math.min(10, Math.max(1, Number(window.prompt("Строки", "2")) || 2)); const c = Math.min(8, Math.max(1, Number(window.prompt("Столбцы", "2")) || 2)); insert(`<table style="border-collapse:collapse;width:100%;"><tbody>${Array.from({ length: r }, (_, ri) => `<tr>${Array.from({ length: c }, (_, ci) => `<td style="border:1px solid #cbd5e1;padding:8px;">${ri === 0 ? `Ячейка ${ci + 1}` : ""}</td>`).join("")}</tr>`).join("")}</tbody></table>\n`); };
+  const undo = () => { const v = undoStack.current.pop(); if (!v) return; redoStack.current.push(draft); emit(v, false); }; const redo = () => { const v = redoStack.current.pop(); if (!v) return; undoStack.current.push(draft); emit(v, false); }; const toggle = () => { if (html) emit(cleanHTML(draft), false); setHtml((v) => !v); };
+  const tools = [["Заголовок", Heading2, () => wrap("<h2>", "</h2>")], ["Подзаголовок", Heading3, () => wrap("<h3>", "</h3>")], ["Жирный", Bold, () => wrap("<strong>", "</strong>")], ["Курсив", Italic, () => wrap("<em>", "</em>")], ["Подчёркнутый", Underline, () => wrap("<u>", "</u>")], ["Зачёркнутый", Strikethrough, () => wrap("<s>", "</s>")], ["Список", List, () => wrap("<ul><li>", "</li></ul>")], ["Нумерованный список", ListOrdered, () => wrap("<ol><li>", "</li></ol>")], ["Цитата", Quote, () => wrap("<blockquote>", "</blockquote>")], ["Ссылка", Link2, link], ["Удалить ссылку", Unlink, () => wrap("", "")], ["Изображение", ImagePlus, () => { const u = url(window.prompt("URL изображения", "https://") || ""); if (u) insert(`<img src="${esc(u)}" alt="">`); }], ["Таблица", Table2, table], ["Разделитель", Minus, () => insert("<hr>\n")], ["Слева", AlignLeft, () => wrap('<p style="text-align:left">', "</p>")], ["Центр", AlignCenter, () => wrap('<p style="text-align:center">', "</p>")], ["Справа", AlignRight, () => wrap('<p style="text-align:right">', "</p>")], ["Очистить", Eraser, () => { const s = selection(); if (s) insert(textFromHTML(draft.slice(s.start, s.end))); }], ["Отменить", Undo2, undo], ["Повторить", Redo2, redo]] as const;
+  return <div className="mt-1 overflow-hidden rounded-md border border-slate-200 bg-white"><div className="flex flex-wrap items-center gap-1 border-b border-slate-200 bg-slate-50 p-2">{tools.map(([title, Icon, action]) => <button key={title} type="button" title={title} onClick={action} className="rounded-md p-1.5 text-slate-600 hover:bg-white"><Icon className="h-4 w-4" /></button>)}<button type="button" onClick={toggle} className={`rounded-md px-2 py-1 text-xs font-medium ${html ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-white"}`}>HTML</button></div><textarea ref={area} value={draft} onChange={(e) => emit(e.target.value)} rows={html ? 12 : 10} className={`min-h-[280px] w-full resize-y px-4 py-3 text-sm leading-6 outline-none ${html ? "font-mono text-xs" : ""}`} placeholder={placeholder} /><div className="border-t border-slate-200 px-3 py-1.5 text-[11px] text-slate-400">Обычный текст без тегов; форматирование — кнопками или HTML-режимом.</div></div>;
 }
