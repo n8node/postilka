@@ -76,7 +76,16 @@ function htmlForEditor(value: string) {
     const cells = rows.flatMap((row) => Array.from(row.querySelectorAll("td,th")));
     if (cells.length > 0) return cells.map((cell) => cell.innerHTML).join("");
   }
-  return doc.body.innerHTML;
+  for (const heading of Array.from(doc.body.querySelectorAll("h1,h2,h3,h4,h5,h6"))) {
+    heading.replaceWith(...Array.from(heading.childNodes));
+  }
+  return doc.body.innerHTML.replace(/<div[^>]*>/gi, "").replace(/<\/div>/gi, "<br>");
+}
+
+function serializeEditorContent(editor: HTMLDivElement) {
+  const hasFormatting = Boolean(editor.querySelector("strong,b,em,i,u,s,a,img,ul,ol,blockquote,pre,h1,h2,h3,h4,h5,h6"));
+  if (hasFormatting) return sanitizeEmailHTML(editor.innerHTML);
+  return (editor.innerText || editor.textContent || "").replace(/\u00a0/g, " ").replace(/\n+$/g, "");
 }
 
 export function EmailRichEditor({ value, onChange, placeholder }: Props) {
@@ -99,7 +108,7 @@ export function EmailRichEditor({ value, onChange, placeholder }: Props) {
   }, [htmlMode]);
 
   function emit() {
-    const html = sanitizeEmailHTML(editorRef.current?.innerHTML ?? "");
+    const html = editorRef.current ? serializeEditorContent(editorRef.current) : "";
     draftRef.current = html;
     setDraft(html);
     onChange(html);

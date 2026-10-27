@@ -20,6 +20,9 @@ func (r *EmailRenderer) Render(cfg model.EmailTemplateSettings, body EmailBody) 
 	bg := html.EscapeString(cfg.BackgroundColor)
 	radius := strconv.Itoa(cfg.CardRadiusPx)
 	content := normalizeEmailContentHTML(injectPrimaryColor(body.ContentHTML, cfg.PrimaryColor))
+	if !strings.Contains(content, "<") {
+		content = strings.ReplaceAll(html.EscapeString(content), "\n", "<br>")
+	}
 
 	var b strings.Builder
 	b.WriteString("<!DOCTYPE html><html lang=\"ru\"><head><meta charset=\"UTF-8\">")
