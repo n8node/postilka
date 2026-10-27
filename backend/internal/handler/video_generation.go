@@ -218,6 +218,8 @@ func (h *VideoGenerationHandler) mapError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, service.ErrInsufficientAICredits):
 		writeErrorWithCode(w, http.StatusPaymentRequired, "insufficient_credits", "Недостаточно AI-кредитов или средств на кошельке")
+	case errors.Is(err, service.ErrUnverifiedGenerationLimit):
+		writeErrorWithCode(w, http.StatusForbidden, "email_verification_required", "Вы использовали бесплатный лимит генераций. Подтвердите email, чтобы снять ограничения: доступно до 5 изображений и 2 видео.")
 	case errors.Is(err, service.ErrVideoGenerationNotConfigured):
 		writeErrorWithCode(w, http.StatusServiceUnavailable, "video_generation_not_configured", "Сервис генерации видео временно недоступен")
 	case errors.Is(err, service.ErrReferenceVideoDuration):

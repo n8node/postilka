@@ -258,7 +258,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	genUploadRepo := repository.NewGenerationSourceUploadRepository(db.Pool)
 	aiBillingSvc := service.NewAIBillingService(quotaSvc, usageRepo, walletRepo, kieSettingsRepo)
 	generationSvc := service.NewGenerationService(
-		kieConfigSvc, kieVideoConfigSvc, genRepo, genJobRepo, genUploadRepo, aiBillingSvc, objectStorage, fileStorageSvc, wsSvc, yandexGptConfigSvc, quotaSvc,
+		kieConfigSvc, kieVideoConfigSvc, genRepo, genJobRepo, genUploadRepo, aiBillingSvc, objectStorage, fileStorageSvc, wsSvc, userRepo, yandexGptConfigSvc, quotaSvc,
 	)
 	generationSvc.SetMediaProviderService(mediaProviderSvc)
 	generationSvc.SetMediaProviderUserLookup(userRepo)

@@ -343,6 +343,8 @@ func (h *GenerationHandler) mapError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, service.ErrInsufficientAICredits):
 		writeErrorWithCode(w, http.StatusPaymentRequired, "insufficient_credits", "Недостаточно AI-кредитов или средств на кошельке")
+	case errors.Is(err, service.ErrUnverifiedGenerationLimit):
+		writeErrorWithCode(w, http.StatusForbidden, "email_verification_required", "Вы использовали бесплатный лимит генераций. Подтвердите email, чтобы снять ограничения: доступно до 5 изображений и 2 видео.")
 	case errors.Is(err, service.ErrKieNotConfigured):
 		writeErrorWithCode(w, http.StatusServiceUnavailable, "generation_not_configured", "Сервис генерации временно недоступен")
 	case errors.Is(err, service.ErrGenerationUploadNotFound):

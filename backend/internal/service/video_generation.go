@@ -138,12 +138,14 @@ func (s *GenerationService) StartGenerateVideo(ctx context.Context, userID strin
 	if err := s.aiBilling.PrefailCheckWithKopecks(ctx, ws.ID, userID, cost, kopecks); err != nil {
 		return StartGenerateResult{}, err
 	}
-
 	if s.mediaProviders == nil {
 		if _, _, err := s.kieVideoConfig.ResolveCredentials(ctx); err != nil {
 			slog.Warn("video generation credentials unavailable", "user_id", userID, "err", err)
 			return StartGenerateResult{}, fmt.Errorf("%w: %v", ErrVideoGenerationNotConfigured, err)
 		}
+	}
+	if err := s.reserveUnverifiedGeneration(ctx, userID, true); err != nil {
+		return StartGenerateResult{}, err
 	}
 
 	modelID := ai.NormalizeKieVideoModelID(settings.ModelForMode(mode))
@@ -180,6 +182,7 @@ func (s *GenerationService) StartGenerateVideo(ctx context.Context, userID strin
 		PollAfter:               time.Now(),
 	})
 	if err != nil {
+		s.releaseUnverifiedGeneration(ctx, userID, true)
 		slog.Error("create video generation job failed", "user_id", userID, "mode", mode, "err", err)
 		return StartGenerateResult{}, err
 	}

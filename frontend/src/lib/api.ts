@@ -369,6 +369,9 @@ export function login(email: string, password: string) {
 export const EMAIL_UNVERIFIED_RESTRICTED_MESSAGE =
   "Подтвердите email, чтобы публиковать посты, пополнять счёт и оплачивать тариф";
 
+export const EMAIL_VERIFICATION_GENERATION_LIMIT_MESSAGE =
+  "Вы использовали бесплатный лимит генераций: до 5 изображений и 2 видео. Подтвердите email, чтобы снять ограничения";
+
 export const PLACEHOLDER_LOGIN_EMAIL_DOMAIN = "login.postilka.local";
 
 export function isPlaceholderLoginEmail(email: string | null | undefined) {

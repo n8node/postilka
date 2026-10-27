@@ -367,6 +367,8 @@ func (h *AdStudioHandler) mapError(w http.ResponseWriter, err error) {
 		writeErrorWithCode(w, http.StatusBadRequest, "preview_required", "У шаблона нет превью. Загрузите его в админке.")
 	case errors.Is(err, service.ErrInsufficientAICredits):
 		writeErrorWithCode(w, http.StatusPaymentRequired, "insufficient_credits", "Недостаточно AI-кредитов или средств на кошельке")
+	case errors.Is(err, service.ErrUnverifiedGenerationLimit):
+		writeErrorWithCode(w, http.StatusForbidden, "email_verification_required", "Вы использовали бесплатный лимит генераций. Подтвердите email, чтобы снять ограничения: доступно до 5 изображений и 2 видео.")
 	case errors.Is(err, service.ErrKieNotConfigured), errors.Is(err, service.ErrVideoGenerationNotConfigured):
 		writeErrorWithCode(w, http.StatusServiceUnavailable, "generation_not_configured", "Сервис генерации временно недоступен")
 	case errors.Is(err, service.ErrGenerationUploadNotFound):

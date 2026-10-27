@@ -105,7 +105,7 @@ func main() {
 
 	// Сервис генерации
 	generationSvc := service.NewGenerationService(
-		kieConfigSvc, kieVideoConfigSvc, genRepo, genJobRepo, genUploadRepo, aiBillingSvc, objectStorage, fileStorageSvc, wsSvc, yandexGptConfigSvc, quotaSvc,
+		kieConfigSvc, kieVideoConfigSvc, genRepo, genJobRepo, genUploadRepo, aiBillingSvc, objectStorage, fileStorageSvc, wsSvc, userRepo, yandexGptConfigSvc, quotaSvc,
 	)
 	mediaProviderRepo := repository.NewMediaProviderRepository(db.Pool)
 	mediaProviderSvc := service.NewMediaProviderService(mediaProviderRepo, secretCipher)

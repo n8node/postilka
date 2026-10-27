@@ -45,6 +45,7 @@ type GenerationService struct {
 	objectStore      *ObjectStorage
 	fileStorage      *FileStorageService
 	wsSvc            *WorkspaceService
+	users            *repository.UserRepository
 	yandexGPT        *YandexGptConfigService
 	quota            *QuotaService
 	mediaProviders   *MediaProviderService
@@ -65,6 +66,7 @@ func NewGenerationService(
 	objectStore *ObjectStorage,
 	fileStorage *FileStorageService,
 	wsSvc *WorkspaceService,
+	users *repository.UserRepository,
 	yandexGPT *YandexGptConfigService,
 	quota *QuotaService,
 ) *GenerationService {
@@ -78,6 +80,7 @@ func NewGenerationService(
 		objectStore:    objectStore,
 		fileStorage:    fileStorage,
 		wsSvc:          wsSvc,
+		users:          users,
 		yandexGPT:      yandexGPT,
 		quota:          quota,
 		createGate:     newKieCreateGate(),
@@ -193,6 +196,9 @@ func (s *GenerationService) StartGenerate(ctx context.Context, userID string, r 
 	if err := s.aiBilling.PrefailCheck(ctx, ws.ID, userID, cost); err != nil {
 		return StartGenerateResult{}, err
 	}
+	if err := s.reserveUnverifiedGeneration(ctx, userID, false); err != nil {
+		return StartGenerateResult{}, err
+	}
 
 	modelID := ai.NormalizeKieModelID(modelForGenerationMode(settings, mode))
 	if modelID == "" {
@@ -222,10 +228,33 @@ func (s *GenerationService) StartGenerate(ctx context.Context, userID string, r 
 		PollAfter:          time.Now(),
 	})
 	if err != nil {
+		s.releaseUnverifiedGeneration(ctx, userID, false)
 		return StartGenerateResult{}, err
 	}
 
 	return StartGenerateResult{Job: jobToView(job, nil)}, nil
+}
+
+var ErrUnverifiedGenerationLimit = errors.New("unverified email generation limit reached")
+
+func (s *GenerationService) reserveUnverifiedGeneration(ctx context.Context, userID string, video bool) error {
+	if s.users == nil {
+		return nil
+	}
+	ok, err := s.users.ReserveUnverifiedGeneration(ctx, userID, video)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return ErrUnverifiedGenerationLimit
+	}
+	return nil
+}
+
+func (s *GenerationService) releaseUnverifiedGeneration(ctx context.Context, userID string, video bool) {
+	if s.users != nil {
+		_ = s.users.ReleaseUnverifiedGeneration(ctx, userID, video)
+	}
 }
 
 func (s *GenerationService) GetJob(ctx context.Context, userID, jobID string) (GetGenerationJobResult, error) {

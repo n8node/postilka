@@ -73,6 +73,49 @@ func (r *UserRepository) SetEmailVerified(ctx context.Context, userID string) er
 	return nil
 }
 
+const (
+	UnverifiedImageGenerationLimit = 5
+	UnverifiedVideoGenerationLimit = 2
+)
+
+// ReserveUnverifiedGeneration atomically reserves one lifetime generation slot.
+// Verified users are deliberately excluded from the update and are unlimited.
+func (r *UserRepository) ReserveUnverifiedGeneration(ctx context.Context, userID string, video bool) (bool, error) {
+	column := "unverified_image_generations"
+	limit := UnverifiedImageGenerationLimit
+	if video {
+		column = "unverified_video_generations"
+		limit = UnverifiedVideoGenerationLimit
+	}
+	query := fmt.Sprintf(`
+		UPDATE users
+		SET %s = %s + 1, updated_at = NOW()
+		WHERE id = $1 AND email_verified_at IS NULL AND %s < $2
+	`, column, column, column)
+	tag, err := r.pool.Exec(ctx, query, userID, limit)
+	if err != nil {
+		return false, err
+	}
+	// A verified user is unlimited; the caller must not turn that into a quota error.
+	var verified bool
+	if err := r.pool.QueryRow(ctx, `SELECT email_verified_at IS NOT NULL FROM users WHERE id = $1`, userID).Scan(&verified); err != nil {
+		return false, err
+	}
+	return verified || tag.RowsAffected() > 0, nil
+}
+
+func (r *UserRepository) ReleaseUnverifiedGeneration(ctx context.Context, userID string, video bool) error {
+	column := "unverified_image_generations"
+	if video {
+		column = "unverified_video_generations"
+	}
+	_, err := r.pool.Exec(ctx, fmt.Sprintf(`
+		UPDATE users SET %s = GREATEST(%s - 1, 0), updated_at = NOW()
+		WHERE id = $1 AND email_verified_at IS NULL
+	`, column, column), userID)
+	return err
+}
+
 func (r *UserRepository) ClearEmailVerified(ctx context.Context, userID string) error {
 	tag, err := r.pool.Exec(ctx, `
 		UPDATE users
