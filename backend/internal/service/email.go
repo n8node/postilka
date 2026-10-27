@@ -29,14 +29,23 @@ func (e *EmailService) Render(ctx context.Context, body EmailBody) (string, erro
 	return e.renderer.Render(cfg, body), nil
 }
 
+func (e *EmailService) RenderWithSettings(ctx context.Context, cfg model.EmailTemplateSettings, body EmailBody) (string, error) {
+	return e.renderer.Render(cfg, body), nil
+}
+
 func (e *EmailService) Send(ctx context.Context, to, subject string, body EmailBody) error {
-	if !model.IsDeliverableEmail(to) {
-		return nil
-	}
-	html, err := e.Render(ctx, body)
+	cfg, err := e.templates.GetEffective(ctx)
 	if err != nil {
 		return err
 	}
+	return e.SendWithSettings(ctx, to, subject, cfg, body)
+}
+
+func (e *EmailService) SendWithSettings(ctx context.Context, to, subject string, cfg model.EmailTemplateSettings, body EmailBody) error {
+	if !model.IsDeliverableEmail(to) {
+		return nil
+	}
+	html := e.renderer.Render(cfg, body)
 	return e.mail.Send(ctx, to, subject, html)
 }
 

@@ -41,6 +41,29 @@ const DEFAULT_SETTINGS: EmailTemplateSettings = {
   unsubscribe_text: "Отписаться от рассылки",
   unsubscribe_url: "https://postilka.ru/app/settings",
   community_promo: {
+    logo_url: "",
+    logo_alt: "Postilka",
+    primary_color: "#2563eb",
+    background_color: "#eef1f6",
+    card_radius_px: 20,
+    signature_title: "Делаем автопостинг проще!",
+    signature_team: "Команда сервиса Postilka",
+    footer_links: [
+      { label: "Возможности", url: "https://postilka.ru" },
+      { label: "Документация", url: "https://postilka.ru/docs" },
+      { label: "Полезное", url: "https://postilka.ru/blog" },
+    ],
+    social_links: [
+      { label: "Telegram", url: "https://t.me/postilka", icon_url: "" },
+      { label: "VK", url: "https://vk.com/postilka", icon_url: "" },
+      { label: "Дзен", url: "https://dzen.ru/postilka", icon_url: "" },
+    ],
+    app_download_text: "Скачайте приложение Postilka",
+    app_store_url: "",
+    google_play_url: "",
+    footer_legal_text: "Вы получили это письмо, потому что зарегистрировались в сервисе Postilka или подписались на рассылку.",
+    unsubscribe_text: "Отписаться от рассылки",
+    unsubscribe_url: "https://postilka.ru/app/settings",
     subject: "Postilka — присоединяйтесь к нашему Telegram-сообществу",
     preheader: "Полезные материалы, новости и поддержка в Telegram",
     content_html: "<tr><td style=\"padding:0 0 16px;font-size:16px;line-height:1.6;color:#334155;\">Присоединяйтесь к Telegram-сообществу Postilka: там мы публикуем новости сервиса, полезные материалы и отвечаем на вопросы пользователей.</td></tr>",
@@ -68,15 +91,24 @@ const EMAIL_TEMPLATE_MENU: { key: EmailTemplateSection; label: string; descripti
 function CommunityPromoSection({
   settings,
   patch,
+  testTo,
+  setTestTo,
+  testing,
+  handleTestSend,
 }: {
   settings: EmailTemplateSettings;
   patch: (partial: Partial<EmailTemplateSettings>) => void;
+  testTo: string;
+  setTestTo: (value: string) => void;
+  testing: boolean;
+  handleTestSend: (template?: "community-promo") => Promise<void>;
 }) {
   const promo = settings.community_promo;
   const update = (partial: Partial<typeof promo>) =>
     patch({ community_promo: { ...promo, ...partial } });
 
   return (
+    <div className="space-y-4">
     <section className="rounded-xl border border-blue-200 bg-blue-50/40 p-4 shadow-sm">
       <h2 className="text-sm font-semibold text-slate-900">Реклама Telegram-сообщества</h2>
       <p className="mt-1 text-xs text-slate-500">
@@ -110,6 +142,32 @@ function CommunityPromoSection({
         </label>
       </div>
     </section>
+    <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <h2 className="text-sm font-semibold text-slate-900">Оформление рекламного письма</h2>
+      <div className="mt-3 grid gap-4 md:grid-cols-2">
+        <label className="block text-xs font-medium text-slate-500">URL логотипа<input type="url" value={promo.logo_url} onChange={(e) => update({ logo_url: e.target.value })} className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm" /></label>
+        <label className="block text-xs font-medium text-slate-500">Alt-текст<input type="text" value={promo.logo_alt} onChange={(e) => update({ logo_alt: e.target.value })} className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm" /></label>
+        <label className="block text-xs font-medium text-slate-500">Основной цвет<input type="color" value={promo.primary_color} onChange={(e) => update({ primary_color: e.target.value })} className="mt-1 h-10 w-full rounded-md border border-slate-200" /></label>
+        <label className="block text-xs font-medium text-slate-500">Фон письма<input type="color" value={promo.background_color} onChange={(e) => update({ background_color: e.target.value })} className="mt-1 h-10 w-full rounded-md border border-slate-200" /></label>
+        <label className="block text-xs font-medium text-slate-500">Скругление карточки<input type="number" min={8} max={40} value={promo.card_radius_px} onChange={(e) => update({ card_radius_px: Number(e.target.value) })} className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm" /></label>
+        <label className="block text-xs font-medium text-slate-500">Слоган<input type="text" value={promo.signature_title} onChange={(e) => update({ signature_title: e.target.value })} className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm" /></label>
+        <label className="block text-xs font-medium text-slate-500">Команда<input type="text" value={promo.signature_team} onChange={(e) => update({ signature_team: e.target.value })} className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm" /></label>
+        <label className="block text-xs font-medium text-slate-500">Текст приложений<input type="text" value={promo.app_download_text} onChange={(e) => update({ app_download_text: e.target.value })} className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm" /></label>
+        <label className="block text-xs font-medium text-slate-500 md:col-span-2">Юридический текст<textarea rows={3} value={promo.footer_legal_text} onChange={(e) => update({ footer_legal_text: e.target.value })} className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm" /></label>
+        <label className="block text-xs font-medium text-slate-500">Текст отписки<input type="text" value={promo.unsubscribe_text} onChange={(e) => update({ unsubscribe_text: e.target.value })} className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm" /></label>
+        <label className="block text-xs font-medium text-slate-500">URL отписки<input type="url" value={promo.unsubscribe_url} onChange={(e) => update({ unsubscribe_url: e.target.value })} className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm" /></label>
+      </div>
+    </section>
+    <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <h2 className="text-sm font-semibold text-slate-900">Ссылки и соцсети</h2>
+      <div className="mt-3 space-y-2">
+        {promo.footer_links.map((link, index) => <div key={`promo-footer-${index}`} className="grid gap-2 md:grid-cols-2"><input value={link.label} placeholder="Название ссылки" onChange={(e) => update({ footer_links: promo.footer_links.map((item, i) => i === index ? { ...item, label: e.target.value } : item) })} className="rounded-md border border-slate-200 px-3 py-2 text-sm" /><input value={link.url} placeholder="https://..." onChange={(e) => update({ footer_links: promo.footer_links.map((item, i) => i === index ? { ...item, url: e.target.value } : item) })} className="rounded-md border border-slate-200 px-3 py-2 text-sm" /></div>)}
+        {promo.social_links.map((link, index) => <div key={`promo-social-${index}`} className="grid gap-2 md:grid-cols-3"><input value={link.label} placeholder="Соцсеть" onChange={(e) => update({ social_links: promo.social_links.map((item, i) => i === index ? { ...item, label: e.target.value } : item) })} className="rounded-md border border-slate-200 px-3 py-2 text-sm" /><input value={link.url} placeholder="https://..." onChange={(e) => update({ social_links: promo.social_links.map((item, i) => i === index ? { ...item, url: e.target.value } : item) })} className="rounded-md border border-slate-200 px-3 py-2 text-sm" /><input value={link.icon_url} placeholder="URL иконки" onChange={(e) => update({ social_links: promo.social_links.map((item, i) => i === index ? { ...item, icon_url: e.target.value } : item) })} className="rounded-md border border-slate-200 px-3 py-2 text-sm" /></div>)}
+      </div>
+    </section>
+    <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900"><Eye className="h-4 w-4" />Превью рекламного письма</h2><iframe title="Превью рекламного письма" src={adminEmailTemplatePreviewURL("community-promo")} className="mt-3 h-[640px] w-full rounded-lg border border-slate-200 bg-white" /></section>
+    <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900"><Send className="h-4 w-4" />Тестовая отправка рекламы</h2><div className="mt-3 flex max-w-xl gap-2"><input type="email" value={testTo} onChange={(e) => setTestTo(e.target.value)} placeholder="email для тестовой отправки" className="min-w-[200px] flex-1 rounded-md border border-slate-200 px-3 py-2 text-sm" /><button type="button" disabled={testing || !testTo.trim()} onClick={() => void handleTestSend("community-promo")} className="rounded-md border border-slate-200 px-4 py-2 text-sm disabled:opacity-50">{testing ? "Отправка…" : "Отправить"}</button></div></section>
+    </div>
   );
 }
 
@@ -203,7 +261,7 @@ export function AdminEmailTemplatesPage() {
     }
   }
 
-  async function handleTestSend() {
+  async function handleTestSend(template?: "community-promo") {
     if (!testTo.trim()) {
       setError("Укажите email для тестовой отправки");
       return;
@@ -212,7 +270,7 @@ export function AdminEmailTemplatesPage() {
     setError(null);
     setTestMessage(null);
     try {
-      const result = await sendAdminEmailTemplateTest(testTo.trim());
+      const result = await sendAdminEmailTemplateTest(testTo.trim(), template);
       setTestMessage(result.message);
       if (!result.ok) {
         setError(result.message);
@@ -271,7 +329,7 @@ export function AdminEmailTemplatesPage() {
           </aside>
           <div className="flex min-w-0 flex-1 flex-col">
             <div className="flex-1 space-y-4 overflow-y-auto p-6">
-              {selected === "community-promo" && <CommunityPromoSection settings={settings} patch={patch} />}
+              {selected === "community-promo" && <CommunityPromoSection settings={settings} patch={patch} testTo={testTo} setTestTo={setTestTo} testing={testing} handleTestSend={handleTestSend} />}
               {selected === "general" && <>
           <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <h2 className="text-sm font-semibold text-slate-900">Логотип</h2>

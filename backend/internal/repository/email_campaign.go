@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -20,11 +21,15 @@ func (r *EmailCampaignQueueRepository) Enqueue(ctx context.Context, item model.E
 	if item.ID == "" {
 		item.ID = uuid.NewString()
 	}
-	_, err := r.pool.Exec(ctx, `
+	templateJSON, err := json.Marshal(item.TemplateSettings)
+	if err != nil {
+		return err
+	}
+	_, err = r.pool.Exec(ctx, `
 		INSERT INTO email_campaign_queue
-		(id, campaign_type, recipient_email, recipient_name, subject, preheader, content_html, cta_label, cta_url, send_interval_seconds, status, next_attempt_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'pending',$11)
-	`, item.ID, item.CampaignType, item.RecipientEmail, item.RecipientName, item.Subject, item.Preheader, item.ContentHTML, item.CTALabel, item.CTAURL, item.SendIntervalSeconds, next)
+		(id, campaign_type, recipient_email, recipient_name, subject, preheader, content_html, cta_label, cta_url, send_interval_seconds, template_settings, status, next_attempt_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'pending',$12)
+	`, item.ID, item.CampaignType, item.RecipientEmail, item.RecipientName, item.Subject, item.Preheader, item.ContentHTML, item.CTALabel, item.CTAURL, item.SendIntervalSeconds, templateJSON, next)
 	return err
 }
 
@@ -37,11 +42,12 @@ func (r *EmailCampaignQueueRepository) ClaimOne(ctx context.Context, staleBefore
 		)
 		UPDATE email_campaign_queue q SET status='processing', locked_at=NOW(), updated_at=NOW()
 		FROM picked WHERE q.id=picked.id
-		RETURNING q.id,q.campaign_type,q.recipient_email,q.recipient_name,q.subject,q.preheader,q.content_html,q.cta_label,q.cta_url,q.send_interval_seconds,q.status,q.attempt_count,q.next_attempt_at,q.last_error,q.locked_at,q.sent_at
+		RETURNING q.id,q.campaign_type,q.recipient_email,q.recipient_name,q.subject,q.preheader,q.content_html,q.cta_label,q.cta_url,q.send_interval_seconds,q.template_settings,q.status,q.attempt_count,q.next_attempt_at,q.last_error,q.locked_at,q.sent_at
 	`
 	item := &model.EmailCampaignQueueItem{}
 	var status string
-	err := r.pool.QueryRow(ctx, q, staleBefore).Scan(&item.ID, &item.CampaignType, &item.RecipientEmail, &item.RecipientName, &item.Subject, &item.Preheader, &item.ContentHTML, &item.CTALabel, &item.CTAURL, &item.SendIntervalSeconds, &status, &item.AttemptCount, &item.NextAttemptAt, &item.LastError, &item.LockedAt, &item.SentAt)
+	var templateJSON []byte
+	err := r.pool.QueryRow(ctx, q, staleBefore).Scan(&item.ID, &item.CampaignType, &item.RecipientEmail, &item.RecipientName, &item.Subject, &item.Preheader, &item.ContentHTML, &item.CTALabel, &item.CTAURL, &item.SendIntervalSeconds, &templateJSON, &status, &item.AttemptCount, &item.NextAttemptAt, &item.LastError, &item.LockedAt, &item.SentAt)
 	if err == pgx.ErrNoRows {
 		return nil, nil
 	}
@@ -49,6 +55,11 @@ func (r *EmailCampaignQueueRepository) ClaimOne(ctx context.Context, staleBefore
 		return nil, err
 	}
 	item.Status = model.EmailCampaignQueueStatus(status)
+	if len(templateJSON) > 0 {
+		if err := json.Unmarshal(templateJSON, &item.TemplateSettings); err != nil {
+			return nil, err
+		}
+	}
 	return item, nil
 }
 

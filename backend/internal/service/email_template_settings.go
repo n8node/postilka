@@ -98,6 +98,16 @@ func normalizeEmailTemplateSettings(cfg model.EmailTemplateSettings) model.Email
 	if cfg.CommunityPromo.Subject == "" {
 		cfg.CommunityPromo = defaults.CommunityPromo
 	}
+	if cfg.CommunityPromo.LogoAlt == "" {
+		promo := defaults.CommunityPromo
+		promo.Subject = cfg.CommunityPromo.Subject
+		promo.Preheader = cfg.CommunityPromo.Preheader
+		promo.ContentHTML = cfg.CommunityPromo.ContentHTML
+		promo.CTALabel = cfg.CommunityPromo.CTALabel
+		promo.CTAURL = cfg.CommunityPromo.CTAURL
+		promo.SendIntervalSeconds = cfg.CommunityPromo.SendIntervalSeconds
+		cfg.CommunityPromo = promo
+	}
 	if cfg.CommunityPromo.SendIntervalSeconds < 1 {
 		cfg.CommunityPromo.SendIntervalSeconds = 5
 	}
@@ -165,6 +175,18 @@ func validateEmailTemplateSettings(cfg model.EmailTemplateSettings) error {
 
 func CommunityPromoEmailBody(cfg model.CommunityPromoTemplate) EmailBody {
 	return EmailBody{Preheader: cfg.Preheader, ContentHTML: cfg.ContentHTML, CTALabel: cfg.CTALabel, CTAURL: cfg.CTAURL}
+}
+
+func CommunityPromoEmailSettings(cfg model.CommunityPromoTemplate) model.EmailTemplateSettings {
+	return model.EmailTemplateSettings{
+		LogoURL: cfg.LogoURL, LogoAlt: cfg.LogoAlt, PrimaryColor: cfg.PrimaryColor,
+		BackgroundColor: cfg.BackgroundColor, CardRadiusPx: cfg.CardRadiusPx,
+		SignatureTitle: cfg.SignatureTitle, SignatureTeam: cfg.SignatureTeam,
+		FooterLinks: cfg.FooterLinks, SocialLinks: cfg.SocialLinks,
+		AppDownloadText: cfg.AppDownloadText, AppStoreURL: cfg.AppStoreURL,
+		GooglePlayURL: cfg.GooglePlayURL, FooterLegalText: cfg.FooterLegalText,
+		UnsubscribeText: cfg.UnsubscribeText, UnsubscribeURL: cfg.UnsubscribeURL,
+	}
 }
 
 func DefaultTestEmailBody() EmailBody {

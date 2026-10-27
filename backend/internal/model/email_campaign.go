@@ -22,6 +22,7 @@ type EmailCampaignQueueItem struct {
 	CTALabel            string
 	CTAURL              string
 	SendIntervalSeconds int
+	TemplateSettings    EmailTemplateSettings
 	Status              EmailCampaignQueueStatus
 	AttemptCount        int
 	NextAttemptAt       time.Time

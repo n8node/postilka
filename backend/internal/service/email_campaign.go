@@ -35,7 +35,7 @@ func (s *EmailCampaignService) EnqueueCommunityPromo(ctx context.Context, userID
 			return queued, skipped, err
 		}
 		next := time.Now().Add(time.Duration(queued*cfg.SendIntervalSeconds) * time.Second)
-		if err := s.queue.Enqueue(ctx, model.EmailCampaignQueueItem{CampaignType: CommunityPromoCampaignType, RecipientEmail: user.Email, RecipientName: user.Name, Subject: cfg.Subject, Preheader: cfg.Preheader, ContentHTML: cfg.ContentHTML, CTALabel: cfg.CTALabel, CTAURL: cfg.CTAURL, SendIntervalSeconds: cfg.SendIntervalSeconds}, next); err != nil {
+		if err := s.queue.Enqueue(ctx, model.EmailCampaignQueueItem{CampaignType: CommunityPromoCampaignType, RecipientEmail: user.Email, RecipientName: user.Name, Subject: cfg.Subject, Preheader: cfg.Preheader, ContentHTML: cfg.ContentHTML, CTALabel: cfg.CTALabel, CTAURL: cfg.CTAURL, SendIntervalSeconds: cfg.SendIntervalSeconds, TemplateSettings: CommunityPromoEmailSettings(cfg)}, next); err != nil {
 			return queued, skipped, err
 		}
 		queued++
@@ -48,7 +48,7 @@ func (s *EmailCampaignService) ProcessOne(ctx context.Context) (bool, error) {
 	if err != nil || item == nil {
 		return item != nil, err
 	}
-	err = s.email.Send(ctx, item.RecipientEmail, item.Subject, CommunityPromoEmailBody(model.CommunityPromoTemplate{Preheader: item.Preheader, ContentHTML: item.ContentHTML, CTALabel: item.CTALabel, CTAURL: item.CTAURL}))
+	err = s.email.SendWithSettings(ctx, item.RecipientEmail, item.Subject, item.TemplateSettings, EmailBody{Preheader: item.Preheader, ContentHTML: item.ContentHTML, CTALabel: item.CTALabel, CTAURL: item.CTAURL})
 	if err == nil {
 		return true, s.queue.MarkSent(ctx, item.ID)
 	}

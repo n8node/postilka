@@ -1654,6 +1654,21 @@ export type EmailTemplateSettings = {
 };
 
 export type CommunityPromoTemplate = {
+  logo_url: string;
+  logo_alt: string;
+  primary_color: string;
+  background_color: string;
+  card_radius_px: number;
+  signature_title: string;
+  signature_team: string;
+  footer_links: EmailFooterLink[];
+  social_links: EmailSocialLink[];
+  app_download_text: string;
+  app_store_url: string;
+  google_play_url: string;
+  footer_legal_text: string;
+  unsubscribe_text: string;
+  unsubscribe_url: string;
   subject: string;
   preheader: string;
   content_html: string;
@@ -1687,15 +1702,15 @@ export function updateAdminEmailTemplates(payload: EmailTemplateAdminUpdateReque
   });
 }
 
-export function sendAdminEmailTemplateTest(to: string) {
-  return apiFetch<EmailTemplateTestResult>("/admin/email-templates/test", {
+export function sendAdminEmailTemplateTest(to: string, template?: "community-promo") {
+  return apiFetch<EmailTemplateTestResult>(`/admin/email-templates/test${template ? "?template=community-promo" : ""}`, {
     method: "POST",
     body: JSON.stringify({ to }),
   });
 }
 
-export function adminEmailTemplatePreviewURL() {
-  return `${clientBase()}/admin/email-templates/preview`;
+export function adminEmailTemplatePreviewURL(template?: "community-promo") {
+  return `${clientBase()}/admin/email-templates/preview${template ? "?template=community-promo" : ""}`;
 }
 
 export type RobokassaAdminSettings = {

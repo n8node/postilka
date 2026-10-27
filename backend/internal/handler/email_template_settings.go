@@ -47,6 +47,19 @@ func (h *EmailTemplateSettingsHandler) UpdateAdmin(w http.ResponseWriter, r *htt
 }
 
 func (h *EmailTemplateSettingsHandler) Preview(w http.ResponseWriter, r *http.Request) {
+	settings, err := h.templates.GetEffective(r.Context())
+	if r.URL.Query().Get("template") == "community-promo" {
+		promo := settings.CommunityPromo
+		html, renderErr := h.email.RenderWithSettings(r.Context(), service.CommunityPromoEmailSettings(promo), service.CommunityPromoEmailBody(promo))
+		if renderErr != nil {
+			writeError(w, http.StatusInternalServerError, "Не удалось сформировать превью")
+			return
+		}
+		w.Header().Set("Content-Type", "text/html; charset=UTF-8")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(html))
+		return
+	}
 	html, err := h.email.Render(r.Context(), service.DefaultTestEmailBody())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Не удалось сформировать превью")
@@ -64,6 +77,21 @@ func (h *EmailTemplateSettingsHandler) SendTest(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	if r.URL.Query().Get("template") == "community-promo" {
+		settings, err := h.templates.GetEffective(r.Context())
+		if err != nil {
+			writeJSON(w, http.StatusOK, model.EmailTemplateTestResult{Message: service.MapEmailSendError(err)})
+			return
+		}
+		promo := settings.CommunityPromo
+		err = h.email.SendWithSettings(r.Context(), req.To, promo.Subject, service.CommunityPromoEmailSettings(promo), service.CommunityPromoEmailBody(promo))
+		if err != nil {
+			writeJSON(w, http.StatusOK, model.EmailTemplateTestResult{Message: service.MapEmailSendError(err)})
+			return
+		}
+		writeJSON(w, http.StatusOK, model.EmailTemplateTestResult{OK: true, Message: "Рекламное письмо отправлено"})
+		return
+	}
 	if err := h.email.SendTest(r.Context(), req.To); err != nil {
 		writeJSON(w, http.StatusOK, model.EmailTemplateTestResult{
 			OK:      false,
