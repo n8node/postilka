@@ -61,6 +61,17 @@ function sanitizeEmailHTML(value: string) {
   return doc.body.innerHTML;
 }
 
+function htmlForEditor(value: string) {
+  if (typeof window === "undefined") return value;
+  const doc = new DOMParser().parseFromString(value || "", "text/html");
+  const rows = Array.from(doc.querySelectorAll("tr"));
+  if (rows.length > 0) {
+    const cells = rows.flatMap((row) => Array.from(row.querySelectorAll("td,th")));
+    if (cells.length > 0) return cells.map((cell) => cell.innerHTML).join("");
+  }
+  return doc.body.innerHTML;
+}
+
 export function EmailRichEditor({ value, onChange, placeholder }: Props) {
   const editorRef = useRef<HTMLDivElement>(null);
   const rangeRef = useRef<Range | null>(null);
@@ -69,8 +80,10 @@ export function EmailRichEditor({ value, onChange, placeholder }: Props) {
 
   useEffect(() => {
     const editor = editorRef.current;
-    if (!editor || document.activeElement === editor || editor.innerHTML === value) return;
-    editor.innerHTML = value || "";
+    if (!editor || document.activeElement === editor) return;
+    const next = htmlForEditor(value);
+    if (editor.innerHTML === next) return;
+    editor.innerHTML = next;
     setHTMLValue(value);
   }, [value]);
 
@@ -120,7 +133,7 @@ export function EmailRichEditor({ value, onChange, placeholder }: Props) {
       setHTMLValue(sanitizeEmailHTML(editorRef.current?.innerHTML ?? ""));
     } else {
       const next = sanitizeEmailHTML(htmlValue);
-      if (editorRef.current) editorRef.current.innerHTML = next;
+      if (editorRef.current) editorRef.current.innerHTML = htmlForEditor(next);
       onChange(next);
     }
     setHTMLMode((current) => !current);

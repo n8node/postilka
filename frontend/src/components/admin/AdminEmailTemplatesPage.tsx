@@ -96,6 +96,7 @@ function CommunityPromoSection({
   setTestTo,
   testing,
   handleTestSend,
+  previewKey,
 }: {
   settings: EmailTemplateSettings;
   patch: (partial: Partial<EmailTemplateSettings>) => void;
@@ -103,6 +104,7 @@ function CommunityPromoSection({
   setTestTo: (value: string) => void;
   testing: boolean;
   handleTestSend: (template?: "community-promo") => Promise<void>;
+  previewKey: number;
 }) {
   const promo = settings.community_promo;
   const update = (partial: Partial<typeof promo>) =>
@@ -166,7 +168,7 @@ function CommunityPromoSection({
         {promo.social_links.map((link, index) => <div key={`promo-social-${index}`} className="grid gap-2 md:grid-cols-3"><input value={link.label} placeholder="Соцсеть" onChange={(e) => update({ social_links: promo.social_links.map((item, i) => i === index ? { ...item, label: e.target.value } : item) })} className="rounded-md border border-slate-200 px-3 py-2 text-sm" /><input value={link.url} placeholder="https://..." onChange={(e) => update({ social_links: promo.social_links.map((item, i) => i === index ? { ...item, url: e.target.value } : item) })} className="rounded-md border border-slate-200 px-3 py-2 text-sm" /><input value={link.icon_url} placeholder="URL иконки" onChange={(e) => update({ social_links: promo.social_links.map((item, i) => i === index ? { ...item, icon_url: e.target.value } : item) })} className="rounded-md border border-slate-200 px-3 py-2 text-sm" /></div>)}
       </div>
     </section>
-    <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900"><Eye className="h-4 w-4" />Превью рекламного письма</h2><iframe title="Превью рекламного письма" src={adminEmailTemplatePreviewURL("community-promo")} className="mt-3 h-[640px] w-full rounded-lg border border-slate-200 bg-white" /></section>
+    <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900"><Eye className="h-4 w-4" />Превью рекламного письма</h2><iframe key={previewKey} title="Превью рекламного письма" src={adminEmailTemplatePreviewURL("community-promo", previewKey)} className="mt-3 h-[640px] w-full rounded-lg border border-slate-200 bg-white" /></section>
     <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"><h2 className="flex items-center gap-2 text-sm font-semibold text-slate-900"><Send className="h-4 w-4" />Тестовая отправка рекламы</h2><div className="mt-3 flex max-w-xl gap-2"><input type="email" value={testTo} onChange={(e) => setTestTo(e.target.value)} placeholder="email для тестовой отправки" className="min-w-[200px] flex-1 rounded-md border border-slate-200 px-3 py-2 text-sm" /><button type="button" disabled={testing || !testTo.trim()} onClick={() => void handleTestSend("community-promo")} className="rounded-md border border-slate-200 px-4 py-2 text-sm disabled:opacity-50">{testing ? "Отправка…" : "Отправить"}</button></div></section>
     </div>
   );
@@ -330,7 +332,7 @@ export function AdminEmailTemplatesPage() {
           </aside>
           <div className="flex min-w-0 flex-1 flex-col">
             <div className="flex-1 space-y-4 overflow-y-auto p-6">
-              {selected === "community-promo" && <CommunityPromoSection settings={settings} patch={patch} testTo={testTo} setTestTo={setTestTo} testing={testing} handleTestSend={handleTestSend} />}
+              {selected === "community-promo" && <CommunityPromoSection settings={settings} patch={patch} testTo={testTo} setTestTo={setTestTo} testing={testing} handleTestSend={handleTestSend} previewKey={previewKey} />}
               {selected === "general" && <>
           <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <h2 className="text-sm font-semibold text-slate-900">Логотип</h2>

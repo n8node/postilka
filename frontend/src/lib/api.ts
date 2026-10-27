@@ -1709,8 +1709,12 @@ export function sendAdminEmailTemplateTest(to: string, template?: "community-pro
   });
 }
 
-export function adminEmailTemplatePreviewURL(template?: "community-promo") {
-  return `${clientBase()}/admin/email-templates/preview${template ? "?template=community-promo" : ""}`;
+export function adminEmailTemplatePreviewURL(template?: "community-promo", cacheBuster?: number) {
+  const params = new URLSearchParams();
+  if (template) params.set("template", template);
+  if (cacheBuster != null) params.set("v", String(cacheBuster));
+  const query = params.toString();
+  return `${clientBase()}/admin/email-templates/preview${query ? `?${query}` : ""}`;
 }
 
 export type RobokassaAdminSettings = {
