@@ -1650,6 +1650,16 @@ export type EmailTemplateSettings = {
   footer_legal_text: string;
   unsubscribe_text: string;
   unsubscribe_url: string;
+  community_promo: CommunityPromoTemplate;
+};
+
+export type CommunityPromoTemplate = {
+  subject: string;
+  preheader: string;
+  content_html: string;
+  cta_label: string;
+  cta_url: string;
+  send_interval_seconds: number;
 };
 
 export type EmailTemplateAdminView = {
@@ -3517,6 +3527,15 @@ export function reorderAdminGenerationNav(ids: string[]) {
   return apiFetch<{ ok: boolean }>("/admin/generation-nav/reorder", {
     method: "PUT",
     body: JSON.stringify({ ids }),
+  });
+}
+
+export type AdminCommunityPromoResult = { queued: number; skipped: number };
+
+export function sendAdminCommunityPromo(userIds: string[]) {
+  return apiFetch<AdminCommunityPromoResult>("/admin/users/send-community-promo", {
+    method: "POST",
+    body: JSON.stringify({ user_ids: userIds }),
   });
 }
 

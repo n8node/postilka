@@ -77,6 +77,7 @@ func (s *EmailTemplateSettingsService) Update(ctx context.Context, req model.Ema
 }
 
 func normalizeEmailTemplateSettings(cfg model.EmailTemplateSettings) model.EmailTemplateSettings {
+	defaults := model.DefaultEmailTemplateSettings()
 	cfg.LogoURL = strings.TrimSpace(cfg.LogoURL)
 	cfg.LogoAlt = strings.TrimSpace(cfg.LogoAlt)
 	cfg.PrimaryColor = strings.TrimSpace(cfg.PrimaryColor)
@@ -89,6 +90,20 @@ func normalizeEmailTemplateSettings(cfg model.EmailTemplateSettings) model.Email
 	cfg.FooterLegalText = strings.TrimSpace(cfg.FooterLegalText)
 	cfg.UnsubscribeText = strings.TrimSpace(cfg.UnsubscribeText)
 	cfg.UnsubscribeURL = strings.TrimSpace(cfg.UnsubscribeURL)
+	cfg.CommunityPromo.Subject = strings.TrimSpace(cfg.CommunityPromo.Subject)
+	cfg.CommunityPromo.Preheader = strings.TrimSpace(cfg.CommunityPromo.Preheader)
+	cfg.CommunityPromo.ContentHTML = strings.TrimSpace(cfg.CommunityPromo.ContentHTML)
+	cfg.CommunityPromo.CTALabel = strings.TrimSpace(cfg.CommunityPromo.CTALabel)
+	cfg.CommunityPromo.CTAURL = strings.TrimSpace(cfg.CommunityPromo.CTAURL)
+	if cfg.CommunityPromo.Subject == "" {
+		cfg.CommunityPromo = defaults.CommunityPromo
+	}
+	if cfg.CommunityPromo.SendIntervalSeconds < 1 {
+		cfg.CommunityPromo.SendIntervalSeconds = 5
+	}
+	if cfg.CommunityPromo.SendIntervalSeconds > 3600 {
+		cfg.CommunityPromo.SendIntervalSeconds = 3600
+	}
 
 	if cfg.LogoAlt == "" {
 		cfg.LogoAlt = "Postilka"
@@ -142,7 +157,14 @@ func validateEmailTemplateSettings(cfg model.EmailTemplateSettings) error {
 	if !hexColorRe.MatchString(cfg.BackgroundColor) {
 		return fmt.Errorf("%w: invalid background color", ErrInvalidEmailTemplateSettings)
 	}
+	if cfg.CommunityPromo.Subject == "" || cfg.CommunityPromo.ContentHTML == "" || cfg.CommunityPromo.CTALabel == "" || cfg.CommunityPromo.CTAURL == "" {
+		return fmt.Errorf("%w: community promo fields are required", ErrInvalidEmailTemplateSettings)
+	}
 	return nil
+}
+
+func CommunityPromoEmailBody(cfg model.CommunityPromoTemplate) EmailBody {
+	return EmailBody{Preheader: cfg.Preheader, ContentHTML: cfg.ContentHTML, CTALabel: cfg.CTALabel, CTAURL: cfg.CTAURL}
 }
 
 func DefaultTestEmailBody() EmailBody {

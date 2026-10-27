@@ -15,18 +15,28 @@ import (
 )
 
 type AdminHandler struct {
-	users         *repository.UserRepository
-	adminUsers    *service.AdminUserService
-	adminWallet   *service.AdminWalletService
-	plans         *service.PlanService
-	oauth         *service.OAuthLoginService
-	workspaces    *service.AdminWorkspaceService
-	files         *repository.WorkspaceFileRepository
-	folders       *repository.WorkspaceFolderRepository
-	posts         *repository.PostRepository
-	analytics     *repository.AdminAnalyticsRepository
-	genJobs       *repository.AIGenerationJobRepository
-	objectStorage *service.ObjectStorage
+	users          *repository.UserRepository
+	adminUsers     *service.AdminUserService
+	adminWallet    *service.AdminWalletService
+	plans          *service.PlanService
+	oauth          *service.OAuthLoginService
+	workspaces     *service.AdminWorkspaceService
+	files          *repository.WorkspaceFileRepository
+	folders        *repository.WorkspaceFolderRepository
+	posts          *repository.PostRepository
+	analytics      *repository.AdminAnalyticsRepository
+	genJobs        *repository.AIGenerationJobRepository
+	objectStorage  *service.ObjectStorage
+	emailCampaign  *service.EmailCampaignService
+	emailTemplates *service.EmailTemplateSettingsService
+}
+
+func (h *AdminHandler) SetEmailCampaign(campaign *service.EmailCampaignService) {
+	h.emailCampaign = campaign
+}
+
+func (h *AdminHandler) SetEmailTemplates(templates *service.EmailTemplateSettingsService) {
+	h.emailTemplates = templates
 }
 
 func (h *AdminHandler) SetGenerationJobs(repo *repository.AIGenerationJobRepository) {
@@ -180,6 +190,33 @@ func (h *AdminHandler) ResendUserVerification(w http.ResponseWriter, r *http.Req
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]int{"sent": sent, "skipped": skipped, "failed": failed})
+}
+
+func (h *AdminHandler) SendCommunityPromo(w http.ResponseWriter, r *http.Request) {
+	if h.emailCampaign == nil {
+		writeError(w, http.StatusServiceUnavailable, "Рассылка email не настроена")
+		return
+	}
+	var body resendVerificationBody
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || len(body.UserIDs) == 0 {
+		writeError(w, http.StatusBadRequest, "Выберите хотя бы одного пользователя")
+		return
+	}
+	if h.emailTemplates == nil {
+		writeError(w, http.StatusServiceUnavailable, "Шаблон рекламного письма не настроен")
+		return
+	}
+	cfg, err := h.emailTemplates.GetEffective(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось загрузить шаблон рекламного письма")
+		return
+	}
+	queued, skipped, err := h.emailCampaign.EnqueueCommunityPromo(r.Context(), body.UserIDs, cfg.CommunityPromo)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]int{"queued": queued, "skipped": skipped})
 }
 
 func (h *AdminHandler) ApproveUser(w http.ResponseWriter, r *http.Request) {

@@ -15,6 +15,7 @@ import {
   fetchAdminUserWorkspaces,
   fetchAdminUsers,
   resendAdminUserVerification,
+  sendAdminCommunityPromo,
   approveAdminUser,
   setAdminUserBlocked,
   type AdminUser,
@@ -107,8 +108,9 @@ export function AdminUsersPage() {
   const [sort, setSort] = useState<AdminUsersSort>("created_at");
   const [order, setOrder] = useState<"asc" | "desc">("desc");
   const [selectedPending, setSelectedPending] = useState<string[]>([]);
-  const [selectedForVerification, setSelectedForVerification] = useState<string[]>([]);
+  const [selectedForPromo, setSelectedForPromo] = useState<string[]>([]);
   const [resendingVerification, setResendingVerification] = useState(false);
+  const [sendingPromo, setSendingPromo] = useState(false);
   const [approving, setApproving] = useState(false);
   const [selected, setSelected] = useState<AdminUser | null>(null);
   const [grantUser, setGrantUser] = useState<AdminUser | null>(null);
@@ -198,13 +200,14 @@ export function AdminUsersPage() {
   }
 
   async function resendSelectedVerification() {
-    if (selectedForVerification.length === 0) return;
-    if (!window.confirm(`Отправить письмо для подтверждения ${selectedForVerification.length} пользователям?`)) return;
+    const ids = selectedForPromo.filter((id) => users.some((u) => u.id === id && !u.email_verified));
+    if (ids.length === 0) return;
+    if (!window.confirm(`Отправить письмо для подтверждения ${ids.length} пользователям?`)) return;
     setResendingVerification(true);
     setError(null);
     try {
-      const result = await resendAdminUserVerification(selectedForVerification);
-      setSelectedForVerification([]);
+      const result = await resendAdminUserVerification(ids);
+      setSelectedForPromo([]);
       await load();
       if (result.failed > 0 || result.skipped > 0) {
         setError(`Отправлено: ${result.sent}. Пропущено: ${result.skipped}. Ошибок: ${result.failed}.`);
@@ -214,6 +217,19 @@ export function AdminUsersPage() {
     } finally {
       setResendingVerification(false);
     }
+  }
+
+  async function sendSelectedPromo() {
+    if (selectedForPromo.length === 0) return;
+    if (!window.confirm(`Поставить рекламное письмо в очередь для ${selectedForPromo.length} пользователей?`)) return;
+    setSendingPromo(true); setError(null);
+    try {
+      const result = await sendAdminCommunityPromo(selectedForPromo);
+      setSelectedForPromo([]);
+      setError(`В очереди: ${result.queued}. Пропущено: ${result.skipped}.`);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : "Не удалось поставить рекламные письма в очередь");
+    } finally { setSendingPromo(false); }
   }
 
   useEffect(() => {
@@ -300,14 +316,14 @@ export function AdminUsersPage() {
             <option value="all">Все</option>
           </select>
         </label>
-        {selectedForVerification.length > 0 && (
-          <button
-            type="button"
-            disabled={resendingVerification}
-            onClick={() => void resendSelectedVerification()}
-            className="rounded-md bg-amber-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
-          >
-            {resendingVerification ? "Отправка…" : `Напомнить о подтверждении (${selectedForVerification.length})`}
+        {selectedForPromo.some((id) => users.some((u) => u.id === id && !u.email_verified)) && (
+          <button type="button" disabled={resendingVerification} onClick={() => void resendSelectedVerification()} className="rounded-md bg-amber-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50">
+            {resendingVerification ? "Отправка…" : "Напомнить о подтверждении"}
+          </button>
+        )}
+        {selectedForPromo.length > 0 && (
+          <button type="button" disabled={sendingPromo} onClick={() => void sendSelectedPromo()} className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50">
+            {sendingPromo ? "Постановка…" : `Реклама Telegram (${selectedForPromo.length})`}
           </button>
         )}
       </div>
@@ -364,12 +380,12 @@ export function AdminUsersPage() {
                     <td className="px-4 py-3">
                       <input
                         type="checkbox"
-                        checked={selectedForVerification.includes(u.id)}
-                        disabled={u.email_verified || u.is_blocked}
-                        onChange={(e) => setSelectedForVerification((prev) =>
+                        checked={selectedForPromo.includes(u.id)}
+                        disabled={u.is_blocked}
+                        onChange={(e) => setSelectedForPromo((prev) =>
                           e.target.checked ? [...prev, u.id] : prev.filter((id) => id !== u.id),
                         )}
-                        title={u.email_verified ? "Email уже подтверждён" : "Выбрать для отправки письма"}
+                        title={u.is_blocked ? "Заблокированный пользователь" : "Выбрать пользователя для рассылки"}
                         className="rounded border-slate-300"
                       />
                     </td>

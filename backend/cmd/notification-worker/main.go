@@ -52,6 +52,8 @@ func main() {
 	emailTemplateSettingsSvc := service.NewEmailTemplateSettingsService(emailTemplateSettingsRepo)
 	emailRenderer := service.NewEmailRenderer()
 	emailSvc := service.NewEmailService(mailSvc, emailTemplateSettingsSvc, emailRenderer)
+	emailCampaignRepo := repository.NewEmailCampaignQueueRepository(db.Pool)
+	emailCampaignSvc := service.NewEmailCampaignService(emailCampaignRepo, userRepo, emailSvc, logger)
 
 	// Сервисы для Telegram
 	telegramProviderSettingsRepo := repository.NewTelegramProviderSettingsRepository(db.Pool)
@@ -88,7 +90,7 @@ func main() {
 
 	// Запуск обработкиscheduled уведомлений
 	go func() {
-		ticker := time.NewTicker(30 * time.Second)
+		ticker := time.NewTicker(1 * time.Second)
 		defer ticker.Stop()
 
 		for {
@@ -102,6 +104,11 @@ func main() {
 				// Обработка scheduled уведомлений
 				if err := notificationSvc.ProcessScheduled(ctx); err != nil {
 					logger.Warn("notification worker scheduled process failed", "error", err)
+				}
+				if processed, err := emailCampaignSvc.ProcessOne(ctx); err != nil {
+					logger.Warn("email campaign process failed", "error", err)
+				} else if processed {
+					// The next queued item is scheduled with the configured campaign interval.
 				}
 			case <-workerCtx.Done():
 				logger.Info("notification worker scheduled loop stopped")

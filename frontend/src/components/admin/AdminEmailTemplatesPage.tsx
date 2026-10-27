@@ -38,6 +38,14 @@ const DEFAULT_SETTINGS: EmailTemplateSettings = {
     "Вы получили это письмо, потому что зарегистрировались в сервисе Postilka или подписались на рассылку.",
   unsubscribe_text: "Отписаться от рассылки",
   unsubscribe_url: "https://postilka.ru/app/settings",
+  community_promo: {
+    subject: "Postilka — присоединяйтесь к нашему Telegram-сообществу",
+    preheader: "Полезные материалы, новости и поддержка в Telegram",
+    content_html: "<tr><td style=\"padding:0 0 16px;font-size:16px;line-height:1.6;color:#334155;\">Присоединяйтесь к Telegram-сообществу Postilka: там мы публикуем новости сервиса, полезные материалы и отвечаем на вопросы пользователей.</td></tr>",
+    cta_label: "Перейти в Telegram",
+    cta_url: "https://t.me/postilka",
+    send_interval_seconds: 5,
+  },
 };
 
 function emptyFooterLink(): EmailFooterLink {
@@ -204,6 +212,19 @@ export function AdminEmailTemplatesPage() {
                 />
               </div>
             )}
+          </section>
+
+          <section className="rounded-xl border border-blue-200 bg-blue-50/40 p-4 shadow-sm">
+            <h2 className="text-sm font-semibold text-slate-900">Реклама Telegram-сообщества</h2>
+            <p className="mt-1 text-xs text-slate-500">Этот шаблон используется кнопкой массовой отправки в разделе пользователей.</p>
+            <div className="mt-3 grid gap-4 md:grid-cols-2">
+              <label className="block text-xs font-medium text-slate-500">Тема письма<input type="text" value={settings.community_promo.subject} onChange={(e) => patch({ community_promo: { ...settings.community_promo, subject: e.target.value } })} className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm" /></label>
+              <label className="block text-xs font-medium text-slate-500">Прехедер<input type="text" value={settings.community_promo.preheader} onChange={(e) => patch({ community_promo: { ...settings.community_promo, preheader: e.target.value } })} className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm" /></label>
+              <label className="block text-xs font-medium text-slate-500 md:col-span-2">HTML-содержимое письма<textarea rows={7} value={settings.community_promo.content_html} onChange={(e) => patch({ community_promo: { ...settings.community_promo, content_html: e.target.value } })} className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 font-mono text-xs" /></label>
+              <label className="block text-xs font-medium text-slate-500">Текст кнопки<input type="text" value={settings.community_promo.cta_label} onChange={(e) => patch({ community_promo: { ...settings.community_promo, cta_label: e.target.value } })} className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm" /></label>
+              <label className="block text-xs font-medium text-slate-500">URL кнопки<input type="url" value={settings.community_promo.cta_url} onChange={(e) => patch({ community_promo: { ...settings.community_promo, cta_url: e.target.value } })} className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm" /></label>
+              <label className="block text-xs font-medium text-slate-500">Пауза между письмами, секунд<input type="number" min={1} max={3600} value={settings.community_promo.send_interval_seconds} onChange={(e) => patch({ community_promo: { ...settings.community_promo, send_interval_seconds: Number(e.target.value) } })} className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm" /><span className="mt-1 block text-[11px] font-normal text-slate-400">По умолчанию: 5 секунд</span></label>
+            </div>
           </section>
 
           <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
