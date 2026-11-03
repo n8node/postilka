@@ -103,7 +103,8 @@ func main() {
 
 	// Сервисы для бэкапов
 	storageSettingsRepo := repository.NewStorageSettingsRepository(db.Pool)
-	storageSettingsSvc := service.NewStorageSettingsService(storageSettingsRepo, cfg)
+	storageProvidersRepo := repository.NewStorageProvidersRepository(db.Pool)
+	storageSettingsSvc := service.NewStorageSettingsService(storageSettingsRepo, storageProvidersRepo, cfg)
 	objectStorage := service.NewObjectStorage(storageSettingsSvc)
 	backupSvc := service.NewBackupService(backupRepo, objectStorage, cfg, logger)
 

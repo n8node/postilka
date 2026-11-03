@@ -35,7 +35,8 @@ func main() {
 	defer db.Close()
 
 	storageSettingsRepo := repository.NewStorageSettingsRepository(db.Pool)
-	storageSettingsSvc := service.NewStorageSettingsService(storageSettingsRepo, cfg)
+	storageProvidersRepo := repository.NewStorageProvidersRepository(db.Pool)
+	storageSettingsSvc := service.NewStorageSettingsService(storageSettingsRepo, storageProvidersRepo, cfg)
 	objectStorage := service.NewObjectStorage(storageSettingsSvc)
 	adStudioRepo := repository.NewAdStudioRepository(db.Pool)
 	settingsRepo := repository.NewSettingsRepository(db.Pool)

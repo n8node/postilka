@@ -18,12 +18,13 @@ import (
 var ErrInvalidStorageSettings = errors.New("invalid storage settings")
 
 type StorageSettingsService struct {
-	repo *repository.StorageSettingsRepository
-	cfg  *config.Config
+	repo      *repository.StorageSettingsRepository
+	providers *repository.StorageProvidersRepository
+	cfg       *config.Config
 }
 
-func NewStorageSettingsService(repo *repository.StorageSettingsRepository, cfg *config.Config) *StorageSettingsService {
-	return &StorageSettingsService{repo: repo, cfg: cfg}
+func NewStorageSettingsService(repo *repository.StorageSettingsRepository, providers *repository.StorageProvidersRepository, cfg *config.Config) *StorageSettingsService {
+	return &StorageSettingsService{repo: repo, providers: providers, cfg: cfg}
 }
 
 func (s *StorageSettingsService) GetStored(ctx context.Context) (*model.StorageSettingsRecord, error) {
@@ -39,11 +40,86 @@ func (s *StorageSettingsService) GetStored(ctx context.Context) (*model.StorageS
 }
 
 func (s *StorageSettingsService) GetEffective(ctx context.Context) (model.StorageSettings, error) {
+	if s.providers != nil {
+		items, err := s.providers.List(ctx)
+		if err == nil {
+			for _, item := range items {
+				if item.Enabled {
+					return model.StorageSettings{Endpoint: item.Endpoint, Bucket: item.Bucket, Region: item.Region, AccessKey: item.AccessKey, SecretKey: item.SecretKey, UseSSL: item.UseSSL, PathStyle: item.PathStyle, Enabled: true}, nil
+				}
+			}
+		}
+	}
 	rec, err := s.GetStored(ctx)
 	if err != nil {
 		return model.StorageSettings{}, err
 	}
 	return rec.Config, nil
+}
+
+func (s *StorageSettingsService) ListProviders(ctx context.Context) ([]*model.StorageProviderAdminView, error) {
+	items, err := s.providers.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]*model.StorageProviderAdminView, 0, len(items))
+	for i := range items {
+		out = append(out, s.providerView(&items[i]))
+	}
+	return out, nil
+}
+
+func (s *StorageSettingsService) SaveProvider(ctx context.Context, id string, req model.StorageProviderUpdateRequest) (*model.StorageProviderAdminView, error) {
+	if strings.TrimSpace(req.Name) == "" {
+		req.Name = "S3-провайдер"
+	}
+	if req.Enabled && (strings.TrimSpace(req.Endpoint) == "" || strings.TrimSpace(req.Bucket) == "" || strings.TrimSpace(req.AccessKey) == "") {
+		return nil, ErrInvalidStorageSettings
+	}
+	item, err := s.providers.Get(ctx, id)
+	if err != nil && !errors.Is(err, repository.ErrNotFound) {
+		return nil, err
+	}
+	secret := strings.TrimSpace(req.SecretKey)
+	if secret == "" && item != nil {
+		secret = item.SecretKey
+	}
+	if req.Region == "" {
+		req.Region = "ru-central1"
+	}
+	saved, err := s.providers.Save(ctx, id, req, secret)
+	if err != nil {
+		return nil, err
+	}
+	return s.providerView(saved), nil
+}
+
+func (s *StorageSettingsService) DeleteProvider(ctx context.Context, id string) error {
+	return s.providers.Delete(ctx, id)
+}
+
+func (s *StorageSettingsService) TestProvider(ctx context.Context, id string) (*model.StorageTestResult, error) {
+	item, err := s.providers.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if item.Endpoint == "" || item.Bucket == "" || item.AccessKey == "" || item.SecretKey == "" {
+		return &model.StorageTestResult{Message: "Заполните все параметры подключения"}, nil
+	}
+	client, err := newS3Client(model.StorageSettings{Endpoint: item.Endpoint, Region: item.Region, AccessKey: item.AccessKey, SecretKey: item.SecretKey, UseSSL: item.UseSSL, PathStyle: item.PathStyle})
+	if err != nil {
+		return &model.StorageTestResult{Message: err.Error()}, nil
+	}
+	_, err = client.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: aws.String(item.Bucket)})
+	if err != nil {
+		return &model.StorageTestResult{Message: "Не удалось подключиться к бакету: " + sanitizeS3Error(err)}, nil
+	}
+	return &model.StorageTestResult{OK: true, Message: fmt.Sprintf("Соединение успешно. Бакет «%s» доступен.", item.Bucket)}, nil
+}
+
+func (s *StorageSettingsService) providerView(item *model.StorageProvider) *model.StorageProviderAdminView {
+	origins := buildCORSOrigins(s.cfg.Domain, s.cfg.PublicAppURL)
+	return &model.StorageProviderAdminView{ID: item.ID, Name: item.Name, Endpoint: item.Endpoint, Bucket: item.Bucket, Region: item.Region, AccessKey: item.AccessKey, SecretKeySet: item.SecretKey != "", SecretKeyHint: maskSecret(item.SecretKey), UseSSL: item.UseSSL, PathStyle: item.PathStyle, Enabled: item.Enabled, CorsOrigins: origins, CorsXML: buildCORSXML(origins), UpdatedAt: item.UpdatedAt}
 }
 
 func (s *StorageSettingsService) GetAdminView(ctx context.Context) (*model.StorageAdminView, error) {

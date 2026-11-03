@@ -1789,6 +1789,9 @@ export type StorageAdminView = {
   updated_at?: string;
 };
 
+export type StorageProviderAdminView = StorageAdminView & { id: string; name: string };
+export type StorageProviderUpdateRequest = StorageAdminUpdateRequest & { name: string };
+
 export type StorageAdminUpdateRequest = {
   endpoint: string;
   bucket: string;
@@ -1821,6 +1824,19 @@ export function testAdminStorageConnection() {
     method: "POST",
     body: JSON.stringify({}),
   });
+}
+
+export function fetchAdminStorageProviders() {
+  return apiFetch<StorageProviderAdminView[]>("/admin/storage-providers");
+}
+export function saveAdminStorageProvider(id: string, payload: StorageProviderUpdateRequest) {
+  return apiFetch<StorageProviderAdminView>(`/admin/storage-providers/${id}`, { method: "PUT", body: JSON.stringify(payload) });
+}
+export function testAdminStorageProvider(id: string) {
+  return apiFetch<StorageTestResult>(`/admin/storage-providers/${id}/test`, { method: "POST", body: JSON.stringify({}) });
+}
+export function deleteAdminStorageProvider(id: string) {
+  return apiFetch<void>(`/admin/storage-providers/${id}`, { method: "DELETE" });
 }
 
 export type BackupFrequency = "daily" | "weekly";
