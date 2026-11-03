@@ -580,6 +580,7 @@ func transcodeTrendVideoTo960(data []byte, filename string) ([]byte, error) {
 	}
 	cmd := exec.Command("ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
 		"-i", inPath, "-map", "0:v:0", "-map", "0:a:0?",
+		"-t", "15",
 		"-vf", "scale=960:960:force_original_aspect_ratio=decrease,fps=30",
 		"-c:v", "libx264", "-preset", "medium", "-crf", "29",
 		"-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k",
