@@ -414,6 +414,12 @@ export function AdStudioPage({ catalog = "studio" }: { catalog?: AdStudioCatalog
       if (templateParam !== item.id) {
         router.replace(catalogHref(catalog, filter, item.id, mediaFilter), { scroll: false });
       }
+      window.setTimeout(() => {
+        const form = formRef.current;
+        if (!form) return;
+        const top = form.getBoundingClientRect().top + window.scrollY - 24;
+        window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+      }, 0);
     },
     [applyTemplate, catalog, filter, mediaFilter, router, templateParam],
   );
