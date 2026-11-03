@@ -237,6 +237,7 @@ func (s *AdStudioService) ImportUnpublishedVideoTrends(ctx context.Context, dir 
 		}
 		items = append(items, item)
 	}
+	fmt.Fprintf(os.Stderr, "[trends-video] подготовлено файлов: %d, исключено/пропущено при разборе: %d\n", len(items), out.Skipped)
 
 	existing, err := s.repo.List(ctx, model.AdStudioCatalogTrends, "", false)
 	if err != nil {
@@ -247,7 +248,11 @@ func (s *AdStudioService) ImportUnpublishedVideoTrends(ctx context.Context, dir 
 		byTitle[strings.ToLower(strings.TrimSpace(template.Title))] = template
 	}
 
-	for _, item := range items {
+	for index, item := range items {
+		progress := func(status string) {
+			percent := (index + 1) * 100 / len(items)
+			fmt.Fprintf(os.Stderr, "[trends-video] %d/%d (%d%%) %s | ok=%d created=%d skipped=%d failed=%d\n", index+1, len(items), percent, status, out.PreviewFilled, out.Created, out.Skipped, out.Failed)
+		}
 		if err := ctx.Err(); err != nil {
 			return out, err
 		}
@@ -255,6 +260,7 @@ func (s *AdStudioService) ImportUnpublishedVideoTrends(ctx context.Context, dir 
 		if found {
 			if strings.TrimSpace(current.PreviewS3Key) != "" {
 				out.Skipped++
+				progress("пропуск: preview уже есть")
 				continue
 			}
 			if dryRun {
@@ -262,6 +268,7 @@ func (s *AdStudioService) ImportUnpublishedVideoTrends(ctx context.Context, dir 
 				if err != nil {
 					out.Failed++
 					out.Errors = append(out.Errors, fmt.Sprintf("%s: optimize: %s", item.jsonName, err))
+					progress("ошибка оптимизации")
 					continue
 				}
 				_ = optimized
@@ -269,23 +276,27 @@ func (s *AdStudioService) ImportUnpublishedVideoTrends(ctx context.Context, dir 
 				out.OriginalBytes += originalBytes
 				out.OptimizedBytes += optimizedBytes
 				out.PreviewFilled++
+				progress("dry-run: оптимизация готова")
 				continue
 			}
 			optimized, originalBytes, optimizedBytes, err := optimizeTrendVideoFile(item.mediaPath, item.mediaName)
 			if err != nil {
 				out.Failed++
 				out.Errors = append(out.Errors, fmt.Sprintf("%s: optimize: %s", item.jsonName, err))
+				progress("ошибка оптимизации")
 				continue
 			}
 			if err := s.uploadTrendsImportPreviewBytes(ctx, current.ID, optimized, item.mediaName, "video/mp4"); err != nil {
 				out.Failed++
 				out.Errors = append(out.Errors, fmt.Sprintf("%s: preview: %s", item.jsonName, err))
+				progress("ошибка загрузки")
 				continue
 			}
 			out.Optimized++
 			out.OriginalBytes += originalBytes
 			out.OptimizedBytes += optimizedBytes
 			out.PreviewFilled++
+			progress("загружено в S3")
 			continue
 		}
 		if dryRun {
@@ -300,6 +311,7 @@ func (s *AdStudioService) ImportUnpublishedVideoTrends(ctx context.Context, dir 
 			out.OriginalBytes += originalBytes
 			out.OptimizedBytes += optimizedBytes
 			out.Created++
+			progress("dry-run: карточка будет создана")
 			continue
 		}
 		published := false
@@ -317,6 +329,7 @@ func (s *AdStudioService) ImportUnpublishedVideoTrends(ctx context.Context, dir 
 		if err != nil {
 			out.Failed++
 			out.Errors = append(out.Errors, fmt.Sprintf("%s: create: %s", item.jsonName, err))
+			progress("ошибка создания карточки")
 			continue
 		}
 		byTitle[strings.ToLower(item.title)] = model.AdStudioTemplate{ID: created.ID, Title: created.Title}
@@ -324,17 +337,20 @@ func (s *AdStudioService) ImportUnpublishedVideoTrends(ctx context.Context, dir 
 		if err != nil {
 			out.Failed++
 			out.Errors = append(out.Errors, fmt.Sprintf("%s: optimize: %s", item.jsonName, err))
+			progress("ошибка оптимизации")
 			continue
 		}
 		if err := s.uploadTrendsImportPreviewBytes(ctx, created.ID, optimized, item.mediaName, "video/mp4"); err != nil {
 			out.Failed++
 			out.Errors = append(out.Errors, fmt.Sprintf("%s: preview: %s", item.jsonName, err))
+			progress("ошибка загрузки")
 			continue
 		}
 		out.Optimized++
 		out.OriginalBytes += originalBytes
 		out.OptimizedBytes += optimizedBytes
 		out.Created++
+		progress("карточка создана и загружено в S3")
 	}
 	return out, nil
 }

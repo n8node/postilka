@@ -1,4 +1,4 @@
-.PHONY: up down prod prod-backend prod-backend-nocache prod-frontend prod-nginx verify-release migrate test lint logs logs-prod logs-prod-backend setup restore-latest psql wp-cli status create-superadmin import-trends restore-image-trends
+.PHONY: up down prod prod-backend prod-backend-nocache prod-frontend prod-nginx verify-release migrate test lint logs logs-prod logs-prod-backend setup restore-latest psql wp-cli status create-superadmin import-trends import-video-trends restore-image-trends
 
 COMPOSE := docker compose --env-file .env
 COMPOSE_PROD := $(COMPOSE) -f docker-compose.yml -f docker-compose.prod.yml
@@ -52,6 +52,9 @@ TRENDS_IMPORT_DIR ?= /data/trends-import
 TRENDS_IMPORT_KIND ?= all
 import-trends:
 	$(COMPOSE_PROD) exec -T backend /app/import-trends -dir "$(TRENDS_IMPORT_DIR)" -kind "$(TRENDS_IMPORT_KIND)"
+
+import-video-trends:
+	$(COMPOSE_PROD) exec -T backend /app/import-trends -dir "$(TRENDS_IMPORT_DIR)" -kind video
 
 # Restore media only for existing image trend templates; never creates or rewrites template prompts.
 IMAGE_TRENDS_IMPORT_DIR ?= /data/trends-import
