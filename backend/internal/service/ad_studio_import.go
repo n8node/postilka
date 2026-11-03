@@ -38,7 +38,82 @@ type syntxTrendImageMeta struct {
 	Categories []syntxTrendCategory `json:"categories"`
 	Files      struct {
 		PostilkaPreview string `json:"postilka_preview"`
+		KieSource       string `json:"kie_source"`
 	} `json:"files"`
+}
+
+// RestoreExistingImageTrendMedia restores only S3 media for existing trend
+// templates. It never creates templates and never updates prompts or settings.
+func (s *AdStudioService) RestoreExistingImageTrendMedia(ctx context.Context, dir string, dryRun bool) (TrendsImageImportResult, error) {
+	var out TrendsImageImportResult
+	root, err := filepath.Abs(strings.TrimSpace(dir))
+	if err != nil || strings.TrimSpace(dir) == "" {
+		return out, fmt.Errorf("import dir is required")
+	}
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return out, fmt.Errorf("read import dir: %w", err)
+	}
+	existing, err := s.repo.List(ctx, model.AdStudioCatalogTrends, "", false)
+	if err != nil {
+		return out, err
+	}
+	byTitle := make(map[string]model.AdStudioTemplate, len(existing))
+	for _, item := range existing {
+		byTitle[strings.ToLower(strings.TrimSpace(item.Title))] = item
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.EqualFold(filepath.Ext(entry.Name()), ".json") {
+			continue
+		}
+		var meta syntxTrendImageMeta
+		raw, readErr := os.ReadFile(filepath.Join(root, entry.Name()))
+		if readErr != nil {
+			out.Failed++
+			out.Errors = append(out.Errors, fmt.Sprintf("%s: %s", entry.Name(), readErr))
+			continue
+		}
+		if err := json.Unmarshal(raw, &meta); err != nil {
+			out.Failed++
+			out.Errors = append(out.Errors, fmt.Sprintf("%s: invalid json: %s", entry.Name(), err))
+			continue
+		}
+		if kind := strings.ToLower(strings.TrimSpace(meta.GenerationType)); kind != "" && kind != "image" {
+			continue
+		}
+		template, found := byTitle[strings.ToLower(strings.TrimSpace(meta.Title))]
+		if !found {
+			out.Skipped++
+			out.Errors = append(out.Errors, fmt.Sprintf("%s: existing template not found: %s", entry.Name(), meta.Title))
+			continue
+		}
+		kieRel := strings.TrimSpace(meta.Files.KieSource)
+		if kieRel == "" {
+			kieRel = filepath.ToSlash(filepath.Join("kie-source", strings.TrimSuffix(entry.Name(), filepath.Ext(entry.Name()))+".webp"))
+		}
+		kiePath := filepath.Join(root, filepath.FromSlash(kieRel))
+		data, readErr := os.ReadFile(kiePath)
+		if readErr != nil {
+			out.Failed++
+			out.Errors = append(out.Errors, fmt.Sprintf("%s: kie source: %s", entry.Name(), readErr))
+			continue
+		}
+		out.OriginalBytes += int64(len(data))
+		if dryRun {
+			out.PreviewFilled++
+			continue
+		}
+		if _, uploadErr := s.UploadPreviewFromBytes(ctx, template.ID, data, filepath.Base(kiePath), "image/webp"); uploadErr != nil {
+			out.Failed++
+			out.Errors = append(out.Errors, fmt.Sprintf("%s: restore template %s: %s", entry.Name(), template.ID, uploadErr))
+			continue
+		}
+		out.PreviewFilled++
+		out.Optimized++
+		out.OptimizedBytes += int64(len(data))
+	}
+	return out, nil
 }
 
 type syntxTrendVideoMeta struct {
@@ -61,13 +136,14 @@ type syntxTrendCategory struct {
 }
 
 type trendsImageImportItem struct {
-	jsonName    string
-	title       string
-	category    string
-	ratio       string
-	prompt      string
-	previewPath string
-	sortOrder   int
+	jsonName      string
+	title         string
+	category      string
+	ratio         string
+	prompt        string
+	previewPath   string
+	kieSourcePath string
+	sortOrder     int
 }
 
 type trendsVideoImportItem struct {
@@ -515,13 +591,14 @@ func parseTrendsImageImportFile(root, name string, usedTitles map[string]bool) (
 	}
 	title := uniqueTrendsImportTitle(meta.Title, meta.Slug, meta.ID, usedTitles)
 	return trendsImageImportItem{
-		jsonName:    name,
-		title:       title,
-		ratio:       ratio,
-		prompt:      prompt,
-		category:    category,
-		previewPath: previewPath,
-		sortOrder:   trendsImportSortOrder(name),
+		jsonName:      name,
+		title:         title,
+		ratio:         ratio,
+		prompt:        prompt,
+		category:      category,
+		previewPath:   previewPath,
+		kieSourcePath: filepath.Join(root, filepath.FromSlash(strings.TrimSpace(meta.Files.KieSource))),
+		sortOrder:     trendsImportSortOrder(name),
 	}, false, nil
 }
 

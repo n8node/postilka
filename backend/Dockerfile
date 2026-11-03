@@ -23,6 +23,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /maintenance-worker ./
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /backup-worker ./cmd/backup-worker
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /create-superadmin ./cmd/create-superadmin
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /import-trends ./cmd/import-trends
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /restore-image-trends ./cmd/restore-image-trends
 RUN CGO_ENABLED=0 GOOS=linux GOBIN=/go/bin go install github.com/pressly/goose/v3/cmd/goose@v3.24.1
 
 FROM alpine:3.20
@@ -46,6 +47,7 @@ COPY --from=builder /maintenance-worker /app/maintenance-worker
 COPY --from=builder /backup-worker /app/backup-worker
 COPY --from=builder /create-superadmin /app/create-superadmin
 COPY --from=builder /import-trends /app/import-trends
+COPY --from=builder /restore-image-trends /app/restore-image-trends
 COPY --from=builder /go/bin/goose /usr/local/bin/goose
 COPY migrations ./migrations
 
