@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"image"
 	"image/draw"
 	"image/png"
@@ -13,7 +12,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/google/uuid"
 	"github.com/postilka/postilka/internal/model"
 	"github.com/postilka/postilka/internal/repository"
 )
@@ -24,17 +22,18 @@ const (
 )
 
 var (
-	ErrProviderLogoInvalid = errors.New("provider logo invalid")
+	ErrProviderLogoInvalid  = errors.New("provider logo invalid")
 	ErrProviderLogoNotFound = errors.New("provider logo not found")
 )
 
 type ProviderLogoService struct {
 	repo  *repository.ProviderLogoRepository
 	store *ObjectStorage
+	local *LocalMediaStore
 }
 
-func NewProviderLogoService(repo *repository.ProviderLogoRepository, store *ObjectStorage) *ProviderLogoService {
-	return &ProviderLogoService{repo: repo, store: store}
+func NewProviderLogoService(repo *repository.ProviderLogoRepository, store *ObjectStorage, local *LocalMediaStore) *ProviderLogoService {
+	return &ProviderLogoService{repo: repo, store: store, local: local}
 }
 
 func (s *ProviderLogoService) ListViews(ctx context.Context) ([]model.ProviderLogoView, error) {
@@ -117,17 +116,20 @@ func (s *ProviderLogoService) Upload(
 		return nil, err
 	}
 
-	key := fmt.Sprintf("postilka/provider-logos/%s/%s.png", provider, uuid.NewString())
-	if err := s.store.PutObject(ctx, key, "image/png", normalized); err != nil {
+	key, err := s.local.Put(ctx, "provider-logos", string(provider), ".png", normalized)
+	if err != nil {
 		return nil, err
 	}
 	rec, err := s.repo.Upsert(ctx, provider, key)
 	if err != nil {
-		_ = s.store.DeleteObject(ctx, key)
+		_ = s.local.Delete(key)
 		return nil, err
 	}
 	if prev != nil && prev.S3Key != "" && prev.S3Key != key {
-		_ = s.store.DeleteObject(ctx, prev.S3Key)
+		_ = s.local.Delete(prev.S3Key)
+		if !IsLocalMediaKey(prev.S3Key) {
+			_ = s.store.DeleteObject(ctx, prev.S3Key)
+		}
 	}
 	return &model.ProviderLogoView{
 		Provider:  rec.Provider,
@@ -145,7 +147,10 @@ func (s *ProviderLogoService) Delete(ctx context.Context, provider model.Provide
 		return err
 	}
 	if key != "" {
-		_ = s.store.DeleteObject(ctx, key)
+		_ = s.local.Delete(key)
+		if !IsLocalMediaKey(key) {
+			_ = s.store.DeleteObject(ctx, key)
+		}
 	}
 	return nil
 }
@@ -158,7 +163,18 @@ func (s *ProviderLogoService) Fetch(ctx context.Context, provider model.Provider
 		}
 		return nil, "", err
 	}
-	body, contentType, err := s.store.GetObject(ctx, rec.S3Key)
+	var body io.ReadCloser
+	var contentType string
+	if IsLocalMediaKey(rec.S3Key) {
+		f, info, openErr := s.local.Open(rec.S3Key)
+		if openErr != nil {
+			return nil, "", ErrProviderLogoNotFound
+		}
+		body = f
+		contentType = contentTypeFromLocalPath(info.Name())
+	} else {
+		body, contentType, err = s.store.GetObject(ctx, rec.S3Key)
+	}
 	if err != nil {
 		return nil, "", ErrProviderLogoNotFound
 	}

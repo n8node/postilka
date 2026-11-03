@@ -125,7 +125,8 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	fileStorageRepo := repository.NewWorkspaceFileRepository(db.Pool)
 	objectStorage := service.NewObjectStorage(storageSettingsSvc)
 	authScreenRepo := repository.NewAuthScreenRepository(db.Pool)
-	authScreenSvc := service.NewAuthScreenService(authScreenRepo, objectStorage)
+	localMedia := service.NewLocalMediaStore()
+	authScreenSvc := service.NewAuthScreenService(authScreenRepo, objectStorage, localMedia)
 	authScreenHandler := handler.NewAuthScreenHandler(authScreenSvc)
 	postRepo := repository.NewPostRepository(db.Pool)
 	linkCodeRepo := repository.NewLinkCodeRepository(db.Pool)
@@ -146,7 +147,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	wsInviteRepo := repository.NewWorkspaceInviteRepository(db.Pool)
 	wsInviteSvc := service.NewWorkspaceInviteService(wsInviteRepo, wsRepo, userRepo, wsSvc, txEmailSvc, cfg, logger)
 
-	userAvatarSvc := service.NewUserAvatarService(userRepo, objectStorage)
+	userAvatarSvc := service.NewUserAvatarService(userRepo, objectStorage, localMedia)
 	authSvc := service.NewAuthService(userRepo, wsRepo, planRepo, inviteSvc, wsInviteSvc, db.Pool, authMW, emailVerificationSvc, passwordResetSvc, telegramSvc)
 	emailVerificationSvc.BindTelegram(telegramSvc)
 
@@ -192,7 +193,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	telegramProviderHandler := handler.NewTelegramProviderSettingsHandler(telegramProviderSettingsSvc)
 	youtubeProviderHandler := handler.NewYouTubeProviderSettingsHandler(youtubeProviderSettingsSvc)
 	providerLogoRepo := repository.NewProviderLogoRepository(db.Pool)
-	providerLogoSvc := service.NewProviderLogoService(providerLogoRepo, objectStorage)
+	providerLogoSvc := service.NewProviderLogoService(providerLogoRepo, objectStorage, localMedia)
 	socialProviderHandler := handler.NewSocialProviderSettingsHandler(socialProviderSettingsSvc, providerLogoSvc)
 	maxPlatformBotHandler := handler.NewMAXPlatformBotHandler(socialProviderSettingsSvc, secretCipher)
 	yandexGptConfigRepo := repository.NewYandexGptConfigRepository(db.Pool)
@@ -274,7 +275,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	adStudioSvc := service.NewAdStudioService(adStudioRepo, adStudioPromptsRepo, settingsRepo, generationSvc, objectStorage)
 	adStudioHandler := handler.NewAdStudioHandler(adStudioSvc)
 	sketchStyleRepo := repository.NewSketchStyleRepository(db.Pool)
-	sketchSvc := service.NewSketchService(sketchStyleRepo, generationSvc, objectStorage)
+	sketchSvc := service.NewSketchService(sketchStyleRepo, generationSvc, objectStorage, localMedia)
 	sketchHandler := handler.NewSketchHandler(sketchSvc)
 	generationNavRepo := repository.NewGenerationNavRepository(db.Pool)
 	generationNavSvc := service.NewGenerationNavService(generationNavRepo, objectStorage)
@@ -319,9 +320,11 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 
 	r.Get("/health", health.ServeHTTP)
 	r.Get("/metrics", metricsHandler.ServeHTTP)
+	localMediaHandler := handler.NewLocalMediaHandler(localMedia)
 	r.Get("/go/{code}", linkRedirectHandler.Redirect)
 
 	r.Route("/api/v1", func(r chi.Router) {
+		r.With(authMW.Required).Get("/local-media/*", localMediaHandler.Serve)
 		r.Get("/health", health.ServeHTTP)
 		r.Get("/metrics", metricsHandler.ServeHTTP)
 		r.Get("/status", status.ServeHTTP)

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
@@ -28,14 +27,16 @@ type SketchService struct {
 	repo        *repository.SketchStyleRepository
 	generation  *GenerationService
 	objectStore *ObjectStorage
+	local       *LocalMediaStore
 }
 
 func NewSketchService(
 	repo *repository.SketchStyleRepository,
 	generation *GenerationService,
-	objectStore *ObjectStorage,
+	objectStorage *ObjectStorage,
+	local *LocalMediaStore,
 ) *SketchService {
-	return &SketchService{repo: repo, generation: generation, objectStore: objectStore}
+	return &SketchService{repo: repo, generation: generation, objectStore: objectStorage, local: local}
 }
 
 func (s *SketchService) ListPublic(ctx context.Context) ([]model.SketchStylePublicView, error) {
@@ -117,6 +118,9 @@ func (s *SketchService) PreviewPresignedURL(ctx context.Context, id string, publ
 	if key == "" {
 		return "", repository.ErrNotFound
 	}
+	if IsLocalMediaKey(key) {
+		return localMediaURL(key), nil
+	}
 	return s.objectStore.PresignGetWithOptions(ctx, key, PresignGetOptions{
 		Expires:      time.Hour,
 		Inline:       true,
@@ -160,17 +164,20 @@ func (s *SketchService) UploadPreviewAdmin(ctx context.Context, id string, file 
 	case "image/webp":
 		ext = ".webp"
 	}
-	key := fmt.Sprintf("postilka/sketch-styles/%s/preview%s", item.ID, ext)
-	if err := s.objectStore.PutObject(ctx, key, contentType, data); err != nil {
+	key, err := s.local.Put(ctx, "sketch-styles", item.ID, ext, data)
+	if err != nil {
 		return err
 	}
 	oldKey := strings.TrimSpace(item.PreviewS3Key)
 	if err := s.repo.UpdatePreview(ctx, id, key, contentType); err != nil {
-		_ = s.objectStore.DeleteObject(ctx, key)
+		_ = s.local.Delete(key)
 		return err
 	}
 	if oldKey != "" && oldKey != key {
-		_ = s.objectStore.DeleteObject(ctx, oldKey)
+		_ = s.local.Delete(oldKey)
+		if !IsLocalMediaKey(oldKey) {
+			_ = s.objectStore.DeleteObject(ctx, oldKey)
+		}
 	}
 	return nil
 }

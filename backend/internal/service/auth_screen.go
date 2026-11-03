@@ -12,7 +12,6 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/google/uuid"
 	"github.com/postilka/postilka/internal/model"
 	"github.com/postilka/postilka/internal/repository"
 )
@@ -35,10 +34,11 @@ var (
 type AuthScreenService struct {
 	repo  *repository.AuthScreenRepository
 	store *ObjectStorage
+	local *LocalMediaStore
 }
 
-func NewAuthScreenService(repo *repository.AuthScreenRepository, store *ObjectStorage) *AuthScreenService {
-	return &AuthScreenService{repo: repo, store: store}
+func NewAuthScreenService(repo *repository.AuthScreenRepository, store *ObjectStorage, local *LocalMediaStore) *AuthScreenService {
+	return &AuthScreenService{repo: repo, store: store, local: local}
 }
 
 func (s *AuthScreenService) PublicView(ctx context.Context) (model.AuthScreenSettings, error) {
@@ -135,16 +135,19 @@ func (s *AuthScreenService) UploadLogo(ctx context.Context, file multipart.File,
 	if err != nil && !errors.Is(err, repository.ErrNotFound) {
 		return nil, err
 	}
-	key := fmt.Sprintf("postilka/auth-screen/logo/%s%s", uuid.NewString(), authScreenExtension(contentType))
-	if err := s.store.PutObjectWithCacheControl(ctx, key, contentType, "public, max-age=300", data); err != nil {
+	key, err := s.local.Put(ctx, "auth", "logo", authScreenExtension(contentType), data)
+	if err != nil {
 		return nil, err
 	}
 	if _, err := s.repo.UpdateLogo(ctx, key, contentType); err != nil {
-		_ = s.store.DeleteObject(ctx, key)
+		_ = s.local.Delete(key)
 		return nil, err
 	}
 	if previous.LogoS3Key != "" && previous.LogoS3Key != key {
-		_ = s.store.DeleteObject(ctx, previous.LogoS3Key)
+		_ = s.local.Delete(previous.LogoS3Key)
+		if !IsLocalMediaKey(previous.LogoS3Key) {
+			_ = s.store.DeleteObject(ctx, previous.LogoS3Key)
+		}
 	}
 	view, err := s.AdminView(ctx)
 	if err != nil {
@@ -162,7 +165,10 @@ func (s *AuthScreenService) DeleteLogo(ctx context.Context) error {
 		return err
 	}
 	if previous.LogoS3Key != "" {
-		_ = s.store.DeleteObject(ctx, previous.LogoS3Key)
+		_ = s.local.Delete(previous.LogoS3Key)
+		if !IsLocalMediaKey(previous.LogoS3Key) {
+			_ = s.store.DeleteObject(ctx, previous.LogoS3Key)
+		}
 	}
 	return nil
 }
@@ -198,16 +204,19 @@ func (s *AuthScreenService) UploadSlideMedia(
 	if err != nil {
 		return nil, err
 	}
-	key := fmt.Sprintf("postilka/auth-screen/slides/%d/%s%s", slot, uuid.NewString(), authScreenExtension(contentType))
-	if err := s.store.PutObjectWithCacheControl(ctx, key, contentType, "public, max-age=300", data); err != nil {
+	key, err := s.local.Put(ctx, "auth-slides", fmt.Sprintf("%d", slot), authScreenExtension(contentType), data)
+	if err != nil {
 		return nil, err
 	}
 	if _, err := s.repo.UpdateSlideMedia(ctx, slot, kind, key, contentType); err != nil {
-		_ = s.store.DeleteObject(ctx, key)
+		_ = s.local.Delete(key)
 		return nil, err
 	}
 	if previous.MediaS3Key != "" && previous.MediaS3Key != key {
-		_ = s.store.DeleteObject(ctx, previous.MediaS3Key)
+		_ = s.local.Delete(previous.MediaS3Key)
+		if !IsLocalMediaKey(previous.MediaS3Key) {
+			_ = s.store.DeleteObject(ctx, previous.MediaS3Key)
+		}
 	}
 	view, err := s.AdminView(ctx)
 	if err != nil {
@@ -231,7 +240,10 @@ func (s *AuthScreenService) DeleteSlideMedia(ctx context.Context, slot int) erro
 		return err
 	}
 	if previous.MediaS3Key != "" {
-		_ = s.store.DeleteObject(ctx, previous.MediaS3Key)
+		_ = s.local.Delete(previous.MediaS3Key)
+		if !IsLocalMediaKey(previous.MediaS3Key) {
+			_ = s.store.DeleteObject(ctx, previous.MediaS3Key)
+		}
 	}
 	return nil
 }
@@ -275,6 +287,13 @@ func (s *AuthScreenService) OpenSlideMedia(ctx context.Context, slot int, rangeH
 }
 
 func (s *AuthScreenService) openObject(ctx context.Context, key, rangeHeader string) (*ObjectReadResult, error) {
+	if IsLocalMediaKey(key) {
+		f, info, err := s.local.Open(key)
+		if err != nil {
+			return nil, ErrAuthScreenNotFound
+		}
+		return &ObjectReadResult{Body: f, ContentType: contentTypeFromLocalPath(info.Name()), ContentLength: info.Size()}, nil
+	}
 	result, err := s.store.GetObjectWithRange(ctx, key, rangeHeader)
 	if err != nil {
 		return nil, ErrAuthScreenNotFound

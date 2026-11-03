@@ -57,6 +57,10 @@ func (h *SketchHandler) PreviewStyle(w http.ResponseWriter, r *http.Request) {
 		h.mapError(w, err)
 		return
 	}
+	if strings.HasPrefix(url, "/api/v1/local-media/") {
+		http.Redirect(w, r, "/app"+url, http.StatusTemporaryRedirect)
+		return
+	}
 	redirectPresignedObject(w, r, url)
 }
 

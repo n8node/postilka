@@ -1,3 +1,5 @@
+.local-media/
+local-media/
 .env
 .env.local
 .env.*.local

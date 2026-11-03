@@ -3,14 +3,12 @@ package service
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"path"
 	"strings"
 
-	"github.com/google/uuid"
 	"github.com/postilka/postilka/internal/model"
 	"github.com/postilka/postilka/internal/repository"
 )
@@ -25,10 +23,11 @@ const maxUserAvatarSize = 5 << 20
 type UserAvatarService struct {
 	users *repository.UserRepository
 	store *ObjectStorage
+	local *LocalMediaStore
 }
 
-func NewUserAvatarService(users *repository.UserRepository, store *ObjectStorage) *UserAvatarService {
-	return &UserAvatarService{users: users, store: store}
+func NewUserAvatarService(users *repository.UserRepository, store *ObjectStorage, local *LocalMediaStore) *UserAvatarService {
+	return &UserAvatarService{users: users, store: store, local: local}
 }
 
 func (s *UserAvatarService) Upload(
@@ -78,19 +77,22 @@ func (s *UserAvatarService) Upload(
 		return nil, err
 	}
 
-	key := fmt.Sprintf("postilka/user-avatars/%s/%s%s", userID, uuid.NewString(), ext)
-	if err := s.store.PutObject(ctx, key, contentType, data); err != nil {
+	key, err := s.local.Put(ctx, "user-avatars", userID, ext, data)
+	if err != nil {
 		return nil, err
 	}
 
 	user, err := s.users.UpdateAvatarS3Key(ctx, userID, &key)
 	if err != nil {
-		_ = s.store.DeleteObject(ctx, key)
+		_ = s.local.Delete(key)
 		return nil, err
 	}
 
 	if prevKey != "" && prevKey != key {
-		_ = s.store.DeleteObject(ctx, prevKey)
+		_ = s.local.Delete(prevKey)
+		if !IsLocalMediaKey(prevKey) {
+			_ = s.store.DeleteObject(ctx, prevKey)
+		}
 	}
 	return user, nil
 }
@@ -107,7 +109,10 @@ func (s *UserAvatarService) Delete(ctx context.Context, userID string) (*model.U
 	}
 
 	if prevKey != "" {
-		_ = s.store.DeleteObject(ctx, prevKey)
+		_ = s.local.Delete(prevKey)
+		if !IsLocalMediaKey(prevKey) {
+			_ = s.store.DeleteObject(ctx, prevKey)
+		}
 	}
 	return user, nil
 }
@@ -121,7 +126,18 @@ func (s *UserAvatarService) Fetch(ctx context.Context, userID string) ([]byte, s
 		return nil, "", ErrUserAvatarNotFound
 	}
 
-	body, contentType, err := s.store.GetObject(ctx, key)
+	var body io.ReadCloser
+	var contentType string
+	if IsLocalMediaKey(key) {
+		f, info, openErr := s.local.Open(key)
+		if openErr != nil {
+			return nil, "", ErrUserAvatarNotFound
+		}
+		body = f
+		contentType = contentTypeFromLocalPath(info.Name())
+	} else {
+		body, contentType, err = s.store.GetObject(ctx, key)
+	}
 	if err != nil {
 		return nil, "", ErrUserAvatarNotFound
 	}

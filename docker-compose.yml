@@ -31,6 +31,7 @@ services:
         condition: service_healthy
     volumes:
       - ./trends-import:/data/trends-import:ro
+      - ./local-media:/var/lib/postilka/local-media
     init: true
     stop_grace_period: 30s
     healthcheck:
@@ -53,6 +54,7 @@ services:
       BACKUP_DIR: /var/lib/postilka/backups
       BACKUP_SRC_DIR: /var/lib/postilka/src
     volumes:
+      - ./local-media:/var/lib/postilka/local-media
       - ./backups:/var/lib/postilka/backups
       - ./.env:/var/lib/postilka/src/dotenv:ro
       - ./nginx/ssl:/var/lib/postilka/src/ssl:ro
