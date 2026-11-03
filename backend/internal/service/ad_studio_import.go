@@ -258,7 +258,13 @@ func (s *AdStudioService) ImportUnpublishedVideoTrends(ctx context.Context, dir 
 		}
 		current, found := byTitle[strings.ToLower(item.title)]
 		if found {
-			if strings.TrimSpace(current.PreviewS3Key) != "" {
+			mediaReady := false
+			if strings.TrimSpace(current.PreviewS3Key) != "" && strings.TrimSpace(current.PreviewThumbS3Key) != "" {
+				_, videoErr := s.objectStore.HeadObject(ctx, current.PreviewS3Key)
+				_, thumbErr := s.objectStore.HeadObject(ctx, current.PreviewThumbS3Key)
+				mediaReady = videoErr == nil && thumbErr == nil
+			}
+			if mediaReady {
 				out.Skipped++
 				progress("пропуск: preview уже есть")
 				continue
