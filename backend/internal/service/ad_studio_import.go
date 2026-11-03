@@ -88,16 +88,12 @@ func (s *AdStudioService) RestoreExistingImageTrendMedia(ctx context.Context, di
 			out.Errors = append(out.Errors, fmt.Sprintf("%s: existing template not found: %s", entry.Name(), meta.Title))
 			continue
 		}
-		kieRel := strings.TrimSpace(meta.Files.KieSource)
-		if kieRel == "" {
-			// Older imports contain only postilka-preview/ next to the JSON files.
-			// It is still a valid image source for restoring the existing card.
-			kieRel = strings.TrimSpace(meta.Files.PostilkaPreview)
+		kiePath, readErr := resolveExistingImageRestoreFile(root, entry.Name(), meta.Files.KieSource, meta.Files.PostilkaPreview)
+		if readErr != nil {
+			out.Failed++
+			out.Errors = append(out.Errors, fmt.Sprintf("%s: image source: %s", entry.Name(), readErr))
+			continue
 		}
-		if kieRel == "" {
-			kieRel = filepath.ToSlash(filepath.Join("kie-source", strings.TrimSuffix(entry.Name(), filepath.Ext(entry.Name()))+".webp"))
-		}
-		kiePath := filepath.Join(root, filepath.FromSlash(kieRel))
 		data, readErr := os.ReadFile(kiePath)
 		if readErr != nil {
 			out.Failed++
@@ -119,6 +115,32 @@ func (s *AdStudioService) RestoreExistingImageTrendMedia(ctx context.Context, di
 		out.OptimizedBytes += int64(len(data))
 	}
 	return out, nil
+}
+
+func resolveExistingImageRestoreFile(root, jsonName, kieSource, preview string) (string, error) {
+	base := strings.TrimSuffix(jsonName, filepath.Ext(jsonName)) + ".webp"
+	candidates := []string{
+		strings.TrimSpace(kieSource),
+		strings.TrimSpace(preview),
+		filepath.ToSlash(filepath.Join("kie-source", base)),
+		filepath.ToSlash(filepath.Join("postilka-preview", base)),
+	}
+	seen := map[string]struct{}{}
+	for _, rel := range candidates {
+		if rel == "" {
+			continue
+		}
+		rel = filepath.Clean(filepath.FromSlash(rel))
+		if _, ok := seen[rel]; ok {
+			continue
+		}
+		seen[rel] = struct{}{}
+		path := filepath.Join(root, rel)
+		if info, err := os.Stat(path); err == nil && !info.IsDir() {
+			return path, nil
+		}
+	}
+	return "", fmt.Errorf("no existing image file (checked kie-source and postilka-preview)")
 }
 
 type syntxTrendVideoMeta struct {
