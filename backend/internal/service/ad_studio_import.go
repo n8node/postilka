@@ -90,6 +90,11 @@ func (s *AdStudioService) RestoreExistingImageTrendMedia(ctx context.Context, di
 		}
 		kieRel := strings.TrimSpace(meta.Files.KieSource)
 		if kieRel == "" {
+			// Older imports contain only postilka-preview/ next to the JSON files.
+			// It is still a valid image source for restoring the existing card.
+			kieRel = strings.TrimSpace(meta.Files.PostilkaPreview)
+		}
+		if kieRel == "" {
 			kieRel = filepath.ToSlash(filepath.Join("kie-source", strings.TrimSuffix(entry.Name(), filepath.Ext(entry.Name()))+".webp"))
 		}
 		kiePath := filepath.Join(root, filepath.FromSlash(kieRel))

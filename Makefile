@@ -54,7 +54,7 @@ import-trends:
 	$(COMPOSE_PROD) exec -T backend /app/import-trends -dir "$(TRENDS_IMPORT_DIR)" -kind "$(TRENDS_IMPORT_KIND)"
 
 # Restore media only for existing image trend templates; never creates or rewrites template prompts.
-IMAGE_TRENDS_IMPORT_DIR ?= /data/trends-import/images
+IMAGE_TRENDS_IMPORT_DIR ?= /data/trends-import
 restore-image-trends:
 	$(COMPOSE_PROD) exec -T backend /app/restore-image-trends -dir "$(IMAGE_TRENDS_IMPORT_DIR)"
 

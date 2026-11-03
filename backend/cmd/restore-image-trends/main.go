@@ -15,7 +15,7 @@ import (
 )
 
 func main() {
-	dir := flag.String("dir", envOr("TRENDS_IMPORT_DIR", "/data/trends-import/images"), "folder with image trend JSON and kie-source files")
+	dir := flag.String("dir", envOr("TRENDS_IMPORT_DIR", "/data/trends-import"), "folder with image trend JSON and postilka-preview or kie-source files")
 	dryRun := flag.Bool("dry-run", false, "report without uploading media or updating template media keys")
 	flag.Parse()
 
