@@ -337,6 +337,7 @@ export function AdminUsersPage() {
                 <SortHeader column="name">Пользователь</SortHeader>
                 <th className="px-4 py-3">Email</th>
                 <th className="px-4 py-3">ID</th>
+                <th className="px-4 py-3">Email подтверждён</th>
                 <SortHeader column="status">Статус аккаунта</SortHeader>
                 <SortHeader column="role">Роль</SortHeader>
                 <th className="w-36 px-4 py-3">Тариф</th>
