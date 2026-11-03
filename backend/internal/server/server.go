@@ -177,7 +177,9 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	)
 	notificationSvc.BindOutbound(userRepo, txEmailSvc, userMessenger, cfg)
 	adminAnalyticsRepo := repository.NewAdminAnalyticsRepository(db.Pool, settingsRepo)
-	adminHandler := handler.NewAdminHandler(userRepo, adminUserSvc, adminWalletSvc, planSvc, oauthSvc, adminWorkspaceSvc, fileStorageRepo, folderStorageRepo, postRepo, adminAnalyticsRepo, objectStorage)
+	genUploadRepo := repository.NewGenerationSourceUploadRepository(db.Pool)
+	aiBillingSvc := service.NewAIBillingService(quotaSvc, usageRepo, walletRepo, kieSettingsRepo)
+	adminHandler := handler.NewAdminHandler(userRepo, adminUserSvc, adminWalletSvc, planSvc, oauthSvc, adminWorkspaceSvc, fileStorageRepo, folderStorageRepo, postRepo, adminAnalyticsRepo, objectStorage, aiBillingSvc)
 	adminHandler.SetEmailCampaign(emailCampaignSvc)
 	adminHandler.SetEmailTemplates(emailTemplateSettingsSvc)
 	inviteHandler := handler.NewInviteHandler(inviteSvc, oauthSvc)
@@ -261,8 +263,6 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	genRepo := repository.NewAIGenerationRepository(db.Pool)
 	genJobRepo := repository.NewAIGenerationJobRepository(db.Pool)
 	adminHandler.SetGenerationJobs(genJobRepo)
-	genUploadRepo := repository.NewGenerationSourceUploadRepository(db.Pool)
-	aiBillingSvc := service.NewAIBillingService(quotaSvc, usageRepo, walletRepo, kieSettingsRepo)
 	generationSvc := service.NewGenerationService(
 		kieConfigSvc, kieVideoConfigSvc, genRepo, genJobRepo, genUploadRepo, aiBillingSvc, objectStorage, fileStorageSvc, wsSvc, userRepo, yandexGptConfigSvc, quotaSvc,
 	)

@@ -27,6 +27,7 @@ type AdminHandler struct {
 	analytics      *repository.AdminAnalyticsRepository
 	genJobs        *repository.AIGenerationJobRepository
 	objectStorage  *service.ObjectStorage
+	aiBilling      *service.AIBillingService
 	emailCampaign  *service.EmailCampaignService
 	emailTemplates *service.EmailTemplateSettingsService
 }
@@ -102,10 +103,11 @@ func NewAdminHandler(
 	posts *repository.PostRepository,
 	analytics *repository.AdminAnalyticsRepository,
 	objectStorage *service.ObjectStorage,
+	aiBilling *service.AIBillingService,
 ) *AdminHandler {
 	return &AdminHandler{
 		users: users, adminUsers: adminUsers, adminWallet: adminWallet, plans: plans, oauth: oauth, workspaces: workspaces,
-		files: files, folders: folders, posts: posts, analytics: analytics, objectStorage: objectStorage,
+		files: files, folders: folders, posts: posts, analytics: analytics, objectStorage: objectStorage, aiBilling: aiBilling,
 	}
 }
 
@@ -158,6 +160,22 @@ func (h *AdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Не удалось загрузить пользователей")
 		return
+	}
+	if h.aiBilling != nil {
+		for i := range items {
+			if items[i].Workspace == nil {
+				continue
+			}
+			credits, creditErr := h.aiBilling.GetMediaCreditsRemaining(r.Context(), items[i].Workspace.ID, items[i].ID)
+			if creditErr != nil {
+				continue
+			}
+			items[i].MediaCreditsUnlimited = credits.Unlimited
+			if !credits.Unlimited {
+				value := credits.TotalAvailable
+				items[i].MediaCreditsRemaining = &value
+			}
+		}
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{

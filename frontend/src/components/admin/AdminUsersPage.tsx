@@ -341,6 +341,7 @@ export function AdminUsersPage() {
                 <SortHeader column="role">Роль</SortHeader>
                 <th className="px-4 py-3">Тариф</th>
                 <SortHeader column="wallet_balance_cents">Кошелёк</SortHeader>
+                <th className="px-4 py-3">Медиа-кредиты</th>
                 <th className="px-4 py-3">Workspace</th>
                 <th className="px-4 py-3">Роль WS</th>
                 <th className="px-4 py-3">Язык</th>
@@ -438,6 +439,9 @@ export function AdminUsersPage() {
                     </td>
                     <td className="px-4 py-3 font-medium text-slate-800">
                       {formatAdminWalletRub(u.wallet_balance_cents ?? 0)}
+                    </td>
+                    <td className="px-4 py-3 font-medium text-slate-800">
+                      {u.media_credits_unlimited ? "Безлимит" : (u.media_credits_remaining ?? "—")}
                     </td>
                     <td className="px-4 py-3 text-slate-800">
                       {u.workspace?.name ?? "—"}

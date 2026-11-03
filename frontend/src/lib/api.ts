@@ -55,6 +55,8 @@ export type AdminUser = {
   pending_approval: boolean;
   is_platform_admin: boolean;
   wallet_balance_cents: number;
+  media_credits_remaining?: number;
+  media_credits_unlimited: boolean;
   created_at: string;
   updated_at: string;
   workspace: AdminUserWorkspace | null;
