@@ -339,9 +339,9 @@ export function AdminUsersPage() {
                 <th className="px-4 py-3">ID</th>
                 <SortHeader column="status">Статус аккаунта</SortHeader>
                 <SortHeader column="role">Роль</SortHeader>
-                <th className="px-4 py-3">Тариф</th>
-                <SortHeader column="wallet_balance_cents">Кошелёк</SortHeader>
-                <th className="px-4 py-3">Медиа-кредиты</th>
+                <th className="w-36 px-4 py-3">Тариф</th>
+                <SortHeader column="wallet_balance_cents">Кошелёк, ₽</SortHeader>
+                <th className="w-32 px-4 py-3">Медиа-кредиты</th>
                 <th className="px-4 py-3">Workspace</th>
                 <th className="px-4 py-3">Роль WS</th>
                 <th className="px-4 py-3">Язык</th>
@@ -355,21 +355,21 @@ export function AdminUsersPage() {
             <tbody className="divide-y divide-slate-100">
               {loading && (
                 <tr>
-                  <td colSpan={16} className="px-4 py-10 text-center text-slate-500">
+                  <td colSpan={17} className="px-4 py-10 text-center text-slate-500">
                     Загрузка…
                   </td>
                 </tr>
               )}
               {!loading && error && (
                 <tr>
-                  <td colSpan={16} className="px-4 py-10 text-center text-rose-600">
+                  <td colSpan={17} className="px-4 py-10 text-center text-rose-600">
                     {error}
                   </td>
                 </tr>
               )}
               {!loading && !error && users.length === 0 && (
                 <tr>
-                  <td colSpan={16} className="px-4 py-10 text-center text-slate-500">
+                  <td colSpan={17} className="px-4 py-10 text-center text-slate-500">
                     Пользователи не найдены
                   </td>
                 </tr>
@@ -378,7 +378,7 @@ export function AdminUsersPage() {
                 !error &&
                 users.map((u) => (
                   <tr key={u.id} className="hover:bg-slate-50/80">
-                    <td className="px-4 py-3">
+                    <td className="w-36 px-4 py-3">
                       <input
                         type="checkbox"
                         checked={selectedForPromo.includes(u.id)}
@@ -437,11 +437,15 @@ export function AdminUsersPage() {
                         <span className="text-slate-400">—</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 font-medium text-slate-800">
+                    <td className="w-32 px-4 py-3 font-medium text-slate-800">
                       {formatAdminWalletRub(u.wallet_balance_cents ?? 0)}
                     </td>
-                    <td className="px-4 py-3 font-medium text-slate-800">
-                      {u.media_credits_unlimited ? "Безлимит" : (u.media_credits_remaining ?? "—")}
+                    <td className="w-32 px-4 py-3 font-medium text-slate-800">
+                      {u.media_credits_unlimited
+                        ? "Безлимит"
+                        : u.media_credits_remaining != null
+                          ? `${u.media_credits_remaining} кред.`
+                          : "—"}
                     </td>
                     <td className="px-4 py-3 text-slate-800">
                       {u.workspace?.name ?? "—"}
