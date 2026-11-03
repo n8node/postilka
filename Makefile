@@ -50,11 +50,12 @@ create-superadmin:
 # make import-trends
 TRENDS_IMPORT_DIR ?= /data/trends-import
 TRENDS_IMPORT_KIND ?= all
+TRENDS_IMPORT_VIDEO_DIR ?= /data/trends-import/videos
 import-trends:
 	$(COMPOSE_PROD) exec -T backend /app/import-trends -dir "$(TRENDS_IMPORT_DIR)" -kind "$(TRENDS_IMPORT_KIND)"
 
 import-video-trends:
-	$(COMPOSE_PROD) exec -T backend /app/import-trends -dir "$(TRENDS_IMPORT_DIR)" -kind video
+	$(COMPOSE_PROD) exec -T backend /app/import-trends -dir "$(TRENDS_IMPORT_VIDEO_DIR)" -kind video
 
 # Restore media only for existing image trend templates; never creates or rewrites template prompts.
 IMAGE_TRENDS_IMPORT_DIR ?= /data/trends-import
