@@ -15,7 +15,7 @@ func NewLocalMediaHandler(store *service.LocalMediaStore) *LocalMediaHandler {
 	return &LocalMediaHandler{store: store}
 }
 func (h *LocalMediaHandler) Serve(w http.ResponseWriter, r *http.Request) {
-	key := "local:" + chi.URLParam(r, "key")
+	key := "local:" + chi.URLParam(r, "*")
 	f, info, err := h.store.Open(key)
 	if err != nil {
 		http.NotFound(w, r)
