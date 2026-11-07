@@ -102,7 +102,7 @@ func (s *AdStudioService) ListPublic(ctx context.Context, catalog, category stri
 	return out, hidden, nil
 }
 
-func (s *AdStudioService) ListCatalog(ctx context.Context, catalog, category string, limit, offset int) ([]model.AdStudioTemplatePublicView, []string, int, error) {
+func (s *AdStudioService) ListCatalog(ctx context.Context, catalog, category string, ids []string, limit, offset int) ([]model.AdStudioTemplatePublicView, []string, int, error) {
 	if limit < 1 {
 		limit = adStudioCatalogDefaultLimit
 	}
@@ -115,6 +115,19 @@ func (s *AdStudioService) ListCatalog(ctx context.Context, catalog, category str
 	items, hidden, err := s.listPublishedFiltered(ctx, catalog, category)
 	if err != nil {
 		return nil, hidden, 0, err
+	}
+	if len(ids) > 0 {
+		byID := make(map[string]model.AdStudioTemplate, len(items))
+		for _, item := range items {
+			byID[item.ID] = item
+		}
+		filtered := make([]model.AdStudioTemplate, 0, len(ids))
+		for _, id := range ids {
+			if item, ok := byID[id]; ok {
+				filtered = append(filtered, item)
+			}
+		}
+		items = filtered
 	}
 	total := len(items)
 	if offset >= total {

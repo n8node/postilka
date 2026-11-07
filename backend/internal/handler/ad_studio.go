@@ -56,7 +56,8 @@ func (h *AdStudioHandler) ListCatalog(w http.ResponseWriter, r *http.Request) {
 		category = ""
 	}
 	catalog := catalogFromRequest(r)
-	items, hidden, total, err := h.svc.ListCatalog(r.Context(), catalog, category, limit, offset)
+	ids := splitCatalogIDs(r.URL.Query().Get("ids"))
+	items, hidden, total, err := h.svc.ListCatalog(r.Context(), catalog, category, ids, limit, offset)
 	if err != nil {
 		h.mapError(w, err)
 		return
@@ -70,6 +71,23 @@ func (h *AdStudioHandler) ListCatalog(w http.ResponseWriter, r *http.Request) {
 		"offset":            offset,
 		"has_more":          offset+len(items) < total,
 	})
+}
+
+func splitCatalogIDs(value string) []string {
+	seen := make(map[string]struct{})
+	ids := make([]string, 0)
+	for _, raw := range strings.Split(value, ",") {
+		id := strings.TrimSpace(raw)
+		if id == "" {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		ids = append(ids, id)
+	}
+	return ids
 }
 
 func (h *AdStudioHandler) PublicPreview(w http.ResponseWriter, r *http.Request) {

@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Postilka Studio Examples
  * Description: Masonry gallery of Ad Studio examples for Elementor. Shortcode: [postilka_studio_examples]
- * Version: 1.0.1
+ * Version: 1.1.0
  * Author: Postilka
  * Text Domain: postilka-studio-examples
  */
@@ -12,7 +12,7 @@ if (!defined('ABSPATH')) {
 }
 
 final class Postilka_Studio_Examples {
-    private const VERSION = '1.0.1';
+    private const VERSION = '1.1.0';
     private static bool $shortcode_used = false;
 
     public static function init(): void {
@@ -30,6 +30,9 @@ final class Postilka_Studio_Examples {
             [
                 'category'  => 'all',
                 'page_size' => '18',
+                'limit'     => '0',
+                'ids'       => '',
+                'show_categories' => '1',
                 'link'      => '1',
                 'cta_base'  => '/app/ai',
                 'api_base'  => '/app/api/v1',
@@ -39,9 +42,18 @@ final class Postilka_Studio_Examples {
         );
 
         $page_size = max(1, min(48, (int) $atts['page_size']));
+        $limit = max(0, min(500, (int) $atts['limit']));
         $category  = sanitize_key((string) $atts['category']);
         if ($category === '') {
             $category = 'all';
+        }
+
+        $ids = [];
+        foreach (explode(',', (string) $atts['ids']) as $id) {
+            $id = sanitize_text_field(trim($id));
+            if ($id !== '' && !in_array($id, $ids, true)) {
+                $ids[] = $id;
+            }
         }
 
         $root_id = 'pse-' . wp_unique_id();
@@ -56,9 +68,12 @@ final class Postilka_Studio_Examples {
             data-cta-base="<?php echo esc_attr($atts['cta_base']); ?>"
             data-category="<?php echo esc_attr($category); ?>"
             data-page-size="<?php echo esc_attr((string) $page_size); ?>"
+            data-limit="<?php echo esc_attr((string) $limit); ?>"
+            data-ids="<?php echo esc_attr(implode(',', $ids)); ?>"
+            data-show-categories="<?php echo esc_attr($atts['show_categories'] === '0' ? '0' : '1'); ?>"
             data-link="<?php echo esc_attr($atts['link'] === '0' ? '0' : '1'); ?>"
         >
-            <div class="pse-filters" data-pse-filters role="tablist" aria-label="Категории примеров"></div>
+            <div class="pse-filters" data-pse-filters role="tablist" aria-label="Категории примеров"<?php echo $atts['show_categories'] === '0' ? ' hidden' : ''; ?>></div>
             <div class="pse-status" data-pse-status>Загрузка примеров…</div>
             <div class="pse-grid" data-pse-grid></div>
             <div class="pse-sentinel" data-pse-sentinel hidden aria-hidden="true"></div>

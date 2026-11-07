@@ -64,6 +64,11 @@
     var apiBase = root.getAttribute("data-api-base") || "/app/api/v1";
     var ctaBase = root.getAttribute("data-cta-base") || "/app/ai";
     var pageSize = Math.max(1, Math.min(48, parseInt(root.getAttribute("data-page-size") || "18", 10) || 18));
+    var maxItems = Math.max(0, Math.min(500, parseInt(root.getAttribute("data-limit") || "0", 10) || 0));
+    var ids = (root.getAttribute("data-ids") || "").split(",").map(function (id) {
+      return id.trim();
+    }).filter(Boolean);
+    var showCategories = root.getAttribute("data-show-categories") !== "0";
     var linkEnabled = root.getAttribute("data-link") !== "0";
     var filtersEl = qs(root, "[data-pse-filters]");
     var statusEl = qs(root, "[data-pse-status]");
@@ -113,7 +118,7 @@
     }
 
     function renderFilters() {
-      if (!filtersEl) return;
+      if (!filtersEl || !showCategories) return;
       var cats = [{ id: "all", label: "Все" }].concat(state.categories);
       var existing = filtersEl.querySelectorAll(".pse-filter");
       var canReuse =
@@ -262,13 +267,14 @@
     }
 
     function loadMore(anchorTop) {
-      if (state.loading || !state.hasMore) return;
+      if (state.loading || !state.hasMore || (maxItems > 0 && state.items.length >= maxItems)) return;
       state.loading = true;
       if (sentinelEl) sentinelEl.hidden = true;
 
       var params = new URLSearchParams();
-      params.set("limit", String(pageSize));
+      params.set("limit", String(Math.min(pageSize, maxItems > 0 ? maxItems - state.items.length : pageSize)));
       params.set("offset", String(state.offset));
+      if (ids.length) params.set("ids", ids.join(","));
       if (state.category && state.category !== "all") {
         params.set("category", state.category);
       }
@@ -284,6 +290,9 @@
         })
         .then(function (data) {
           var incoming = Array.isArray(data.items) ? data.items : [];
+          if (maxItems > 0) {
+            incoming = incoming.slice(0, Math.max(0, maxItems - state.items.length));
+          }
           state.categories = Array.isArray(data.categories) ? data.categories : state.categories;
           state.labels = {};
           state.categories.forEach(function (cat) {
@@ -291,7 +300,9 @@
           });
           state.items = state.items.concat(incoming);
           state.offset += incoming.length;
-          state.hasMore = !!data.has_more;
+          state.hasMore = maxItems > 0
+            ? state.items.length < maxItems && !!data.has_more
+            : !!data.has_more;
           renderFilters();
           if (state.items.length === 0) {
             setStatus("Пока нет опубликованных примеров.");
