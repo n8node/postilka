@@ -14,6 +14,7 @@ type PublicPage struct {
 	ID              string    `json:"id"`
 	Title           string    `json:"title"`
 	Slug            string    `json:"slug"`
+	ContentHTML     string    `json:"content_html"`
 	MetaDescription string    `json:"meta_description"`
 	ExternalURL     string    `json:"external_url"`
 	Category        string    `json:"category"`

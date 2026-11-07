@@ -322,8 +322,10 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	r.Get("/metrics", metricsHandler.ServeHTTP)
 	localMediaHandler := handler.NewLocalMediaHandler(localMedia)
 	r.Get("/go/{code}", linkRedirectHandler.Redirect)
+	r.Get("/docs/{slug}", publicPageHandler.RenderPublic)
 
 	r.Route("/api/v1", func(r chi.Router) {
+		r.Get("/public/pages/{slug}", publicPageHandler.GetPublic)
 		r.With(authMW.Required).Get("/local-media/*", localMediaHandler.Serve)
 		r.Get("/health", health.ServeHTTP)
 		r.Get("/metrics", metricsHandler.ServeHTTP)

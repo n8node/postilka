@@ -1088,6 +1088,7 @@ export type PublicPage = {
   id: string;
   title: string;
   slug: string;
+  content_html: string;
   meta_description: string;
   external_url: string;
   category: PublicPageCategory;
@@ -1101,6 +1102,7 @@ export type PublicPage = {
 export type PublicPageInput = {
   title: string;
   slug?: string;
+  content_html?: string;
   meta_description?: string;
   external_url?: string;
   category?: PublicPageCategory;

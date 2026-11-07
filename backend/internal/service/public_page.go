@@ -35,9 +35,22 @@ func (s *PublicPageService) Get(ctx context.Context, id string) (*model.PublicPa
 	return p, err
 }
 
+func (s *PublicPageService) GetPublishedBySlug(ctx context.Context, slug string) (*model.PublicPage, error) {
+	slug = strings.Trim(strings.ToLower(strings.TrimSpace(slug)), "/")
+	if slug == "" {
+		return nil, ErrPublicPageNotFound
+	}
+	p, err := s.pages.GetPublishedBySlug(ctx, slug)
+	if errors.Is(err, repository.ErrNotFound) {
+		return nil, ErrPublicPageNotFound
+	}
+	return p, err
+}
+
 type PublicPageInput struct {
 	Title           string
 	Slug            string
+	ContentHTML     string
 	MetaDescription string
 	ExternalURL     string
 	Category        string
@@ -79,6 +92,7 @@ func (s *PublicPageService) Create(ctx context.Context, in PublicPageInput) (*mo
 	p := &model.PublicPage{
 		Title:           title,
 		Slug:            slug,
+		ContentHTML:     strings.TrimSpace(in.ContentHTML),
 		MetaDescription: strings.TrimSpace(in.MetaDescription),
 		ExternalURL:     externalURL,
 		Category:        category,
@@ -131,6 +145,7 @@ func (s *PublicPageService) Update(ctx context.Context, id string, in PublicPage
 		ID:              id,
 		Title:           title,
 		Slug:            slug,
+		ContentHTML:     strings.TrimSpace(in.ContentHTML),
 		MetaDescription: strings.TrimSpace(in.MetaDescription),
 		ExternalURL:     externalURL,
 		Category:        category,

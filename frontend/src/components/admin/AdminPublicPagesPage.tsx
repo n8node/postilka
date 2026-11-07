@@ -34,6 +34,7 @@ function emptyForm(): PublicPageInput {
   return {
     title: "",
     slug: "",
+    content_html: "",
     meta_description: "",
     external_url: "",
     category: "other",
@@ -47,6 +48,7 @@ function pageToForm(page: PublicPage): PublicPageInput {
   return {
     title: page.title,
     slug: page.slug,
+    content_html: page.content_html,
     meta_description: page.meta_description,
     external_url: page.external_url,
     category: page.category,
@@ -167,12 +169,10 @@ export function AdminPublicPagesPage() {
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-slate-900">
-          Публичные страницы
+          Юридические страницы
         </h1>
         <p className="mt-1 text-sm text-slate-500">
-          Юридические и информационные страницы в открытом доступе — инструкции,
-          центр помощи и др. Контент публикуется в WordPress, здесь задаются
-          ссылки и метаданные.
+          Юридические страницы и другие документы, доступные без авторизации.
         </p>
       </div>
 
@@ -279,8 +279,18 @@ export function AdminPublicPagesPage() {
               </div>
 
               <label className="block space-y-1.5">
+                <span className="text-sm font-medium text-slate-700">HTML-контент</span>
+                <textarea
+                  rows={18}
+                  value={form.content_html ?? ""}
+                  onChange={(e) => patch({ content_html: e.target.value })}
+                  className="w-full rounded-md border border-slate-200 px-3 py-2 font-mono text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  placeholder="<p>Текст страницы...</p>"
+                />
+              </label>
+              <label className="block space-y-1.5">
                 <span className="text-sm font-medium text-slate-700">
-                  URL статьи (WordPress)
+                  Внешняя ссылка (необязательно)
                 </span>
                 <input
                   type="url"
@@ -365,9 +375,7 @@ export function AdminPublicPagesPage() {
               </div>
 
               <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-                Контент статей хранится в WordPress. В админке задаются заголовок,
-                slug, ссылка и метаданные. После публикации статьи в WordPress
-                укажите её URL и включите «Опубликована».
+                Публичный адрес: https://postilka.ru/docs/{form.slug || "slug"}
               </div>
 
               <div className="flex flex-wrap items-center gap-6">
