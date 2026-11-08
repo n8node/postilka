@@ -1100,7 +1100,7 @@ func (s *ChannelConnectService) discoverTargets(
 		}
 		hint := "Выберите Instagram Professional Account для публикации."
 		if len(targets) == 0 {
-			hint = "Не найдено доступных Instagram Professional Account. Подключите аккаунт Business или Creator и предоставьте доступ в Meta."
+			hint = "Meta вернула 0 Instagram-аккаунтов для этого подключения. Проверьте, что в окне Meta выбран аккаунт george_erman и Business Portfolio Postilka, затем начните подключение заново. Если ошибка повторяется, проверьте backend-лог: instagram assigned accounts response."
 		}
 		return targets, hint, nil
 

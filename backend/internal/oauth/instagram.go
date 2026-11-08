@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -34,6 +35,13 @@ type InstagramAccount struct {
 	ID       string `json:"id"`
 	Username string `json:"username"`
 	Name     string `json:"name"`
+}
+
+type instagramAccountsPage struct {
+	Data   []InstagramAccount `json:"data"`
+	Paging struct {
+		Next string `json:"next"`
+	} `json:"paging"`
 }
 
 func (c *InstagramUnifiedClient) AuthorizeURL(state string) (string, error) {
@@ -86,6 +94,7 @@ func (c *InstagramUnifiedClient) AssignedAccounts(ctx context.Context, accessTok
 	for endpoint != "" {
 		q := url.Values{}
 		q.Set("access_token", accessToken)
+		q.Set("fields", "id,username")
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint+"?"+q.Encode(), nil)
 		if err != nil {
 			return nil, err
@@ -102,15 +111,11 @@ func (c *InstagramUnifiedClient) AssignedAccounts(ctx context.Context, accessTok
 		if resp.StatusCode >= 400 {
 			return nil, fmt.Errorf("instagram accounts: HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 		}
-		var page struct {
-			Data   []InstagramAccount `json:"data"`
-			Paging struct {
-				Next string `json:"next"`
-			} `json:"paging"`
-		}
+		var page instagramAccountsPage
 		if err := json.Unmarshal(body, &page); err != nil {
 			return nil, err
 		}
+		slog.InfoContext(ctx, "instagram assigned accounts response", "status", resp.StatusCode, "accounts", len(page.Data), "has_next", strings.TrimSpace(page.Paging.Next) != "")
 		accounts = append(accounts, page.Data...)
 		endpoint = strings.TrimSpace(page.Paging.Next)
 	}
