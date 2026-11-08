@@ -38,10 +38,23 @@ type InstagramAccount struct {
 }
 
 type instagramAccountsPage struct {
-	Data   []InstagramAccount `json:"data"`
+	Data    []InstagramAccount `json:"data"`
+	Summary struct {
+		TotalCount int `json:"total_count"`
+	} `json:"summary"`
+	Error *struct {
+		Message string `json:"message"`
+		Type    string `json:"type"`
+		Code    int    `json:"code"`
+	} `json:"error,omitempty"`
 	Paging struct {
 		Next string `json:"next"`
 	} `json:"paging"`
+}
+
+type InstagramUnifiedSubject struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 func (c *InstagramUnifiedClient) AuthorizeURL(state string) (string, error) {
@@ -115,11 +128,46 @@ func (c *InstagramUnifiedClient) AssignedAccounts(ctx context.Context, accessTok
 		if err := json.Unmarshal(body, &page); err != nil {
 			return nil, err
 		}
-		slog.InfoContext(ctx, "instagram assigned accounts response", "status", resp.StatusCode, "accounts", len(page.Data), "has_next", strings.TrimSpace(page.Paging.Next) != "")
+		attrs := []any{
+			"status", resp.StatusCode,
+			"accounts", len(page.Data),
+			"summary_total", page.Summary.TotalCount,
+			"has_next", strings.TrimSpace(page.Paging.Next) != "",
+		}
+		if page.Error != nil {
+			attrs = append(attrs, "error_type", page.Error.Type, "error_code", page.Error.Code, "error_message", page.Error.Message)
+		}
+		slog.InfoContext(ctx, "instagram assigned accounts response", attrs...)
 		accounts = append(accounts, page.Data...)
 		endpoint = strings.TrimSpace(page.Paging.Next)
 	}
 	return accounts, nil
+}
+
+// Subject returns only the safe identity fields of the token subject. It is
+// used for diagnostics and deliberately never returns the access token.
+func (c *InstagramUnifiedClient) Subject(ctx context.Context, accessToken string) (*InstagramUnifiedSubject, error) {
+	q := url.Values{}
+	q.Set("access_token", accessToken)
+	q.Set("fields", "id,name")
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.graphURL("/me")+"?"+q.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.http().Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("instagram subject: HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	var subject InstagramUnifiedSubject
+	if err := json.Unmarshal(body, &subject); err != nil {
+		return nil, err
+	}
+	return &subject, nil
 }
 
 func (c *InstagramUnifiedClient) graphURL(path string) string {

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -1085,6 +1086,11 @@ func (s *ChannelConnectService) discoverTargets(
 		client, err := s.instagramClient(ctx, cfg, redirectURI)
 		if err != nil {
 			return nil, "", err
+		}
+		if subject, subjectErr := client.Subject(ctx, accessToken); subjectErr != nil {
+			slog.WarnContext(ctx, "instagram token subject lookup failed", "error", subjectErr)
+		} else {
+			slog.InfoContext(ctx, "instagram token subject", "id", subject.ID, "name", subject.Name)
 		}
 		accounts, err := client.AssignedAccounts(ctx, accessToken)
 		if err != nil {
