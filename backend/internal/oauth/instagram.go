@@ -74,6 +74,7 @@ func (c *InstagramUnifiedClient) AuthorizeURL(state string) (string, error) {
 	q.Set("response_type", "code")
 	q.Set("display", "popup")
 	q.Set("override_default_response_type", "true")
+	q.Set("prompt", "login")
 	return "https://www.facebook.com/dialog/oauth?" + q.Encode(), nil
 }
 
