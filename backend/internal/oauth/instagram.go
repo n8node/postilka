@@ -5,91 +5,69 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
 )
 
-const instagramGraphBaseURL = "https://graph.facebook.com"
+const (
+	instagramAuthorizeURL = "https://www.instagram.com/oauth/authorize"
+	instagramTokenURL     = "https://api.instagram.com/oauth/access_token"
+	instagramGraphURL     = "https://graph.instagram.com"
+	InstagramLoginScope   = "instagram_business_basic,instagram_business_content_publish,instagram_business_manage_insights"
+)
 
-// InstagramUnifiedClient implements Meta's Instagram API with Unified Login.
-// Unified Login uses a Facebook Login for Business configuration (config_id),
-// then returns a Business Integration System User access token.
-type InstagramUnifiedClient struct {
+// InstagramLoginClient implements Instagram API with Instagram Login.
+type InstagramLoginClient struct {
 	AppID       string
 	AppSecret   string
-	ConfigID    string
 	RedirectURI string
 	APIVersion  string
 	HTTP        *http.Client
 }
 
-type InstagramUnifiedToken struct {
+type InstagramLoginToken struct {
 	AccessToken string `json:"access_token"`
+	UserID      string `json:"user_id"`
 	TokenType   string `json:"token_type"`
 	ExpiresIn   int64  `json:"expires_in"`
 }
 
 type InstagramAccount struct {
-	ID       string `json:"id"`
-	Username string `json:"username"`
-	Name     string `json:"name"`
+	ID             string `json:"id"`
+	UserID         string `json:"user_id,omitempty"`
+	Username       string `json:"username"`
+	Name           string `json:"name"`
+	AccountType    string `json:"account_type,omitempty"`
+	ProfilePicture string `json:"profile_picture_url,omitempty"`
 }
 
-type instagramAccountsPage struct {
-	Data    []InstagramAccount `json:"data"`
-	Summary struct {
-		TotalCount int `json:"total_count"`
-	} `json:"summary"`
-	Error *struct {
-		Message string `json:"message"`
-		Type    string `json:"type"`
-		Code    int    `json:"code"`
-	} `json:"error,omitempty"`
-	Paging struct {
-		Next string `json:"next"`
-	} `json:"paging"`
-}
-
-type InstagramUnifiedSubject struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
-}
-
-type InstagramTokenPermission struct {
-	Permission string `json:"permission"`
-	Status     string `json:"status"`
-}
-
-func (c *InstagramUnifiedClient) AuthorizeURL(state string) (string, error) {
-	if strings.TrimSpace(c.AppID) == "" || strings.TrimSpace(c.ConfigID) == "" {
-		return "", fmt.Errorf("instagram unified login: app id and config id are required")
+func (c *InstagramLoginClient) AuthorizeURL(state string) (string, error) {
+	if strings.TrimSpace(c.AppID) == "" {
+		return "", fmt.Errorf("instagram login: app id is required")
 	}
 	q := url.Values{}
 	q.Set("client_id", strings.TrimSpace(c.AppID))
-	q.Set("config_id", strings.TrimSpace(c.ConfigID))
 	q.Set("redirect_uri", strings.TrimSpace(c.RedirectURI))
-	q.Set("state", strings.TrimSpace(state))
 	q.Set("response_type", "code")
-	q.Set("display", "popup")
-	q.Set("override_default_response_type", "true")
-	q.Set("prompt", "login")
-	return "https://www.facebook.com/dialog/oauth?" + q.Encode(), nil
+	q.Set("scope", InstagramLoginScope)
+	q.Set("state", strings.TrimSpace(state))
+	return instagramAuthorizeURL + "?" + q.Encode(), nil
 }
 
-func (c *InstagramUnifiedClient) ExchangeCode(ctx context.Context, code string) (*InstagramUnifiedToken, error) {
-	q := url.Values{}
-	q.Set("client_id", strings.TrimSpace(c.AppID))
-	q.Set("client_secret", strings.TrimSpace(c.AppSecret))
-	q.Set("code", strings.TrimSpace(code))
-	// Meta requires redirect_uri to be identical in the authorization request
-	// and in the authorization-code exchange.
-	q.Set("redirect_uri", strings.TrimSpace(c.RedirectURI))
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.graphURL("/oauth/access_token")+"?"+q.Encode(), nil)
+func (c *InstagramLoginClient) ExchangeCode(ctx context.Context, code string) (*InstagramLoginToken, error) {
+	form := url.Values{
+		"client_id":     {strings.TrimSpace(c.AppID)},
+		"client_secret": {strings.TrimSpace(c.AppSecret)},
+		"grant_type":    {"authorization_code"},
+		"redirect_uri":  {strings.TrimSpace(c.RedirectURI)},
+		"code":          {strings.TrimSpace(code)},
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, instagramTokenURL, strings.NewReader(form.Encode()))
 	if err != nil {
 		return nil, err
 	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	resp, err := c.http().Do(req)
 	if err != nil {
 		return nil, err
@@ -99,67 +77,43 @@ func (c *InstagramUnifiedClient) ExchangeCode(ctx context.Context, code string) 
 	if resp.StatusCode >= 400 {
 		return nil, fmt.Errorf("instagram oauth: HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
-	var token InstagramUnifiedToken
+	var short InstagramLoginToken
+	if err := json.Unmarshal(body, &short); err != nil {
+		return nil, err
+	}
+	if short.AccessToken == "" {
+		return nil, fmt.Errorf("instagram oauth: empty access token")
+	}
+	return c.exchangeLongLivedToken(ctx, short.AccessToken)
+}
+
+func (c *InstagramLoginClient) exchangeLongLivedToken(ctx context.Context, shortToken string) (*InstagramLoginToken, error) {
+	q := url.Values{"grant_type": {"ig_exchange_token"}, "client_secret": {strings.TrimSpace(c.AppSecret)}, "access_token": {strings.TrimSpace(shortToken)}}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.graphURL("/access_token")+"?"+q.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.http().Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("instagram long-lived token: HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	var token InstagramLoginToken
 	if err := json.Unmarshal(body, &token); err != nil {
 		return nil, err
 	}
-	if strings.TrimSpace(token.AccessToken) == "" {
-		return nil, fmt.Errorf("instagram oauth: empty access token")
+	if token.AccessToken == "" {
+		return nil, fmt.Errorf("instagram long-lived token: empty access token")
 	}
 	return &token, nil
 }
 
-func (c *InstagramUnifiedClient) AssignedAccounts(ctx context.Context, accessToken string) ([]InstagramAccount, error) {
-	// For Unified Login, /me is the Business Integration System User. Meta's
-	// Unified Login documentation explicitly uses /me/assigned_instagram_accounts
-	// to list the Instagram assets shared by the selected business portfolio.
-	endpoint := c.graphURL("/me/assigned_instagram_accounts")
-	var accounts []InstagramAccount
-	for endpoint != "" {
-		q := url.Values{}
-		q.Set("access_token", accessToken)
-		req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint+"?"+q.Encode(), nil)
-		if err != nil {
-			return nil, err
-		}
-		resp, err := c.http().Do(req)
-		if err != nil {
-			return nil, err
-		}
-		body, readErr := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
-		resp.Body.Close()
-		if readErr != nil {
-			return nil, readErr
-		}
-		if resp.StatusCode >= 400 {
-			return nil, fmt.Errorf("instagram accounts: HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
-		}
-		var page instagramAccountsPage
-		if err := json.Unmarshal(body, &page); err != nil {
-			return nil, err
-		}
-		attrs := []any{
-			"status", resp.StatusCode,
-			"accounts", len(page.Data),
-			"summary_total", page.Summary.TotalCount,
-			"has_next", strings.TrimSpace(page.Paging.Next) != "",
-		}
-		if page.Error != nil {
-			attrs = append(attrs, "error_type", page.Error.Type, "error_code", page.Error.Code, "error_message", page.Error.Message)
-		}
-		slog.InfoContext(ctx, "instagram assigned accounts response", attrs...)
-		accounts = append(accounts, page.Data...)
-		endpoint = strings.TrimSpace(page.Paging.Next)
-	}
-	return accounts, nil
-}
-
-// Subject returns only the safe identity fields of the token subject. It is
-// used for diagnostics and deliberately never returns the access token.
-func (c *InstagramUnifiedClient) Subject(ctx context.Context, accessToken string) (*InstagramUnifiedSubject, error) {
-	q := url.Values{}
-	q.Set("access_token", accessToken)
-	q.Set("fields", "id,name")
+func (c *InstagramLoginClient) Profile(ctx context.Context, accessToken string) (*InstagramAccount, error) {
+	q := url.Values{"fields": {"id,user_id,username,name,account_type,profile_picture_url"}, "access_token": {accessToken}}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.graphURL("/me")+"?"+q.Encode(), nil)
 	if err != nil {
 		return nil, err
@@ -169,54 +123,29 @@ func (c *InstagramUnifiedClient) Subject(ctx context.Context, accessToken string
 		return nil, err
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
 	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("instagram subject: HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return nil, fmt.Errorf("instagram profile: HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
-	var subject InstagramUnifiedSubject
-	if err := json.Unmarshal(body, &subject); err != nil {
+	var profile InstagramAccount
+	if err := json.Unmarshal(body, &profile); err != nil {
 		return nil, err
 	}
-	return &subject, nil
+	if profile.ID == "" {
+		return nil, fmt.Errorf("instagram profile: empty account id")
+	}
+	return &profile, nil
 }
 
-func (c *InstagramUnifiedClient) Permissions(ctx context.Context, accessToken string) ([]InstagramTokenPermission, error) {
-	q := url.Values{}
-	q.Set("access_token", accessToken)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.graphURL("/me/permissions")+"?"+q.Encode(), nil)
-	if err != nil {
-		return nil, err
+func (c *InstagramLoginClient) graphURL(path string) string {
+	version := strings.TrimSpace(c.APIVersion)
+	if version == "" {
+		version = "v27.0"
 	}
-	resp, err := c.http().Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("instagram permissions: HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
-	}
-	var result struct {
-		Data []InstagramTokenPermission `json:"data"`
-	}
-	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, err
-	}
-	return result.Data, nil
+	return strings.TrimRight(instagramGraphURL, "/") + "/" + version + "/" + strings.TrimLeft(path, "/")
 }
 
-func (c *InstagramUnifiedClient) graphURL(path string) string {
-	return strings.TrimRight(instagramGraphBaseURL, "/") + "/" + c.version() + "/" + strings.TrimLeft(path, "/")
-}
-
-func (c *InstagramUnifiedClient) version() string {
-	if v := strings.TrimSpace(c.APIVersion); v != "" {
-		return v
-	}
-	return "v27.0"
-}
-
-func (c *InstagramUnifiedClient) http() *http.Client {
+func (c *InstagramLoginClient) http() *http.Client {
 	if c.HTTP != nil {
 		return c.HTTP
 	}

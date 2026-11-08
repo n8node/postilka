@@ -94,9 +94,6 @@ func (s *SocialProviderSettingsService) UpdateAdmin(
 		if cfg.OAuthClientID == "" {
 			return nil, fmt.Errorf("%w: укажите OAuth Client ID", ErrInvalidSocialProviderSettings)
 		}
-		if provider == model.SocialProviderInstagram && cfg.OAuthConfigID == "" {
-			return nil, fmt.Errorf("%w: укажите Meta Configuration ID", ErrInvalidSocialProviderSettings)
-		}
 	}
 	if cfg.Enabled && provider == model.SocialProviderVK && cfg.PlatformOAuthEnabled {
 		if cfg.OAuthClientID == "" {
