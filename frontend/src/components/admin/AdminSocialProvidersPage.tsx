@@ -1031,6 +1031,23 @@ function SocialSettingsForm({
                 className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
               />
             </label>
+            {provider === "instagram" && (
+              <>
+                <label className="block space-y-1.5">
+                  <span className="text-sm font-medium text-slate-700">Meta Configuration ID</span>
+                  <input
+                    type="text"
+                    value={settings.oauth_config_id ?? ""}
+                    onChange={(e) => onPatch({ oauth_config_id: e.target.value })}
+                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+                    placeholder="ID конфигурации Unified Login"
+                  />
+                </label>
+                <p className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900">
+                  Configuration ID берётся в Meta App Dashboard в разделе Instagram → API setup with Unified Login. Для публикации нужен permission <code>instagram_content_publish</code>, а для получения профиля — <code>instagram_basic</code>.
+                </p>
+              </>
+            )}
           </Section>
           {provider === "rutube" && (
             <Section title="Возможности публикации">

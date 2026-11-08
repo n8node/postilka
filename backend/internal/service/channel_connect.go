@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -205,9 +206,9 @@ func (s *ChannelConnectService) OAuthStart(
 		client := &oauthclient.PinterestClient{ClientID: appID, ClientSecret: appSecret, RedirectURI: redirectURI}
 		authURL = client.AuthorizeURL(state)
 	case model.SocialProviderInstagram:
-		client, err := s.instagramLoginClient(ctx, cfg, redirectURI)
-		if err != nil {
-			return nil, err
+		client := &oauthclient.InstagramUnifiedClient{
+			AppID: cfg.OAuthClientID, AppSecret: cfg.OAuthClientSecret,
+			ConfigID: cfg.OAuthConfigID, RedirectURI: redirectURI,
 		}
 		authURL, err = client.AuthorizeURL(state)
 		if err != nil {
@@ -358,7 +359,7 @@ func (s *ChannelConnectService) OAuthCallback(
 			expiresAt = &t
 		}
 	case model.SocialProviderInstagram:
-		client, err := s.instagramLoginClient(ctx, cfg, redirectURI)
+		client, err := s.instagramClient(ctx, cfg, redirectURI)
 		if err != nil {
 			return nil, err
 		}
@@ -1082,19 +1083,41 @@ func (s *ChannelConnectService) discoverTargets(
 		return targets, "Выберите доску Pinterest для публикации Pins.", nil
 
 	case model.SocialProviderInstagram:
-		client, err := s.instagramLoginClient(ctx, cfg, redirectURI)
+		client, err := s.instagramClient(ctx, cfg, redirectURI)
 		if err != nil {
 			return nil, "", err
 		}
-		profile, err := client.Profile(ctx, accessToken)
+		if subject, subjectErr := client.Subject(ctx, accessToken); subjectErr != nil {
+			slog.WarnContext(ctx, "instagram token subject lookup failed", "error", subjectErr)
+		} else {
+			slog.InfoContext(ctx, "instagram token subject", "id", subject.ID, "name", subject.Name)
+		}
+		if permissions, permissionsErr := client.Permissions(ctx, accessToken); permissionsErr != nil {
+			slog.WarnContext(ctx, "instagram token permissions lookup failed", "error", permissionsErr)
+		} else {
+			granted := make([]string, 0, len(permissions))
+			for _, item := range permissions {
+				granted = append(granted, item.Permission+":"+item.Status)
+			}
+			slog.InfoContext(ctx, "instagram token permissions", "permissions", granted)
+		}
+		accounts, err := client.AssignedAccounts(ctx, accessToken)
 		if err != nil {
 			return nil, "", err
 		}
-		title := strings.TrimSpace(profile.Username)
-		if title == "" {
-			title = strings.TrimSpace(profile.Name)
+		targets := make([]model.DiscoveredChannelTarget, 0, len(accounts))
+		for _, account := range accounts {
+			title := strings.TrimSpace(account.Username)
+			if title == "" {
+				title = strings.TrimSpace(account.Name)
+			}
+			targets = append(targets, model.DiscoveredChannelTarget{ExternalID: account.ID, Title: title, Type: "instagram_professional_account", CanPost: true, PublicURL: "https://www.instagram.com/" + title})
 		}
-		return []model.DiscoveredChannelTarget{{ExternalID: profile.ID, Title: title, Type: "instagram_professional_account", CanPost: true, AvatarURL: profile.ProfilePicture, PublicURL: "https://www.instagram.com/" + title}}, "Профиль Instagram готов к подключению.", nil
+		hint := "Выберите Instagram Professional Account для публикации."
+		if len(targets) == 0 {
+			hint = "Meta вернула 0 Instagram-аккаунтов для этого подключения. Проверьте, что в окне Meta выбран аккаунт george_erman и Business Portfolio Postilka, затем начните подключение заново. Если ошибка повторяется, проверьте backend-лог: instagram assigned accounts response."
+		}
+		return targets, hint, nil
 
 	case model.SocialProviderOK:
 		client := &oauthclient.OKClient{
@@ -1302,11 +1325,11 @@ func (s *ChannelConnectService) oauthAppCredentialsFromSession(
 	return strings.TrimSpace(cfg.OAuthClientID), strings.TrimSpace(cfg.OAuthClientSecret), nil
 }
 
-func (s *ChannelConnectService) instagramLoginClient(ctx context.Context, cfg model.SocialProviderSettings, redirectURI string) (*oauthclient.InstagramLoginClient, error) {
-	if strings.TrimSpace(cfg.OAuthClientID) == "" || strings.TrimSpace(cfg.OAuthClientSecret) == "" {
+func (s *ChannelConnectService) instagramClient(ctx context.Context, cfg model.SocialProviderSettings, redirectURI string) (*oauthclient.InstagramUnifiedClient, error) {
+	if strings.TrimSpace(cfg.OAuthClientID) == "" || strings.TrimSpace(cfg.OAuthClientSecret) == "" || strings.TrimSpace(cfg.OAuthConfigID) == "" {
 		return nil, ErrSocialProviderNotReady
 	}
-	client := &oauthclient.InstagramLoginClient{AppID: cfg.OAuthClientID, AppSecret: cfg.OAuthClientSecret, RedirectURI: redirectURI}
+	client := &oauthclient.InstagramUnifiedClient{AppID: cfg.OAuthClientID, AppSecret: cfg.OAuthClientSecret, ConfigID: cfg.OAuthConfigID, RedirectURI: redirectURI}
 	if s.instagramSettings != nil {
 		httpClient, err := s.instagramSettings.HTTPClient(ctx)
 		if err != nil {
