@@ -1092,6 +1092,15 @@ func (s *ChannelConnectService) discoverTargets(
 		} else {
 			slog.InfoContext(ctx, "instagram token subject", "id", subject.ID, "name", subject.Name)
 		}
+		if permissions, permissionsErr := client.Permissions(ctx, accessToken); permissionsErr != nil {
+			slog.WarnContext(ctx, "instagram token permissions lookup failed", "error", permissionsErr)
+		} else {
+			granted := make([]string, 0, len(permissions))
+			for _, item := range permissions {
+				granted = append(granted, item.Permission+":"+item.Status)
+			}
+			slog.InfoContext(ctx, "instagram token permissions", "permissions", granted)
+		}
 		accounts, err := client.AssignedAccounts(ctx, accessToken)
 		if err != nil {
 			return nil, "", err

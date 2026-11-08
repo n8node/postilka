@@ -57,6 +57,11 @@ type InstagramUnifiedSubject struct {
 	Name string `json:"name"`
 }
 
+type InstagramTokenPermission struct {
+	Permission string `json:"permission"`
+	Status     string `json:"status"`
+}
+
 func (c *InstagramUnifiedClient) AuthorizeURL(state string) (string, error) {
 	if strings.TrimSpace(c.AppID) == "" || strings.TrimSpace(c.ConfigID) == "" {
 		return "", fmt.Errorf("instagram unified login: app id and config id are required")
@@ -67,7 +72,9 @@ func (c *InstagramUnifiedClient) AuthorizeURL(state string) (string, error) {
 	q.Set("redirect_uri", strings.TrimSpace(c.RedirectURI))
 	q.Set("state", strings.TrimSpace(state))
 	q.Set("response_type", "code")
-	return "https://www.facebook.com/" + c.version() + "/dialog/oauth?" + q.Encode(), nil
+	q.Set("display", "popup")
+	q.Set("override_default_response_type", "true")
+	return "https://www.facebook.com/dialog/oauth?" + q.Encode(), nil
 }
 
 func (c *InstagramUnifiedClient) ExchangeCode(ctx context.Context, code string) (*InstagramUnifiedToken, error) {
@@ -168,6 +175,31 @@ func (c *InstagramUnifiedClient) Subject(ctx context.Context, accessToken string
 		return nil, err
 	}
 	return &subject, nil
+}
+
+func (c *InstagramUnifiedClient) Permissions(ctx context.Context, accessToken string) ([]InstagramTokenPermission, error) {
+	q := url.Values{}
+	q.Set("access_token", accessToken)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.graphURL("/me/permissions")+"?"+q.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.http().Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if resp.StatusCode >= 400 {
+		return nil, fmt.Errorf("instagram permissions: HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	var result struct {
+		Data []InstagramTokenPermission `json:"data"`
+	}
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, err
+	}
+	return result.Data, nil
 }
 
 func (c *InstagramUnifiedClient) graphURL(path string) string {
