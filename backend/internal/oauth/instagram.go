@@ -109,7 +109,17 @@ func (c *InstagramUnifiedClient) ExchangeCode(ctx context.Context, code string) 
 }
 
 func (c *InstagramUnifiedClient) AssignedAccounts(ctx context.Context, accessToken string) ([]InstagramAccount, error) {
-	endpoint := c.graphURL("/me/assigned_instagram_accounts")
+	// Unified Login returns a Business Integration System User token. Meta's
+	// reference describes this edge as /{user-id}/assigned_instagram_accounts;
+	// resolve /me first and use that concrete subject ID for the edge.
+	subject, err := c.Subject(ctx, accessToken)
+	if err != nil {
+		return nil, err
+	}
+	if strings.TrimSpace(subject.ID) == "" {
+		return nil, fmt.Errorf("instagram accounts: empty token subject id")
+	}
+	endpoint := c.graphURL("/" + url.PathEscape(subject.ID) + "/assigned_instagram_accounts")
 	var accounts []InstagramAccount
 	for endpoint != "" {
 		q := url.Values{}
