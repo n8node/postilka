@@ -12,6 +12,7 @@ export const PROVIDER_LABEL: Record<ChannelProvider, string> = {
   photochka: "Photochka",
   wordpress: "WordPress",
   pinterest: "Pinterest",
+  instagram: "Instagram",
 };
 
 export function formatProviderLabel(provider: ChannelProvider, chatType?: string) {
@@ -30,6 +31,7 @@ export const PROVIDER_BRAND_COLOR: Record<ChannelProvider, string> = {
   photochka: "#7C3AED",
   wordpress: "#21759B",
   pinterest: "#E60023",
+  instagram: "#E1306C",
 };
 
 export function ProviderIcon({
@@ -106,6 +108,13 @@ export function ProviderIcon({
             fill="#fff"
             d="M12 4.6c-1.6 0-3 .5-4.1 1.5l2.2 6.1 2.1-6.3c.5-.1.9-.2 1.4-.2 2.8 0 4.8 1.9 4.8 5.1 0 .5 0 1-.1 1.5-.8-.2-1.7-.2-1.7-.2-.1 0-.2.2 0 .3 0 0 .8.1 1.3.1l1.4 4.1c.3.7.5 1.3.5 1.8C17.8 16.6 15.2 19.4 12 19.4c-1.4 0-2.6-.4-3.6-1.1l2-5.7 1.3 3.8c.1.3.2.3.4.3s.3 0 .4-.3l2.3-6.8c.2-.6.2-1.1.2-1.5 0-2.2-1.4-3.3-3.4-3.3-.8 0-1.6.3-2.1.7l-.8 2.4c-.2.6-.3 1.1-.3 1.5 0 2.2 1.4 3.3 3.4 3.3.4 0 .8 0 1.1-.1-.1.3-.2.6-.4 1.1-.6.1-1.2.2-1.8.2-3.2 0-5.3-2.1-5.3-5.3C4.6 7 7.8 4.6 12 4.6z"
           />
+        </>
+      ) : null}
+      {provider === "instagram" ? (
+        <>
+          <rect x="3" y="3" width="18" height="18" rx="5" fill="none" stroke={color} strokeWidth="2" />
+          <circle cx="12" cy="12" r="4" fill="none" stroke={color} strokeWidth="2" />
+          <circle cx="17.3" cy="6.8" r="1.2" fill={color} />
         </>
       ) : null}
     </svg>

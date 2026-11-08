@@ -7,7 +7,7 @@ import { ConnectVKDialog } from "@/components/channels/ConnectVKDialog";
 import { ConnectYouTubeDialog } from "@/components/channels/ConnectYouTubeDialog";
 import type { SocialProviderKey } from "@/lib/api";
 
-const OAUTH_PROVIDERS: SocialProviderKey[] = ["vk", "rutube", "dzen", "youtube", "pinterest"];
+const OAUTH_PROVIDERS: SocialProviderKey[] = ["vk", "rutube", "dzen", "youtube", "pinterest", "instagram"];
 
 const LABELS: Record<SocialProviderKey, string> = {
   vk: "VK",
@@ -16,6 +16,7 @@ const LABELS: Record<SocialProviderKey, string> = {
   dzen: "Дзен",
   youtube: "YouTube",
   pinterest: "Pinterest",
+  instagram: "Instagram",
 };
 
 export default function ChannelOAuthCallbackPage({

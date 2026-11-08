@@ -115,6 +115,7 @@ const PROVIDER_LABEL: Record<ChannelProvider, string> = {
   photochka: "Photochka",
   wordpress: "WordPress",
   pinterest: "Pinterest",
+  instagram: "Instagram",
 };
 
 const PROVIDER_COLOR: Record<ChannelProvider, string> = {
@@ -128,6 +129,7 @@ const PROVIDER_COLOR: Record<ChannelProvider, string> = {
   photochka: "#7C3AED",
   wordpress: "#21759B",
   pinterest: "#e60023",
+  instagram: "#e1306c",
 };
 
 const STATUS_LABEL: Record<Post["status"], string> = {

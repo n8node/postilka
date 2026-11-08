@@ -10,10 +10,12 @@ import {
   fetchAdminSocialProviders,
   fetchAdminTelegramProviderSettings,
   fetchAdminYouTubeProviderSettings,
+  fetchAdminInstagramProviderSettings,
   updateAdminMAXPlatformBot,
   updateAdminSocialProvider,
   updateAdminTelegramProviderSettings,
   updateAdminYouTubeProviderSettings,
+  updateAdminInstagramProviderSettings,
   type MAXPlatformBotAdminView,
   type ProviderLogoKey,
   type ProviderLogoView,
@@ -21,6 +23,7 @@ import {
   type SocialProviderSettings,
   type TelegramProviderSettings,
   type YouTubeProviderSettings,
+  type InstagramProviderSettings,
 } from "@/lib/api";
 import { MaxPlatformBotSettingsPanel } from "@/components/admin/AdminMaxPlatformBotPage";
 import { ProviderLogoField } from "@/components/admin/ProviderLogoField";
@@ -35,6 +38,7 @@ const PROVIDER_MENU: { key: ProviderKey; label: string; connectFlow: string }[] 
   { key: "rutube", label: "Rutube", connectFlow: "oauth" },
   { key: "youtube", label: "YouTube", connectFlow: "user_oauth" },
   { key: "pinterest", label: "Pinterest", connectFlow: "oauth" },
+  { key: "instagram", label: "Instagram", connectFlow: "oauth" },
   { key: "dzen", label: "Дзен", connectFlow: "telegram_crosspost" },
   { key: "photochka", label: "Photochka", connectFlow: "api_key" },
   { key: "wordpress", label: "WordPress", connectFlow: "app_password" },
@@ -94,6 +98,13 @@ const DEFAULT_YOUTUBE_PROXY: YouTubeProviderSettings = {
   proxy_urls: [],
 };
 
+const DEFAULT_INSTAGRAM_PROXY: InstagramProviderSettings = {
+  proxy_enabled: false,
+  proxy_active_url: "",
+  proxy_auto_failover: true,
+  proxy_urls: [],
+};
+
 export function AdminSocialProvidersPage() {
   const searchParams = useSearchParams();
   const initialProvider = (searchParams.get("provider") as ProviderKey) || "telegram";
@@ -106,6 +117,7 @@ export function AdminSocialProvidersPage() {
 
   const [telegram, setTelegram] = useState<TelegramProviderSettings>(DEFAULT_TELEGRAM);
   const [youtubeProxy, setYoutubeProxy] = useState<YouTubeProviderSettings>(DEFAULT_YOUTUBE_PROXY);
+  const [instagramProxy, setInstagramProxy] = useState<InstagramProviderSettings>(DEFAULT_INSTAGRAM_PROXY);
   const [socialProviders, setSocialProviders] = useState<SocialProviderAdminView[]>([]);
   const [socialForm, setSocialForm] = useState<SocialProviderSettings>(DEFAULT_SOCIAL);
   const [maxBot, setMaxBot] = useState<MAXPlatformBotAdminView | null>(null);
@@ -122,10 +134,11 @@ export function AdminSocialProvidersPage() {
     setLoading(true);
     setError(null);
     try {
-      const [telegramData, socialData, youtubeData, maxBotData, logoData] = await Promise.all([
+      const [telegramData, socialData, youtubeData, instagramData, maxBotData, logoData] = await Promise.all([
         fetchAdminTelegramProviderSettings(),
         fetchAdminSocialProviders(),
         fetchAdminYouTubeProviderSettings(),
+        fetchAdminInstagramProviderSettings(),
         fetchAdminMAXPlatformBot(),
         fetchAdminProviderLogos(),
       ]);
@@ -150,6 +163,10 @@ export function AdminSocialProvidersPage() {
         proxy_urls: ytProxyUrls,
         proxy_active_url: ytProxyActive,
       });
+      const igProxyUrls = instagramData.settings.proxy_urls || [];
+      const igProxyActive = instagramData.settings.proxy_active_url && igProxyUrls.includes(instagramData.settings.proxy_active_url)
+        ? instagramData.settings.proxy_active_url : "";
+      setInstagramProxy({ ...instagramData.settings, proxy_urls: igProxyUrls, proxy_active_url: igProxyActive });
       setMaxBot(maxBotData);
       setMaxBotEnabled(maxBotData.enabled);
       setMaxBotTokenInput("");
@@ -204,6 +221,15 @@ export function AdminSocialProvidersPage() {
         const proxyUrls = proxyData.settings.proxy_urls || [];
         setYoutubeProxy({ ...proxyData.settings, proxy_urls: proxyUrls });
         setSuccess("Настройки YouTube сохранены");
+      } else if (selected === "instagram") {
+        const [updated, proxyData] = await Promise.all([
+          updateAdminSocialProvider("instagram", socialForm),
+          updateAdminInstagramProviderSettings(instagramProxy),
+        ]);
+        setSocialProviders((prev) => prev.map((p) => (p.provider === updated.provider ? updated : p)));
+        setSocialForm(updated.settings);
+        setInstagramProxy(proxyData.settings);
+        setSuccess("Настройки Instagram сохранены");
       } else if (selected === "photochka" || selected === "wordpress") {
         setSuccess("Логотип сохраняется сразу при загрузке");
       } else if (selected === "max") {
@@ -224,7 +250,7 @@ export function AdminSocialProvidersPage() {
         setSuccess("Настройки MAX сохранены");
       } else {
         const updated = await updateAdminSocialProvider(
-          selected as "vk" | "max" | "rutube" | "dzen" | "youtube" | "pinterest",
+          selected as "vk" | "max" | "rutube" | "dzen" | "youtube" | "pinterest" | "instagram",
           socialForm,
         );
         setSocialProviders((prev) =>
@@ -255,6 +281,11 @@ export function AdminSocialProvidersPage() {
     setSuccess(null);
   }
 
+  function patchInstagramProxy(partial: Partial<InstagramProviderSettings>) {
+    setInstagramProxy((prev) => ({ ...prev, ...partial }));
+    setSuccess(null);
+  }
+
   const menuItem = PROVIDER_MENU.find((m) => m.key === selected)!;
   const proxyOptions = telegram.proxy_urls.filter(Boolean);
   const proxySelectValue =
@@ -266,6 +297,9 @@ export function AdminSocialProvidersPage() {
     youtubeProxy.proxy_active_url && youtubeProxyOptions.includes(youtubeProxy.proxy_active_url)
       ? youtubeProxy.proxy_active_url
       : "";
+  const instagramProxyOptions = instagramProxy.proxy_urls.filter(Boolean);
+  const instagramProxySelectValue = instagramProxy.proxy_active_url && instagramProxyOptions.includes(instagramProxy.proxy_active_url)
+    ? instagramProxy.proxy_active_url : "";
 
   return (
     <div className="space-y-4">
@@ -446,6 +480,27 @@ export function AdminSocialProvidersPage() {
                 saving={saving}
                 disabled={maxBotEnabled && !maxBot?.bot_token_set && !maxBotTokenInput.trim()}
               />
+            </div>
+          ) : selected === "instagram" ? (
+            <div className="mx-auto max-w-2xl space-y-5">
+              <SocialSettingsForm
+                provider={selected}
+                label={currentSocial?.label ?? menuItem.label}
+                connectFlow={menuItem.connectFlow}
+                settings={socialForm}
+                onPatch={patchSocial}
+                onSave={() => void handleSave()}
+                saving={saving}
+                logo={logos[selected]}
+                onLogoChanged={(logo) => setLogos((prev) => ({ ...prev, [selected]: logo ?? undefined }))}
+              />
+              <Section title="Proxy Meta / Instagram">
+                <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={instagramProxy.proxy_enabled} onChange={(e) => patchInstagramProxy({ proxy_enabled: e.target.checked })} /> Использовать proxy для Meta API</label>
+                <input className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm" placeholder="http://user:password@host:port" value={instagramProxy.proxy_urls.join("\n")} onChange={(e) => patchInstagramProxy({ proxy_urls: e.target.value.split(/\r?\n/).map((v) => v.trim()).filter(Boolean) })} />
+                <select className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm" value={instagramProxySelectValue} onChange={(e) => patchInstagramProxy({ proxy_active_url: e.target.value })}><option value="">Выберите active proxy</option>{instagramProxyOptions.map((v) => <option key={v} value={v}>{v}</option>)}</select>
+                <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={instagramProxy.proxy_auto_failover} onChange={(e) => patchInstagramProxy({ proxy_auto_failover: e.target.checked })} /> Переключаться на следующий proxy при ошибке</label>
+              </Section>
+              <SaveButton onSave={() => void handleSave()} saving={saving} />
             </div>
           ) : (
             <SocialSettingsForm
@@ -976,6 +1031,23 @@ function SocialSettingsForm({
                 className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
               />
             </label>
+            {provider === "instagram" && (
+              <>
+                <label className="block space-y-1.5">
+                  <span className="text-sm font-medium text-slate-700">Meta Configuration ID</span>
+                  <input
+                    type="text"
+                    value={settings.oauth_config_id ?? ""}
+                    onChange={(e) => onPatch({ oauth_config_id: e.target.value })}
+                    className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+                    placeholder="ID конфигурации Unified Login"
+                  />
+                </label>
+                <p className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-900">
+                  Configuration ID берётся в Meta App Dashboard в разделе Instagram → API setup with Unified Login. Для публикации нужен permission <code>instagram_content_publish</code>, а для получения профиля — <code>instagram_basic</code>.
+                </p>
+              </>
+            )}
           </Section>
           {provider === "rutube" && (
             <Section title="Возможности публикации">

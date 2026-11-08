@@ -83,6 +83,7 @@ func (s *SocialProviderSettingsService) UpdateAdmin(
 ) (*model.SocialProviderAdminView, error) {
 	cfg.OAuthClientID = strings.TrimSpace(cfg.OAuthClientID)
 	cfg.OAuthClientSecret = strings.TrimSpace(cfg.OAuthClientSecret)
+	cfg.OAuthConfigID = strings.TrimSpace(cfg.OAuthConfigID)
 	cfg.ConnectHelpURL = strings.TrimSpace(cfg.ConnectHelpURL)
 	cfg.DocsURL = strings.TrimSpace(cfg.DocsURL)
 	cfg.SupportTelegramUsername = strings.TrimPrefix(strings.TrimSpace(cfg.SupportTelegramUsername), "@")
@@ -92,6 +93,9 @@ func (s *SocialProviderSettingsService) UpdateAdmin(
 	if cfg.Enabled && provider.ConnectFlow() == "oauth" && provider != model.SocialProviderVK {
 		if cfg.OAuthClientID == "" {
 			return nil, fmt.Errorf("%w: укажите OAuth Client ID", ErrInvalidSocialProviderSettings)
+		}
+		if provider == model.SocialProviderInstagram && cfg.OAuthConfigID == "" {
+			return nil, fmt.Errorf("%w: укажите Meta Configuration ID", ErrInvalidSocialProviderSettings)
 		}
 	}
 	if cfg.Enabled && provider == model.SocialProviderVK && cfg.PlatformOAuthEnabled {
@@ -174,7 +178,7 @@ func (s *SocialProviderSettingsService) EnsureReady(ctx context.Context, provide
 	if !cfg.Enabled {
 		return cfg, ErrSocialProviderDisabled
 	}
-	if provider == model.SocialProviderVK || provider == model.SocialProviderYouTube || provider == model.SocialProviderPinterest {
+	if provider == model.SocialProviderVK || provider == model.SocialProviderYouTube || provider == model.SocialProviderPinterest || provider == model.SocialProviderInstagram {
 		return cfg, nil
 	}
 	if provider.ConnectFlow() == "oauth" && strings.TrimSpace(cfg.OAuthClientID) == "" {
@@ -187,7 +191,7 @@ func normalizeSocialProviderAdminSettings(
 	provider model.SocialProvider,
 	cfg model.SocialProviderSettings,
 ) model.SocialProviderSettings {
-	if provider == model.SocialProviderVK || provider == model.SocialProviderYouTube || provider == model.SocialProviderPinterest {
+	if provider == model.SocialProviderVK || provider == model.SocialProviderYouTube || provider == model.SocialProviderPinterest || provider == model.SocialProviderInstagram {
 		def := model.DefaultSocialProviderSettings(provider)
 		if strings.TrimSpace(cfg.ConnectHelpURL) == "" {
 			cfg.ConnectHelpURL = def.ConnectHelpURL

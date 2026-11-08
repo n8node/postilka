@@ -2339,6 +2339,29 @@ export type YouTubeProviderAdminView = {
   updated_at?: string;
 };
 
+export type InstagramProviderSettings = {
+  proxy_enabled: boolean;
+  proxy_active_url: string;
+  proxy_auto_failover: boolean;
+  proxy_urls: string[];
+};
+
+export type InstagramProviderAdminView = {
+  settings: InstagramProviderSettings;
+  updated_at?: string;
+};
+
+export function fetchAdminInstagramProviderSettings() {
+  return apiFetch<InstagramProviderAdminView>("/admin/instagram/provider");
+}
+
+export function updateAdminInstagramProviderSettings(settings: InstagramProviderSettings) {
+  return apiFetch<InstagramProviderAdminView>("/admin/instagram/provider", {
+    method: "PUT",
+    body: JSON.stringify(settings),
+  });
+}
+
 export function fetchAdminYouTubeProviderSettings() {
   return apiFetch<YouTubeProviderAdminView>("/admin/youtube/provider");
 }
@@ -2350,12 +2373,13 @@ export function updateAdminYouTubeProviderSettings(settings: YouTubeProviderSett
   });
 }
 
-export type SocialProviderKey = "vk" | "max" | "rutube" | "dzen" | "youtube" | "pinterest";
+export type SocialProviderKey = "vk" | "max" | "rutube" | "dzen" | "youtube" | "pinterest" | "instagram";
 
 export type SocialProviderSettings = {
   enabled: boolean;
   oauth_client_id: string;
   oauth_client_secret: string;
+  oauth_config_id?: string;
   platform_bot_enabled?: boolean;
   platform_oauth_enabled?: boolean;
   connect_help_text: string;
@@ -2394,6 +2418,7 @@ export type ProviderLogoKey =
   | "dzen"
   | "youtube"
   | "pinterest"
+  | "instagram"
   | "photochka"
   | "wordpress";
 
@@ -2460,7 +2485,7 @@ export type ChannelProvider =
   | "pinterest"
   | "photochka"
   | "wordpress"
-  | "pinterest";
+  | "instagram";
 
 export type ChannelMetadata = {
   provider_title?: string;

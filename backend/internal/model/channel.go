@@ -23,6 +23,7 @@ const (
 	ChannelProviderPhotochka ChannelProvider = "photochka"
 	ChannelProviderWordPress ChannelProvider = "wordpress"
 	ChannelProviderPinterest ChannelProvider = "pinterest"
+	ChannelProviderInstagram ChannelProvider = "instagram"
 )
 
 func (p ChannelProvider) Label() string {
@@ -45,6 +46,10 @@ func (p ChannelProvider) Label() string {
 		return "Photochka"
 	case ChannelProviderWordPress:
 		return "WordPress"
+	case ChannelProviderPinterest:
+		return "Pinterest"
+	case ChannelProviderInstagram:
+		return "Instagram"
 	default:
 		return string(p)
 	}

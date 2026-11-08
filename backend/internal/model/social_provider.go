@@ -16,6 +16,7 @@ const (
 	ProviderLogoRutube           ProviderLogoKey = "rutube"
 	ProviderLogoDzen             ProviderLogoKey = "dzen"
 	ProviderLogoYouTube          ProviderLogoKey = "youtube"
+	ProviderLogoInstagram        ProviderLogoKey = "instagram"
 	ProviderLogoPhotochka        ProviderLogoKey = "photochka"
 	ProviderLogoWordPress        ProviderLogoKey = "wordpress"
 )
@@ -28,6 +29,7 @@ var AllProviderLogoKeys = []ProviderLogoKey{
 	ProviderLogoRutube,
 	ProviderLogoDzen,
 	ProviderLogoYouTube,
+	ProviderLogoInstagram,
 	ProviderLogoPhotochka,
 	ProviderLogoWordPress,
 	ProviderLogoPinterest,
@@ -77,6 +79,7 @@ const (
 	SocialProviderDzen      SocialProvider = "dzen"
 	SocialProviderYouTube   SocialProvider = "youtube"
 	SocialProviderPinterest SocialProvider = "pinterest"
+	SocialProviderInstagram SocialProvider = "instagram"
 )
 
 var AllSocialProviders = []SocialProvider{
@@ -86,6 +89,7 @@ var AllSocialProviders = []SocialProvider{
 	SocialProviderDzen,
 	SocialProviderYouTube,
 	SocialProviderPinterest,
+	SocialProviderInstagram,
 }
 
 func (p SocialProvider) Label() string {
@@ -104,6 +108,8 @@ func (p SocialProvider) Label() string {
 		return "YouTube"
 	case SocialProviderPinterest:
 		return "Pinterest"
+	case SocialProviderInstagram:
+		return "Instagram"
 	default:
 		return string(p)
 	}
@@ -121,6 +127,8 @@ func (p SocialProvider) ConnectFlow() string {
 		return "user_oauth"
 	case SocialProviderPinterest:
 		return "oauth"
+	case SocialProviderInstagram:
+		return "oauth"
 	default:
 		return "oauth"
 	}
@@ -134,6 +142,7 @@ type SocialProviderSettings struct {
 	Enabled                 bool   `json:"enabled"`
 	OAuthClientID           string `json:"oauth_client_id"`
 	OAuthClientSecret       string `json:"oauth_client_secret"`
+	OAuthConfigID           string `json:"oauth_config_id,omitempty"`
 	PlatformBotEnabled      bool   `json:"platform_bot_enabled"`
 	PlatformOAuthEnabled    bool   `json:"platform_oauth_enabled"`
 	ConnectHelpText         string `json:"connect_help_text"`
@@ -223,6 +232,10 @@ func DefaultSocialProviderSettings(provider SocialProvider) SocialProviderSettin
 	case SocialProviderPinterest:
 		def.ConnectHelpURL = "https://developers.pinterest.com/docs/getting-started/authentication/"
 		def.ConnectHelpText = "Pinterest сейчас на этапе подготовки интеграции. Включите Trial access, укажите Redirect URI и запросите права user_accounts:read, boards:read, boards:write, pins:read и pins:write. После изменения прав переподключите Pinterest. Для production-публикации потребуется Standard access Pinterest."
+	case SocialProviderInstagram:
+		def.ConnectHelpURL = "https://developers.facebook.com/documentation/instagram-platform/instagram-api-with-unified-login"
+		def.ConnectHelpText = "1. Создайте Business-приложение Meta и добавьте сценарий управления сообщениями и контентом в Instagram.\n2. Настройте Unified Login и OAuth Redirect URI: https://postilka.ru/app/api/v1/channels/oauth/instagram/callback\n3. Укажите App ID и App Secret в настройках Postilka.\n4. Для подключения используйте профессиональный аккаунт Instagram: Business или Creator.\n5. Серверные запросы к Meta выполняются через настроенный proxy."
+		def.DocsURL = "https://developers.facebook.com/documentation/instagram-platform/instagram-api-with-unified-login"
 	}
 	return def
 }

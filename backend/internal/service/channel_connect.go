@@ -27,25 +27,27 @@ var (
 )
 
 type ChannelConnectService struct {
-	channels       *repository.ChannelRepository
-	oauthSessions  *repository.ChannelOAuthSessionRepository
-	socialSettings *SocialProviderSettingsService
-	telegram       *TelegramProviderSettingsService
-	youtubeAPI     *YouTubeAPIClient
-	wsSvc          *WorkspaceService
-	quota          *QuotaService
-	cipher         *SecretCipher
-	maxClient      *oauthclient.MAXBotClient
-	photochka      *photochka.Client
-	wordpress      *wordpress.Client
-	cfg            *config.Config
-	notify         *NotificationService
+	channels          *repository.ChannelRepository
+	oauthSessions     *repository.ChannelOAuthSessionRepository
+	socialSettings    *SocialProviderSettingsService
+	instagramSettings *InstagramProviderSettingsService
+	telegram          *TelegramProviderSettingsService
+	youtubeAPI        *YouTubeAPIClient
+	wsSvc             *WorkspaceService
+	quota             *QuotaService
+	cipher            *SecretCipher
+	maxClient         *oauthclient.MAXBotClient
+	photochka         *photochka.Client
+	wordpress         *wordpress.Client
+	cfg               *config.Config
+	notify            *NotificationService
 }
 
 func NewChannelConnectService(
 	channels *repository.ChannelRepository,
 	oauthSessions *repository.ChannelOAuthSessionRepository,
 	socialSettings *SocialProviderSettingsService,
+	instagramSettings *InstagramProviderSettingsService,
 	telegram *TelegramProviderSettingsService,
 	youtubeAPI *YouTubeAPIClient,
 	wsSvc *WorkspaceService,
@@ -54,18 +56,19 @@ func NewChannelConnectService(
 	cfg *config.Config,
 ) *ChannelConnectService {
 	return &ChannelConnectService{
-		channels:       channels,
-		oauthSessions:  oauthSessions,
-		socialSettings: socialSettings,
-		telegram:       telegram,
-		youtubeAPI:     youtubeAPI,
-		wsSvc:          wsSvc,
-		quota:          quota,
-		cipher:         cipher,
-		maxClient:      oauthclient.NewMAXBotClient(),
-		photochka:      photochka.NewClient(cfg.PhotochkaAPIBaseURL),
-		wordpress:      wordpress.NewClient(),
-		cfg:            cfg,
+		channels:          channels,
+		oauthSessions:     oauthSessions,
+		socialSettings:    socialSettings,
+		instagramSettings: instagramSettings,
+		telegram:          telegram,
+		youtubeAPI:        youtubeAPI,
+		wsSvc:             wsSvc,
+		quota:             quota,
+		cipher:            cipher,
+		maxClient:         oauthclient.NewMAXBotClient(),
+		photochka:         photochka.NewClient(cfg.PhotochkaAPIBaseURL),
+		wordpress:         wordpress.NewClient(),
+		cfg:               cfg,
 	}
 }
 
@@ -201,6 +204,15 @@ func (s *ChannelConnectService) OAuthStart(
 	case model.SocialProviderPinterest:
 		client := &oauthclient.PinterestClient{ClientID: appID, ClientSecret: appSecret, RedirectURI: redirectURI}
 		authURL = client.AuthorizeURL(state)
+	case model.SocialProviderInstagram:
+		client := &oauthclient.InstagramUnifiedClient{
+			AppID: cfg.OAuthClientID, AppSecret: cfg.OAuthClientSecret,
+			ConfigID: cfg.OAuthConfigID, RedirectURI: redirectURI,
+		}
+		authURL, err = client.AuthorizeURL(state)
+		if err != nil {
+			return nil, err
+		}
 	default:
 		return nil, fmt.Errorf("неподдерживаемый провайдер")
 	}
@@ -341,6 +353,20 @@ func (s *ChannelConnectService) OAuthCallback(
 		}
 		accessToken = token.AccessToken
 		refreshToken = token.RefreshToken
+		if token.ExpiresIn > 0 {
+			t := time.Now().Add(time.Duration(token.ExpiresIn) * time.Second)
+			expiresAt = &t
+		}
+	case model.SocialProviderInstagram:
+		client, err := s.instagramClient(ctx, cfg, redirectURI)
+		if err != nil {
+			return nil, err
+		}
+		token, err := client.ExchangeCode(ctx, code)
+		if err != nil {
+			return nil, err
+		}
+		accessToken = token.AccessToken
 		if token.ExpiresIn > 0 {
 			t := time.Now().Add(time.Duration(token.ExpiresIn) * time.Second)
 			expiresAt = &t
@@ -1055,6 +1081,29 @@ func (s *ChannelConnectService) discoverTargets(
 		}
 		return targets, "Выберите доску Pinterest для публикации Pins.", nil
 
+	case model.SocialProviderInstagram:
+		client, err := s.instagramClient(ctx, cfg, redirectURI)
+		if err != nil {
+			return nil, "", err
+		}
+		accounts, err := client.AssignedAccounts(ctx, accessToken)
+		if err != nil {
+			return nil, "", err
+		}
+		targets := make([]model.DiscoveredChannelTarget, 0, len(accounts))
+		for _, account := range accounts {
+			title := strings.TrimSpace(account.Username)
+			if title == "" {
+				title = strings.TrimSpace(account.Name)
+			}
+			targets = append(targets, model.DiscoveredChannelTarget{ExternalID: account.ID, Title: title, Type: "instagram_professional_account", CanPost: true, PublicURL: "https://www.instagram.com/" + title})
+		}
+		hint := "Выберите Instagram Professional Account для публикации."
+		if len(targets) == 0 {
+			hint = "Не найдено доступных Instagram Professional Account. Подключите аккаунт Business или Creator и предоставьте доступ в Meta."
+		}
+		return targets, hint, nil
+
 	case model.SocialProviderOK:
 		client := &oauthclient.OKClient{
 			AppID: cfg.OAuthClientID, AppSecret: cfg.OAuthClientSecret, RedirectURI: redirectURI,
@@ -1259,6 +1308,21 @@ func (s *ChannelConnectService) oauthAppCredentialsFromSession(
 		return youtubeOAuthCredentialsFromSession(session.Metadata, s.cipher)
 	}
 	return strings.TrimSpace(cfg.OAuthClientID), strings.TrimSpace(cfg.OAuthClientSecret), nil
+}
+
+func (s *ChannelConnectService) instagramClient(ctx context.Context, cfg model.SocialProviderSettings, redirectURI string) (*oauthclient.InstagramUnifiedClient, error) {
+	if strings.TrimSpace(cfg.OAuthClientID) == "" || strings.TrimSpace(cfg.OAuthClientSecret) == "" || strings.TrimSpace(cfg.OAuthConfigID) == "" {
+		return nil, ErrSocialProviderNotReady
+	}
+	client := &oauthclient.InstagramUnifiedClient{AppID: cfg.OAuthClientID, AppSecret: cfg.OAuthClientSecret, ConfigID: cfg.OAuthConfigID, RedirectURI: redirectURI}
+	if s.instagramSettings != nil {
+		httpClient, err := s.instagramSettings.HTTPClient(ctx)
+		if err != nil {
+			return nil, err
+		}
+		client.HTTP = httpClient
+	}
+	return client, nil
 }
 
 func normalizeVKOAuthMode(raw string) model.VKOAuthMode {

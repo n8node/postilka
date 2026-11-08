@@ -100,6 +100,8 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	youtubeProviderSettingsSvc := service.NewYouTubeProviderSettingsService(youtubeProviderSettingsRepo)
 	socialProviderSettingsRepo := repository.NewSocialProviderSettingsRepository(db.Pool)
 	socialProviderSettingsSvc := service.NewSocialProviderSettingsService(socialProviderSettingsRepo)
+	instagramProviderSettingsRepo := repository.NewInstagramProviderSettingsRepository(db.Pool)
+	instagramProviderSettingsSvc := service.NewInstagramProviderSettingsService(instagramProviderSettingsRepo)
 	channelOAuthSessionRepo := repository.NewChannelOAuthSessionRepository(db.Pool)
 	telegramBotClient := service.NewTelegramBotClient(telegramProviderSettingsSvc, cfg.TelegramLocalProxy)
 	youtubeAPIClient := service.NewYouTubeAPIClient(youtubeProviderSettingsSvc, cfg.YouTubeLocalProxy)
@@ -117,7 +119,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	channelSvc.SetTelegramBusinessService(telegramBusinessSvc)
 	channelConnectSvc := service.NewChannelConnectService(
 		channelRepo, channelOAuthSessionRepo, socialProviderSettingsSvc,
-		telegramProviderSettingsSvc, youtubeAPIClient, wsSvc, quotaSvc, secretCipher, cfg,
+		instagramProviderSettingsSvc, telegramProviderSettingsSvc, youtubeAPIClient, wsSvc, quotaSvc, secretCipher, cfg,
 	)
 	channelTestSvc := service.NewChannelTestService(
 		channelRepo, userRepo, telegramBotClient, youtubeAPIClient, socialProviderSettingsSvc, wsSvc, secretCipher, photochkaClient,
@@ -194,6 +196,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	uploadFileSettingsHandler := handler.NewUploadFileSettingsHandler(uploadFileSettingsSvc)
 	telegramProviderHandler := handler.NewTelegramProviderSettingsHandler(telegramProviderSettingsSvc)
 	youtubeProviderHandler := handler.NewYouTubeProviderSettingsHandler(youtubeProviderSettingsSvc)
+	instagramProviderHandler := handler.NewInstagramProviderSettingsHandler(instagramProviderSettingsSvc)
 	providerLogoRepo := repository.NewProviderLogoRepository(db.Pool)
 	providerLogoSvc := service.NewProviderLogoService(providerLogoRepo, objectStorage, localMedia)
 	socialProviderHandler := handler.NewSocialProviderSettingsHandler(socialProviderSettingsSvc, providerLogoSvc)
@@ -770,6 +773,8 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Put("/telegram/provider", telegramProviderHandler.UpdateAdmin)
 				r.Get("/youtube/provider", youtubeProviderHandler.GetAdmin)
 				r.Put("/youtube/provider", youtubeProviderHandler.UpdateAdmin)
+				r.Get("/instagram/provider", instagramProviderHandler.GetAdmin)
+				r.Put("/instagram/provider", instagramProviderHandler.UpdateAdmin)
 				r.Get("/social-providers", socialProviderHandler.ListAdmin)
 				r.Get("/social-providers/logos", socialProviderHandler.ListLogos)
 				r.Post("/social-providers/{provider}/logo", socialProviderHandler.UploadLogo)
