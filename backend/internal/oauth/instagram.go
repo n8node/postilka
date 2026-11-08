@@ -54,6 +54,9 @@ func (c *InstagramUnifiedClient) ExchangeCode(ctx context.Context, code string) 
 	q.Set("client_id", strings.TrimSpace(c.AppID))
 	q.Set("client_secret", strings.TrimSpace(c.AppSecret))
 	q.Set("code", strings.TrimSpace(code))
+	// Meta requires redirect_uri to be identical in the authorization request
+	// and in the authorization-code exchange.
+	q.Set("redirect_uri", strings.TrimSpace(c.RedirectURI))
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.graphURL("/oauth/access_token")+"?"+q.Encode(), nil)
 	if err != nil {
 		return nil, err
