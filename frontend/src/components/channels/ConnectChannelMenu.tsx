@@ -28,6 +28,7 @@ const PROVIDER_LABELS: Partial<Record<ChannelProvider, string>> = {
   dzen: "Дзен",
   youtube: "YouTube",
   pinterest: "Pinterest",
+  instagram: "Instagram",
   photochka: "Photochka",
   wordpress: "WordPress",
 };
@@ -207,6 +208,16 @@ function ConnectChannelDialogs({
           open
           provider="pinterest"
           label="Pinterest"
+          onClose={onClose}
+          onConnected={onConnected}
+        />
+      )}
+
+      {activeProvider === "instagram" && (
+        <ConnectOAuthProviderDialog
+          open
+          provider="instagram"
+          label="Instagram"
           onClose={onClose}
           onConnected={onConnected}
         />
