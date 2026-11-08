@@ -118,7 +118,6 @@ func (c *InstagramUnifiedClient) AssignedAccounts(ctx context.Context, accessTok
 	for endpoint != "" {
 		q := url.Values{}
 		q.Set("access_token", accessToken)
-		q.Set("fields", "id,username")
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint+"?"+q.Encode(), nil)
 		if err != nil {
 			return nil, err
