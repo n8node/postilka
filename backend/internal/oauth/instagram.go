@@ -81,29 +81,40 @@ func (c *InstagramUnifiedClient) ExchangeCode(ctx context.Context, code string) 
 }
 
 func (c *InstagramUnifiedClient) AssignedAccounts(ctx context.Context, accessToken string) ([]InstagramAccount, error) {
-	var page struct {
-		Data []InstagramAccount `json:"data"`
+	endpoint := c.graphURL("/me/assigned_instagram_accounts")
+	var accounts []InstagramAccount
+	for endpoint != "" {
+		q := url.Values{}
+		q.Set("access_token", accessToken)
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint+"?"+q.Encode(), nil)
+		if err != nil {
+			return nil, err
+		}
+		resp, err := c.http().Do(req)
+		if err != nil {
+			return nil, err
+		}
+		body, readErr := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+		resp.Body.Close()
+		if readErr != nil {
+			return nil, readErr
+		}
+		if resp.StatusCode >= 400 {
+			return nil, fmt.Errorf("instagram accounts: HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		}
+		var page struct {
+			Data   []InstagramAccount `json:"data"`
+			Paging struct {
+				Next string `json:"next"`
+			} `json:"paging"`
+		}
+		if err := json.Unmarshal(body, &page); err != nil {
+			return nil, err
+		}
+		accounts = append(accounts, page.Data...)
+		endpoint = strings.TrimSpace(page.Paging.Next)
 	}
-	q := url.Values{}
-	q.Set("access_token", accessToken)
-	q.Set("fields", "id,username,name")
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.graphURL("/me/assigned_instagram_accounts")+"?"+q.Encode(), nil)
-	if err != nil {
-		return nil, err
-	}
-	resp, err := c.http().Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
-	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("instagram accounts: HTTP %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
-	}
-	if err := json.Unmarshal(body, &page); err != nil {
-		return nil, err
-	}
-	return page.Data, nil
+	return accounts, nil
 }
 
 func (c *InstagramUnifiedClient) graphURL(path string) string {
