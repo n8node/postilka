@@ -118,6 +118,8 @@ func (c *InstagramUnifiedClient) AssignedAccounts(ctx context.Context, accessTok
 	for endpoint != "" {
 		q := url.Values{}
 		q.Set("access_token", accessToken)
+		// Meta's Unified Login Get Started example requests these fields on this edge.
+		q.Set("fields", "id,username")
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint+"?"+q.Encode(), nil)
 		if err != nil {
 			return nil, err

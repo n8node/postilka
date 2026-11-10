@@ -61,3 +61,33 @@ func TestInstagramUnifiedAuthorizeURLAndExchangeUseSameRedirectURI(t *testing.T)
 type instagramRoundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f instagramRoundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
+
+func TestInstagramUnifiedAssignedAccountsRequest(t *testing.T) {
+	var requestURL *url.URL
+	client := &InstagramUnifiedClient{
+		APIVersion: "v27.0",
+		HTTP: &http.Client{Transport: instagramRoundTripFunc(func(req *http.Request) (*http.Response, error) {
+			requestURL = req.URL
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(strings.NewReader(`{"data":[{"id":"17841402981323552","username":"george_erman"}]}`)),
+				Request:    req,
+			}, nil
+		})},
+	}
+
+	accounts, err := client.AssignedAccounts(context.Background(), "test-token")
+	if err != nil {
+		t.Fatalf("AssignedAccounts() error = %v", err)
+	}
+	if len(accounts) != 1 || accounts[0].ID != "17841402981323552" || accounts[0].Username != "george_erman" {
+		t.Fatalf("unexpected accounts: %#v", accounts)
+	}
+	if requestURL.Path != "/v27.0/me/assigned_instagram_accounts" {
+		t.Fatalf("request path = %q", requestURL.Path)
+	}
+	if requestURL.Query().Get("fields") != "id,username" || requestURL.Query().Get("access_token") != "test-token" {
+		t.Fatalf("unexpected request query: %v", requestURL.Query())
+	}
+}
