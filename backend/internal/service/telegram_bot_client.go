@@ -188,6 +188,18 @@ func (c *TelegramBotClient) doRequestWithClient(
 	contentType string,
 	body []byte,
 ) (*http.Response, error) {
+	return c.doRequestWithSettings(ctx, client, method, endpoint, contentType, body, nil)
+}
+
+func (c *TelegramBotClient) doRequestWithSettings(
+	ctx context.Context,
+	client *http.Client,
+	method string,
+	endpoint string,
+	contentType string,
+	body []byte,
+	settings *model.TelegramSettings,
+) (*http.Response, error) {
 	reqBody := body
 	if reqBody == nil {
 		reqBody = []byte{}
@@ -203,7 +215,29 @@ func (c *TelegramBotClient) doRequestWithClient(
 		return client.Do(req)
 	}
 
-	cfg, err := c.providerSettings.GetEffective(ctx)
+	var cfg model.TelegramProviderSettings
+	var err error
+	if settings != nil {
+		cfg = model.TelegramProviderSettings{
+			ProxyEnabled:      settings.ProxyEnabled,
+			ProxyActiveURL:    settings.ProxyActiveURL,
+			ProxyAutoFailover: settings.ProxyAutoFailover,
+			ProxyURLs:         settings.ProxyURLs,
+		}
+	} else if c.providerSettings != nil {
+		cfg, err = c.providerSettings.GetEffective(ctx)
+	}
+	if settings != nil {
+		if c.providerSettings != nil {
+			stored, settingsErr := c.providerSettings.GetEffective(ctx)
+			if settingsErr == nil {
+				cfg.ProxyEnabled = stored.ProxyEnabled
+				cfg.ProxyActiveURL = stored.ProxyActiveURL
+				cfg.ProxyAutoFailover = stored.ProxyAutoFailover
+				cfg.ProxyURLs = stored.ProxyURLs
+			}
+		}
+	}
 	proxyEnabled := err == nil && cfg.ProxyEnabled && len(cfg.ProxyURLs) > 0
 	var proxies []string
 	if proxyEnabled {
@@ -759,6 +793,36 @@ func (c *TelegramBotClient) SendMedia(
 	return msgID, allIDs, nil
 }
 
+func (c *TelegramBotClient) SendMediaWithSettings(ctx context.Context, token, chatID string, media []TelegramMediaInput, opts *TelegramMediaSendOptions, settings model.TelegramSettings) (string, []string, error) {
+	if len(media) != 1 || len(media[0].Data) == 0 {
+		return "", nil, errors.New("expected a single uploaded media file")
+	}
+	item := media[0]
+	if item.Type != TelegramMediaPhoto && item.Type != TelegramMediaVideo {
+		return "", nil, errors.New("unsupported generation media type")
+	}
+	if err := validateTelegramUploadMedia(item); err != nil {
+		return "", nil, err
+	}
+	method, field := "sendPhoto", "photo"
+	if item.Type == TelegramMediaVideo {
+		method, field = "sendVideo", "video"
+	}
+	fields := map[string]string{"chat_id": fmt.Sprint(telegramChatIDParam(chatID))}
+	if opts != nil && strings.TrimSpace(opts.Caption) != "" {
+		fields["caption"] = telegramMediaCaption(opts.Caption, opts.ParseMode)
+	}
+	raw, err := c.apiMultipartTypedWithSettings(ctx, token, method, fields, field, item.Filename, item.Data, item.ContentType, &settings)
+	if err != nil {
+		return "", nil, err
+	}
+	id, err := telegramMessageID(raw)
+	if err != nil {
+		return "", nil, err
+	}
+	return id, []string{id}, nil
+}
+
 func (c *TelegramBotClient) sendMediaBatch(
 	ctx context.Context,
 	token, chatID string,
@@ -1012,7 +1076,11 @@ func (c *TelegramBotClient) apiMultipartForm(
 	if err := writer.Close(); err != nil {
 		return nil, err
 	}
-	uploadClient := &http.Client{Timeout: 5 * time.Minute, Transport: c.client.Transport}
+	var transport http.RoundTripper = directHTTPTransport()
+	if c.client != nil && c.client.Transport != nil {
+		transport = c.client.Transport
+	}
+	uploadClient := &http.Client{Timeout: 5 * time.Minute, Transport: transport}
 	resp, err := c.doRequestWithClient(ctx, uploadClient, http.MethodPost, endpoint, contentType, buf.Bytes())
 	if err != nil {
 		return nil, sanitizeTelegramError(err)
@@ -2258,6 +2326,10 @@ func (c *TelegramBotClient) apiMultipartTyped(
 	fileData []byte,
 	fileContentType string,
 ) (json.RawMessage, error) {
+	return c.apiMultipartTypedWithSettings(ctx, token, method, fields, fileField, filename, fileData, fileContentType, nil)
+}
+
+func (c *TelegramBotClient) apiMultipartTypedWithSettings(ctx context.Context, token, method string, fields map[string]string, fileField, filename string, fileData []byte, fileContentType string, settings *model.TelegramSettings) (json.RawMessage, error) {
 	endpoint := fmt.Sprintf("https://api.telegram.org/bot%s/%s", strings.TrimSpace(token), method)
 	var buf bytes.Buffer
 	writer := multipart.NewWriter(&buf)
@@ -2268,6 +2340,15 @@ func (c *TelegramBotClient) apiMultipartTyped(
 	}
 	if fileContentType == "" {
 		fileContentType = "application/octet-stream"
+	}
+	if fileField == "photo" || fileField == "video" {
+		mediaType := TelegramMediaPhoto
+		if fileField == "video" {
+			mediaType = TelegramMediaVideo
+		}
+		if err := validateTelegramUploadMedia(TelegramMediaInput{Type: mediaType, Data: fileData, ContentType: fileContentType}); err != nil {
+			return nil, err
+		}
 	}
 	fileHeader := make(textproto.MIMEHeader)
 	fileHeader.Set("Content-Disposition", fmt.Sprintf(`form-data; name="%s"; filename="%s"`, fileField, filename))
@@ -2283,8 +2364,12 @@ func (c *TelegramBotClient) apiMultipartTyped(
 	if err := writer.Close(); err != nil {
 		return nil, err
 	}
-	uploadClient := &http.Client{Timeout: 5 * time.Minute, Transport: c.client.Transport}
-	resp, err := c.doRequestWithClient(ctx, uploadClient, http.MethodPost, endpoint, contentType, buf.Bytes())
+	var transport http.RoundTripper = directHTTPTransport()
+	if c.client != nil && c.client.Transport != nil {
+		transport = c.client.Transport
+	}
+	uploadClient := &http.Client{Timeout: 5 * time.Minute, Transport: transport}
+	resp, err := c.doRequestWithSettings(ctx, uploadClient, http.MethodPost, endpoint, contentType, buf.Bytes(), settings)
 	if err != nil {
 		return nil, sanitizeTelegramError(err)
 	}
@@ -2301,4 +2386,28 @@ func (c *TelegramBotClient) apiMultipartTyped(
 		return nil, fmt.Errorf("telegram api: request failed")
 	}
 	return parsed.Result, nil
+}
+
+func validateTelegramUploadMedia(item TelegramMediaInput) error {
+	if len(item.Data) == 0 {
+		return errors.New("empty Telegram media")
+	}
+	contentType := strings.ToLower(strings.TrimSpace(strings.Split(item.ContentType, ";")[0]))
+	maxBytes := 50 << 20
+	if item.Type == TelegramMediaPhoto {
+		if !strings.HasPrefix(contentType, "image/") {
+			return errors.New("Telegram photo must have image content type")
+		}
+		maxBytes = 10 << 20
+	} else if item.Type == TelegramMediaVideo {
+		if !strings.HasPrefix(contentType, "video/") {
+			return errors.New("Telegram video must have video content type")
+		}
+	} else {
+		return errors.New("unsupported Telegram media type")
+	}
+	if len(item.Data) > maxBytes {
+		return fmt.Errorf("Telegram media exceeds %d MB limit", maxBytes>>20)
+	}
+	return nil
 }

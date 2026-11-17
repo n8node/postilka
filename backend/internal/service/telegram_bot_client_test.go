@@ -2,6 +2,32 @@ package service
 
 import "testing"
 
+func TestValidateTelegramUploadMedia(t *testing.T) {
+	tests := []struct {
+		name        string
+		mediaType   string
+		contentType string
+		size        int
+		wantErr     bool
+	}{
+		{name: "image within limit", mediaType: TelegramMediaPhoto, contentType: "image/jpeg", size: 10 << 20},
+		{name: "image too large", mediaType: TelegramMediaPhoto, contentType: "image/jpeg", size: (10 << 20) + 1, wantErr: true},
+		{name: "video within limit", mediaType: TelegramMediaVideo, contentType: "video/mp4", size: 50 << 20},
+		{name: "video too large", mediaType: TelegramMediaVideo, contentType: "video/mp4", size: (50 << 20) + 1, wantErr: true},
+		{name: "mismatched content type", mediaType: TelegramMediaPhoto, contentType: "video/mp4", size: 10, wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateTelegramUploadMedia(TelegramMediaInput{
+				Type: tt.mediaType, ContentType: tt.contentType, Data: make([]byte, tt.size),
+			})
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("validateTelegramUploadMedia() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
 func TestTelegramVideoNoteFilename(t *testing.T) {
 	tests := []struct {
 		in   string

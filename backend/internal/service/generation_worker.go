@@ -400,6 +400,10 @@ func (s *GenerationService) finalizeJob(ctx context.Context, jobID string) error
 	if err := s.jobRepo.MarkSucceeded(ctx, job.ID, record.ID, debit.WalletCentsCharged, debit.QuotaCreditsUsed); err != nil {
 		return err
 	}
+	job.GenerationID = &record.ID
+	if s.telegram != nil {
+		s.telegram.NotifyGenerationSucceeded(ctx, job, record, s.users, s.objectStore)
+	}
 	if s.notify != nil {
 		gid := record.ID
 		job.GenerationID = &gid

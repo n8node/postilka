@@ -23,14 +23,18 @@ type TelegramSettings struct {
 	WalletTopupTemplate   string   `json:"wallet_topup_template"`
 	NotifySupport         bool     `json:"notify_support"`
 	SupportTemplate       string   `json:"support_template"`
-	DigestEnabled         bool     `json:"digest_enabled"`
-	DigestChatID          string   `json:"digest_chat_id"`
-	DigestTopicID         int      `json:"digest_topic_id"`
-	DigestHour            int      `json:"digest_hour"`
-	KieCreditsEnabled     bool     `json:"kie_credits_enabled"`
-	KieCreditsAlert1      int      `json:"kie_credits_alert_1"`
-	KieCreditsAlert2      int      `json:"kie_credits_alert_2"`
-	KieCreditsAlert3      int      `json:"kie_credits_alert_3"`
+	NotifyGenerationFailed      bool     `json:"notify_generation_failed"`
+	GenerationFailedTemplate    string   `json:"generation_failed_template"`
+	NotifyGenerationSucceeded   bool     `json:"notify_generation_succeeded"`
+	GenerationSucceededTemplate string   `json:"generation_succeeded_template"`
+	DigestEnabled               bool     `json:"digest_enabled"`
+	DigestChatID                string   `json:"digest_chat_id"`
+	DigestTopicID               int      `json:"digest_topic_id"`
+	DigestHour                  int      `json:"digest_hour"`
+	KieCreditsEnabled           bool     `json:"kie_credits_enabled"`
+	KieCreditsAlert1            int      `json:"kie_credits_alert_1"`
+	KieCreditsAlert2            int      `json:"kie_credits_alert_2"`
+	KieCreditsAlert3            int      `json:"kie_credits_alert_3"`
 }
 
 type TelegramSettingsRecord struct {
@@ -91,6 +95,10 @@ func DefaultTelegramSettings() TelegramSettings {
 		WalletTopupTemplate:   "💳 Пополнение кошелька\nПользователь: {userEmail} ({userName})\nСумма пополнения: {amount} {currency}\nТекущий баланс: {balance} {currency}",
 		NotifySupport:         false,
 		SupportTemplate:       "🎫 Тикет поддержки\nПользователь: {userEmail}\nТема: {subject}",
+		NotifyGenerationFailed:      true,
+		GenerationFailedTemplate:    "тЭМ ╨Ю╤И╨╕╨▒╨║╨░ ╨│╨╡╨╜╨╡╤А╨░╤Ж╨╕╨╕\n╨Ф╨░╤В╨░: {dateTime}\n╨Я╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╤М: {userEmail}\n╨Я╤А╨╛╨╝╨┐╤В: {prompt}\n╨Ю╤И╨╕╨▒╨║╨░: {error}\n╨а╨╡╤Д╨╡╤А╨╡╨╜╤Б: {reference}",
+		NotifyGenerationSucceeded:   true,
+		GenerationSucceededTemplate: "тЬЕ ╨У╨╡╨╜╨╡╤А╨░╤Ж╨╕╤П ╨╖╨░╨▓╨╡╤А╤И╨╡╨╜╨░\n╨Ф╨░╤В╨░: {dateTime}\n╨Я╨╛╨╗╤М╨╖╨╛╨▓╨░╤В╨╡╨╗╤М: {userEmail}\n╨Я╤А╨╛╨╝╨┐╤В: {prompt}",
 		DigestEnabled:         false,
 		DigestChatID:          "",
 		DigestTopicID:         0,

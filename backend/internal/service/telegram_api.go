@@ -11,6 +11,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/postilka/postilka/internal/model"
 )
 
 type telegramUser struct {
@@ -121,6 +123,90 @@ func (s *TelegramService) telegramAPI(ctx context.Context, token, method string,
 		return nil, fmt.Errorf("telegram api: status %d", resp.StatusCode)
 	}
 	return parsed.Result, nil
+}
+
+func (s *TelegramService) telegramAPIWithConfig(ctx context.Context, cfg model.TelegramSettings, token, method string, payload any) (json.RawMessage, error) {
+	url := fmt.Sprintf("https://api.telegram.org/bot%s/%s", strings.TrimSpace(token), method)
+	var body []byte
+	var err error
+	if payload != nil {
+		body, err = json.Marshal(payload)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		body = []byte("{}")
+	}
+	resp, err := s.doTelegramRequestWithConfig(ctx, cfg, http.MethodPost, url, "application/json", body)
+	if err != nil {
+		return nil, sanitizeTelegramError(err)
+	}
+	defer resp.Body.Close()
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 8192))
+	var parsed telegramAPIResponse
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return nil, errors.New("telegram api: invalid response")
+	}
+	if !parsed.OK {
+		if parsed.Description != "" {
+			return nil, fmt.Errorf("telegram api: %s", parsed.Description)
+		}
+		return nil, errors.New("telegram api: request failed")
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("telegram api: status %d", resp.StatusCode)
+	}
+	return parsed.Result, nil
+}
+
+func (s *TelegramService) doTelegramRequestWithConfig(ctx context.Context, settings model.TelegramSettings, method, endpoint, contentType string, body []byte) (*http.Response, error) {
+	reqBody := body
+	if reqBody == nil {
+		reqBody = []byte{}
+	}
+	makeRequest := func(client *http.Client) (*http.Response, error) {
+		req, err := http.NewRequestWithContext(ctx, method, endpoint, bytes.NewReader(reqBody))
+		if err != nil {
+			return nil, err
+		}
+		if contentType != "" {
+			req.Header.Set("Content-Type", contentType)
+		}
+		return client.Do(req)
+	}
+	proxyEnabled := settings.ProxyEnabled && len(settings.ProxyURLs) > 0
+	var proxies []string
+	if proxyEnabled {
+		proxies = telegramOutboundProxies(s.localProxy, true, settings.ProxyActiveURL, settings.ProxyURLs)
+	} else {
+		proxies = telegramOutboundProxies(s.localProxy, false, "", nil)
+	}
+	if len(proxies) == 0 {
+		return makeRequest(s.client)
+	}
+	var lastErr error
+	for idx, proxyURL := range proxies {
+		proxyClient, err := httpClientForProxy(s.client, proxyURL)
+		if err != nil {
+			lastErr = fmt.Errorf("proxy %s: %w", maskProxyURLForError(proxyURL), err)
+			if !settings.ProxyAutoFailover {
+				return nil, lastErr
+			}
+			continue
+		}
+		resp, reqErr := makeRequest(proxyClient)
+		if reqErr == nil {
+			return resp, nil
+		}
+		lastErr = fmt.Errorf("proxy %s: %w", maskProxyURLForError(proxyURL), sanitizeTelegramError(reqErr))
+		if !settings.ProxyAutoFailover || idx == len(proxies)-1 || !isProxyRetryableError(reqErr) {
+			return nil, lastErr
+		}
+	}
+	if lastErr != nil {
+		return nil, lastErr
+	}
+	return nil, errors.New("proxy request failed")
 }
 
 func (s *TelegramService) telegramGetMe(ctx context.Context, token string) (*telegramUser, error) {

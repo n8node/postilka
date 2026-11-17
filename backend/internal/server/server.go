@@ -141,6 +141,8 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	)
 	postSvc := service.NewPostService(postRepo, channelRepo, wsSvc, publicationSvc, postApprovalRepo, userRepo)
 	telegramSvc := service.NewTelegramService(telegramSettingsSvc, telegramQueueRepo, cfg.TelegramLocalProxy, logger)
+	genUploadRepo := repository.NewGenerationSourceUploadRepository(db.Pool)
+	telegramSvc.SetGenerationMediaSources(genUploadRepo, objectStorage)
 	telegramSettingsSvc.BindRuntimeStatus(telegramSvc.GetRuntimeStatus)
 	telegramSvc.Start()
 	telegramHealthMonitor := service.NewTelegramHealthMonitor(telegramSvc, emailSvc, userRepo, cfg, logger)
@@ -182,7 +184,6 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	)
 	notificationSvc.BindOutbound(userRepo, txEmailSvc, userMessenger, cfg)
 	adminAnalyticsRepo := repository.NewAdminAnalyticsRepository(db.Pool, settingsRepo)
-	genUploadRepo := repository.NewGenerationSourceUploadRepository(db.Pool)
 	aiBillingSvc := service.NewAIBillingService(quotaSvc, usageRepo, walletRepo, kieSettingsRepo)
 	adminHandler := handler.NewAdminHandler(userRepo, adminUserSvc, adminWalletSvc, planSvc, oauthSvc, adminWorkspaceSvc, fileStorageRepo, folderStorageRepo, postRepo, adminAnalyticsRepo, objectStorage, aiBillingSvc)
 	adminHandler.SetSecuritySignals(securitySignalRepo)
@@ -273,6 +274,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	generationSvc := service.NewGenerationService(
 		kieConfigSvc, kieVideoConfigSvc, genRepo, genJobRepo, genUploadRepo, aiBillingSvc, objectStorage, fileStorageSvc, wsSvc, userRepo, yandexGptConfigSvc, quotaSvc,
 	)
+	generationSvc.SetTelegramNotifications(telegramSvc)
 	generationSvc.SetMediaProviderService(mediaProviderSvc)
 	generationSvc.SetMediaProviderUserLookup(userRepo)
 	generationHandler := handler.NewGenerationHandler(generationSvc)

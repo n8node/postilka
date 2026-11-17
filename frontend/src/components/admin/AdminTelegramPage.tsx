@@ -39,6 +39,12 @@ const DEFAULT_SETTINGS: TelegramSettings = {
   wallet_topup_template: "",
   notify_support: false,
   support_template: "",
+  notify_generation_failed: true,
+  generation_failed_template:
+    "❌ Ошибка генерации\nДата: {dateTime}\nПользователь: {userEmail}\nПромпт: {prompt}\nОшибка: {error}\nРеференс: {reference}",
+  notify_generation_succeeded: true,
+  generation_succeeded_template:
+    "✅ Генерация завершена\nДата: {dateTime}\nПользователь: {userEmail}\nПромпт: {prompt}",
   digest_enabled: false,
   digest_chat_id: "",
   digest_topic_id: 0,
@@ -725,6 +731,24 @@ export function AdminTelegramPage({ embedded = false }: { embedded?: boolean }) 
             hint="Будет доступно после запуска модуля поддержки"
           />
         </div>
+
+        <NotificationBlock
+          title="Ошибка генерации"
+          enabled={settings.notify_generation_failed}
+          onEnabledChange={(v) => patch({ notify_generation_failed: v })}
+          template={settings.generation_failed_template}
+          onTemplateChange={(v) => patch({ generation_failed_template: v })}
+          vars="{dateTime}, {userEmail}, {prompt}, {error}, {reference}"
+        />
+
+        <NotificationBlock
+          title="Успешная генерация"
+          enabled={settings.notify_generation_succeeded}
+          onEnabledChange={(v) => patch({ notify_generation_succeeded: v })}
+          template={settings.generation_succeeded_template}
+          onTemplateChange={(v) => patch({ generation_succeeded_template: v })}
+          vars="{dateTime}, {userEmail}, {prompt}; результат прикрепляется как медиа"
+        />
       </section>
 
       <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">

@@ -95,6 +95,10 @@ func main() {
 	userMessenger := service.NewUserMessengerService(
 		identityRepo, oauthSettingsRepo, telegramSettingsSvc, telegramBotClient, oauthclient.NewMAXBotClient(), logger,
 	)
+	telegramQueueRepo := repository.NewTelegramNotificationQueueRepository(db.Pool)
+	telegramSvc := service.NewTelegramService(telegramSettingsSvc, telegramQueueRepo, cfg.TelegramLocalProxy, logger)
+	telegramSvc.SetGenerationMediaSources(genUploadRepo, objectStorage)
+	telegramSvc.Start()
 	mailSettingsRepo := repository.NewSMTPSettingsRepository(db.Pool)
 	mailSettingsSvc := service.NewSMTPSettingsService(mailSettingsRepo)
 	mailSvc := service.NewMailService(mailSettingsSvc)
@@ -112,6 +116,7 @@ func main() {
 	mediaProviderSvc := service.NewMediaProviderService(mediaProviderRepo, secretCipher)
 	generationSvc.SetMediaProviderService(mediaProviderSvc)
 	generationSvc.SetNotifier(notificationSvc)
+	generationSvc.SetTelegramNotifications(telegramSvc)
 
 	logger.Info("generation worker started",
 		"version", config.Version,

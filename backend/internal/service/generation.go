@@ -54,6 +54,7 @@ type GenerationService struct {
 	streamingLimiter streamingLimiter
 	createGate       *kieCreateGate
 	notify           *NotificationService
+	telegram         *TelegramService
 }
 
 func NewGenerationService(
@@ -91,6 +92,10 @@ func (s *GenerationService) SetNotifier(n *NotificationService) {
 	s.notify = n
 }
 
+func (s *GenerationService) SetTelegramNotifications(telegram *TelegramService) {
+	s.telegram = telegram
+}
+
 func (s *GenerationService) SetStreamingSettingsProvider(fn func(context.Context) model.StreamingSettings) {
 	s.streaming = fn
 }
@@ -111,15 +116,19 @@ func (s *GenerationService) StreamingSettings(ctx context.Context) model.Streami
 }
 
 func (s *GenerationService) markJobFailed(ctx context.Context, jobID, msg string) {
-	_ = s.jobRepo.MarkFailed(ctx, jobID, msg)
-	if s.notify == nil {
+	if err := s.jobRepo.MarkFailed(ctx, jobID, msg); err != nil {
 		return
 	}
 	job, err := s.jobRepo.GetByIDInternal(ctx, jobID)
 	if err != nil {
 		return
 	}
-	s.notify.NotifyAIFailed(ctx, job, msg)
+	if s.notify != nil {
+		s.notify.NotifyAIFailed(ctx, job, msg)
+	}
+	if s.telegram != nil {
+		s.telegram.NotifyGenerationFailedWithUsers(ctx, job, msg, s.users)
+	}
 }
 
 type GenerateImageInput struct {

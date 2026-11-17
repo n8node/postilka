@@ -2208,6 +2208,10 @@ export type TelegramSettings = {
   wallet_topup_template: string;
   notify_support: boolean;
   support_template: string;
+  notify_generation_failed: boolean;
+  generation_failed_template: string;
+  notify_generation_succeeded: boolean;
+  generation_succeeded_template: string;
   digest_enabled: boolean;
   digest_chat_id: string;
   digest_topic_id: number;

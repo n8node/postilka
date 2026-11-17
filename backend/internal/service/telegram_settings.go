@@ -44,6 +44,13 @@ func (s *TelegramSettingsService) GetStored(ctx context.Context) (*model.Telegra
 		}
 		return nil, err
 	}
+	defaults := model.DefaultTelegramSettings()
+	if strings.TrimSpace(rec.Config.GenerationFailedTemplate) == "" {
+		rec.Config.GenerationFailedTemplate = defaults.GenerationFailedTemplate
+	}
+	if strings.TrimSpace(rec.Config.GenerationSucceededTemplate) == "" {
+		rec.Config.GenerationSucceededTemplate = defaults.GenerationSucceededTemplate
+	}
 	return rec, nil
 }
 
@@ -72,6 +79,19 @@ func (s *TelegramSettingsService) Update(ctx context.Context, req model.Telegram
 	}
 
 	cfg := req.Settings
+	defaults := model.DefaultTelegramSettings()
+	if strings.TrimSpace(cfg.GenerationFailedTemplate) == "" {
+		cfg.GenerationFailedTemplate = rec.Config.GenerationFailedTemplate
+		if strings.TrimSpace(cfg.GenerationFailedTemplate) == "" {
+			cfg.GenerationFailedTemplate = defaults.GenerationFailedTemplate
+		}
+	}
+	if strings.TrimSpace(cfg.GenerationSucceededTemplate) == "" {
+		cfg.GenerationSucceededTemplate = rec.Config.GenerationSucceededTemplate
+		if strings.TrimSpace(cfg.GenerationSucceededTemplate) == "" {
+			cfg.GenerationSucceededTemplate = defaults.GenerationSucceededTemplate
+		}
+	}
 	if strings.TrimSpace(req.BotToken) != "" {
 		cfg.BotToken = strings.TrimSpace(req.BotToken)
 	} else {
