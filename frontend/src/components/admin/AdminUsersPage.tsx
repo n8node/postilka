@@ -456,24 +456,24 @@ export function AdminUsersPage() {
           <table className="min-w-full text-left text-sm">
             <thead className="border-b border-slate-200 bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
               <tr>
-                {isColumnVisible("selection") && <th className="px-4 py-3">Р’С‹Р±РѕСЂ</th>}
-                {isColumnVisible("name") && <SortHeader column="name">РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ</SortHeader>}
+                {isColumnVisible("selection") && <th className="px-4 py-3">Выбор</th>}
+                {isColumnVisible("name") && <SortHeader column="name">Пользователь</SortHeader>}
                 {isColumnVisible("email") && <th className="px-4 py-3">Email</th>}
                 {isColumnVisible("id") && <th className="px-4 py-3">ID</th>}
-                {isColumnVisible("email_verified") && <th className="px-4 py-3">Email РїРѕРґС‚РІРµСЂР¶РґС‘РЅ</th>}
-                {isColumnVisible("status") && <SortHeader column="status">РЎС‚Р°С‚СѓСЃ Р°РєРєР°СѓРЅС‚Р°</SortHeader>}
-                {isColumnVisible("role") && <SortHeader column="role">Р РѕР»СЊ</SortHeader>}
-                {isColumnVisible("plan") && <th className="w-36 px-4 py-3">РўР°СЂРёС„</th>}
-                {isColumnVisible("wallet") && <SortHeader column="wallet_balance_cents">РљРѕС€РµР»С‘Рє, в‚Ѕ</SortHeader>}
-                {isColumnVisible("credits") && <th className="w-32 px-4 py-3">РњРµРґРёР°-РєСЂРµРґРёС‚С‹</th>}
+                {isColumnVisible("email_verified") && <th className="px-4 py-3">Email подтверждён</th>}
+                {isColumnVisible("status") && <SortHeader column="status">Статус аккаунта</SortHeader>}
+                {isColumnVisible("role") && <SortHeader column="role">Роль</SortHeader>}
+                {isColumnVisible("plan") && <th className="w-36 px-4 py-3">Тариф</th>}
+                {isColumnVisible("wallet") && <SortHeader column="wallet_balance_cents">Кошелёк, ₽</SortHeader>}
+                {isColumnVisible("credits") && <th className="w-32 px-4 py-3">Медиа-кредиты</th>}
                 {isColumnVisible("workspace") && <th className="px-4 py-3">Workspace</th>}
-                {isColumnVisible("workspace_role") && <th className="px-4 py-3">Р РѕР»СЊ WS</th>}
-                {isColumnVisible("locale") && <th className="px-4 py-3">РЇР·С‹Рє</th>}
-                {isColumnVisible("timezone") && <th className="px-4 py-3">РўР°Р№РјР·РѕРЅР°</th>}
-                {isColumnVisible("created_at") && <SortHeader column="created_at">Р—Р°СЂРµРіРёСЃС‚СЂРёСЂРѕРІР°РЅ</SortHeader>}
-                {isColumnVisible("updated_at") && <SortHeader column="updated_at">РћР±РЅРѕРІР»С‘РЅ</SortHeader>}
-                {isColumnVisible("files") && <th className="px-4 py-3">Р¤Р°Р№Р»С‹</th>}
-                {isColumnVisible("actions") && <th className="px-4 py-3">Р”РµР№СЃС‚РІРёСЏ</th>}
+                {isColumnVisible("workspace_role") && <th className="px-4 py-3">Роль WS</th>}
+                {isColumnVisible("locale") && <th className="px-4 py-3">Язык</th>}
+                {isColumnVisible("timezone") && <th className="px-4 py-3">Таймзона</th>}
+                {isColumnVisible("created_at") && <SortHeader column="created_at">Зарегистрирован</SortHeader>}
+                {isColumnVisible("updated_at") && <SortHeader column="updated_at">Обновлён</SortHeader>}
+                {isColumnVisible("files") && <th className="px-4 py-3">Файлы</th>}
+                {isColumnVisible("actions") && <th className="px-4 py-3">Действия</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
