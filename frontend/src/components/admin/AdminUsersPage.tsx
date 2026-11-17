@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { X } from "lucide-react";
 import {
   ApiError,
@@ -12,6 +13,7 @@ import {
   fetchAdminUserInviteRelations,
   fetchAdminUserInvites,
   fetchAdminUserLoginIdentities,
+  fetchAdminUserSecuritySignals,
   fetchAdminUserWorkspaces,
   fetchAdminUsers,
   resendAdminUserVerification,
@@ -19,6 +21,7 @@ import {
   approveAdminUser,
   setAdminUserBlocked,
   type AdminUser,
+  type AdminUserSecuritySignals,
   type AdminUsersQuery,
   type AdminUsersSort,
   type AdminUserWorkspaceItem,
@@ -93,6 +96,8 @@ function Badge({
 }
 
 export function AdminUsersPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -127,6 +132,13 @@ export function AdminUsersPage() {
         : prev,
     );
   }
+
+  useEffect(() => {
+    const selectedUserId = searchParams.get("user");
+    if (!selectedUserId || selected?.id === selectedUserId) return;
+    const match = users.find((user) => user.id === selectedUserId);
+    if (match) setSelected(match);
+  }, [searchParams, selected?.id, users]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -511,7 +523,10 @@ export function AdminUsersPage() {
       {selected && (
         <UserDrawer
           user={selected}
-          onClose={() => setSelected(null)}
+          onClose={() => {
+            setSelected(null);
+            router.replace("/admin/users", { scroll: false });
+          }}
           onGrant={() => setGrantUser(selected)}
           onPlanChanged={(updated) => {
             setUsers((prev) =>
@@ -528,6 +543,7 @@ export function AdminUsersPage() {
           onUserDeleted={(userId) => {
             setUsers((prev) => prev.filter((u) => u.id !== userId));
             setSelected(null);
+            router.replace("/admin/users", { scroll: false });
           }}
         />
       )}
@@ -559,6 +575,7 @@ function UserDrawer({
   onUserChanged: (user: AdminUser) => void;
   onUserDeleted: (userId: string) => void;
 }) {
+  const router = useRouter();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [planId, setPlanId] = useState(user.plan?.id ?? "");
   const [workspaceId, setWorkspaceId] = useState(user.workspace?.id ?? "");
@@ -572,6 +589,8 @@ function UserDrawer({
   const [inviteRelations, setInviteRelations] =
     useState<UserInviteRelations | null>(null);
   const [loginIdentities, setLoginIdentities] = useState<LoginIdentity[]>([]);
+  const [securitySignals, setSecuritySignals] = useState<AdminUserSecuritySignals | null>(null);
+  const [securitySignalsLoading, setSecuritySignalsLoading] = useState(true);
   const [inviteCount, setInviteCount] = useState(3);
   const [addingInvites, setAddingInvites] = useState(false);
   const [invitesLoading, setInvitesLoading] = useState(true);
@@ -594,28 +613,33 @@ function UserDrawer({
     setInvitesLoading(true);
     setLoginIdentitiesLoading(true);
     setWorkspacesLoading(true);
+    setSecuritySignalsLoading(true);
     Promise.all([
       fetchAdminUserInvites(user.id),
       fetchAdminUserInviteRelations(user.id),
       fetchAdminUserLoginIdentities(user.id),
       fetchAdminUserWorkspaces(user.id),
+      fetchAdminUserSecuritySignals(user.id),
     ])
-      .then(([invitesData, relationsData, identitiesData, workspacesData]) => {
+      .then(([invitesData, relationsData, identitiesData, workspacesData, signalsData]) => {
         setUserInvites(invitesData.invites ?? []);
         setInviteRelations(relationsData);
         setLoginIdentities(identitiesData.identities ?? []);
         setUserWorkspaces(workspacesData.workspaces ?? []);
+        setSecuritySignals(signalsData);
       })
       .catch(() => {
         setUserInvites([]);
         setInviteRelations(null);
         setLoginIdentities([]);
         setUserWorkspaces([]);
+        setSecuritySignals(null);
       })
       .finally(() => {
         setInvitesLoading(false);
         setLoginIdentitiesLoading(false);
         setWorkspacesLoading(false);
+        setSecuritySignalsLoading(false);
       });
   }, [user.id]);
 
@@ -783,6 +807,69 @@ function UserDrawer({
               <p className="mt-0.5 font-medium">{user.timezone}</p>
             </div>
           </div>
+
+        <section className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <h3 className="text-sm font-semibold text-amber-950">Связи и сигналы</h3>
+          <p className="mt-1 text-xs leading-5 text-amber-900">
+            Совпадения IP или браузерного идентификатора — только повод проверить аккаунты, а не доказательство общего владельца.
+            Значения IP и cookie не сохраняются: используются только HMAC-отпечатки.
+          </p>
+          {securitySignalsLoading ? (
+            <p className="mt-3 text-sm text-slate-500">Загрузка сигналов…</p>
+          ) : (
+            <>
+              <div className="mt-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Возможные связи ({securitySignals?.related_accounts.length ?? 0})
+                </p>
+                {securitySignals?.related_accounts.length ? (
+                  <ul className="mt-2 space-y-2">
+                    {securitySignals.related_accounts.map((account) => (
+                      <li key={account.user_id} className="rounded-lg border border-amber-100 bg-white px-3 py-2.5">
+                        <Link href={`/admin/users?user=${account.user_id}`} onClick={(event) => {
+                          event.preventDefault();
+                          onClose();
+                          router.push(`/admin/users?user=${account.user_id}`, { scroll: false });
+                        }} className="text-sm font-medium text-blue-700 hover:underline">
+                          {account.email}
+                        </Link>
+                        <p className="mt-1 text-xs text-slate-600">
+                          Совпадает: {[
+                            account.shared_ip && "IP",
+                            account.shared_device && "браузерный ID",
+                          ].filter(Boolean).join(", ")}. Событий: {account.signal_count}. Регистрация: {formatDateTime(account.created_at)}.
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-2 text-sm text-slate-500">Связанных аккаунтов пока не найдено.</p>
+                )}
+              </div>
+              <div className="mt-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Регистрации и входы ({securitySignals?.events.length ?? 0})
+                </p>
+                {securitySignals?.events.length ? (
+                  <ul className="mt-2 max-h-56 space-y-1.5 overflow-y-auto">
+                    {securitySignals.events.map((event) => (
+                      <li key={event.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-slate-50 px-3 py-2 text-xs">
+                        <span className="font-medium text-slate-700">
+                          {event.event_type === "register" ? "Регистрация" : "Вход"}
+                          {event.ip_hash && " · IP"}
+                          {event.device_hash && " · браузер"}
+                        </span>
+                        <time className="text-slate-500">{formatDateTime(event.created_at)}</time>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-2 text-sm text-slate-500">Событий пока нет. Новые регистрации и входы начнут учитываться после обновления.</p>
+                )}
+              </div>
+            </>
+          )}
+        </section>
 
           <section className="rounded-xl border border-slate-200 p-4">
             <h3 className="text-sm font-semibold text-slate-900">Кошелёк</h3>

@@ -924,6 +924,34 @@ export type UserInviteRelations = {
   }[];
 };
 
+export type AdminUserSecuritySignal = {
+  id: number;
+  user_id: string;
+  event_type: "register" | "login";
+  ip_hash?: string;
+  device_hash?: string;
+  created_at: string;
+};
+
+export type AdminRelatedSecurityAccount = {
+  user_id: string;
+  email: string;
+  name: string;
+  created_at: string;
+  shared_ip: boolean;
+  shared_device: boolean;
+  signal_count: number;
+};
+
+export type AdminUserSecuritySignals = {
+  events: AdminUserSecuritySignal[];
+  related_accounts: AdminRelatedSecurityAccount[];
+};
+
+export function fetchAdminUserSecuritySignals(userId: string) {
+  return apiFetch<AdminUserSecuritySignals>(`/admin/users/${userId}/security-signals`);
+}
+
 export function fetchAdminUserInvites(userId: string) {
   return apiFetch<{ invites: UserInvite[] }>(`/admin/users/${userId}/invites`);
 }

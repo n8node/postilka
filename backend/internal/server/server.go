@@ -38,6 +38,8 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	authLimiter := middleware.NewRateLimiter()
 
 	userRepo := repository.NewUserRepository(db.Pool)
+	securitySignalRepo := repository.NewUserSecuritySignalRepository(db.Pool)
+	securitySignalSvc := service.NewUserSecuritySignalService(securitySignalRepo, cfg.APIKeySalt)
 	wsRepo := repository.NewWorkspaceRepository(db.Pool)
 	planRepo := repository.NewPlanRepository(db.Pool)
 	settingsRepo := repository.NewSettingsRepository(db.Pool)
@@ -163,6 +165,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	metricsHandler := handler.NewMetricsHandler(metricsRegistry)
 	status := handler.NewStatusHandler(cfg)
 	authHandler := handler.NewAuthHandler(authSvc, wsSvc, authMW, cfg)
+	authHandler.SetSecuritySignals(securitySignalSvc)
 	userHandler := handler.NewUserHandler(authSvc, userAvatarSvc)
 	wsInviteHandler := handler.NewWorkspaceInviteHandler(wsInviteSvc, wsSvc)
 	oauthHandler := handler.NewOAuthLoginHandler(oauthSvc, wsSvc, authMW, cfg, logger)
@@ -182,6 +185,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	genUploadRepo := repository.NewGenerationSourceUploadRepository(db.Pool)
 	aiBillingSvc := service.NewAIBillingService(quotaSvc, usageRepo, walletRepo, kieSettingsRepo)
 	adminHandler := handler.NewAdminHandler(userRepo, adminUserSvc, adminWalletSvc, planSvc, oauthSvc, adminWorkspaceSvc, fileStorageRepo, folderStorageRepo, postRepo, adminAnalyticsRepo, objectStorage, aiBillingSvc)
+	adminHandler.SetSecuritySignals(securitySignalRepo)
 	adminHandler.SetEmailCampaign(emailCampaignSvc)
 	adminHandler.SetEmailTemplates(emailTemplateSettingsSvc)
 	inviteHandler := handler.NewInviteHandler(inviteSvc, oauthSvc)
@@ -797,6 +801,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Post("/users/{userID}/invites", adminInviteHandler.AddUserInvites)
 				r.Get("/users/{userID}/invite-relations", adminInviteHandler.UserInviteRelations)
 				r.Get("/users/{userID}/login-identities", adminHandler.ListUserLoginIdentities)
+				r.Get("/users/{userID}/security-signals", adminHandler.ListUserSecuritySignals)
 				r.Get("/users/{userID}/workspaces", adminHandler.ListUserWorkspaces)
 
 				r.Get("/workspaces", adminHandler.ListWorkspaces)

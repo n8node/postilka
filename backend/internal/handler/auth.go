@@ -12,10 +12,15 @@ import (
 )
 
 type AuthHandler struct {
-	auth       *service.AuthService
-	workspaces *service.WorkspaceService
-	mw         *middleware.Auth
-	cfg        *config.Config
+	auth            *service.AuthService
+	workspaces      *service.WorkspaceService
+	mw              *middleware.Auth
+	cfg             *config.Config
+	securitySignals *service.UserSecuritySignalService
+}
+
+func (h *AuthHandler) SetSecuritySignals(signals *service.UserSecuritySignalService) {
+	h.securitySignals = signals
 }
 
 func NewAuthHandler(
@@ -67,10 +72,17 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if result.PendingApproval {
+		if h.securitySignals != nil {
+			h.securitySignals.EnsureDeviceCookie(w, r, h.cfg.IsProduction())
+			h.securitySignals.RecordRequest(r, result.User.ID, "register")
+		}
 		writeJSON(w, http.StatusAccepted, map[string]any{"pending_approval": true, "message": "Заявка принята. Подтвердите email — после этого она попадёт на рассмотрение."})
 		return
 	}
-
+	if h.securitySignals != nil {
+		h.securitySignals.EnsureDeviceCookie(w, r, h.cfg.IsProduction())
+		h.securitySignals.RecordRequest(r, result.User.ID, "register")
+	}
 	h.mw.SetTokenCookie(w, result.Token, h.cfg.IsProduction())
 
 	active, list, err := h.workspaces.ResolveActive(r.Context(), result.User.ID, r)
@@ -147,6 +159,10 @@ func (h *AuthHandler) VerifyEmail(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"pending_approval": true, "message": "Email подтверждён. Ваша заявка находится на рассмотрении."})
 		return
 	}
+	if h.securitySignals != nil {
+		h.securitySignals.RecordRequest(r, result.User.ID, "login")
+		h.securitySignals.EnsureDeviceCookie(w, r, h.cfg.IsProduction())
+	}
 
 	h.mw.SetTokenCookie(w, result.Token, h.cfg.IsProduction())
 	if result.Workspace != nil {
@@ -213,6 +229,10 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	if result.PendingApproval {
 		writeJSON(w, http.StatusForbidden, map[string]any{"pending_approval": true, "message": "Заявка на вступление находится на рассмотрении"})
 		return
+	}
+	if h.securitySignals != nil {
+		h.securitySignals.EnsureDeviceCookie(w, r, h.cfg.IsProduction())
+		h.securitySignals.RecordRequest(r, result.User.ID, "login")
 	}
 
 	h.mw.SetTokenCookie(w, result.Token, h.cfg.IsProduction())
