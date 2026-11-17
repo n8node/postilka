@@ -444,7 +444,15 @@ func (r *UserRepository) ListForAdmin(ctx context.Context, f ListUsersFilter) ([
 	listQ := fmt.Sprintf(`
 		SELECT
 			u.id, u.email, u.name, u.locale, u.timezone,
-		u.is_blocked, u.email_verified_at IS NOT NULL, u.is_platform_admin, u.pending_approval, u.wallet_balance_cents, u.created_at, u.updated_at,
+			u.is_blocked, u.email_verified_at IS NOT NULL, u.is_platform_admin, u.pending_approval, u.wallet_balance_cents, u.created_at, u.updated_at,
+			EXISTS (
+				SELECT 1
+				FROM user_security_signals own
+				JOIN user_security_signals other ON other.user_id <> own.user_id
+					AND ((own.ip_hash IS NOT NULL AND other.ip_hash = own.ip_hash)
+						OR (own.device_hash IS NOT NULL AND other.device_hash = own.device_hash))
+				WHERE own.user_id = u.id
+			) AS has_related_security_signals,
 			ws.id, ws.name, ws.slug, ws.role,
 			p.id, p.slug, p.name, p.is_free
 		FROM users u
@@ -478,6 +486,7 @@ func (r *UserRepository) ListForAdmin(ctx context.Context, f ListUsersFilter) ([
 			&item.ID, &item.Email, &item.Name, &item.Locale, &item.Timezone,
 			&item.IsBlocked, &item.EmailVerified, &item.IsPlatformAdmin, &item.PendingApproval, &item.WalletBalanceCents,
 			&item.CreatedAt, &item.UpdatedAt,
+			&item.HasRelatedSecuritySignals,
 			&wsID, &wsName, &wsSlug, &wsRole,
 			&planID, &planSlug, &planName, &planIsFree,
 		); err != nil {

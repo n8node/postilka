@@ -54,6 +54,7 @@ export type AdminUser = {
   email_verified: boolean;
   pending_approval: boolean;
   is_platform_admin: boolean;
+  has_related_security_signals: boolean;
   wallet_balance_cents: number;
   media_credits_remaining?: number;
   media_credits_unlimited: boolean;

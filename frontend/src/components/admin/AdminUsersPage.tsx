@@ -405,7 +405,14 @@ export function AdminUsersPage() {
                     </td>
                     <td className="px-4 py-3">
                       {u.pending_approval && <input type="checkbox" checked={selectedPending.includes(u.id)} onChange={(e) => setSelectedPending((prev) => e.target.checked ? [...prev, u.id] : prev.filter((id) => id !== u.id))} className="mr-2 rounded border-slate-300" />}
-                      <div className="font-medium text-slate-900">
+                      <div className="flex items-center gap-2 font-medium text-slate-900">
+                        {u.has_related_security_signals && (
+                          <span
+                            className="inline-block h-2.5 w-2.5 shrink-0 rounded-full bg-red-500 shadow-[0_0_0_2px_rgba(239,68,68,0.18)]"
+                            title="Есть совпадения по IP или браузерному идентификатору — требуется проверка"
+                            aria-label="Возможная связь с другими аккаунтами"
+                          />
+                        )}
                         {u.name || "—"}
                       </div>
                     </td>
