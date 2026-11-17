@@ -2278,6 +2278,43 @@ export type TelegramNotificationRecord = {
   updated_at: string;
 };
 
+export type AntiFraudTelegramSettings = {
+  enabled: boolean;
+  admin_telegram_id: number;
+  proxy_enabled: boolean;
+  proxy_active_url: string;
+  proxy_auto_failover: boolean;
+  proxy_urls: string[];
+  notify_high: boolean;
+  notify_critical: boolean;
+  require_confirmation: boolean;
+};
+
+export type AntiFraudTelegramAdminView = {
+  settings: AntiFraudTelegramSettings;
+  bot_token_set: boolean;
+  bot_token_hint?: string;
+  webhook_secret_set: boolean;
+  updated_at?: string;
+};
+
+export type AntiFraudTelegramUpdateRequest = {
+  settings: AntiFraudTelegramSettings;
+  bot_token?: string;
+  webhook_secret?: string;
+};
+
+export function fetchAdminAntiFraudTelegramSettings() {
+  return apiFetch<AntiFraudTelegramAdminView>("/admin/telegram/anti-fraud");
+}
+
+export function updateAdminAntiFraudTelegramSettings(payload: AntiFraudTelegramUpdateRequest) {
+  return apiFetch<AntiFraudTelegramAdminView>("/admin/telegram/anti-fraud", {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
 export type TelegramNotificationListResult = {
   items: TelegramNotificationRecord[];
   total: number;

@@ -16,6 +16,7 @@ import { AdminKiePage } from "@/components/admin/AdminKiePage";
 import { AdminKieVideoPage } from "@/components/admin/AdminKieVideoPage";
 import { AdminPaymentSettingsPage } from "@/components/admin/AdminPaymentSettingsPage";
 import { AdminTelegramPage } from "@/components/admin/AdminTelegramPage";
+import { AdminAntiFraudTelegramPage } from "@/components/admin/AdminAntiFraudTelegramPage";
 import { AdminMetrikaPage } from "@/components/admin/AdminMetrikaPage";
 import { AdminYandexGptPage } from "@/components/admin/AdminYandexGptPage";
 import { AdminMediaProvidersPage } from "@/components/admin/AdminMediaProvidersPage";
@@ -35,6 +36,7 @@ type SettingsKey =
   | "backups"
   | "invites"
   | "telegram-notifications"
+  | "telegram-antifraud"
   | "payment"
   | "email-smtp"
   | "ai-yandex-gpt"
@@ -72,6 +74,11 @@ const SETTINGS_MENU: { key: SettingsKey; label: string; description: string }[] 
     key: "telegram-notifications",
     label: "Telegram — уведомления",
     description: "Бот и очередь событий",
+  },
+  {
+    key: "telegram-antifraud",
+    label: "Telegram — антифрод",
+    description: "Отдельный бот модерации и прокси",
   },
   {
     key: "payment",
@@ -295,6 +302,9 @@ function SettingsSectionContent({
   }
   if (selected === "telegram-notifications") {
     return <AdminTelegramPage embedded />;
+  }
+  if (selected === "telegram-antifraud") {
+    return <AdminAntiFraudTelegramPage embedded />;
   }
   if (selected === "payment") {
     return <AdminPaymentSettingsPage embedded />;

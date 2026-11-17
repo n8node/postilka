@@ -4,7 +4,6 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -36,6 +35,14 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 
 	authMW := middleware.NewAuth(cfg.JWTSecret)
 	authLimiter := middleware.NewRateLimiter()
+	encKey := cfg.EncryptionKey
+	if encKey == "" {
+		encKey = cfg.JWTSecret
+	}
+	secretCipher, err := service.NewSecretCipher(encKey)
+	if err != nil {
+		panic(err)
+	}
 
 	userRepo := repository.NewUserRepository(db.Pool)
 	securitySignalRepo := repository.NewUserSecuritySignalRepository(db.Pool)
@@ -101,6 +108,8 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	telegramSettingsSvc := service.NewTelegramSettingsService(telegramSettingsRepo)
 	telegramProviderSettingsRepo := repository.NewTelegramProviderSettingsRepository(db.Pool)
 	telegramProviderSettingsSvc := service.NewTelegramProviderSettingsService(telegramProviderSettingsRepo)
+	antifraudTelegramSettingsRepo := repository.NewAntiFraudTelegramSettingsRepository(db.Pool)
+	antifraudTelegramSettingsSvc := service.NewAntiFraudTelegramSettingsService(antifraudTelegramSettingsRepo, secretCipher)
 	youtubeProviderSettingsRepo := repository.NewYouTubeProviderSettingsRepository(db.Pool)
 	youtubeProviderSettingsSvc := service.NewYouTubeProviderSettingsService(youtubeProviderSettingsRepo)
 	socialProviderSettingsRepo := repository.NewSocialProviderSettingsRepository(db.Pool)
@@ -111,11 +120,6 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	telegramBotClient := service.NewTelegramBotClient(telegramProviderSettingsSvc, cfg.TelegramLocalProxy)
 	youtubeAPIClient := service.NewYouTubeAPIClient(youtubeProviderSettingsSvc, cfg.YouTubeLocalProxy)
 	service.SetYouTubeAPIClient(youtubeAPIClient)
-	encKey := cfg.EncryptionKey
-	if strings.TrimSpace(encKey) == "" {
-		encKey = cfg.JWTSecret
-	}
-	secretCipher, _ := service.NewSecretCipher(encKey)
 	photochkaClient := photochka.NewClient(cfg.PhotochkaAPIBaseURL)
 	channelSvc := service.NewChannelService(channelRepo, telegramProviderSettingsSvc, socialProviderSettingsSvc, telegramBotClient, wsSvc, quotaSvc, secretCipher, photochkaClient)
 	telegramBusinessSvc := service.NewTelegramBusinessService(
@@ -232,6 +236,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	)
 	loadMonitorHandler := handler.NewLoadMonitorHandler(loadMonitorSvc)
 	telegramHandler := handler.NewTelegramSettingsHandler(telegramSettingsSvc, telegramSvc, opsDigestSvc)
+	antifraudTelegramSettingsHandler := handler.NewAntiFraudTelegramSettingsHandler(antifraudTelegramSettingsSvc)
 	yandexGptConfigHandler := handler.NewYandexGptConfigHandler(yandexGptConfigSvc)
 	kieConfigHandler := handler.NewKieConfigHandler(kieConfigSvc)
 	kieVideoConfigHandler := handler.NewKieVideoConfigHandler(kieVideoConfigSvc, kieVideoExampleSvc)
@@ -782,6 +787,8 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Post("/telegram/queue/{id}/retry", telegramHandler.RetryQueueItem)
 				r.Get("/telegram/provider", telegramProviderHandler.GetAdmin)
 				r.Put("/telegram/provider", telegramProviderHandler.UpdateAdmin)
+				r.Get("/telegram/anti-fraud", antifraudTelegramSettingsHandler.GetAdmin)
+				r.Put("/telegram/anti-fraud", antifraudTelegramSettingsHandler.UpdateAdmin)
 				r.Get("/youtube/provider", youtubeProviderHandler.GetAdmin)
 				r.Put("/youtube/provider", youtubeProviderHandler.UpdateAdmin)
 				r.Get("/instagram/provider", instagramProviderHandler.GetAdmin)
