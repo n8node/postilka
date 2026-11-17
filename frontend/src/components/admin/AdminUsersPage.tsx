@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { X } from "lucide-react";
+import { Columns3, X } from "lucide-react";
 import {
   ApiError,
   addAdminUserInvites,
@@ -47,6 +47,50 @@ const loginProviders = [
   { id: "vk" as const, label: "ВКонтакте" },
   { id: "max" as const, label: "MAX" },
 ];
+
+const userTableColumns = [
+  { id: "selection", label: "Выбор", fixed: true },
+  { id: "name", label: "Пользователь", fixed: true },
+  { id: "email", label: "Email", fixed: false },
+  { id: "id", label: "ID", fixed: false },
+  { id: "email_verified", label: "Email подтверждён", fixed: false },
+  { id: "status", label: "Статус аккаунта", fixed: false },
+  { id: "role", label: "Роль", fixed: false },
+  { id: "plan", label: "Тариф", fixed: false },
+  { id: "wallet", label: "Кошелёк, ₽", fixed: false },
+  { id: "credits", label: "Медиа-кредиты", fixed: false },
+  { id: "workspace", label: "Workspace", fixed: false },
+  { id: "workspace_role", label: "Роль WS", fixed: false },
+  { id: "locale", label: "Язык", fixed: false },
+  { id: "timezone", label: "Таймзона", fixed: false },
+  { id: "created_at", label: "Зарегистрирован", fixed: false },
+  { id: "updated_at", label: "Обновлён", fixed: false },
+  { id: "files", label: "Файлы", fixed: false },
+  { id: "actions", label: "Действия", fixed: true },
+] as const;
+
+type UserTableColumnId = (typeof userTableColumns)[number]["id"];
+const userTableColumnsStorageKey = "postilka.admin.users.visible-columns.v1";
+
+function defaultVisibleUserColumns(): Set<UserTableColumnId> {
+  return new Set(userTableColumns.map((column) => column.id));
+}
+
+function readVisibleUserColumns(): Set<UserTableColumnId> {
+  if (typeof window === "undefined") return defaultVisibleUserColumns();
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(userTableColumnsStorageKey) ?? "null");
+    if (!Array.isArray(parsed)) return defaultVisibleUserColumns();
+    const allowed = new Set<string>(userTableColumns.map((column) => column.id));
+    const selected = parsed.filter((id): id is UserTableColumnId => typeof id === "string" && allowed.has(id));
+    for (const column of userTableColumns) {
+      if (column.fixed) selected.push(column.id);
+    }
+    return new Set(selected);
+  } catch {
+    return defaultVisibleUserColumns();
+  }
+}
 
 function formatDate(iso: string) {
   const d = new Date(iso);
@@ -119,6 +163,37 @@ export function AdminUsersPage() {
   const [approving, setApproving] = useState(false);
   const [selected, setSelected] = useState<AdminUser | null>(null);
   const [grantUser, setGrantUser] = useState<AdminUser | null>(null);
+  const [visibleColumns, setVisibleColumns] = useState<Set<UserTableColumnId>>(() => defaultVisibleUserColumns());
+  const [columnsMenuOpen, setColumnsMenuOpen] = useState(false);
+
+  useEffect(() => {
+    setVisibleColumns(readVisibleUserColumns());
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(userTableColumnsStorageKey, JSON.stringify([...visibleColumns]));
+    } catch {
+      // Column preferences remain usable for this page view if storage is unavailable.
+    }
+  }, [visibleColumns]);
+
+  function isColumnVisible(column: UserTableColumnId) {
+    return visibleColumns.has(column);
+  }
+
+  function toggleColumn(column: UserTableColumnId) {
+    setVisibleColumns((current) => {
+      const next = new Set(current);
+      if (next.has(column)) next.delete(column);
+      else next.add(column);
+      return next;
+    });
+  }
+
+  function resetVisibleColumns() {
+    setVisibleColumns(defaultVisibleUserColumns());
+  }
 
   function handleWalletGranted(userId: string, walletBalanceCents: number) {
     setUsers((prev) =>
@@ -330,14 +405,50 @@ export function AdminUsersPage() {
         </label>
         {selectedForPromo.some((id) => users.some((u) => u.id === id && !u.email_verified)) && (
           <button type="button" disabled={resendingVerification} onClick={() => void resendSelectedVerification()} className="rounded-md bg-amber-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50">
-            {resendingVerification ? "Отправка…" : "Напомнить о подтверждении"}
+            {resendingVerification ? "РћС‚РїСЂР°РІРєР°вЂ¦" : "РќР°РїРѕРјРЅРёС‚СЊ Рѕ РїРѕРґС‚РІРµСЂР¶РґРµРЅРёРё"}
           </button>
         )}
         {selectedForPromo.length > 0 && (
           <button type="button" disabled={sendingPromo} onClick={() => void sendSelectedPromo()} className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50">
-            {sendingPromo ? "Постановка…" : `Реклама Telegram (${selectedForPromo.length})`}
+            {sendingPromo ? "РџРѕСЃС‚Р°РЅРѕРІРєР°вЂ¦" : `Р РµРєР»Р°РјР° Telegram (${selectedForPromo.length})`}
           </button>
         )}
+        <div className="relative ml-auto">
+          <button
+            type="button"
+            aria-expanded={columnsMenuOpen}
+            aria-haspopup="true"
+            onClick={() => setColumnsMenuOpen((open) => !open)}
+            className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+          >
+            <Columns3 className="h-4 w-4" />
+            Столбцы
+          </button>
+          {columnsMenuOpen && (
+            <div className="absolute right-0 z-20 mt-2 max-h-[min(70vh,32rem)] w-64 overflow-y-auto rounded-lg border border-slate-200 bg-white p-3 shadow-xl">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="text-sm font-semibold text-slate-900">Видимые столбцы</p>
+                <button type="button" onClick={resetVisibleColumns} className="text-xs font-medium text-blue-600 hover:underline">
+                  Сбросить
+                </button>
+              </div>
+              <div className="space-y-1">
+                {userTableColumns.map((column) => (
+                  <label key={column.id} className={cn("flex items-center gap-2 rounded px-2 py-1.5 text-sm", column.fixed ? "cursor-not-allowed text-slate-400" : "cursor-pointer text-slate-700 hover:bg-slate-50")}>
+                    <input
+                      type="checkbox"
+                      checked={isColumnVisible(column.id)}
+                      disabled={column.fixed}
+                      onChange={() => toggleColumn(column.id)}
+                      className="rounded border-slate-300"
+                    />
+                    {column.label}{column.fixed ? " · обязательный" : ""}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -345,44 +456,44 @@ export function AdminUsersPage() {
           <table className="min-w-full text-left text-sm">
             <thead className="border-b border-slate-200 bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
               <tr>
-                <th className="px-4 py-3">Выбор</th>
-                <SortHeader column="name">Пользователь</SortHeader>
-                <th className="px-4 py-3">Email</th>
-                <th className="px-4 py-3">ID</th>
-                <th className="px-4 py-3">Email подтверждён</th>
-                <SortHeader column="status">Статус аккаунта</SortHeader>
-                <SortHeader column="role">Роль</SortHeader>
-                <th className="w-36 px-4 py-3">Тариф</th>
-                <SortHeader column="wallet_balance_cents">Кошелёк, ₽</SortHeader>
-                <th className="w-32 px-4 py-3">Медиа-кредиты</th>
-                <th className="px-4 py-3">Workspace</th>
-                <th className="px-4 py-3">Роль WS</th>
-                <th className="px-4 py-3">Язык</th>
-                <th className="px-4 py-3">Таймзона</th>
-                <SortHeader column="created_at">Зарегистрирован</SortHeader>
-                <SortHeader column="updated_at">Обновлён</SortHeader>
-                <th className="px-4 py-3">Файлы</th>
-                <th className="px-4 py-3" />
+                {isColumnVisible("selection") && <th className="px-4 py-3">Р’С‹Р±РѕСЂ</th>}
+                {isColumnVisible("name") && <SortHeader column="name">РџРѕР»СЊР·РѕРІР°С‚РµР»СЊ</SortHeader>}
+                {isColumnVisible("email") && <th className="px-4 py-3">Email</th>}
+                {isColumnVisible("id") && <th className="px-4 py-3">ID</th>}
+                {isColumnVisible("email_verified") && <th className="px-4 py-3">Email РїРѕРґС‚РІРµСЂР¶РґС‘РЅ</th>}
+                {isColumnVisible("status") && <SortHeader column="status">РЎС‚Р°С‚СѓСЃ Р°РєРєР°СѓРЅС‚Р°</SortHeader>}
+                {isColumnVisible("role") && <SortHeader column="role">Р РѕР»СЊ</SortHeader>}
+                {isColumnVisible("plan") && <th className="w-36 px-4 py-3">РўР°СЂРёС„</th>}
+                {isColumnVisible("wallet") && <SortHeader column="wallet_balance_cents">РљРѕС€РµР»С‘Рє, в‚Ѕ</SortHeader>}
+                {isColumnVisible("credits") && <th className="w-32 px-4 py-3">РњРµРґРёР°-РєСЂРµРґРёС‚С‹</th>}
+                {isColumnVisible("workspace") && <th className="px-4 py-3">Workspace</th>}
+                {isColumnVisible("workspace_role") && <th className="px-4 py-3">Р РѕР»СЊ WS</th>}
+                {isColumnVisible("locale") && <th className="px-4 py-3">РЇР·С‹Рє</th>}
+                {isColumnVisible("timezone") && <th className="px-4 py-3">РўР°Р№РјР·РѕРЅР°</th>}
+                {isColumnVisible("created_at") && <SortHeader column="created_at">Р—Р°СЂРµРіРёСЃС‚СЂРёСЂРѕРІР°РЅ</SortHeader>}
+                {isColumnVisible("updated_at") && <SortHeader column="updated_at">РћР±РЅРѕРІР»С‘РЅ</SortHeader>}
+                {isColumnVisible("files") && <th className="px-4 py-3">Р¤Р°Р№Р»С‹</th>}
+                {isColumnVisible("actions") && <th className="px-4 py-3">Р”РµР№СЃС‚РІРёСЏ</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading && (
                 <tr>
-                  <td colSpan={17} className="px-4 py-10 text-center text-slate-500">
+                  <td colSpan={visibleColumns.size} className="px-4 py-10 text-center text-slate-500">
                     Загрузка…
                   </td>
                 </tr>
               )}
               {!loading && error && (
                 <tr>
-                  <td colSpan={17} className="px-4 py-10 text-center text-rose-600">
+                  <td colSpan={visibleColumns.size} className="px-4 py-10 text-center text-rose-600">
                     {error}
                   </td>
                 </tr>
               )}
               {!loading && !error && users.length === 0 && (
                 <tr>
-                  <td colSpan={17} className="px-4 py-10 text-center text-slate-500">
+                  <td colSpan={visibleColumns.size} className="px-4 py-10 text-center text-slate-500">
                     Пользователи не найдены
                   </td>
                 </tr>
@@ -391,7 +502,7 @@ export function AdminUsersPage() {
                 !error &&
                 users.map((u) => (
                   <tr key={u.id} className="hover:bg-slate-50/80">
-                    <td className="w-36 px-4 py-3">
+                    {isColumnVisible("selection") && <td className="w-36 px-4 py-3">
                       <input
                         type="checkbox"
                         checked={selectedForPromo.includes(u.id)}
@@ -402,8 +513,8 @@ export function AdminUsersPage() {
                         title={u.is_blocked ? "Заблокированный пользователь" : "Выбрать пользователя для рассылки"}
                         className="rounded border-slate-300"
                       />
-                    </td>
-                    <td className="px-4 py-3">
+                    </td>}
+                    {isColumnVisible("name") && <td className="px-4 py-3">
                       {u.pending_approval && <input type="checkbox" checked={selectedPending.includes(u.id)} onChange={(e) => setSelectedPending((prev) => e.target.checked ? [...prev, u.id] : prev.filter((id) => id !== u.id))} className="mr-2 rounded border-slate-300" />}
                       <div className="flex items-center gap-2 font-medium text-slate-900">
                         {u.has_related_security_signals && (
@@ -415,19 +526,19 @@ export function AdminUsersPage() {
                         )}
                         {u.name || "—"}
                       </div>
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">{u.email}</td>
-                    <td className="max-w-[140px] truncate px-4 py-3 font-mono text-xs text-slate-500">
+                    </td>}
+                    {isColumnVisible("email") && <td className="px-4 py-3 text-slate-700">{u.email}</td>}
+                    {isColumnVisible("id") && <td className="max-w-[140px] truncate px-4 py-3 font-mono text-xs text-slate-500">
                       {u.id}
-                    </td>
-                    <td className="px-4 py-3">
+                    </td>}
+                    {isColumnVisible("email_verified") && <td className="px-4 py-3">
                       {u.email_verified ? (
                         <Badge tone="green">Подтверждён</Badge>
                       ) : (
                         <Badge tone="red">Не подтверждён</Badge>
                       )}
-                    </td>
-                    <td className="px-4 py-3">
+                    </td>}
+                    {isColumnVisible("status") && <td className="px-4 py-3">
                       {u.pending_approval ? (
                         <Badge tone="blue">Ожидает одобрения</Badge>
                       ) : u.is_blocked ? (
@@ -435,15 +546,15 @@ export function AdminUsersPage() {
                       ) : (
                         <Badge tone="green">Активен</Badge>
                       )}
-                    </td>
-                    <td className="px-4 py-3">
+                    </td>}
+                    {isColumnVisible("role") && <td className="px-4 py-3">
                       {u.is_platform_admin ? (
                         <Badge tone="blue">Superadmin</Badge>
                       ) : (
                         <span className="text-slate-700">Пользователь</span>
                       )}
-                    </td>
-                    <td className="px-4 py-3">
+                    </td>}
+                    {isColumnVisible("plan") && <td className="px-4 py-3">
                       {u.plan ? (
                         <span className="font-medium text-slate-800">
                           {u.plan.name}
@@ -456,43 +567,43 @@ export function AdminUsersPage() {
                       ) : (
                         <span className="text-slate-400">—</span>
                       )}
-                    </td>
-                    <td className="w-32 px-4 py-3 font-medium text-slate-800">
+                    </td>}
+                    {isColumnVisible("wallet") && <td className="w-32 px-4 py-3 font-medium text-slate-800">
                       {formatAdminWalletRub(u.wallet_balance_cents ?? 0)}
-                    </td>
-                    <td className="w-32 px-4 py-3 font-medium text-slate-800">
+                    </td>}
+                    {isColumnVisible("credits") && <td className="w-32 px-4 py-3 font-medium text-slate-800">
                       {u.media_credits_unlimited
                         ? "Безлимит"
                         : u.media_credits_remaining != null
                           ? `${u.media_credits_remaining} кред.`
                           : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-slate-800">
+                    </td>}
+                    {isColumnVisible("workspace") && <td className="px-4 py-3 text-slate-800">
                       {u.workspace?.name ?? "—"}
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">
+                    </td>}
+                    {isColumnVisible("workspace_role") && <td className="px-4 py-3 text-slate-700">
                       {u.workspace
                         ? workspaceRoleLabels[u.workspace.role] ??
                           u.workspace.role
                         : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">{u.locale}</td>
-                    <td className="px-4 py-3 text-slate-700">{u.timezone}</td>
-                    <td className="px-4 py-3 text-slate-700">
+                    </td>}
+                    {isColumnVisible("locale") && <td className="px-4 py-3 text-slate-700">{u.locale}</td>}
+                    {isColumnVisible("timezone") && <td className="px-4 py-3 text-slate-700">{u.timezone}</td>}
+                    {isColumnVisible("created_at") && <td className="px-4 py-3 text-slate-700">
                       {formatDate(u.created_at)}
-                    </td>
-                    <td className="px-4 py-3 text-slate-700">
+                    </td>}
+                    {isColumnVisible("updated_at") && <td className="px-4 py-3 text-slate-700">
                       {formatDate(u.updated_at)}
-                    </td>
-                    <td className="px-4 py-3">
+                    </td>}
+                    {isColumnVisible("files") && <td className="px-4 py-3">
                       <Link
                         href={`/admin/files?uploaded_by=${u.id}`}
                         className="text-xs font-medium text-blue-600 hover:underline"
                       >
                         Все файлы
                       </Link>
-                    </td>
-                    <td className="px-4 py-3">
+                    </td>}
+                    {isColumnVisible("actions") && <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-1.5">
                         <button
                           type="button"
@@ -509,7 +620,7 @@ export function AdminUsersPage() {
                           Открыть
                         </button>
                       </div>
-                    </td>
+                    </td>}
                   </tr>
                 ))}
             </tbody>
