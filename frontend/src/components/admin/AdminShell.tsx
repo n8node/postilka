@@ -37,6 +37,7 @@ const nav: NavSection[] = [
     label: "Платформа",
     items: [
       { href: "/admin/users", label: "Пользователи" },
+      { href: "/admin/anti-fraud", label: "Мультиаккаунтинг" },
       { href: "/admin/support", label: "Тикеты поддержки" },
       { href: "/admin/posts", label: "Посты" },
       { href: "/admin/workspaces", label: "Workspace" },

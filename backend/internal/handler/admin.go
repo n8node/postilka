@@ -31,10 +31,86 @@ type AdminHandler struct {
 	emailCampaign   *service.EmailCampaignService
 	emailTemplates  *service.EmailTemplateSettingsService
 	securitySignals *repository.UserSecuritySignalRepository
+	antifraud       *service.AntiFraudService
 }
 
 func (h *AdminHandler) SetSecuritySignals(signals *repository.UserSecuritySignalRepository) {
 	h.securitySignals = signals
+}
+
+func (h *AdminHandler) SetAntiFraudService(svc *service.AntiFraudService) { h.antifraud = svc }
+
+func (h *AdminHandler) GetAntiFraudSettings(w http.ResponseWriter, r *http.Request) {
+	if h.antifraud == nil {
+		writeError(w, http.StatusServiceUnavailable, "Мониторинг мультиаккаунтинга не настроен")
+		return
+	}
+	cfg, err := h.antifraud.GetSettings(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось загрузить настройки антифрода")
+		return
+	}
+	writeJSON(w, http.StatusOK, cfg)
+}
+
+func (h *AdminHandler) UpdateAntiFraudSettings(w http.ResponseWriter, r *http.Request) {
+	if h.antifraud == nil {
+		writeError(w, http.StatusServiceUnavailable, "Мониторинг мультиаккаунтинга не настроен")
+		return
+	}
+	var cfg model.AntiFraudSettings
+	if err := json.NewDecoder(r.Body).Decode(&cfg); err != nil {
+		writeError(w, http.StatusBadRequest, "Некорректное тело запроса")
+		return
+	}
+	updated, err := h.antifraud.UpdateSettings(r.Context(), cfg)
+	if errors.Is(err, service.ErrInvalidAntiFraudSettings) {
+		writeError(w, http.StatusBadRequest, "Проверьте пороги и правила антифрода")
+		return
+	}
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось сохранить настройки антифрода")
+		return
+	}
+	writeJSON(w, http.StatusOK, updated)
+}
+
+func (h *AdminHandler) ListAntiFraudUsers(w http.ResponseWriter, r *http.Request) {
+	if h.antifraud == nil {
+		writeError(w, http.StatusServiceUnavailable, "Мониторинг мультиаккаунтинга не настроен")
+		return
+	}
+	items, total, err := h.antifraud.ListUsers(r.Context(), parseIntDefault(r.URL.Query().Get("limit"), 50), parseIntDefault(r.URL.Query().Get("offset"), 0))
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось загрузить риск-профили")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"users": items, "total": total})
+}
+
+func (h *AdminHandler) SetAntiFraudDecision(w http.ResponseWriter, r *http.Request) {
+	if h.antifraud == nil {
+		writeError(w, http.StatusServiceUnavailable, "Мониторинг мультиаккаунтинга не настроен")
+		return
+	}
+	actorID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Не авторизован")
+		return
+	}
+	var decision model.AntiFraudDecision
+	if err := json.NewDecoder(r.Body).Decode(&decision); err != nil {
+		writeError(w, http.StatusBadRequest, "Некорректное тело запроса")
+		return
+	}
+	if err := h.antifraud.SetDecision(r.Context(), actorID, chi.URLParam(r, "userID"), decision); errors.Is(err, service.ErrInvalidAntiFraudSettings) {
+		writeError(w, http.StatusBadRequest, "Недопустимое решение или пустая причина")
+		return
+	} else if err != nil {
+		writeError(w, http.StatusInternalServerError, "Не удалось сохранить решение")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 func (h *AdminHandler) SetEmailCampaign(campaign *service.EmailCampaignService) {

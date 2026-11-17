@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/postilka/postilka/internal/model"
 )
 
 type UserSecuritySignal struct {
@@ -65,6 +66,76 @@ func (r *UserSecuritySignalRepository) ListForUser(ctx context.Context, userID s
 		items = append(items, item)
 	}
 	return items, rows.Err()
+}
+
+func (r *UserSecuritySignalRepository) ListRiskProfiles(ctx context.Context, limit, offset int) ([]model.AntiFraudUserProfile, int, error) {
+	var total int
+	if err := r.pool.QueryRow(ctx, `SELECT COUNT(DISTINCT user_id) FROM user_security_signals`).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	rows, err := r.pool.Query(ctx, `
+		WITH stats AS (
+			SELECT s.user_id,
+			 COUNT(*)::int AS events,
+			 COUNT(DISTINCT NULLIF(s.device_hash, ''))::int AS devices,
+			 COUNT(DISTINCT NULLIF(s.ip_hash, ''))::int AS ips,
+			 MAX(s.created_at) AS last_activity,
+			 COUNT(DISTINCT other.user_id)::int AS related
+		FROM user_security_signals s
+		LEFT JOIN user_security_signals other ON other.user_id <> s.user_id
+		  AND ((s.device_hash IS NOT NULL AND s.device_hash = other.device_hash)
+		    OR (s.ip_hash IS NOT NULL AND s.ip_hash = other.ip_hash))
+		GROUP BY s.user_id
+		)
+		SELECT u.id, u.email, u.name, u.is_blocked, u.is_platform_admin, u.created_at,
+		       st.related, st.last_activity,
+		       COALESCE(d.decision, ''), COALESCE(d.reason, ''), d.decided_at,
+		       CASE WHEN st.related >= 3 THEN 50 WHEN st.related >= 1 THEN 25 ELSE 0 END
+		       + CASE WHEN st.devices > 1 THEN 10 ELSE 0 END
+		       + CASE WHEN st.ips > 3 THEN 10 ELSE 0 END AS risk_score
+		FROM stats st JOIN users u ON u.id = st.user_id AND u.is_platform_admin = FALSE
+		LEFT JOIN anti_fraud_user_decisions d ON d.user_id = u.id
+		ORDER BY risk_score DESC, st.last_activity DESC LIMIT $1 OFFSET $2
+	`, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	items := make([]model.AntiFraudUserProfile, 0, limit)
+	for rows.Next() {
+		var item model.AntiFraudUserProfile
+		var lastActivity, decisionAt *time.Time
+		if err := rows.Scan(&item.UserID, &item.Email, &item.Name, &item.IsBlocked, &item.IsPlatformAdmin, &item.CreatedAt, &item.RelatedAccounts, &lastActivity, &item.Decision, &item.DecisionReason, &decisionAt, &item.RiskScore); err != nil {
+			return nil, 0, err
+		}
+		item.LastActivityAt, item.DecisionAt = lastActivity, decisionAt
+		item.RiskLevel = "low"
+		if item.RiskScore >= 80 {
+			item.RiskLevel = "critical"
+		} else if item.RiskScore >= 60 {
+			item.RiskLevel = "high"
+		} else if item.RiskScore >= 30 {
+			item.RiskLevel = "medium"
+		}
+		item.Signals = []string{}
+		if item.RelatedAccounts > 0 {
+			item.Signals = append(item.Signals, "shared_identity_signal")
+		}
+		if item.RiskScore >= 60 {
+			item.Signals = append(item.Signals, "high_risk_score")
+		}
+		items = append(items, item)
+	}
+	return items, total, rows.Err()
+}
+
+func (r *UserSecuritySignalRepository) SetDecision(ctx context.Context, actorID, userID, decision, reason string) error {
+	_, err := r.pool.Exec(ctx, `
+		INSERT INTO anti_fraud_user_decisions (user_id, decision, reason, decided_by)
+		VALUES ($1, $2, $3, $4)
+		ON CONFLICT (user_id) DO UPDATE SET decision = EXCLUDED.decision, reason = EXCLUDED.reason, decided_by = EXCLUDED.decided_by, decided_at = NOW()
+	`, userID, decision, reason, actorID)
+	return err
 }
 
 func (r *UserSecuritySignalRepository) RelatedAccounts(ctx context.Context, userID string) ([]RelatedSecurityAccount, error) {

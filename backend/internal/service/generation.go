@@ -55,6 +55,11 @@ type GenerationService struct {
 	createGate       *kieCreateGate
 	notify           *NotificationService
 	telegram         *TelegramService
+	securitySignals  *UserSecuritySignalService
+}
+
+func (s *GenerationService) SetSecuritySignals(signals *UserSecuritySignalService) {
+	s.securitySignals = signals
 }
 
 func NewGenerationService(
@@ -161,6 +166,9 @@ func (s *GenerationService) resolveWorkspace(ctx context.Context, userID string,
 }
 
 func (s *GenerationService) StartGenerate(ctx context.Context, userID string, r *http.Request, in GenerateImageInput) (StartGenerateResult, error) {
+	if s.securitySignals != nil {
+		s.securitySignals.RecordEvent(r, userID, "generation_start")
+	}
 	ws, err := s.resolveWorkspace(ctx, userID, r)
 	if err != nil {
 		return StartGenerateResult{}, err

@@ -39,6 +39,10 @@ func (s *UserSecuritySignalService) RecordRequest(r *http.Request, userID, event
 	}
 }
 
+func (s *UserSecuritySignalService) RecordEvent(r *http.Request, userID, eventType string) {
+	s.RecordRequest(r, userID, eventType)
+}
+
 func (s *UserSecuritySignalService) EnsureDeviceCookie(w http.ResponseWriter, r *http.Request, secure bool) {
 	if cookie, err := r.Cookie(deviceIDCookie); err == nil {
 		if decoded, decodeErr := base64.RawURLEncoding.DecodeString(cookie.Value); decodeErr == nil && len(decoded) == 32 {

@@ -931,7 +931,7 @@ export type UserInviteRelations = {
 export type AdminUserSecuritySignal = {
   id: number;
   user_id: string;
-  event_type: "register" | "login";
+  event_type: "register" | "login" | "generation_start" | "generation_success" | "generation_failed";
   ip_hash?: string;
   device_hash?: string;
   created_at: string;
@@ -955,6 +955,18 @@ export type AdminUserSecuritySignals = {
 export function fetchAdminUserSecuritySignals(userId: string) {
   return apiFetch<AdminUserSecuritySignals>(`/admin/users/${userId}/security-signals`);
 }
+
+export type AntiFraudMode = "monitoring" | "soft" | "strict";
+export type AntiFraudAction = "observe" | "challenge" | "limit_generation" | "manual_review" | "block" | "allowlist";
+export type AntiFraudRule = { key: string; name: string; description: string; enabled: boolean; weight: number; threshold: number; action: AntiFraudAction };
+export type AntiFraudSettings = { enabled: boolean; mode: AntiFraudMode; medium_threshold: number; high_threshold: number; critical_threshold: number; device_accounts_threshold: number; device_image_limit: number; device_video_limit: number; retention_days: number; rules: AntiFraudRule[] };
+export type AntiFraudUserProfile = { user_id: string; email: string; name: string; is_blocked: boolean; is_platform_admin: boolean; risk_score: number; risk_level: string; related_accounts: number; signals: string[]; decision: string; decision_reason?: string; decision_by?: string; decision_at?: string; created_at: string; last_activity_at?: string };
+export type AntiFraudUsersResponse = { users: AntiFraudUserProfile[]; total: number };
+
+export function fetchAntiFraudSettings() { return apiFetch<AntiFraudSettings>("/admin/anti-fraud/settings"); }
+export function updateAntiFraudSettings(settings: AntiFraudSettings) { return apiFetch<AntiFraudSettings>("/admin/anti-fraud/settings", { method: "PUT", body: JSON.stringify(settings) }); }
+export function fetchAntiFraudUsers() { return apiFetch<AntiFraudUsersResponse>("/admin/anti-fraud/users"); }
+export function setAntiFraudDecision(userId: string, decision: string, reason: string) { return apiFetch<{ status: string }>(`/admin/anti-fraud/users/${userId}/decision`, { method: "PUT", body: JSON.stringify({ decision, reason }) }); }
 
 export function fetchAdminUserInvites(userId: string) {
   return apiFetch<{ invites: UserInvite[] }>(`/admin/users/${userId}/invites`);

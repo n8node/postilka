@@ -66,6 +66,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	jobRepo := repository.NewAIGenerationJobRepository(db.Pool)
 	adminUserSvc := service.NewAdminUserService(userRepo, jobRepo, emailSvc)
 	authMW.BindUsers(userRepo)
+	antifraudSvc := service.NewAntiFraudService(settingsRepo, userRepo, securitySignalRepo)
 	emailCampaignRepo := repository.NewEmailCampaignQueueRepository(db.Pool)
 	emailCampaignSvc := service.NewEmailCampaignService(emailCampaignRepo, userRepo, emailSvc, logger)
 	txEmailSvc := service.NewTransactionalEmailService(emailSvc, userRepo, planRepo, wsRepo, cfg, logger)
@@ -189,6 +190,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	aiBillingSvc := service.NewAIBillingService(quotaSvc, usageRepo, walletRepo, kieSettingsRepo)
 	adminHandler := handler.NewAdminHandler(userRepo, adminUserSvc, adminWalletSvc, planSvc, oauthSvc, adminWorkspaceSvc, fileStorageRepo, folderStorageRepo, postRepo, adminAnalyticsRepo, objectStorage, aiBillingSvc)
 	adminHandler.SetSecuritySignals(securitySignalRepo)
+	adminHandler.SetAntiFraudService(antifraudSvc)
 	adminHandler.SetEmailCampaign(emailCampaignSvc)
 	adminHandler.SetEmailTemplates(emailTemplateSettingsSvc)
 	inviteHandler := handler.NewInviteHandler(inviteSvc, oauthSvc)
@@ -276,6 +278,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	generationSvc := service.NewGenerationService(
 		kieConfigSvc, kieVideoConfigSvc, genRepo, genJobRepo, genUploadRepo, aiBillingSvc, objectStorage, fileStorageSvc, wsSvc, userRepo, yandexGptConfigSvc, quotaSvc,
 	)
+	generationSvc.SetSecuritySignals(securitySignalSvc)
 	generationSvc.SetTelegramNotifications(telegramSvc)
 	generationSvc.SetMediaProviderService(mediaProviderSvc)
 	generationSvc.SetMediaProviderUserLookup(userRepo)
@@ -806,6 +809,10 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Get("/users/{userID}/invite-relations", adminInviteHandler.UserInviteRelations)
 				r.Get("/users/{userID}/login-identities", adminHandler.ListUserLoginIdentities)
 				r.Get("/users/{userID}/security-signals", adminHandler.ListUserSecuritySignals)
+				r.Get("/anti-fraud/settings", adminHandler.GetAntiFraudSettings)
+				r.Put("/anti-fraud/settings", adminHandler.UpdateAntiFraudSettings)
+				r.Get("/anti-fraud/users", adminHandler.ListAntiFraudUsers)
+				r.Put("/anti-fraud/users/{userID}/decision", adminHandler.SetAntiFraudDecision)
 				r.Get("/users/{userID}/workspaces", adminHandler.ListUserWorkspaces)
 
 				r.Get("/workspaces", adminHandler.ListWorkspaces)
