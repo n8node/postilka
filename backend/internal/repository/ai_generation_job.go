@@ -34,6 +34,16 @@ func NewAIGenerationJobRepository(pool *pgxpool.Pool) *AIGenerationJobRepository
 	return &AIGenerationJobRepository{pool: pool}
 }
 
+// CancelActiveForUser prevents queued and in-flight jobs from being submitted or finalized.
+func (r *AIGenerationJobRepository) CancelActiveForUser(ctx context.Context, userID, message string) error {
+	_, err := r.pool.Exec(ctx, `
+		UPDATE ai_generation_jobs
+		SET status = $2, fail_message = $3, last_error = $3, lease_owner = '', lease_until = NULL, updated_at = now()
+		WHERE user_id = $1 AND status IN ('preparing', 'waiting', 'queuing', 'generating')
+	`, userID, model.GenJobStatusCancelled, message)
+	return err
+}
+
 func (r *AIGenerationJobRepository) Create(ctx context.Context, job model.AIGenerationJob) (model.AIGenerationJob, error) {
 	if job.ID == "" {
 		job.ID = uuid.NewString()

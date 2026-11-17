@@ -9,6 +9,7 @@ const (
 	GenJobStatusGenerating = "generating"
 	GenJobStatusSucceeded  = "succeeded"
 	GenJobStatusFailed     = "failed"
+	GenJobStatusCancelled  = "cancelled"
 )
 
 type AIGenerationJob struct {

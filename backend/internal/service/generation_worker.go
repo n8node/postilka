@@ -98,6 +98,14 @@ func (s *GenerationService) pollDueJobs(ctx context.Context, owner string, pollG
 			_ = s.jobRepo.ReleaseLease(ctx, id, owner)
 			continue
 		}
+		if s.users != nil {
+			user, userErr := s.users.GetByID(ctx, job.UserID)
+			if userErr != nil || user == nil || (user.IsBlocked && !user.IsPlatformAdmin) {
+				_ = s.jobRepo.CancelActiveForUser(ctx, job.UserID, "Генерация отменена: аккаунт заблокирован или удалён")
+				_ = s.jobRepo.ReleaseLease(ctx, id, owner)
+				continue
+			}
+		}
 		if job.Status == model.GenJobStatusPreparing && strings.TrimSpace(job.ProviderTaskID) == "" {
 			var err error
 			if model.IsVideoGenerationMode(job.Mode) {
@@ -119,6 +127,14 @@ func (s *GenerationService) pollDueJobs(ctx context.Context, owner string, pollG
 		if err != nil {
 			_ = s.jobRepo.ReleaseLease(ctx, id, owner)
 			continue
+		}
+		if s.users != nil {
+			user, userErr := s.users.GetByID(ctx, job.UserID)
+			if userErr != nil || user == nil || (user.IsBlocked && !user.IsPlatformAdmin) {
+				_ = s.jobRepo.CancelActiveForUser(ctx, job.UserID, "Генерация отменена: аккаунт заблокирован или удалён")
+				_ = s.jobRepo.ReleaseLease(ctx, id, owner)
+				continue
+			}
 		}
 		if job.Status == model.GenJobStatusPreparing {
 			p := ai.NextJobProgress(job.Progress, job.Status, job.KieState, 0, job.CreatedAt)
@@ -288,8 +304,15 @@ func (s *GenerationService) finalizeJob(ctx context.Context, jobID string) error
 	if job.GenerationID != nil {
 		return nil
 	}
-	if job.Status == model.GenJobStatusFailed {
+	if job.Status == model.GenJobStatusFailed || job.Status == model.GenJobStatusCancelled {
 		return nil
+	}
+	if s.users != nil {
+		user, userErr := s.users.GetByID(ctx, job.UserID)
+		if userErr != nil || user == nil || (user.IsBlocked && !user.IsPlatformAdmin) {
+			_ = s.jobRepo.CancelActiveForUser(ctx, job.UserID, "Генерация отменена: аккаунт заблокирован или удалён")
+			return nil
+		}
 	}
 	// The result record can be created before a worker restart or a billing
 	// failure. Reuse it instead of downloading and creating a second record.

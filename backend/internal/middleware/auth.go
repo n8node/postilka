@@ -16,10 +16,20 @@ const UserIDKey contextKey = "user_id"
 
 type Auth struct {
 	jwtSecret []byte
+	users     userLookup
+}
+
+type userLookup interface {
+	GetByID(ctx context.Context, id string) (*model.User, error)
 }
 
 func NewAuth(jwtSecret string) *Auth {
 	return &Auth{jwtSecret: []byte(jwtSecret)}
+}
+
+// BindUsers enables immediate revocation of JWTs when an account is blocked or deleted.
+func (a *Auth) BindUsers(users userLookup) {
+	a.users = users
 }
 
 type claims struct {
@@ -38,6 +48,17 @@ func (a *Auth) Required(next http.Handler) http.Handler {
 		if err != nil {
 			writeUnauthorized(w)
 			return
+		}
+		if a.users != nil {
+			user, lookupErr := a.users.GetByID(r.Context(), c.UserID)
+			if lookupErr != nil || user == nil {
+				writeRevoked(w, "auth_revoked")
+				return
+			}
+			if user.IsBlocked && !user.IsPlatformAdmin {
+				writeRevoked(w, "account_blocked")
+				return
+			}
 		}
 		ctx := context.WithValue(r.Context(), UserIDKey, c.UserID)
 		next.ServeHTTP(w, r.WithContext(ctx))
@@ -115,6 +136,13 @@ func writeUnauthorized(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusUnauthorized)
 	_, _ = w.Write([]byte(`{"error":"Не авторизован"}`))
+}
+
+func writeRevoked(w http.ResponseWriter, code string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("X-Auth-Revoked", "true")
+	w.WriteHeader(http.StatusUnauthorized)
+	_, _ = w.Write([]byte(`{"error":"Сессия завершена","code":"` + code + `"}`))
 }
 
 func writeForbidden(w http.ResponseWriter) {

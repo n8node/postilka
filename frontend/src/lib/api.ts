@@ -357,6 +357,9 @@ export async function apiFetch<T>(
       typeof data === "object" && data && "code" in data
         ? String((data as { code: string }).code)
         : undefined;
+    if (res.status === 401 && (code === "auth_revoked" || code === "account_blocked")) {
+      window.location.assign("/auth/login?reason=blocked");
+    }
     throw new ApiError(res.status, msg, code);
   }
   return data as T;
