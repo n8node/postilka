@@ -59,6 +59,7 @@ import {
 } from "@/lib/video-generation-data";
 import { historyVideoItemToUpload } from "@/lib/video-history-drop";
 import { cn } from "@/lib/utils";
+import { fetchCompanyProfiles, type CompanyProfile } from "@/lib/company-profiles-api";
 
 export function VideoGenerationPageContent() {
   const router = useRouter();
@@ -92,6 +93,8 @@ export function VideoGenerationPageContent() {
   >(() => emptyReferenceVideoSlots());
   const [referenceAudios, setReferenceAudios] = useState<VideoGenerationUpload[]>([]);
   const [historyDragActive, setHistoryDragActive] = useState(false);
+  const [companyProfiles, setCompanyProfiles] = useState<CompanyProfile[]>([]);
+  const [companyProfileID, setCompanyProfileID] = useState("");
 
   const generating = useVideoGenerationJobStore((s) => s.running);
   const activeJob = useVideoGenerationJobStore((s) => s.job);
@@ -159,6 +162,7 @@ export function VideoGenerationPageContent() {
     void loadHistory();
     void loadPhotoHistory();
     void loadPricing();
+    void fetchCompanyProfiles().then((data) => setCompanyProfiles(data.items)).catch(() => setCompanyProfiles([]));
   }, [loadHistory, loadPhotoHistory, loadPricing]);
 
   useEffect(() => {
@@ -322,6 +326,7 @@ export function VideoGenerationPageContent() {
       const body = {
         mode,
         prompt: prompt.trim(),
+        company_profile_id: companyProfileID || undefined,
         aspect_ratio: aspectRatio,
         duration,
         source_upload_id: firstFrame?.uploadId,
@@ -559,6 +564,8 @@ export function VideoGenerationPageContent() {
             <p className="mt-2 text-[12px] text-red-600">{improveError}</p>
           )}
         </Card>
+
+        <label className="block"><span className="mb-1 block text-xs font-medium text-muted">Профиль компании</span><select value={companyProfileID} onChange={(e) => setCompanyProfileID(e.target.value)} className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm"><option value="">Без профиля</option>{companyProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}</select></label>
 
         <VideoFormatParamsPanel
           step={formatStep}

@@ -28,6 +28,7 @@ type generateImageRequest struct {
 	SourceUploadID     string   `json:"source_upload_id"`
 	CombineUploadIDs   []string `json:"combine_upload_ids"`
 	ReferenceUploadIDs []string `json:"reference_upload_ids"`
+	CompanyProfileID   string   `json:"company_profile_id"`
 }
 
 func (h *GenerationHandler) Generate(w http.ResponseWriter, r *http.Request) {
@@ -50,6 +51,7 @@ func (h *GenerationHandler) Generate(w http.ResponseWriter, r *http.Request) {
 		SourceUploadID:     req.SourceUploadID,
 		CombineUploadIDs:   req.CombineUploadIDs,
 		ReferenceUploadIDs: req.ReferenceUploadIDs,
+		CompanyProfileID:   req.CompanyProfileID,
 	})
 	if err != nil {
 		h.mapError(w, err)

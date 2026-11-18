@@ -278,6 +278,9 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	helpSettingsHandler := handler.NewHelpSettingsHandler(helpSettingsSvc)
 
 	genRepo := repository.NewAIGenerationRepository(db.Pool)
+	companyProfileRepo := repository.NewCompanyProfileRepository(db.Pool)
+	companyProfileSvc := service.NewCompanyProfileService(companyProfileRepo, wsSvc)
+	companyProfileHandler := handler.NewCompanyProfileHandler(companyProfileSvc)
 	genJobRepo := repository.NewAIGenerationJobRepository(db.Pool)
 	adminHandler.SetGenerationJobs(genJobRepo)
 	generationSvc := service.NewGenerationService(
@@ -287,6 +290,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	generationSvc.SetTelegramNotifications(telegramSvc)
 	generationSvc.SetMediaProviderService(mediaProviderSvc)
 	generationSvc.SetMediaProviderUserLookup(userRepo)
+	generationSvc.SetCompanyProfiles(companyProfileSvc)
 	generationHandler := handler.NewGenerationHandler(generationSvc)
 	videoGenerationHandler := handler.NewVideoGenerationHandler(generationSvc)
 	adStudioRepo := repository.NewAdStudioRepository(db.Pool)
@@ -617,6 +621,12 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Get("/generation-nav", generationNavHandler.GetCabinet)
 			r.Get("/header-buttons", headerButtonsHandler.Get)
 			r.Get("/generation-nav/items/{id}/icon", generationNavHandler.ServeIcon)
+			r.Route("/company-profiles", func(r chi.Router) {
+				r.Get("/", companyProfileHandler.List)
+				r.Post("/", companyProfileHandler.Create)
+				r.Put("/{id}", companyProfileHandler.Update)
+				r.Delete("/{id}", companyProfileHandler.Delete)
+			})
 			r.Get("/ad-studio/templates", adStudioHandler.List)
 			r.Get("/ad-studio/templates/{id}", adStudioHandler.Get)
 			r.Get("/ad-studio/templates/{id}/preview", adStudioHandler.Preview)

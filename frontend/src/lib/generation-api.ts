@@ -165,6 +165,7 @@ export type GenerateImageBody = {
   source_upload_id?: string;
   combine_upload_ids?: string[];
   reference_upload_ids?: string[];
+  company_profile_id?: string;
 };
 
 export type ComposePostTextPayload = {

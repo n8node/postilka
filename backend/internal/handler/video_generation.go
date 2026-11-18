@@ -32,6 +32,7 @@ type generateVideoRequest struct {
 	ReferenceUploadIDs      []string `json:"reference_upload_ids"`
 	ReferenceVideoUploadIDs []string `json:"reference_video_upload_ids"`
 	ReferenceAudioUploadIDs []string `json:"reference_audio_upload_ids"`
+	CompanyProfileID        string   `json:"company_profile_id"`
 }
 
 func (h *VideoGenerationHandler) Generate(w http.ResponseWriter, r *http.Request) {
@@ -57,6 +58,7 @@ func (h *VideoGenerationHandler) Generate(w http.ResponseWriter, r *http.Request
 		ReferenceUploadIDs:      req.ReferenceUploadIDs,
 		ReferenceVideoUploadIDs: req.ReferenceVideoUploadIDs,
 		ReferenceAudioUploadIDs: req.ReferenceAudioUploadIDs,
+		CompanyProfileID:        req.CompanyProfileID,
 	})
 	if err != nil {
 		h.mapError(w, err)

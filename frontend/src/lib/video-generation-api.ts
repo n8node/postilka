@@ -41,6 +41,7 @@ export type GenerateVideoBody = {
   reference_upload_ids?: string[];
   reference_video_upload_ids?: string[];
   reference_audio_upload_ids?: string[];
+  company_profile_id?: string;
 };
 
 export type VideoGenerationCostInput = {

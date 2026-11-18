@@ -13,6 +13,7 @@ import { NotificationSettingsBlock } from "@/components/settings/NotificationSet
 import { fetchUserInvites, isPlaceholderLoginEmail } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
+import { CompanyProfilesSection } from "@/components/settings/CompanyProfilesSection";
 
 export type UserSettingsKey =
   | "profile"
@@ -21,7 +22,8 @@ export type UserSettingsKey =
   | "invites"
   | "login"
   | "timezone"
-  | "notifications";
+  | "notifications"
+  | "company-profiles";
 
 const SETTINGS_MENU: {
   key: UserSettingsKey;
@@ -35,6 +37,7 @@ const SETTINGS_MENU: {
   { key: "login", label: "Вход через соцсети", description: "VK и MAX" },
   { key: "timezone", label: "Таймзона", description: "Расписание публикаций" },
   { key: "notifications", label: "Уведомления", description: "Колокольчик в кабинете" },
+  { key: "company-profiles", label: "Профили компании", description: "Стиль генерации контента" },
 ];
 
 function isSettingsKey(value: string | null): value is UserSettingsKey {
@@ -122,6 +125,8 @@ function SettingsSectionContent({
           <WorkspaceSettingsBlock embedded />
         </div>
       );
+    case "company-profiles":
+      return <CompanyProfilesSection />;
     case "email":
       return <EmailSection />;
     case "invites":

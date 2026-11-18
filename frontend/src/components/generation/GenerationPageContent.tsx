@@ -51,6 +51,7 @@ import {
   uploadHistoryItem,
 } from "@/lib/generation-history-drop";
 import { cn } from "@/lib/utils";
+import { fetchCompanyProfiles, type CompanyProfile } from "@/lib/company-profiles-api";
 
 const modeIcons = {
   "text-to-image": Type,
@@ -76,6 +77,8 @@ export function GenerationPageContent() {
   const [sourcePhoto, setSourcePhoto] = useState<GenerationUpload | null>(null);
   const [combinePhotos, setCombinePhotos] = useState(emptyCombinePhotos);
   const [historyDragActive, setHistoryDragActive] = useState(false);
+  const [companyProfiles, setCompanyProfiles] = useState<CompanyProfile[]>([]);
+  const [companyProfileID, setCompanyProfileID] = useState("");
 
   const generating = useGenerationJobStore((s) => s.running);
   const activeJob = useGenerationJobStore((s) => s.job);
@@ -126,6 +129,7 @@ export function GenerationPageContent() {
   useEffect(() => {
     void loadHistory();
     void loadPricing();
+    void fetchCompanyProfiles().then((data) => setCompanyProfiles(data.items)).catch(() => setCompanyProfiles([]));
   }, [loadHistory, loadPricing]);
 
   useEffect(() => {
@@ -254,6 +258,7 @@ export function GenerationPageContent() {
       const body = {
         mode,
         prompt: prompt.trim(),
+        company_profile_id: companyProfileID || undefined,
         aspect_ratio: aspectRatio,
         source_upload_id: sourcePhoto?.uploadId,
         combine_upload_ids: combinePhotos
@@ -395,6 +400,8 @@ export function GenerationPageContent() {
           )}
         </Card>
 
+        <label className="block"><span className="mb-1 block text-xs font-medium text-muted">Профиль компании</span><select value={companyProfileID} onChange={(e) => setCompanyProfileID(e.target.value)} className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm"><option value="">Без профиля</option>{companyProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}</select></label>
+
         <FormatParamsPanel
           step={formatStep}
           aspectRatio={aspectRatio}
@@ -427,6 +434,7 @@ export function GenerationPageContent() {
         />
       </div>
 
+      <label className="mb-4 block"><span className="mb-1 block text-xs font-medium text-muted">Профиль компании</span><select value={companyProfileID} onChange={(e) => setCompanyProfileID(e.target.value)} className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm"><option value="">Без профиля</option>{companyProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}</select></label>
       <Card hover className="flex min-h-[520px] min-w-0 flex-col overflow-x-hidden">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <p className="text-[11px] font-medium uppercase tracking-[0.04em] text-muted">

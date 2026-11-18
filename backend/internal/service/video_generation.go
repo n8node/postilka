@@ -35,6 +35,7 @@ type GenerateVideoInput struct {
 	ReferenceUploadIDs      []string
 	ReferenceVideoUploadIDs []string
 	ReferenceAudioUploadIDs []string
+	CompanyProfileID        string
 }
 
 func inputImageCountForVideoMode(mode string, in GenerateVideoInput) int {
@@ -82,6 +83,13 @@ func (s *GenerationService) StartGenerateVideo(ctx context.Context, userID strin
 	}
 	if kieVideoPromptOverLimit(prompt) {
 		return StartGenerateResult{}, errors.New("prompt too long")
+	}
+	if s.companyProfiles != nil && strings.TrimSpace(in.CompanyProfileID) != "" {
+		contextText, contextErr := s.companyProfiles.PromptContext(ctx, ws.ID, in.CompanyProfileID, "video")
+		if contextErr != nil {
+			return StartGenerateResult{}, contextErr
+		}
+		prompt = appendCompanyProfilePrompt(prompt, contextText, 7000)
 	}
 
 	settings, err := s.kieVideoConfig.GetSettings(ctx)

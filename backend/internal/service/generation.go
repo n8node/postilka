@@ -56,6 +56,11 @@ type GenerationService struct {
 	notify           *NotificationService
 	telegram         *TelegramService
 	securitySignals  *UserSecuritySignalService
+	companyProfiles  *CompanyProfileService
+}
+
+func (s *GenerationService) SetCompanyProfiles(profiles *CompanyProfileService) {
+	s.companyProfiles = profiles
 }
 
 func (s *GenerationService) SetSecuritySignals(signals *UserSecuritySignalService) {
@@ -143,6 +148,7 @@ type GenerateImageInput struct {
 	SourceUploadID     string
 	CombineUploadIDs   []string
 	ReferenceUploadIDs []string
+	CompanyProfileID   string
 }
 
 type StartGenerateResult struct {
@@ -165,6 +171,22 @@ func (s *GenerationService) resolveWorkspace(ctx context.Context, userID string,
 	return ws, nil
 }
 
+func appendCompanyProfilePrompt(prompt, contextText string, maxChars int) string {
+	contextText = strings.TrimSpace(contextText)
+	if contextText == "" {
+		return prompt
+	}
+	const prefix = "\n\nCompany profile instructions:\n"
+	available := maxChars - len(prompt) - len(prefix)
+	if available <= 0 {
+		return prompt
+	}
+	if len(contextText) > available {
+		contextText = contextText[:available]
+	}
+	return prompt + prefix + contextText
+}
+
 func (s *GenerationService) StartGenerate(ctx context.Context, userID string, r *http.Request, in GenerateImageInput) (StartGenerateResult, error) {
 	if s.securitySignals != nil {
 		s.securitySignals.RecordEvent(r, userID, "generation_start")
@@ -181,6 +203,13 @@ func (s *GenerationService) StartGenerate(ctx context.Context, userID string, r 
 	}
 	if len(prompt) > 4000 {
 		return StartGenerateResult{}, errors.New("prompt too long")
+	}
+	if s.companyProfiles != nil && strings.TrimSpace(in.CompanyProfileID) != "" {
+		contextText, contextErr := s.companyProfiles.PromptContext(ctx, ws.ID, in.CompanyProfileID, "image")
+		if contextErr != nil {
+			return StartGenerateResult{}, contextErr
+		}
+		prompt = appendCompanyProfilePrompt(prompt, contextText, 4000)
 	}
 
 	switch mode {
