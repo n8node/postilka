@@ -703,7 +703,7 @@ export function AdStudioPage({ catalog = "studio" }: { catalog?: AdStudioCatalog
               </p>
               {selected.trend_prompt ? (
                 <p className="mt-2 text-[12px] text-muted">
-                  В Kie уйдут только системный промпт этого тренда, ваш референс и правка.
+                  В генерацию уйдут только системный промпт этого тренда, ваш референс и правка.
                 </p>
               ) : needsTemplateInput && !selected.preview_url ? (
                 <p className="mt-2 text-[12px] text-red-700">

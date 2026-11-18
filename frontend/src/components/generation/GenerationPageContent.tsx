@@ -434,7 +434,6 @@ export function GenerationPageContent() {
         />
       </div>
 
-      <label className="mb-4 block"><span className="mb-1 block text-xs font-medium text-muted">Профиль компании</span><select value={companyProfileID} onChange={(e) => setCompanyProfileID(e.target.value)} className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm"><option value="">Без профиля</option>{companyProfiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.name}</option>)}</select></label>
       <Card hover className="flex min-h-[520px] min-w-0 flex-col overflow-x-hidden">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <p className="text-[11px] font-medium uppercase tracking-[0.04em] text-muted">
