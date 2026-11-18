@@ -64,6 +64,7 @@ import {
 import { useAuth } from "@/context/AuthContext";
 import { channelAvatarCacheKey, channelDisplayName } from "@/lib/channelPresentation";
 import { composePostText } from "@/lib/generation-api";
+import { fetchCompanyProfiles, type CompanyProfile } from "@/lib/company-profiles-api";
 import { refreshBillingBalances } from "@/lib/billing-balances-store";
 import {
   getFileVideoDimensions,
@@ -1278,6 +1279,8 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiUseEditorText, setAiUseEditorText] = useState(false);
   const [aiTone, setAiTone] = useState("нейтральный");
+  const [companyProfiles, setCompanyProfiles] = useState<CompanyProfile[]>([]);
+  const [selectedCompanyProfileId, setSelectedCompanyProfileId] = useState("");
   const [aiLength, setAiLength] = useState<"short" | "medium" | "long">("medium");
   const [aiResult, setAiResult] = useState<string | null>(null);
   const [articleTitle, setArticleTitle] = useState("");
@@ -1304,6 +1307,23 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
   const [telegramCarouselText, setTelegramCarouselText] = useState<
     "separate_message" | "same_message"
   >("separate_message");
+
+  useEffect(() => {
+    void fetchCompanyProfiles()
+      .then(({ items }) => {
+        setCompanyProfiles(items);
+        const defaultProfile = items.find((item) => item.is_default) ?? items[0];
+        if (defaultProfile) {
+          setSelectedCompanyProfileId(defaultProfile.id);
+          if (defaultProfile.tone.trim()) setAiTone(defaultProfile.tone.trim());
+        }
+      })
+      .catch(() => undefined);
+  }, []);
+
+  const selectedCompanyProfile = companyProfiles.find(
+    (profile) => profile.id === selectedCompanyProfileId,
+  );
   const [telegramCaptionPosition, setTelegramCaptionPosition] = useState<"above" | "below">("below");
   const [telegramMediaOrder, setTelegramMediaOrder] = useState<"media_first" | "text_first">("media_first");
   const [channelUTM, setChannelUTM] = useState<Record<string, ChannelUTMSettings>>({});
@@ -3247,6 +3267,29 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
                   </div>
 
                   <div className="flex flex-wrap items-center gap-3">
+                    {companyProfiles.length > 0 && (
+                      <label className="inline-flex items-center gap-1.5 text-xs text-zinc-600">
+                        Профиль компании
+                        <select
+                          value={selectedCompanyProfileId}
+                          disabled={aiBusy || composerLocked}
+                          onChange={(event) => {
+                            const profileId = event.target.value;
+                            setSelectedCompanyProfileId(profileId);
+                            const profile = companyProfiles.find((item) => item.id === profileId);
+                            setAiTone(profile?.tone.trim() || "нейтральный");
+                          }}
+                          className="max-w-48 rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs"
+                        >
+                          <option value="">Без профиля</option>
+                          {companyProfiles.map((profile) => (
+                            <option key={profile.id} value={profile.id}>
+                              {profile.name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    )}
                     <label className="inline-flex items-center gap-2 text-xs text-zinc-600">
                       <input
                         type="checkbox"
@@ -3265,7 +3308,17 @@ export function PostComposer({ initialPostId }: { initialPostId?: string } = {})
                         onChange={(event) => setAiTone(event.target.value)}
                         className="rounded-md border border-zinc-200 bg-white px-2 py-1 text-xs"
                       >
-                        {["нейтральный", "дружелюбный", "экспертный", "продающий", "юмористический"].map(
+                        {[
+                          "нейтральный",
+                          "дружелюбный",
+                          "экспертный",
+                          "продающий",
+                          "юмористический",
+                          ...(selectedCompanyProfile?.tone.trim() &&
+                          !["нейтральный", "дружелюбный", "экспертный", "продающий", "юмористический"].includes(selectedCompanyProfile.tone.trim())
+                            ? [selectedCompanyProfile.tone.trim()]
+                            : []),
+                        ].map(
                           (tone) => (
                             <option key={tone} value={tone}>
                               {tone}
