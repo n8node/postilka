@@ -4,9 +4,11 @@ import (
 	"errors"
 	"math"
 	"sort"
+	"strings"
 )
 
 const ShortsKieMaxSegmentSeconds = 15.0
+const ShortsCandidateMaxSeconds = 60.0
 
 var (
 	ErrInvalidShortsRange      = errors.New("invalid shorts processing range")
@@ -72,6 +74,56 @@ type ShortsCandidate struct {
 	EndSeconds   float64
 	Text         string
 	Score        float64
+}
+
+// BuildShortsCandidates turns transcript fragments into deterministic windows
+// suitable for scoring and later rendering. It intentionally has no LLM or
+// storage dependency; an optional scorer can refine the returned candidates.
+func BuildShortsCandidates(segments []ShortsTranscriptSegment, startSeconds, endSeconds float64, limit int) []ShortsCandidate {
+	if limit <= 0 || endSeconds <= startSeconds {
+		return []ShortsCandidate{}
+	}
+	ordered := append([]ShortsTranscriptSegment(nil), segments...)
+	sort.SliceStable(ordered, func(i, j int) bool { return ordered[i].StartSeconds < ordered[j].StartSeconds })
+	windows := make([]ShortsCandidate, 0)
+	var current *ShortsCandidate
+	for _, segment := range ordered {
+		text := strings.Join(strings.Fields(segment.Text), " ")
+		segStart := math.Max(startSeconds, segment.StartSeconds)
+		segEnd := math.Min(endSeconds, segment.EndSeconds)
+		if text == "" || segEnd <= segStart {
+			continue
+		}
+		if current == nil || segEnd-current.StartSeconds > ShortsCandidateMaxSeconds {
+			if current != nil {
+				windows = append(windows, *current)
+			}
+			candidate := ShortsCandidate{StartSeconds: segStart, EndSeconds: segEnd, Text: text}
+			current = &candidate
+			continue
+		}
+		current.EndSeconds = segEnd
+		current.Text = strings.TrimSpace(current.Text + " " + text)
+	}
+	if current != nil {
+		windows = append(windows, *current)
+	}
+	for i := range windows {
+		windows[i].Score = shortsCandidateHeuristicScore(windows[i])
+	}
+	return RankShortsCandidates(windows, limit)
+}
+
+func shortsCandidateHeuristicScore(candidate ShortsCandidate) float64 {
+	words := len(strings.Fields(candidate.Text))
+	score := math.Min(float64(words)/20.0, 5.0)
+	if strings.ContainsAny(candidate.Text, "?!") {
+		score += 2
+	}
+	if candidate.EndSeconds-candidate.StartSeconds >= 15 {
+		score += 1
+	}
+	return math.Round(score*100) / 100
 }
 
 // RankShortsCandidates provides a deterministic fallback ranking before the

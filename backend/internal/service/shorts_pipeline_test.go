@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -46,5 +47,19 @@ func TestRankShortsCandidatesRemovesOverlap(t *testing.T) {
 	}
 	if got[0].Score != 9 || got[1].Score != 7 {
 		t.Fatalf("unexpected ranking: %+v", got)
+	}
+}
+
+func TestBuildShortsCandidates(t *testing.T) {
+	got := BuildShortsCandidates([]ShortsTranscriptSegment{
+		{StartSeconds: 0, EndSeconds: 4, Text: "Первое предложение"},
+		{StartSeconds: 4, EndSeconds: 12, Text: " Важный вопрос? "},
+		{StartSeconds: 70, EndSeconds: 75, Text: "Поздний фрагмент"},
+	}, 0, 90, 10)
+	if len(got) != 2 {
+		t.Fatalf("expected 2 candidates, got %d", len(got))
+	}
+	if !strings.Contains(got[0].Text, "Важный вопрос?") {
+		t.Fatalf("unexpected candidate text: %+v", got[0])
 	}
 }

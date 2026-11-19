@@ -116,6 +116,18 @@ func (w *ShortsWorker) process(ctx context.Context, job repository.ClaimedShorts
 	if err := w.repo.SetTranscript(ctx, job.WorkspaceID, project.ID, transcript); err != nil {
 		return err
 	}
+	if err := w.repo.UpdateJobProgress(ctx, job.ID, w.owner, "segment_candidates", 80); err != nil {
+		return err
+	}
+	shortsCandidates := BuildShortsCandidates(transcript.Segments, 0, duration, 12)
+	clipRows := make([]model.ShortsClip, 0, len(shortsCandidates))
+	for _, candidate := range shortsCandidates {
+		details, _ := json.Marshal(map[string]any{"source": "transcript_heuristic", "score": candidate.Score})
+		clipRows = append(clipRows, model.ShortsClip{StartSeconds: candidate.StartSeconds, EndSeconds: candidate.EndSeconds, TranscriptText: candidate.Text, Score: candidate.Score, ScoreDetails: details})
+	}
+	if err := w.repo.ReplaceCandidates(ctx, job.WorkspaceID, project.ID, clipRows); err != nil {
+		return err
+	}
 	if err := w.repo.UpdateProjectStatus(ctx, job.WorkspaceID, job.ProjectID, model.ShortsProjectAnalyzing, "transcript_ready"); err != nil {
 		return err
 	}

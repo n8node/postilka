@@ -89,6 +89,30 @@ func (r *ShortsRepository) ListClips(ctx context.Context, workspaceID, projectID
 	return out, rows.Err()
 }
 
+func (r *ShortsRepository) ReplaceCandidates(ctx context.Context, workspaceID, projectID string, candidates []model.ShortsClip) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	var exists bool
+	if err := tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM shorts_projects WHERE id = $1 AND workspace_id = $2 FOR UPDATE)`, projectID, workspaceID).Scan(&exists); err != nil {
+		return err
+	}
+	if !exists {
+		return ErrNotFound
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM shorts_clips WHERE project_id = $1 AND status = 'candidate'`, projectID); err != nil {
+		return err
+	}
+	for _, c := range candidates {
+		if _, err := tx.Exec(ctx, `INSERT INTO shorts_clips (project_id, start_seconds, end_seconds, transcript_text, score, score_details, status) VALUES ($1,$2,$3,$4,$5,$6::jsonb,'candidate')`, projectID, c.StartSeconds, c.EndSeconds, c.TranscriptText, c.Score, []byte(c.ScoreDetails)); err != nil {
+			return err
+		}
+	}
+	return tx.Commit(ctx)
+}
+
 func (r *ShortsRepository) CreateJob(ctx context.Context, projectID, jobType string) (*model.ShortsJob, error) {
 	var j model.ShortsJob
 	var status string
