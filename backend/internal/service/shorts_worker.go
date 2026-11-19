@@ -128,10 +128,53 @@ func (w *ShortsWorker) process(ctx context.Context, job repository.ClaimedShorts
 	if err := w.repo.ReplaceCandidates(ctx, job.WorkspaceID, project.ID, clipRows); err != nil {
 		return err
 	}
+	if err := w.repo.UpdateJobProgress(ctx, job.ID, w.owner, "render_drafts", 90); err != nil {
+		return err
+	}
+	if err := w.renderDrafts(ctx, job, project, sourcePath, shortsCandidates); err != nil {
+		return err
+	}
 	if err := w.repo.UpdateProjectStatus(ctx, job.WorkspaceID, job.ProjectID, model.ShortsProjectAnalyzing, "transcript_ready"); err != nil {
 		return err
 	}
 	return w.repo.SucceedJob(ctx, job.ID, w.owner)
+}
+
+func (w *ShortsWorker) renderDrafts(ctx context.Context, job repository.ClaimedShortsJob, project *model.ShortsProject, sourcePath string, candidates []ShortsCandidate) error {
+	clips, err := w.repo.ListCandidateClips(ctx, job.WorkspaceID, project.ID)
+	if err != nil {
+		return err
+	}
+	if len(clips) != len(candidates) {
+		return fmt.Errorf("candidate clip count mismatch")
+	}
+	for index, candidate := range candidates {
+		path, err := RenderShortsDraft(ctx, sourcePath, candidate.StartSeconds, candidate.EndSeconds)
+		if err != nil {
+			return err
+		}
+		info, statErr := os.Stat(path)
+		if statErr != nil {
+			os.Remove(path)
+			return statErr
+		}
+		key := fmt.Sprintf("workspaces/%s/shorts/%s/drafts/%02d.mp4", job.WorkspaceID, project.ID, index)
+		if err := w.storage.PutObjectFromFile(ctx, key, "video/mp4", path); err != nil {
+			os.Remove(path)
+			return err
+		}
+		uid := project.CreatedByUserID
+		file, err := w.fileStore.RegisterWorkspaceFile(ctx, &model.WorkspaceFile{WorkspaceID: job.WorkspaceID, UploadedByUserID: &uid, Name: fmt.Sprintf("shorts-draft-%02d.mp4", index+1), MimeType: "video/mp4", Size: info.Size(), S3Key: key})
+		os.Remove(path)
+		if err != nil {
+			_ = w.storage.DeleteObject(ctx, key)
+			return err
+		}
+		if err := w.repo.SetClipDraft(ctx, job.WorkspaceID, clips[index].ID, file.ID); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (w *ShortsWorker) downloadObject(ctx context.Context, key, ext string) (string, error) {

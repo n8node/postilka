@@ -102,7 +102,7 @@ func (r *ShortsRepository) ReplaceCandidates(ctx context.Context, workspaceID, p
 	if !exists {
 		return ErrNotFound
 	}
-	if _, err := tx.Exec(ctx, `DELETE FROM shorts_clips WHERE project_id = $1 AND status = 'candidate'`, projectID); err != nil {
+	if _, err := tx.Exec(ctx, `DELETE FROM shorts_clips WHERE project_id = $1 AND status IN ('candidate', 'draft')`, projectID); err != nil {
 		return err
 	}
 	for _, c := range candidates {
@@ -111,6 +111,32 @@ func (r *ShortsRepository) ReplaceCandidates(ctx context.Context, workspaceID, p
 		}
 	}
 	return tx.Commit(ctx)
+}
+
+func (r *ShortsRepository) SetClipDraft(ctx context.Context, workspaceID, clipID, fileID string) error {
+	_, err := r.pool.Exec(ctx, `UPDATE shorts_clips c SET draft_file_id = $1, status = 'draft', updated_at = now() FROM shorts_projects p WHERE c.id = $2 AND p.id = c.project_id AND p.workspace_id = $3`, fileID, clipID, workspaceID)
+	return err
+}
+
+func (r *ShortsRepository) ListCandidateClips(ctx context.Context, workspaceID, projectID string) ([]model.ShortsClip, error) {
+	rows, err := r.pool.Query(ctx, `SELECT c.id, c.project_id, c.start_seconds, c.end_seconds, c.transcript_text, c.score, c.score_details, c.crop_config, c.subtitle_config, c.overlay_config, c.status, c.draft_file_id, c.final_file_id, c.created_at, c.updated_at FROM shorts_clips c JOIN shorts_projects p ON p.id = c.project_id WHERE c.project_id = $1 AND p.workspace_id = $2 AND c.status = 'candidate' ORDER BY c.start_seconds`, projectID, workspaceID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]model.ShortsClip, 0)
+	for rows.Next() {
+		var c model.ShortsClip
+		var status string
+		var scoreDetails, crop, subtitle, overlays []byte
+		if err := rows.Scan(&c.ID, &c.ProjectID, &c.StartSeconds, &c.EndSeconds, &c.TranscriptText, &c.Score, &scoreDetails, &crop, &subtitle, &overlays, &status, &c.DraftFileID, &c.FinalFileID, &c.CreatedAt, &c.UpdatedAt); err != nil {
+			return nil, err
+		}
+		c.Status = status
+		c.ScoreDetails, c.CropConfig, c.SubtitleConfig, c.OverlayConfig = scoreDetails, crop, subtitle, overlays
+		out = append(out, c)
+	}
+	return out, rows.Err()
 }
 
 func (r *ShortsRepository) CreateJob(ctx context.Context, projectID, jobType string) (*model.ShortsJob, error) {
