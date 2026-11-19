@@ -43,6 +43,124 @@ func (r *ShortsRepository) GetProject(ctx context.Context, workspaceID, projectI
 	return p, err
 }
 
+func (r *ShortsRepository) ListForWorkspace(ctx context.Context, workspaceID string, limit, offset int) ([]model.ShortsProjectListItem, int, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 20
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	var total int
+	if err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM shorts_projects WHERE workspace_id = $1`, workspaceID).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+	rows, err := r.pool.Query(ctx, `
+		SELECT `+shortsProjectColumns+`,
+			(SELECT COUNT(*) FROM shorts_clips c WHERE c.project_id = p.id),
+			j.id, j.job_type, j.status, j.current_step, j.progress, j.attempts,
+			j.available_at, j.last_error, j.created_at, j.updated_at,
+			f.id, f.workspace_id, f.folder_id, f.uploaded_by_user_id, f.name, f.mime_type,
+			f.size, f.s3_key, f.media_metadata, f.deleted_at, f.trash_batch_id, f.created_at, f.updated_at
+		FROM shorts_projects p
+		LEFT JOIN LATERAL (
+			SELECT * FROM shorts_jobs WHERE project_id = p.id ORDER BY created_at DESC LIMIT 1
+		) j ON true
+		LEFT JOIN workspace_files f ON f.id = p.source_file_id AND f.deleted_at IS NULL
+		WHERE p.workspace_id = $1
+		ORDER BY p.created_at DESC
+		LIMIT $2 OFFSET $3
+	`, workspaceID, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	items := make([]model.ShortsProjectListItem, 0)
+	for rows.Next() {
+		var item model.ShortsProjectListItem
+		var p model.ShortsProject
+		var contentType, status string
+		var settings []byte
+		var clips int
+		var jobID, jobType, jobStatus, step, lastError *string
+		var progress, attempts *int
+		var available, jobCreated, jobUpdated *time.Time
+		var fileID, fileWorkspaceID, fileFolderID, fileUploadedBy, fileName, fileMime, fileS3Key, fileTrashBatch *string
+		var fileSize *int64
+		var fileMeta []byte
+		var fileDeleted, fileCreated, fileUpdated *time.Time
+		if err := rows.Scan(
+			&p.ID, &p.WorkspaceID, &p.CreatedByUserID, &p.SourceFileID, &contentType, &p.Language, &status,
+			&p.SourceDurationSeconds, &p.ProcessingMinutesReserved, &p.ProcessingMinutesConsumed,
+			&p.SourceExpiresAt, &p.AudioFileID, &p.AudioExpiresAt, &settings, &p.CreatedAt, &p.UpdatedAt,
+			&clips, &jobID, &jobType, &jobStatus, &step, &progress, &attempts, &available, &lastError, &jobCreated, &jobUpdated,
+			&fileID, &fileWorkspaceID, &fileFolderID, &fileUploadedBy, &fileName, &fileMime, &fileSize, &fileS3Key, &fileMeta, &fileDeleted, &fileTrashBatch, &fileCreated, &fileUpdated,
+		); err != nil {
+			return nil, 0, err
+		}
+		p.ContentType = model.ShortsContentType(contentType)
+		p.Status = model.ShortsProjectStatus(status)
+		p.Settings = json.RawMessage(settings)
+		item.Project = &p
+		item.Clips = clips
+		if jobID != nil {
+			item.Job = &model.ShortsJob{ID: *jobID, ProjectID: p.ID, JobType: valueOrEmpty(jobType), Status: model.ShortsJobStatus(valueOrEmpty(jobStatus)), CurrentStep: valueOrEmpty(step), Progress: valueOrZero(progress), Attempts: valueOrZero(attempts), LastError: valueOrEmpty(lastError)}
+			if available != nil {
+				item.Job.AvailableAt = *available
+			}
+			if jobCreated != nil {
+				item.Job.CreatedAt = *jobCreated
+			}
+			if jobUpdated != nil {
+				item.Job.UpdatedAt = *jobUpdated
+			}
+		}
+		if fileID != nil {
+			f := &model.WorkspaceFile{ID: *fileID, WorkspaceID: valueOrEmpty(fileWorkspaceID), Name: valueOrEmpty(fileName), MimeType: valueOrEmpty(fileMime), S3Key: valueOrEmpty(fileS3Key)}
+			if fileFolderID != nil {
+				f.FolderID = fileFolderID
+			}
+			if fileUploadedBy != nil {
+				f.UploadedByUserID = fileUploadedBy
+			}
+			if fileSize != nil {
+				f.Size = *fileSize
+			}
+			if len(fileMeta) > 0 {
+				f.MediaMetadata = json.RawMessage(fileMeta)
+			}
+			if fileDeleted != nil {
+				f.DeletedAt = fileDeleted
+			}
+			if fileTrashBatch != nil {
+				f.TrashBatchID = fileTrashBatch
+			}
+			if fileCreated != nil {
+				f.CreatedAt = *fileCreated
+			}
+			if fileUpdated != nil {
+				f.UpdatedAt = *fileUpdated
+			}
+			item.SourceFile = f
+		}
+		items = append(items, item)
+	}
+	return items, total, rows.Err()
+}
+
+func valueOrEmpty(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
+}
+
+func valueOrZero(value *int) int {
+	if value == nil {
+		return 0
+	}
+	return *value
+}
+
 type ListShortsAdminFilter struct {
 	Status string
 	Limit  int
@@ -240,6 +358,17 @@ func (r *ShortsRepository) CreateRerenderJob(ctx context.Context, workspaceID, p
 	}
 	j.Status = model.ShortsJobStatus(status)
 	return &j, err
+}
+
+func (r *ShortsRepository) DeleteProject(ctx context.Context, workspaceID, projectID string) error {
+	tag, err := r.pool.Exec(ctx, `DELETE FROM shorts_projects WHERE id = $1 AND workspace_id = $2`, projectID, workspaceID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (r *ShortsRepository) GetJob(ctx context.Context, workspaceID, jobID string) (*model.ShortsJob, error) {

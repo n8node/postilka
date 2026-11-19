@@ -97,6 +97,13 @@ type AdminShortsProject struct {
 	Clips   int            `json:"clips"`
 }
 
+type ShortsProjectListItem struct {
+	Project    *ShortsProject `json:"project"`
+	Job        *ShortsJob     `json:"job,omitempty"`
+	Clips      int            `json:"clips"`
+	SourceFile *WorkspaceFile `json:"source_file,omitempty"`
+}
+
 type AdminShortsStats struct {
 	Total      int64 `json:"total"`
 	Active     int64 `json:"active"`

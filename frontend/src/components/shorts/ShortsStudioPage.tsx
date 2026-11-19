@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FileVideo, FolderOpen, Loader2, Upload } from "lucide-react";
+import { FileVideo, FolderOpen, Loader2, Trash2, Upload } from "lucide-react";
 import { WorkspaceMediaPickerModal } from "@/components/generation/WorkspaceMediaPickerModal";
 import { uploadFile, type WorkspaceFile } from "@/lib/files-api";
-import { createShortsProject, getShortsDraftDownloadUrl, getShortsJob, getShortsProject, rerenderShortsProject, updateShortsSubtitleSettings, type ShortsClip, type ShortsJob, type ShortsProject } from "@/lib/shorts-api";
+import { createShortsProject, deleteShortsProject, getShortsDraftDownloadUrl, getShortsJob, getShortsProject, listShortsProjects, rerenderShortsProject, updateShortsSubtitleSettings, type ShortsClip, type ShortsJob, type ShortsProject, type ShortsProjectListItem } from "@/lib/shorts-api";
 
 const contentTypes = [
   ["podcast", "Подкаст"],
@@ -34,6 +34,38 @@ export function ShortsStudioPage() {
   const [draftUrls, setDraftUrls] = useState<Record<string, string>>({});
   const [subtitleStyle, setSubtitleStyle] = useState("classic");
   const [subtitlePosition, setSubtitlePosition] = useState("bottom");
+  const [history, setHistory] = useState<ShortsProjectListItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+
+  useEffect(() => {
+    void listShortsProjects().then((result) => setHistory(result.projects)).catch(() => undefined).finally(() => setHistoryLoading(false));
+  }, []);
+
+  async function openProject(id: string) {
+    try {
+      const result = await getShortsProject(id);
+      setProject(result.project);
+      setClips(result.clips);
+      setJob(history.find((item) => item.project.id === id)?.job ?? null);
+      window.history.replaceState(null, "", `/shorts?project=${encodeURIComponent(id)}`);
+    } catch (error) {
+      setJobMessage(error instanceof Error ? error.message : "Не удалось открыть проект");
+    }
+  }
+
+  async function removeProject(id: string) {
+    if (!window.confirm("Удалить этот Shorts-проект? Исходное видео останется в файлах.")) return;
+    try {
+      await deleteShortsProject(id);
+      setHistory((items) => items.filter((item) => item.project.id !== id));
+      if (project?.id === id) {
+        setProject(null); setClips([]); setJob(null); setDraftUrls({});
+        window.history.replaceState(null, "", "/shorts");
+      }
+    } catch (error) {
+      setJobMessage(error instanceof Error ? error.message : "Не удалось удалить проект");
+    }
+  }
 
   useEffect(() => {
     if (!project?.id || !job?.id) return;
@@ -75,7 +107,9 @@ export function ShortsStudioPage() {
         source_duration_seconds: duration,
         processing_range: { start_seconds: rangeStart, end_seconds: rangeEnd },
       });
-      setProject(result.project); setJob(result.job); setClips([]); setJobMessage(`Проект создан. Задача анализа: ${result.job.id}`);
+      setProject(result.project); setJob(result.job); setClips([]); setJobMessage(`РџСЂРѕРµРєС‚ СЃРѕР·РґР°РЅ. Р—Р°РґР°С‡Р° Р°РЅР°Р»РёР·Р°: ${result.job.id}`);
+      setHistory((items) => [{ project: result.project, job: result.job, clips: 0, source_file: sourceFile ?? undefined }, ...items.filter((item) => item.project.id !== result.project.id)]);
+      window.history.replaceState(null, "", `/shorts?project=${encodeURIComponent(result.project.id)}`);
     } catch (error) {
       setJobMessage(error instanceof Error ? error.message : "Не удалось создать проект");
     } finally {
@@ -141,6 +175,16 @@ export function ShortsStudioPage() {
       </div>
       <WorkspaceMediaPickerModal open={pickerOpen} mediaKind="video" onClose={() => setPickerOpen(false)} onSelect={(file) => { setSourceFile(file); setSourceFileId(file.id); const nextDuration = Math.max(1, Math.round(file.media_metadata?.duration_seconds ?? 60)); setDuration(nextDuration); setRangeEnd(nextDuration); setPickerOpen(false); }} />
       {project && <section className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] p-6"><h2 className="text-lg font-semibold">Стиль субтитров</h2><div className="mt-4 grid gap-4 sm:grid-cols-3"><label className="text-sm text-white/70">Стиль<select value={subtitleStyle} onChange={(e) => setSubtitleStyle(e.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white"><option value="classic">Classic</option><option value="bold">Bold</option><option value="minimal">Minimal</option></select></label><label className="text-sm text-white/70">Позиция<select value={subtitlePosition} onChange={(e) => setSubtitlePosition(e.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white"><option value="top">Сверху</option><option value="center">По центру</option><option value="bottom">Снизу</option></select></label><button type="button" onClick={saveSubtitleSettings} className="self-end rounded-xl border border-white/15 px-4 py-2 text-sm hover:bg-white/10">Сохранить стиль</button></div></section>}
+      <section className="mt-8 rounded-2xl border border-white/10 bg-white/[0.03] p-6">
+        <div className="flex items-center justify-between gap-3"><div><h2 className="text-lg font-semibold">История проектов</h2><p className="mt-1 text-sm text-white/50">Проекты сохраняются после обновления страницы.</p></div>{historyLoading && <Loader2 className="h-4 w-4 animate-spin text-white/50" />}</div>
+        {!historyLoading && history.length === 0 ? <p className="mt-5 text-sm text-white/50">Пока нет созданных проектов.</p> : <div className="mt-5 space-y-3">
+          {history.map((item) => <article key={item.project.id} className={`flex flex-wrap items-center gap-4 rounded-xl border p-3 ${project?.id === item.project.id ? "border-violet-400/60 bg-violet-400/10" : "border-white/10 bg-black/10"}`}>
+            <div className="h-16 w-12 overflow-hidden rounded-md bg-black">{item.source_file?.id ? <video src={`/app/api/v1/files/${item.source_file.id}/download?disposition=inline`} muted playsInline className="h-full w-full object-cover" /> : <FileVideo className="m-3 h-6 w-6 text-white/40" />}</div>
+            <div className="min-w-[180px] flex-1"><p className="truncate text-sm font-medium text-white">{item.source_file?.name ?? "Исходное видео"}</p><p className="mt-1 text-xs text-white/50">{new Date(item.project.created_at).toLocaleString("ru-RU")} · {item.clips} клипов</p><p className="mt-1 text-xs text-violet-200">{item.project.status}</p></div>
+            <div className="flex items-center gap-2"><button type="button" onClick={() => void openProject(item.project.id)} className="rounded-lg border border-white/15 px-3 py-2 text-xs hover:bg-white/10">Открыть</button><button type="button" onClick={() => void removeProject(item.project.id)} className="rounded-lg border border-red-400/30 p-2 text-red-200 hover:bg-red-400/10" aria-label="Удалить проект"><Trash2 className="h-4 w-4" /></button></div>
+          </article>)}
+        </div>}
+      </section>
       {(project || job) && <section className="mt-8 rounded-xl border border-border bg-surface p-6 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div><h2 className="text-xl font-semibold">Результаты анализа</h2><p className="mt-1 text-sm text-white/55">{job?.current_step ?? project?.status ?? "Ожидание"}</p></div>

@@ -127,6 +127,34 @@ func (s *ShortsService) GetProject(ctx context.Context, userID string, r *http.R
 	return project, clips, err
 }
 
+func (s *ShortsService) ListProjects(ctx context.Context, userID string, r *http.Request, limit, offset int) ([]model.ShortsProjectListItem, int, error) {
+	ws, _, err := s.wsSvc.ResolveActive(ctx, userID, r)
+	if err != nil {
+		return nil, 0, err
+	}
+	if ws == nil {
+		return nil, 0, ErrWorkspaceNotFound
+	}
+	if _, err := s.wsSvc.RequireMembership(ctx, userID, ws.ID, model.RoleViewer); err != nil {
+		return nil, 0, err
+	}
+	return s.repo.ListForWorkspace(ctx, ws.ID, limit, offset)
+}
+
+func (s *ShortsService) DeleteProject(ctx context.Context, userID string, r *http.Request, projectID string) error {
+	ws, _, err := s.wsSvc.ResolveActive(ctx, userID, r)
+	if err != nil {
+		return err
+	}
+	if ws == nil {
+		return ErrWorkspaceNotFound
+	}
+	if _, err := s.wsSvc.RequireMembership(ctx, userID, ws.ID, model.RoleEditor); err != nil {
+		return err
+	}
+	return s.repo.DeleteProject(ctx, ws.ID, projectID)
+}
+
 func (s *ShortsService) GetJob(ctx context.Context, userID string, r *http.Request, jobID string) (*model.ShortsJob, error) {
 	ws, _, err := s.wsSvc.ResolveActive(ctx, userID, r)
 	if err != nil {

@@ -9,7 +9,16 @@ export type ShortsProject = {
   source_expires_at?: string;
   audio_file_id?: string;
   audio_expires_at?: string;
+  created_at: string;
+  updated_at: string;
   settings?: { transcript?: unknown; current_step?: string; subtitle_style?: string; subtitle_position?: string };
+};
+
+export type ShortsProjectListItem = {
+  project: ShortsProject;
+  job?: ShortsJob;
+  clips: number;
+  source_file?: { id: string; name: string; mime_type: string; media_metadata?: { duration_seconds?: number; width?: number; height?: number } | null };
 };
 
 export type ShortsClip = {
@@ -57,6 +66,14 @@ export function createShortsProject(input: {
     method: "POST",
     body: JSON.stringify(input),
   });
+}
+
+export function listShortsProjects(limit = 20, offset = 0) {
+  return request<{ projects: ShortsProjectListItem[]; total: number }>(`/shorts/projects?limit=${limit}&offset=${offset}`);
+}
+
+export function deleteShortsProject(projectId: string) {
+  return request<{ ok: boolean }>(`/shorts/projects/${projectId}`, { method: "DELETE" });
 }
 
 export function getShortsJob(id: string) {

@@ -569,7 +569,9 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 		r.Group(func(r chi.Router) {
 			r.Use(authMW.Required)
 			r.Post("/shorts/projects", shortsHandler.CreateProject)
+			r.Get("/shorts/projects", shortsHandler.ListProjects)
 			r.Get("/shorts/projects/{id}", shortsHandler.GetProject)
+			r.Delete("/shorts/projects/{id}", shortsHandler.DeleteProject)
 			r.Get("/shorts/projects/{id}/audio", shortsHandler.DownloadAudio)
 			r.Patch("/shorts/projects/{id}/subtitle-settings", shortsHandler.UpdateSubtitleSettings)
 			r.Post("/shorts/projects/{id}/rerender", shortsHandler.RerenderProject)
