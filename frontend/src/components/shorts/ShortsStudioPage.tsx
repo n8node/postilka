@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { FileVideo, FolderOpen, Loader2, RefreshCw, Trash2, Upload } from "lucide-react";
 import { WorkspaceMediaPickerModal } from "@/components/generation/WorkspaceMediaPickerModal";
 import { uploadFile, type WorkspaceFile } from "@/lib/files-api";
-import { analyzeShortsProject, createShortsProject, deleteShortsProject, getShortsDraftDownloadUrl, getShortsJob, getShortsProject, listShortsProjects, rerenderShortsProject, updateShortsClip, updateShortsSubtitleSettings, type ShortsClip, type ShortsJob, type ShortsProject, type ShortsProjectListItem } from "@/lib/shorts-api";
+import { analyzeShortsProject, createShortsProject, deleteShortsProject, getShortsDraftDownloadUrl, getShortsJob, getShortsProject, listShortsProjects, rerenderShortsProject, updateShortsClip, updateShortsClipOrder, updateShortsSubtitleSettings, type ShortsClip, type ShortsJob, type ShortsProject, type ShortsProjectListItem } from "@/lib/shorts-api";
 
 const contentTypes = [
   ["podcast", "Подкаст"],
@@ -34,6 +34,11 @@ export function ShortsStudioPage() {
   const [draftUrls, setDraftUrls] = useState<Record<string, string>>({});
   const [subtitleStyle, setSubtitleStyle] = useState("classic");
   const [subtitlePosition, setSubtitlePosition] = useState("bottom");
+  const [subtitleFontSize, setSubtitleFontSize] = useState(58);
+  const [subtitleTextColor, setSubtitleTextColor] = useState("#FFFFFF");
+  const [subtitleBackground, setSubtitleBackground] = useState("#101010");
+  const [watermark, setWatermark] = useState("");
+  const [safeZone, setSafeZone] = useState(70);
   const [history, setHistory] = useState<ShortsProjectListItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [clipSaving, setClipSaving] = useState<Record<string, boolean>>({});
@@ -53,6 +58,13 @@ export function ShortsStudioPage() {
       const result = await getShortsProject(id);
       setProject(result.project);
       setClips(result.clips);
+      setSubtitleStyle(result.project.settings?.subtitle_style ?? "classic");
+      setSubtitlePosition(result.project.settings?.subtitle_position ?? "bottom");
+      setSubtitleFontSize(result.project.settings?.subtitle_font_size ?? 58);
+      setSubtitleTextColor(result.project.settings?.subtitle_text_color ?? "#FFFFFF");
+      setSubtitleBackground(result.project.settings?.subtitle_background ?? "#101010");
+      setWatermark(result.project.settings?.watermark ?? "");
+      setSafeZone(result.project.settings?.safe_zone ?? 70);
       setJob(history.find((item) => item.project.id === id)?.job ?? null);
       window.history.replaceState(null, "", `/shorts?project=${encodeURIComponent(id)}`);
     } catch (error) {
@@ -129,7 +141,18 @@ export function ShortsStudioPage() {
 
   async function saveSubtitleSettings() {
     if (!project?.id) return;
-    try { await updateShortsSubtitleSettings(project.id, { style: subtitleStyle, position: subtitlePosition }); const result = await rerenderShortsProject(project.id); setJob(result.job); setDraftUrls({}); setJobMessage("Настройки сохранены. Draft-предпросмотры перерендериваются."); } catch (error) { setJobMessage(error instanceof Error ? error.message : "Не удалось перерендерить preview"); }
+    try { await updateShortsSubtitleSettings(project.id, { style: subtitleStyle, position: subtitlePosition, font_size: subtitleFontSize, text_color: subtitleTextColor, background: subtitleBackground, watermark, safe_zone: safeZone }); const result = await rerenderShortsProject(project.id); setJob(result.job); setDraftUrls({}); setJobMessage("Настройки сохранены. Draft-предпросмотры перерендериваются."); } catch (error) { setJobMessage(error instanceof Error ? error.message : "Не удалось перерендерить preview"); }
+  }
+
+  async function moveClip(index: number, direction: -1 | 1) {
+    if (!project) return;
+    const nextIndex = index + direction;
+    if (nextIndex < 0 || nextIndex >= clips.length) return;
+    const next = [...clips];
+    [next[index], next[nextIndex]] = [next[nextIndex], next[index]];
+    setClips(next);
+    try { await updateShortsClipOrder(project.id, next.map((clip) => clip.id)); setJobMessage("Порядок клипов сохранён."); }
+    catch (error) { setClips(clips); setJobMessage(error instanceof Error ? error.message : "Не удалось сохранить порядок клипов"); }
   }
 
   async function submit() {
@@ -214,7 +237,7 @@ export function ShortsStudioPage() {
         {jobMessage && <p className="text-sm text-white/65">{jobMessage}</p>}
       </div>
       <WorkspaceMediaPickerModal open={pickerOpen} mediaKind="video" onClose={() => setPickerOpen(false)} onSelect={(file) => { setSourceFile(file); setSourceFileId(file.id); const nextDuration = Math.max(1, Math.round(file.media_metadata?.duration_seconds ?? 60)); setDuration(nextDuration); setRangeEnd(nextDuration); setPickerOpen(false); }} />
-      {project && <section className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] p-6"><h2 className="text-lg font-semibold">Стиль субтитров</h2><div className="mt-4 grid gap-4 sm:grid-cols-3"><label className="text-sm text-white/70">Стиль<select value={subtitleStyle} onChange={(e) => setSubtitleStyle(e.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white"><option value="classic">Classic</option><option value="bold">Bold</option><option value="minimal">Minimal</option></select></label><label className="text-sm text-white/70">Позиция<select value={subtitlePosition} onChange={(e) => setSubtitlePosition(e.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white"><option value="top">Сверху</option><option value="center">По центру</option><option value="bottom">Снизу</option></select></label><button type="button" onClick={saveSubtitleSettings} className="self-end rounded-xl border border-white/15 px-4 py-2 text-sm hover:bg-white/10">Сохранить стиль</button></div></section>}
+      {project && <section className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] p-6"><h2 className="text-lg font-semibold">Стиль субтитров</h2><div className="mt-4 grid gap-4 sm:grid-cols-3 lg:grid-cols-5"><label className="text-sm text-white/70">Стиль<select value={subtitleStyle} onChange={(e) => setSubtitleStyle(e.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white"><option value="classic">Classic</option><option value="bold">Bold</option><option value="minimal">Minimal</option></select></label><label className="text-sm text-white/70">Позиция<select value={subtitlePosition} onChange={(e) => setSubtitlePosition(e.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white"><option value="top">Сверху</option><option value="center">По центру</option><option value="bottom">Снизу</option></select></label><label className="text-sm text-white/70">Размер<input type="number" min="24" max="120" value={subtitleFontSize} onChange={(e) => setSubtitleFontSize(Number(e.target.value))} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white" /></label><label className="text-sm text-white/70">Цвет<input type="color" value={subtitleTextColor} onChange={(e) => setSubtitleTextColor(e.target.value)} className="mt-2 h-10 w-full rounded-xl border border-white/10 bg-black/20" /></label><label className="text-sm text-white/70">Фон<input type="color" value={subtitleBackground} onChange={(e) => setSubtitleBackground(e.target.value)} className="mt-2 h-10 w-full rounded-xl border border-white/10 bg-black/20" /></label></div><label className="mt-4 block text-sm text-white/70">Watermark<input value={watermark} onChange={(e) => setWatermark(e.target.value)} placeholder="@brand" className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white" /></label><button type="button" onClick={saveSubtitleSettings} className="mt-4 rounded-xl border border-white/15 px-4 py-2 text-sm hover:bg-white/10">Сохранить настройки</button></section>}
       <section className="mt-8 rounded-2xl border border-white/10 bg-white/[0.03] p-6">
         <div className="flex items-center justify-between gap-3"><div><h2 className="text-lg font-semibold">История проектов</h2><p className="mt-1 text-sm text-white/50">Проекты сохраняются после обновления страницы.</p></div>{historyLoading && <Loader2 className="h-4 w-4 animate-spin text-white/50" />}</div>
         {!historyLoading && history.length === 0 ? <p className="mt-5 text-sm text-white/50">Пока нет созданных проектов.</p> : <div className="mt-5 space-y-3">
@@ -227,12 +250,12 @@ export function ShortsStudioPage() {
       </section>
       {(project || job) && <section className="mt-8 rounded-xl border border-border bg-surface p-6 shadow-sm">
                   {clips.length === 0 ? <p className="mt-6 text-sm text-white/50">Candidates will appear after worker processing.</p> : <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {clips.map((clip) => {
+          {clips.map((clip, clipIndex) => {
             const draft = clipDraft(clip);
             return <article key={clip.id} className="overflow-hidden rounded-xl border border-white/10 bg-black/20">
               <div className="aspect-[9/16] bg-black">{draftUrls[clip.id] ? <video src={draftUrls[clip.id]} controls playsInline className="h-full w-full object-contain" /> : <button type="button" onClick={() => loadDraft(clip.id)} className="flex h-full w-full items-center justify-center text-sm text-violet-200 hover:bg-white/5">Load preview</button>}</div>
               <div className="space-y-3 p-4">
-                <p className="text-xs text-white/45">score {clip.score.toFixed(2)}</p>
+                <div className="flex items-center justify-between"><p className="text-xs text-white/45">Клип {clipIndex + 1} · score {clip.score.toFixed(2)}</p><div className="flex gap-1"><button type="button" disabled={clipIndex === 0} onClick={() => void moveClip(clipIndex, -1)} className="rounded border border-white/15 px-2 py-1 text-xs disabled:opacity-30">↑</button><button type="button" disabled={clipIndex === clips.length - 1} onClick={() => void moveClip(clipIndex, 1)} className="rounded border border-white/15 px-2 py-1 text-xs disabled:opacity-30">↓</button></div></div>
                 <div className="grid grid-cols-2 gap-2"><label className="text-xs text-white/60">Start<input type="number" min="0" step="0.1" value={draft.start} onChange={(e) => setClipDrafts((items) => ({ ...items, [clip.id]: { ...draft, start: e.target.value } }))} className="mt-1 w-full rounded-lg border border-white/10 bg-black/20 px-2 py-1.5 text-sm text-white" /></label><label className="text-xs text-white/60">End<input type="number" min="0" step="0.1" value={draft.end} onChange={(e) => setClipDrafts((items) => ({ ...items, [clip.id]: { ...draft, end: e.target.value } }))} className="mt-1 w-full rounded-lg border border-white/10 bg-black/20 px-2 py-1.5 text-sm text-white" /></label></div>
                 <label className="block text-xs text-white/60">Subtitles<textarea value={draft.text} onChange={(e) => setClipDrafts((items) => ({ ...items, [clip.id]: { ...draft, text: e.target.value } }))} rows={4} className="mt-1 w-full resize-y rounded-lg border border-white/10 bg-black/20 px-2 py-1.5 text-sm text-white" /></label>
                 <label className="flex items-center gap-2 text-sm text-white/75"><input type="checkbox" checked={draft.selected} onChange={(e) => setClipDrafts((items) => ({ ...items, [clip.id]: { ...draft, selected: e.target.checked } }))} />Select for final render</label>

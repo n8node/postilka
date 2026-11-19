@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -298,7 +299,24 @@ func (s *ShortsService) UpdateSubtitleSettings(ctx context.Context, userID strin
 		return err
 	}
 	config = NormalizeShortsSubtitleConfig(config)
-	return s.repo.SetSubtitleSettings(ctx, ws.ID, projectID, config.Style, config.Position)
+	return s.repo.SetSubtitleSettings(ctx, ws.ID, projectID, config.Style, config.Position, config.FontSize, config.TextColor, config.Background, config.Watermark, config.SafeZone)
+}
+
+func (s *ShortsService) SetClipOrder(ctx context.Context, userID string, r *http.Request, projectID string, clipIDs []string) error {
+	ws, _, err := s.wsSvc.ResolveActive(ctx, userID, r)
+	if err != nil {
+		return err
+	}
+	if ws == nil {
+		return ErrWorkspaceNotFound
+	}
+	if _, err := s.wsSvc.RequireMembership(ctx, userID, ws.ID, model.RoleEditor); err != nil {
+		return err
+	}
+	if len(clipIDs) == 0 || len(clipIDs) > 100 {
+		return fmt.Errorf("invalid clip order")
+	}
+	return s.repo.SetClipOrder(ctx, ws.ID, projectID, clipIDs)
 }
 
 func (s *ShortsService) RerenderProject(ctx context.Context, userID string, r *http.Request, projectID string) (*model.ShortsJob, error) {

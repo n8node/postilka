@@ -175,6 +175,26 @@ func (h *ShortsHandler) UpdateSubtitleSettings(w http.ResponseWriter, r *http.Re
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
+func (h *ShortsHandler) UpdateClipOrder(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
+		return
+	}
+	var input struct {
+		ClipIDs []string `json:"clip_ids"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeError(w, http.StatusBadRequest, "Некорректный порядок клипов")
+		return
+	}
+	if err := h.shorts.SetClipOrder(r.Context(), userID, r, chi.URLParam(r, "id"), input.ClipIDs); err != nil {
+		h.mapError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
 func (h *ShortsHandler) RerenderProject(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {

@@ -12,8 +12,13 @@ import (
 )
 
 type ShortsSubtitleConfig struct {
-	Style    string `json:"style"`
-	Position string `json:"position"`
+	Style      string `json:"style"`
+	Position   string `json:"position"`
+	FontSize   int    `json:"font_size"`
+	TextColor  string `json:"text_color"`
+	Background string `json:"background"`
+	Watermark  string `json:"watermark"`
+	SafeZone   int    `json:"safe_zone"`
 }
 
 func NormalizeShortsSubtitleConfig(config ShortsSubtitleConfig) ShortsSubtitleConfig {
@@ -23,17 +28,35 @@ func NormalizeShortsSubtitleConfig(config ShortsSubtitleConfig) ShortsSubtitleCo
 	if config.Position != "top" && config.Position != "center" && config.Position != "bottom" {
 		config.Position = "bottom"
 	}
+	if config.FontSize < 24 || config.FontSize > 120 {
+		config.FontSize = 58
+	}
+	if config.TextColor == "" {
+		config.TextColor = "#FFFFFF"
+	}
+	if config.Background == "" {
+		config.Background = "#101010"
+	}
+	if config.SafeZone < 0 || config.SafeZone > 300 {
+		config.SafeZone = 70
+	}
 	return config
 }
 
 func ShortsSubtitleConfigFromSettings(settings json.RawMessage) ShortsSubtitleConfig {
 	config := ShortsSubtitleConfig{Style: "classic", Position: "bottom"}
 	var envelope struct {
-		SubtitleStyle    string `json:"subtitle_style"`
-		SubtitlePosition string `json:"subtitle_position"`
+		SubtitleStyle      string `json:"subtitle_style"`
+		SubtitlePosition   string `json:"subtitle_position"`
+		SubtitleFontSize   int    `json:"subtitle_font_size"`
+		SubtitleTextColor  string `json:"subtitle_text_color"`
+		SubtitleBackground string `json:"subtitle_background"`
+		Watermark          string `json:"watermark"`
+		SafeZone           int    `json:"safe_zone"`
 	}
 	if json.Unmarshal(settings, &envelope) == nil {
 		config.Style, config.Position = envelope.SubtitleStyle, envelope.SubtitlePosition
+		config.FontSize, config.TextColor, config.Background, config.Watermark, config.SafeZone = envelope.SubtitleFontSize, envelope.SubtitleTextColor, envelope.SubtitleBackground, envelope.Watermark, envelope.SafeZone
 	}
 	return NormalizeShortsSubtitleConfig(config)
 }
@@ -48,9 +71,9 @@ func ShortsVerticalFilter(width, height int) string {
 
 func BuildShortsASS(segments []ShortsTranscriptSegment, clipStart, clipEnd float64, config ShortsSubtitleConfig) string {
 	config = NormalizeShortsSubtitleConfig(config)
-	fontSize, bold, outline := 58, "-1", 3
+	fontSize, bold, outline := config.FontSize, "-1", 3
 	if config.Style == "minimal" {
-		fontSize, bold, outline = 48, "0", 2
+		bold, outline = "0", 2
 	}
 	if config.Style == "bold" {
 		fontSize, outline = 64, 4
@@ -61,8 +84,11 @@ func BuildShortsASS(segments []ShortsTranscriptSegment, clipStart, clipEnd float
 	} else if config.Position == "center" {
 		alignment, marginV = 5, 0
 	}
+	_ = marginV
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("[Script Info]\nScriptType: v4.00+\nPlayResX: 1080\nPlayResY: 1920\n\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: Default,Arial,%d,&H00FFFFFF,&H00FFFFFF,&H00101010,&H90101010,%s,0,0,0,100,100,0,0,1,%d,1,%d,70,70,%d,1\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n", fontSize, bold, outline, alignment, marginV))
+	primary := assColor(config.TextColor)
+	back := assColor(config.Background)
+	b.WriteString(fmt.Sprintf("[Script Info]\nScriptType: v4.00+\nPlayResX: 1080\nPlayResY: 1920\n\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: Default,Arial,%d,%s,%s,&H00101010,%s,%s,0,0,0,100,100,0,0,1,%d,1,%d,70,70,%d,1\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n", fontSize, primary, primary, back, bold, outline, alignment, config.SafeZone))
 	for _, segment := range segments {
 		start := maxFloat(clipStart, segment.StartSeconds)
 		end := minFloat(clipEnd, segment.EndSeconds)
@@ -71,9 +97,20 @@ func BuildShortsASS(segments []ShortsTranscriptSegment, clipStart, clipEnd float
 		}
 		text := strings.ReplaceAll(strings.ReplaceAll(strings.TrimSpace(segment.Text), "{", "("), "}", ")")
 		text = strings.ReplaceAll(text, "\n", "\\N")
+		if strings.TrimSpace(config.Watermark) != "" {
+			text += "\\N" + strings.ReplaceAll(strings.TrimSpace(config.Watermark), "{", "(")
+		}
 		b.WriteString(fmt.Sprintf("Dialogue: 0,%s,%s,Default,,0,0,0,,%s\n", assTimestamp(start-clipStart), assTimestamp(end-clipStart), text))
 	}
 	return b.String()
+}
+
+func assColor(value string) string {
+	value = strings.TrimPrefix(strings.TrimSpace(value), "#")
+	if len(value) != 6 {
+		return "&H00FFFFFF"
+	}
+	return "&H00" + value[4:6] + value[2:4] + value[0:2]
 }
 
 func assTimestamp(seconds float64) string {

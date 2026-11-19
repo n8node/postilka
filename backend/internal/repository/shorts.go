@@ -252,9 +252,23 @@ func (r *ShortsRepository) SetTranscript(ctx context.Context, workspaceID, proje
 	return err
 }
 
-func (r *ShortsRepository) SetSubtitleSettings(ctx context.Context, workspaceID, projectID, style, position string) error {
-	_, err := r.pool.Exec(ctx, `UPDATE shorts_projects SET settings = jsonb_set(jsonb_set(settings, '{subtitle_style}', to_jsonb($1::text), true), '{subtitle_position}', to_jsonb($2::text), true), updated_at = now() WHERE id = $3 AND workspace_id = $4`, style, position, projectID, workspaceID)
+func (r *ShortsRepository) SetSubtitleSettings(ctx context.Context, workspaceID, projectID, style, position string, fontSize int, textColor, background, watermark string, safeZone int) error {
+	_, err := r.pool.Exec(ctx, `UPDATE shorts_projects SET settings = settings || jsonb_build_object('subtitle_style',$1::text,'subtitle_position',$2::text,'subtitle_font_size',$3::int,'subtitle_text_color',$4::text,'subtitle_background',$5::text,'watermark',$6::text,'safe_zone',$7::int), updated_at = now() WHERE id = $8 AND workspace_id = $9`, style, position, fontSize, textColor, background, watermark, safeZone, projectID, workspaceID)
 	return err
+}
+
+func (r *ShortsRepository) SetClipOrder(ctx context.Context, workspaceID, projectID string, clipIDs []string) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	for order, clipID := range clipIDs {
+		if _, err := tx.Exec(ctx, `UPDATE shorts_clips c SET score_details = jsonb_set(CASE WHEN jsonb_typeof(c.score_details) = 'object' THEN c.score_details ELSE '{}'::jsonb END, '{order}', to_jsonb($1::int), true), updated_at = now() FROM shorts_projects p WHERE c.id = $2 AND c.project_id = p.id AND p.id = $3 AND p.workspace_id = $4`, order, clipID, projectID, workspaceID); err != nil {
+			return err
+		}
+	}
+	return tx.Commit(ctx)
 }
 
 func (r *ShortsRepository) ListClips(ctx context.Context, workspaceID, projectID string) ([]model.ShortsClip, error) {
