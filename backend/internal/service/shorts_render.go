@@ -18,16 +18,74 @@ func ShortsVerticalFilter(width, height int) string {
 	return "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920:(iw-1080)/2:(ih-1920)/2,format=yuv420p"
 }
 
-func RenderShortsDraft(ctx context.Context, inputPath string, startSeconds, endSeconds float64) (string, error) {
+func BuildShortsASS(segments []ShortsTranscriptSegment, clipStart, clipEnd float64) string {
+	var b strings.Builder
+	b.WriteString("[Script Info]\nScriptType: v4.00+\nPlayResX: 1080\nPlayResY: 1920\n\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: Default,Arial,58,&H00FFFFFF,&H00FFFFFF,&H00101010,&H90101010,-1,0,0,0,100,100,0,0,1,3,1,2,70,70,180,1\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n")
+	for _, segment := range segments {
+		start := maxFloat(clipStart, segment.StartSeconds)
+		end := minFloat(clipEnd, segment.EndSeconds)
+		if end <= start || strings.TrimSpace(segment.Text) == "" {
+			continue
+		}
+		text := strings.ReplaceAll(strings.ReplaceAll(strings.TrimSpace(segment.Text), "{", "("), "}", ")")
+		text = strings.ReplaceAll(text, "\n", "\\N")
+		b.WriteString(fmt.Sprintf("Dialogue: 0,%s,%s,Default,,0,0,0,,%s\n", assTimestamp(start-clipStart), assTimestamp(end-clipStart), text))
+	}
+	return b.String()
+}
+
+func assTimestamp(seconds float64) string {
+	if seconds < 0 {
+		seconds = 0
+	}
+	hours := int(seconds / 3600)
+	seconds -= float64(hours * 3600)
+	minutes := int(seconds / 60)
+	seconds -= float64(minutes * 60)
+	centiseconds := int(seconds*100 + 0.5)
+	if centiseconds >= 6000 {
+		minutes++
+		centiseconds -= 6000
+	}
+	return fmt.Sprintf("%d:%02d:%02d.%02d", hours, minutes, centiseconds/100, centiseconds%100)
+}
+
+func maxFloat(a, b float64) float64 {
+	if a > b {
+		return a
+	}
+	return b
+}
+func minFloat(a, b float64) float64 {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func RenderShortsDraft(ctx context.Context, inputPath string, startSeconds, endSeconds float64, transcript []ShortsTranscriptSegment) (string, error) {
 	if strings.TrimSpace(inputPath) == "" || endSeconds <= startSeconds {
 		return "", fmt.Errorf("invalid shorts render input")
 	}
 	outputPath := filepath.Join(os.TempDir(), fmt.Sprintf("postilka-shorts-draft-%d.mp4", time.Now().UnixNano()))
+	assPath := filepath.Join(os.TempDir(), fmt.Sprintf("postilka-shorts-subtitles-%d.ass", time.Now().UnixNano()))
+	if err := os.WriteFile(assPath, []byte(BuildShortsASS(transcript, startSeconds, endSeconds)), 0600); err != nil {
+		return "", err
+	}
+	defer os.Remove(assPath)
 	duration := fmt.Sprintf("%.3f", endSeconds-startSeconds)
-	cmd := exec.CommandContext(ctx, "ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-ss", fmt.Sprintf("%.3f", startSeconds), "-i", inputPath, "-t", duration, "-vf", ShortsVerticalFilter(0, 0), "-r", "30", "-c:v", "libx264", "-preset", "veryfast", "-crf", "28", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", outputPath)
+	filter := ShortsVerticalFilter(0, 0) + ",subtitles='" + escapeFFmpegFilterPath(assPath) + "'"
+	cmd := exec.CommandContext(ctx, "ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-ss", fmt.Sprintf("%.3f", startSeconds), "-i", inputPath, "-t", duration, "-vf", filter, "-r", "30", "-c:v", "libx264", "-preset", "veryfast", "-crf", "28", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", outputPath)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		_ = os.Remove(outputPath)
 		return "", fmt.Errorf("render shorts draft: %w: %s", err, strings.TrimSpace(string(output)))
 	}
 	return outputPath, nil
+}
+
+func escapeFFmpegFilterPath(path string) string {
+	path = filepath.ToSlash(path)
+	path = strings.ReplaceAll(path, "\\", "\\\\")
+	path = strings.ReplaceAll(path, ":", "\\:")
+	return strings.ReplaceAll(path, "'", "\\'")
 }
