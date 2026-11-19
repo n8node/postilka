@@ -578,6 +578,8 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Patch("/shorts/projects/{id}/subtitle-settings", shortsHandler.UpdateSubtitleSettings)
 			r.Patch("/shorts/projects/{id}/clip-order", shortsHandler.UpdateClipOrder)
 			r.Post("/shorts/projects/{id}/rerender", shortsHandler.RerenderProject)
+			r.Post("/shorts/projects/{id}/export", shortsHandler.ExportProject)
+			r.Get("/shorts/projects/{id}/final", shortsHandler.DownloadFinal)
 			r.Get("/shorts/clips/{id}/draft", shortsHandler.DownloadDraft)
 			r.Get("/shorts/projects/{id}/audio", shortsHandler.DownloadAudio)
 			r.Get("/shorts/jobs/{id}", shortsHandler.GetJob)

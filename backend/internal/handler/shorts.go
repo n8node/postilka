@@ -209,6 +209,34 @@ func (h *ShortsHandler) RerenderProject(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusAccepted, map[string]any{"job": job})
 }
 
+func (h *ShortsHandler) ExportProject(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
+		return
+	}
+	job, err := h.shorts.ExportProject(r.Context(), userID, r, chi.URLParam(r, "id"))
+	if err != nil {
+		h.mapError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"job": job})
+}
+
+func (h *ShortsHandler) DownloadFinal(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
+		return
+	}
+	url, expiresIn, err := h.shorts.FinalDownloadURL(r.Context(), userID, r, chi.URLParam(r, "id"))
+	if err != nil {
+		h.mapError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"url": url, "expires_in": expiresIn})
+}
+
 func (h *ShortsHandler) mapError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, service.ErrShortsSourceRequired):

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { FileVideo, FolderOpen, Loader2, RefreshCw, Trash2, Upload } from "lucide-react";
 import { WorkspaceMediaPickerModal } from "@/components/generation/WorkspaceMediaPickerModal";
 import { uploadFile, type WorkspaceFile } from "@/lib/files-api";
-import { analyzeShortsProject, createShortsProject, deleteShortsProject, getShortsDraftDownloadUrl, getShortsJob, getShortsProject, listShortsProjects, rerenderShortsProject, updateShortsClip, updateShortsClipOrder, updateShortsSubtitleSettings, type ShortsClip, type ShortsJob, type ShortsProject, type ShortsProjectListItem } from "@/lib/shorts-api";
+import { analyzeShortsProject, createShortsProject, deleteShortsProject, exportShortsProject, getShortsDraftDownloadUrl, getShortsFinalDownloadUrl, getShortsJob, getShortsProject, listShortsProjects, rerenderShortsProject, updateShortsClip, updateShortsClipOrder, updateShortsSubtitleSettings, type ShortsClip, type ShortsJob, type ShortsProject, type ShortsProjectListItem } from "@/lib/shorts-api";
 
 const contentTypes = [
   ["podcast", "Подкаст"],
@@ -155,6 +155,18 @@ export function ShortsStudioPage() {
     catch (error) { setClips(clips); setJobMessage(error instanceof Error ? error.message : "Не удалось сохранить порядок клипов"); }
   }
 
+  async function exportProject() {
+    if (!project) return;
+    try { const result = await exportShortsProject(project.id); setJob(result.job); setJobMessage("Финальный MP4 поставлен в очередь."); }
+    catch (error) { setJobMessage(error instanceof Error ? error.message : "Не удалось запустить экспорт"); }
+  }
+
+  async function downloadFinal() {
+    if (!project) return;
+    try { const result = await getShortsFinalDownloadUrl(project.id); window.open(result.url, "_blank", "noopener,noreferrer"); }
+    catch (error) { setJobMessage(error instanceof Error ? error.message : "Финальный файл ещё не готов"); }
+  }
+
   async function submit() {
     if (!sourceFileId.trim()) {
       setJobMessage("Выберите исходное видео из файлов.");
@@ -249,6 +261,7 @@ export function ShortsStudioPage() {
         </div>}
       </section>
       {(project || job) && <section className="mt-8 rounded-xl border border-border bg-surface p-6 shadow-sm">
+        <div className="mb-4 flex flex-wrap items-center gap-3"><button type="button" onClick={() => void exportProject()} disabled={!clips.some((clip) => clip.status === "selected" || clip.status === "draft") || job?.status === "queued" || job?.status === "running"} className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Export final MP4</button>{project?.status === "completed" ? <button type="button" onClick={() => void downloadFinal()} className="rounded-lg border border-white/15 px-4 py-2 text-sm hover:bg-white/10">Download final MP4</button> : null}{job?.job_type === "export" && <span className="text-sm text-white/60">{job.current_step || job.status} · {job.progress}%</span>}</div>
                   {clips.length === 0 ? <p className="mt-6 text-sm text-white/50">Candidates will appear after worker processing.</p> : <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {clips.map((clip, clipIndex) => {
             const draft = clipDraft(clip);

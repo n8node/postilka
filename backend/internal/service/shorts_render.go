@@ -162,6 +162,30 @@ func RenderShortsDraft(ctx context.Context, inputPath string, startSeconds, endS
 	return outputPath, nil
 }
 
+func MergeShortsClips(ctx context.Context, paths []string) (string, error) {
+	if len(paths) == 0 {
+		return "", fmt.Errorf("no shorts clips to merge")
+	}
+	listPath := filepath.Join(os.TempDir(), fmt.Sprintf("postilka-shorts-concat-%d.txt", time.Now().UnixNano()))
+	outputPath := filepath.Join(os.TempDir(), fmt.Sprintf("postilka-shorts-final-%d.mp4", time.Now().UnixNano()))
+	var list strings.Builder
+	for _, path := range paths {
+		list.WriteString("file '")
+		list.WriteString(strings.ReplaceAll(path, "'", "'\\''"))
+		list.WriteString("'\n")
+	}
+	if err := os.WriteFile(listPath, []byte(list.String()), 0600); err != nil {
+		return "", err
+	}
+	defer os.Remove(listPath)
+	cmd := exec.CommandContext(ctx, "ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "concat", "-safe", "0", "-i", listPath, "-c", "copy", "-movflags", "+faststart", outputPath)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		_ = os.Remove(outputPath)
+		return "", fmt.Errorf("merge shorts clips: %w: %s", err, strings.TrimSpace(string(output)))
+	}
+	return outputPath, nil
+}
+
 func escapeFFmpegFilterPath(path string) string {
 	path = filepath.ToSlash(path)
 	path = strings.ReplaceAll(path, "\\", "\\\\")

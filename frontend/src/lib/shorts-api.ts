@@ -111,3 +111,11 @@ export function updateShortsClipOrder(projectId: string, clipIds: string[]) {
 export function rerenderShortsProject(projectId: string) {
   return request<{ job: ShortsJob }>(`/shorts/projects/${projectId}/rerender`, { method: "POST" });
 }
+
+export function exportShortsProject(projectId: string) {
+  return request<{ job: ShortsJob }>(`/shorts/projects/${projectId}/export`, { method: "POST" });
+}
+
+export function getShortsFinalDownloadUrl(projectId: string) {
+  return request<{ url: string; expires_in: number }>(`/shorts/projects/${projectId}/final`);
+}

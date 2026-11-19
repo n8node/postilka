@@ -50,6 +50,9 @@ func (w *ShortsWorker) process(ctx context.Context, job repository.ClaimedShorts
 	if job.JobType == "rerender" {
 		return w.processRerender(ctx, job)
 	}
+	if job.JobType == "export" {
+		return w.processExport(ctx, job)
+	}
 	if job.JobType != "analyze" {
 		return fmt.Errorf("unsupported shorts job type %q", job.JobType)
 	}
@@ -138,6 +141,84 @@ func (w *ShortsWorker) process(ctx context.Context, job repository.ClaimedShorts
 		return err
 	}
 	if err := w.repo.UpdateProjectStatus(ctx, job.WorkspaceID, job.ProjectID, model.ShortsProjectAnalyzing, "transcript_ready"); err != nil {
+		return err
+	}
+	return w.repo.SucceedJob(ctx, job.ID, w.owner)
+}
+
+func (w *ShortsWorker) processExport(ctx context.Context, job repository.ClaimedShortsJob) error {
+	project, err := w.repo.GetProject(ctx, job.WorkspaceID, job.ProjectID)
+	if err != nil {
+		return err
+	}
+	if project.SourceFileID == nil {
+		return ErrShortsSourceRequired
+	}
+	file, err := w.files.GetByID(ctx, job.WorkspaceID, *project.SourceFileID, false)
+	if err != nil {
+		return err
+	}
+	clips, err := w.repo.ListClips(ctx, job.WorkspaceID, project.ID)
+	if err != nil {
+		return err
+	}
+	selected := make([]model.ShortsClip, 0, len(clips))
+	for _, clip := range clips {
+		if clip.Status == "selected" || clip.Status == "draft" {
+			selected = append(selected, clip)
+		}
+	}
+	if len(selected) == 0 {
+		return fmt.Errorf("no selected shorts clips")
+	}
+	if err := w.repo.UpdateJobProgress(ctx, job.ID, w.owner, "download_source", 10); err != nil {
+		return err
+	}
+	sourcePath, err := w.downloadObject(ctx, file.S3Key, filepath.Ext(file.Name))
+	if err != nil {
+		return err
+	}
+	defer os.Remove(sourcePath)
+	transcript, err := transcriptFromSettings(project.Settings)
+	if err != nil {
+		return err
+	}
+	config := ShortsSubtitleConfigFromSettings(project.Settings)
+	paths := make([]string, 0, len(selected))
+	for index, clip := range selected {
+		if err := w.repo.UpdateJobProgress(ctx, job.ID, w.owner, "render_clip", 15+(index*65/maxInt(1, len(selected)))); err != nil {
+			return err
+		}
+		path, err := RenderShortsDraft(ctx, sourcePath, clip.StartSeconds, clip.EndSeconds, transcript.Segments, config)
+		if err != nil {
+			return err
+		}
+		paths = append(paths, path)
+		defer os.Remove(path)
+	}
+	if err := w.repo.UpdateJobProgress(ctx, job.ID, w.owner, "merge_clips", 85); err != nil {
+		return err
+	}
+	merged, err := MergeShortsClips(ctx, paths)
+	if err != nil {
+		return err
+	}
+	defer os.Remove(merged)
+	info, err := os.Stat(merged)
+	if err != nil {
+		return err
+	}
+	key := fmt.Sprintf("workspaces/%s/shorts/%s/final-%d.mp4", job.WorkspaceID, project.ID, time.Now().UnixNano())
+	if err := w.storage.PutObjectFromFile(ctx, key, "video/mp4", merged); err != nil {
+		return err
+	}
+	uid := project.CreatedByUserID
+	finalFile, err := w.fileStore.RegisterWorkspaceFile(ctx, &model.WorkspaceFile{WorkspaceID: job.WorkspaceID, UploadedByUserID: &uid, Name: "shorts-final.mp4", MimeType: "video/mp4", Size: info.Size(), S3Key: key})
+	if err != nil {
+		_ = w.storage.DeleteObject(ctx, key)
+		return err
+	}
+	if err := w.repo.SetProjectFinalFile(ctx, job.WorkspaceID, project.ID, finalFile.ID); err != nil {
 		return err
 	}
 	return w.repo.SucceedJob(ctx, job.ID, w.owner)

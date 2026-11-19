@@ -397,6 +397,17 @@ func (r *ShortsRepository) CreateRerenderJob(ctx context.Context, workspaceID, p
 	return &j, err
 }
 
+func (r *ShortsRepository) CreateExportJob(ctx context.Context, workspaceID, projectID string) (*model.ShortsJob, error) {
+	var j model.ShortsJob
+	var status string
+	err := r.pool.QueryRow(ctx, `INSERT INTO shorts_jobs (project_id, job_type) SELECT $1, 'export' WHERE EXISTS (SELECT 1 FROM shorts_projects WHERE id = $1 AND workspace_id = $2) AND NOT EXISTS (SELECT 1 FROM shorts_jobs WHERE project_id = $1 AND job_type = 'export' AND status IN ('queued', 'running')) RETURNING id, project_id, job_type, status, current_step, progress, attempts, available_at, last_error, created_at, updated_at`, projectID, workspaceID).Scan(&j.ID, &j.ProjectID, &j.JobType, &status, &j.CurrentStep, &j.Progress, &j.Attempts, &j.AvailableAt, &j.LastError, &j.CreatedAt, &j.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	j.Status = model.ShortsJobStatus(status)
+	return &j, err
+}
+
 func (r *ShortsRepository) CreateAnalyzeJob(ctx context.Context, workspaceID, projectID string) (*model.ShortsJob, error) {
 	var j model.ShortsJob
 	var status string
@@ -442,6 +453,11 @@ func (r *ShortsRepository) GetJob(ctx context.Context, workspaceID, jobID string
 
 func (r *ShortsRepository) SetAudio(ctx context.Context, workspaceID, projectID, fileID string, expiresAt time.Time) error {
 	_, err := r.pool.Exec(ctx, `UPDATE shorts_projects SET audio_file_id = $1, audio_expires_at = $2, updated_at = now() WHERE id = $3 AND workspace_id = $4`, fileID, expiresAt, projectID, workspaceID)
+	return err
+}
+
+func (r *ShortsRepository) SetProjectFinalFile(ctx context.Context, workspaceID, projectID, fileID string) error {
+	_, err := r.pool.Exec(ctx, `UPDATE shorts_projects SET status = 'completed', settings = jsonb_set(settings, '{final_file_id}', to_jsonb($1::text), true), updated_at = now() WHERE id = $2 AND workspace_id = $3`, fileID, projectID, workspaceID)
 	return err
 }
 

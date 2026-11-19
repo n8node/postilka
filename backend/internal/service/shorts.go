@@ -332,3 +332,45 @@ func (s *ShortsService) RerenderProject(ctx context.Context, userID string, r *h
 	}
 	return s.repo.CreateRerenderJob(ctx, ws.ID, projectID)
 }
+
+func (s *ShortsService) ExportProject(ctx context.Context, userID string, r *http.Request, projectID string) (*model.ShortsJob, error) {
+	ws, _, err := s.wsSvc.ResolveActive(ctx, userID, r)
+	if err != nil {
+		return nil, err
+	}
+	if ws == nil {
+		return nil, ErrWorkspaceNotFound
+	}
+	if _, err := s.wsSvc.RequireMembership(ctx, userID, ws.ID, model.RoleEditor); err != nil {
+		return nil, err
+	}
+	return s.repo.CreateExportJob(ctx, ws.ID, projectID)
+}
+
+func (s *ShortsService) FinalDownloadURL(ctx context.Context, userID string, r *http.Request, projectID string) (string, int, error) {
+	ws, _, err := s.wsSvc.ResolveActive(ctx, userID, r)
+	if err != nil {
+		return "", 0, err
+	}
+	if ws == nil {
+		return "", 0, ErrWorkspaceNotFound
+	}
+	if _, err := s.wsSvc.RequireMembership(ctx, userID, ws.ID, model.RoleViewer); err != nil {
+		return "", 0, err
+	}
+	project, err := s.repo.GetProject(ctx, ws.ID, projectID)
+	if err != nil {
+		return "", 0, err
+	}
+	var settings struct {
+		FinalFileID string `json:"final_file_id"`
+	}
+	if err := json.Unmarshal(project.Settings, &settings); err != nil || settings.FinalFileID == "" {
+		return "", 0, repository.ErrNotFound
+	}
+	file, err := s.files.GetByID(ctx, ws.ID, settings.FinalFileID, false)
+	if err != nil {
+		return "", 0, err
+	}
+	return s.fileStorage.DownloadURL(ctx, userID, r, file.ID, true)
+}
