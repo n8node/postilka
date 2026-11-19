@@ -155,6 +155,24 @@ func (s *ShortsService) DeleteProject(ctx context.Context, userID string, r *htt
 	return s.repo.DeleteProject(ctx, ws.ID, projectID)
 }
 
+func (s *ShortsService) AnalyzeProject(ctx context.Context, userID string, r *http.Request, projectID string) (*model.ShortsJob, error) {
+	ws, _, err := s.wsSvc.ResolveActive(ctx, userID, r)
+	if err != nil {
+		return nil, err
+	}
+	if ws == nil {
+		return nil, ErrWorkspaceNotFound
+	}
+	if _, err := s.wsSvc.RequireMembership(ctx, userID, ws.ID, model.RoleEditor); err != nil {
+		return nil, err
+	}
+	job, err := s.repo.CreateAnalyzeJob(ctx, ws.ID, projectID)
+	if errors.Is(err, repository.ErrNotFound) {
+		return nil, ErrShortsProjectNotFound
+	}
+	return job, err
+}
+
 func (s *ShortsService) GetJob(ctx context.Context, userID string, r *http.Request, jobID string) (*model.ShortsJob, error) {
 	ws, _, err := s.wsSvc.ResolveActive(ctx, userID, r)
 	if err != nil {

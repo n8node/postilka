@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FileVideo, FolderOpen, Loader2, Trash2, Upload } from "lucide-react";
+import { FileVideo, FolderOpen, Loader2, RefreshCw, Trash2, Upload } from "lucide-react";
 import { WorkspaceMediaPickerModal } from "@/components/generation/WorkspaceMediaPickerModal";
 import { uploadFile, type WorkspaceFile } from "@/lib/files-api";
-import { createShortsProject, deleteShortsProject, getShortsDraftDownloadUrl, getShortsJob, getShortsProject, listShortsProjects, rerenderShortsProject, updateShortsSubtitleSettings, type ShortsClip, type ShortsJob, type ShortsProject, type ShortsProjectListItem } from "@/lib/shorts-api";
+import { analyzeShortsProject, createShortsProject, deleteShortsProject, getShortsDraftDownloadUrl, getShortsJob, getShortsProject, listShortsProjects, rerenderShortsProject, updateShortsSubtitleSettings, type ShortsClip, type ShortsJob, type ShortsProject, type ShortsProjectListItem } from "@/lib/shorts-api";
 
 const contentTypes = [
   ["podcast", "Подкаст"],
@@ -41,6 +41,11 @@ export function ShortsStudioPage() {
     void listShortsProjects().then((result) => setHistory(result.projects)).catch(() => undefined).finally(() => setHistoryLoading(false));
   }, []);
 
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("project");
+    if (id) void openProject(id);
+  }, []);
+
   async function openProject(id: string) {
     try {
       const result = await getShortsProject(id);
@@ -64,6 +69,18 @@ export function ShortsStudioPage() {
       }
     } catch (error) {
       setJobMessage(error instanceof Error ? error.message : "Не удалось удалить проект");
+    }
+  }
+
+  async function analyzeProject(id: string) {
+    try {
+      const result = await analyzeShortsProject(id);
+      setJob(result.job);
+      setHistory((items) => items.map((item) => item.project.id === id ? { ...item, job: result.job, project: { ...item.project, status: "analyzing" } } : item));
+      setJobMessage("Повторный анализ поставлен в очередь.");
+      if (project?.id === id) setClips([]);
+    } catch (error) {
+      setJobMessage(error instanceof Error ? error.message : "Не удалось запустить повторный анализ");
     }
   }
 
@@ -181,7 +198,7 @@ export function ShortsStudioPage() {
           {history.map((item) => <article key={item.project.id} className={`flex flex-wrap items-center gap-4 rounded-xl border p-3 ${project?.id === item.project.id ? "border-violet-400/60 bg-violet-400/10" : "border-white/10 bg-black/10"}`}>
             <div className="h-16 w-12 overflow-hidden rounded-md bg-black">{item.source_file?.id ? <video src={`/app/api/v1/files/${item.source_file.id}/download?disposition=inline`} muted playsInline className="h-full w-full object-cover" /> : <FileVideo className="m-3 h-6 w-6 text-white/40" />}</div>
             <div className="min-w-[180px] flex-1"><p className="truncate text-sm font-medium text-white">{item.source_file?.name ?? "Исходное видео"}</p><p className="mt-1 text-xs text-white/50">{new Date(item.project.created_at).toLocaleString("ru-RU")} · {item.clips} клипов</p><p className="mt-1 text-xs text-violet-200">{item.project.status}</p></div>
-            <div className="flex items-center gap-2"><button type="button" onClick={() => void openProject(item.project.id)} className="rounded-lg border border-white/15 px-3 py-2 text-xs hover:bg-white/10">Открыть</button><button type="button" onClick={() => void removeProject(item.project.id)} className="rounded-lg border border-red-400/30 p-2 text-red-200 hover:bg-red-400/10" aria-label="Удалить проект"><Trash2 className="h-4 w-4" /></button></div>
+            <div className="flex items-center gap-2"><button type="button" onClick={() => void openProject(item.project.id)} className="rounded-lg border border-white/15 px-3 py-2 text-xs hover:bg-white/10">Открыть</button>{!item.job || (item.job.status !== "queued" && item.job.status !== "running") ? <button type="button" onClick={() => void analyzeProject(item.project.id)} className="rounded-lg border border-violet-400/30 p-2 text-violet-200 hover:bg-violet-400/10" aria-label="Повторить анализ"><RefreshCw className="h-4 w-4" /></button> : null}<button type="button" onClick={() => void removeProject(item.project.id)} className="rounded-lg border border-red-400/30 p-2 text-red-200 hover:bg-red-400/10" aria-label="Удалить проект"><Trash2 className="h-4 w-4" /></button></div>
           </article>)}
         </div>}
       </section>

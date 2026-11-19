@@ -360,6 +360,27 @@ func (r *ShortsRepository) CreateRerenderJob(ctx context.Context, workspaceID, p
 	return &j, err
 }
 
+func (r *ShortsRepository) CreateAnalyzeJob(ctx context.Context, workspaceID, projectID string) (*model.ShortsJob, error) {
+	var j model.ShortsJob
+	var status string
+	err := r.pool.QueryRow(ctx, `
+		INSERT INTO shorts_jobs (project_id, job_type)
+		SELECT $1, 'analyze'
+		WHERE EXISTS (
+			SELECT 1 FROM shorts_projects WHERE id = $1 AND workspace_id = $2
+		)
+		AND NOT EXISTS (
+			SELECT 1 FROM shorts_jobs WHERE project_id = $1 AND status IN ('queued', 'running')
+		)
+		RETURNING id, project_id, job_type, status, current_step, progress, attempts, available_at, last_error, created_at, updated_at
+	`, projectID, workspaceID).Scan(&j.ID, &j.ProjectID, &j.JobType, &status, &j.CurrentStep, &j.Progress, &j.Attempts, &j.AvailableAt, &j.LastError, &j.CreatedAt, &j.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	j.Status = model.ShortsJobStatus(status)
+	return &j, err
+}
+
 func (r *ShortsRepository) DeleteProject(ctx context.Context, workspaceID, projectID string) error {
 	tag, err := r.pool.Exec(ctx, `DELETE FROM shorts_projects WHERE id = $1 AND workspace_id = $2`, projectID, workspaceID)
 	if err != nil {

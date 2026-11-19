@@ -204,51 +204,51 @@ func VisibleCategoriesForCatalog(catalog string, hidden []string) []AdStudioCate
 }
 
 type AdStudioTemplatePublicView struct {
-	ID               string `json:"id"`
-	Title            string `json:"title"`
-	Description      string `json:"description"`
-	Catalog          string `json:"catalog,omitempty"`
-	Category         string `json:"category"`
-	MediaKind        string `json:"media_kind"`
-	GenerationMode   string `json:"generation_mode"`
-	AspectRatio      string `json:"aspect_ratio"`
-	Duration         int    `json:"duration"`
-	RequiresProduct  bool   `json:"requires_product"`
-	RequiresAvatar   bool   `json:"requires_avatar"`
-	TrendPrompt      bool   `json:"trend_prompt"`
-	UseTemplatePrompt bool  `json:"use_template_prompt"`
-	PreviewKind      string `json:"preview_kind,omitempty"`
-	PreviewURL       string `json:"preview_url,omitempty"`
-	PreviewSourceURL string `json:"preview_source_url,omitempty"`
-	SortOrder        int    `json:"sort_order"`
+	ID                string `json:"id"`
+	Title             string `json:"title"`
+	Description       string `json:"description"`
+	Catalog           string `json:"catalog,omitempty"`
+	Category          string `json:"category"`
+	MediaKind         string `json:"media_kind"`
+	GenerationMode    string `json:"generation_mode"`
+	AspectRatio       string `json:"aspect_ratio"`
+	Duration          int    `json:"duration"`
+	RequiresProduct   bool   `json:"requires_product"`
+	RequiresAvatar    bool   `json:"requires_avatar"`
+	TrendPrompt       bool   `json:"trend_prompt"`
+	UseTemplatePrompt bool   `json:"use_template_prompt"`
+	PreviewKind       string `json:"preview_kind,omitempty"`
+	PreviewURL        string `json:"preview_url,omitempty"`
+	PreviewSourceURL  string `json:"preview_source_url,omitempty"`
+	SortOrder         int    `json:"sort_order"`
 }
 
 type AdStudioTemplateAdminView struct {
 	AdStudioTemplatePublicView
-	SystemPrompt string `json:"system_prompt"`
-	UseTemplatePrompt bool `json:"use_template_prompt"`
-	IsPublished  bool   `json:"is_published"`
-	HasPreview   bool   `json:"has_preview"`
-	CreatedAt    string `json:"created_at"`
-	UpdatedAt    string `json:"updated_at"`
+	SystemPrompt      string `json:"system_prompt"`
+	UseTemplatePrompt bool   `json:"use_template_prompt"`
+	IsPublished       bool   `json:"is_published"`
+	HasPreview        bool   `json:"has_preview"`
+	CreatedAt         string `json:"created_at"`
+	UpdatedAt         string `json:"updated_at"`
 }
 
 type AdStudioTemplateWriteRequest struct {
-	Title           string `json:"title"`
-	Description     string `json:"description"`
-	Catalog         string `json:"catalog"`
-	Category        string `json:"category"`
-	MediaKind       string `json:"media_kind"`
-	GenerationMode  string `json:"generation_mode"`
-	AspectRatio     string `json:"aspect_ratio"`
-	Duration        int    `json:"duration"`
-	SystemPrompt    string `json:"system_prompt"`
-	RequiresProduct *bool  `json:"requires_product"`
-	RequiresAvatar  *bool  `json:"requires_avatar"`
-	TrendPrompt     *bool  `json:"trend_prompt"`
-	UseTemplatePrompt *bool `json:"use_template_prompt"`
-	SortOrder       *int   `json:"sort_order"`
-	IsPublished     *bool  `json:"is_published"`
+	Title             string `json:"title"`
+	Description       string `json:"description"`
+	Catalog           string `json:"catalog"`
+	Category          string `json:"category"`
+	MediaKind         string `json:"media_kind"`
+	GenerationMode    string `json:"generation_mode"`
+	AspectRatio       string `json:"aspect_ratio"`
+	Duration          int    `json:"duration"`
+	SystemPrompt      string `json:"system_prompt"`
+	RequiresProduct   *bool  `json:"requires_product"`
+	RequiresAvatar    *bool  `json:"requires_avatar"`
+	TrendPrompt       *bool  `json:"trend_prompt"`
+	UseTemplatePrompt *bool  `json:"use_template_prompt"`
+	SortOrder         *int   `json:"sort_order"`
+	IsPublished       *bool  `json:"is_published"`
 }
 
 type AdStudioGenerateRequest struct {
@@ -296,22 +296,22 @@ func (t AdStudioTemplate) ToPublicView() AdStudioTemplatePublicView {
 		previewKind = AdStudioMediaVideo
 	}
 	view := AdStudioTemplatePublicView{
-		ID:              t.ID,
-		Title:           t.Title,
-		Description:     t.Description,
-		Catalog:         NormalizeAdStudioCatalog(t.Catalog),
-		Category:        t.Category,
-		MediaKind:       t.MediaKind,
-		GenerationMode:  t.GenerationMode,
-		AspectRatio:     t.AspectRatio,
-		Duration:        t.Duration,
-		RequiresProduct: t.RequiresProduct,
-		RequiresAvatar:  t.RequiresAvatar,
-		TrendPrompt:     t.TrendPrompt,
+		ID:                t.ID,
+		Title:             t.Title,
+		Description:       t.Description,
+		Catalog:           NormalizeAdStudioCatalog(t.Catalog),
+		Category:          t.Category,
+		MediaKind:         t.MediaKind,
+		GenerationMode:    t.GenerationMode,
+		AspectRatio:       t.AspectRatio,
+		Duration:          t.Duration,
+		RequiresProduct:   t.RequiresProduct,
+		RequiresAvatar:    t.RequiresAvatar,
+		TrendPrompt:       t.TrendPrompt,
 		UseTemplatePrompt: t.UseTemplatePrompt,
-		PreviewKind:     previewKind,
-		PreviewURL:      t.PreviewPath(),
-		SortOrder:       t.SortOrder,
+		PreviewKind:       previewKind,
+		PreviewURL:        t.PreviewPath(),
+		SortOrder:         t.SortOrder,
 	}
 	if previewKind == AdStudioMediaVideo {
 		view.PreviewSourceURL = t.PreviewSourcePath()

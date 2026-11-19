@@ -76,6 +76,10 @@ export function deleteShortsProject(projectId: string) {
   return request<{ ok: boolean }>(`/shorts/projects/${projectId}`, { method: "DELETE" });
 }
 
+export function analyzeShortsProject(projectId: string) {
+  return request<{ job: ShortsJob }>(`/shorts/projects/${projectId}/analyze`, { method: "POST" });
+}
+
 export function getShortsJob(id: string) {
   return request<{ job: ShortsJob }>(`/shorts/jobs/${id}`);
 }
