@@ -139,6 +139,21 @@ func (r *ShortsRepository) ListCandidateClips(ctx context.Context, workspaceID, 
 	return out, rows.Err()
 }
 
+func (r *ShortsRepository) GetClip(ctx context.Context, workspaceID, clipID string) (*model.ShortsClip, error) {
+	var c model.ShortsClip
+	var status string
+	var scoreDetails, crop, subtitle, overlays []byte
+	err := r.pool.QueryRow(ctx, `SELECT c.id, c.project_id, c.start_seconds, c.end_seconds, c.transcript_text, c.score, c.score_details, c.crop_config, c.subtitle_config, c.overlay_config, c.status, c.draft_file_id, c.final_file_id, c.created_at, c.updated_at FROM shorts_clips c JOIN shorts_projects p ON p.id = c.project_id WHERE c.id = $1 AND p.workspace_id = $2`, clipID, workspaceID).Scan(&c.ID, &c.ProjectID, &c.StartSeconds, &c.EndSeconds, &c.TranscriptText, &c.Score, &scoreDetails, &crop, &subtitle, &overlays, &status, &c.DraftFileID, &c.FinalFileID, &c.CreatedAt, &c.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	c.Status, c.ScoreDetails, c.CropConfig, c.SubtitleConfig, c.OverlayConfig = status, scoreDetails, crop, subtitle, overlays
+	return &c, nil
+}
+
 func (r *ShortsRepository) CreateJob(ctx context.Context, projectID, jobType string) (*model.ShortsJob, error) {
 	var j model.ShortsJob
 	var status string

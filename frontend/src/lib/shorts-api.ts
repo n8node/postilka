@@ -7,6 +7,19 @@ export type ShortsProject = {
   source_duration_seconds: number;
   processing_minutes_reserved: number;
   source_expires_at?: string;
+  audio_file_id?: string;
+  audio_expires_at?: string;
+  settings?: { transcript?: unknown; current_step?: string };
+};
+
+export type ShortsClip = {
+  id: string;
+  start_seconds: number;
+  end_seconds: number;
+  transcript_text: string;
+  score: number;
+  status: string;
+  draft_file_id?: string;
 };
 
 export type ShortsJob = {
@@ -52,4 +65,12 @@ export function getShortsJob(id: string) {
 
 export function getShortsAudioDownloadUrl(projectId: string) {
   return request<{ url: string; expires_in: number }>(`/shorts/projects/${projectId}/audio`);
+}
+
+export function getShortsProject(id: string) {
+  return request<{ project: ShortsProject; clips: ShortsClip[] }>(`/shorts/projects/${id}`);
+}
+
+export function getShortsDraftDownloadUrl(clipId: string) {
+  return request<{ url: string; expires_in: number }>(`/shorts/clips/${clipId}/draft`);
 }

@@ -178,3 +178,34 @@ func (s *ShortsService) AudioDownloadURL(ctx context.Context, userID string, r *
 	}
 	return url, expiresIn, nil
 }
+
+func (s *ShortsService) DraftDownloadURL(ctx context.Context, userID string, r *http.Request, clipID string) (string, int, error) {
+	ws, _, err := s.wsSvc.ResolveActive(ctx, userID, r)
+	if err != nil {
+		return "", 0, err
+	}
+	if ws == nil {
+		return "", 0, ErrWorkspaceNotFound
+	}
+	if _, err := s.wsSvc.RequireMembership(ctx, userID, ws.ID, model.RoleViewer); err != nil {
+		return "", 0, err
+	}
+	clip, err := s.repo.GetClip(ctx, ws.ID, clipID)
+	if errors.Is(err, repository.ErrNotFound) {
+		return "", 0, repository.ErrNotFound
+	}
+	if err != nil {
+		return "", 0, err
+	}
+	if clip.DraftFileID == nil || s.files == nil || s.fileStorage == nil {
+		return "", 0, repository.ErrNotFound
+	}
+	file, err := s.files.GetByID(ctx, ws.ID, *clip.DraftFileID, false)
+	if errors.Is(err, repository.ErrNotFound) {
+		return "", 0, repository.ErrNotFound
+	}
+	if err != nil {
+		return "", 0, err
+	}
+	return s.fileStorage.DownloadURL(ctx, userID, r, file.ID, true)
+}

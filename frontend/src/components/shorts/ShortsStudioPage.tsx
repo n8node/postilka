@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { createShortsProject } from "@/lib/shorts-api";
+import { useEffect, useState } from "react";
+import { createShortsProject, getShortsDraftDownloadUrl, getShortsJob, getShortsProject, type ShortsClip, type ShortsJob, type ShortsProject } from "@/lib/shorts-api";
 
 const contentTypes = [
   ["podcast", "Подкаст"],
@@ -21,6 +21,30 @@ export function ShortsStudioPage() {
   const [contentType, setContentType] = useState("podcast");
   const [jobMessage, setJobMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [project, setProject] = useState<ShortsProject | null>(null);
+  const [clips, setClips] = useState<ShortsClip[]>([]);
+  const [job, setJob] = useState<ShortsJob | null>(null);
+  const [draftUrls, setDraftUrls] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!project?.id || !job?.id) return;
+    if (job.status === "succeeded" || job.status === "failed") {
+      void getShortsProject(project.id).then((result) => { setProject(result.project); setClips(result.clips); }).catch(() => undefined);
+      return;
+    }
+    const timer = window.setInterval(async () => {
+      try {
+        const [nextProject, nextJob] = await Promise.all([getShortsProject(project.id), getShortsJob(job.id)]);
+        setProject(nextProject.project); setClips(nextProject.clips); setJob(nextJob.job);
+      } catch { /* transient polling failure */ }
+    }, 3000);
+    return () => window.clearInterval(timer);
+  }, [project?.id, job?.id, job?.status]);
+
+  async function loadDraft(clipId: string) {
+    if (draftUrls[clipId]) return;
+    try { const result = await getShortsDraftDownloadUrl(clipId); setDraftUrls((current) => ({ ...current, [clipId]: result.url })); } catch { /* draft may not be ready */ }
+  }
 
   async function submit() {
     if (!sourceFileId.trim()) {
@@ -37,7 +61,7 @@ export function ShortsStudioPage() {
         source_duration_seconds: duration,
         processing_range: { start_seconds: rangeStart, end_seconds: rangeEnd },
       });
-      setJobMessage(`Проект создан. Задача анализа: ${result.job.id}`);
+      setProject(result.project); setJob(result.job); setClips([]); setJobMessage(`Проект создан. Задача анализа: ${result.job.id}`);
     } catch (error) {
       setJobMessage(error instanceof Error ? error.message : "Не удалось создать проект");
     } finally {
@@ -86,6 +110,18 @@ export function ShortsStudioPage() {
         </button>
         {jobMessage && <p className="text-sm text-white/65">{jobMessage}</p>}
       </div>
+      {(project || job) && <section className="mt-8 rounded-2xl border border-white/10 bg-white/[0.03] p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div><h2 className="text-xl font-semibold">Результаты анализа</h2><p className="mt-1 text-sm text-white/55">{job?.current_step ?? project?.status ?? "Ожидание"}</p></div>
+          {job && <span className="rounded-full bg-violet-400/15 px-3 py-1 text-sm text-violet-200">{job.progress}% · {job.status}</span>}
+        </div>
+        {clips.length === 0 ? <p className="mt-6 text-sm text-white/50">Кандидаты появятся после транскрибации и обработки worker.</p> : <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {clips.map((clip) => <article key={clip.id} className="overflow-hidden rounded-xl border border-white/10 bg-black/20">
+            <div className="aspect-[9/16] bg-black">{draftUrls[clip.id] ? <video src={draftUrls[clip.id]} controls playsInline className="h-full w-full object-contain" /> : <button type="button" onClick={() => loadDraft(clip.id)} className="flex h-full w-full items-center justify-center text-sm text-violet-200 hover:bg-white/5">Загрузить preview</button>}</div>
+            <div className="p-4"><p className="text-xs text-white/45">{clip.start_seconds.toFixed(1)}–{clip.end_seconds.toFixed(1)} сек. · score {clip.score.toFixed(2)}</p><p className="mt-2 line-clamp-4 text-sm text-white/80">{clip.transcript_text}</p></div>
+          </article>)}
+        </div>}
+      </section>}
     </main>
   );
 }
