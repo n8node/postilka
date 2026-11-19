@@ -1,0 +1,855 @@
+/* WPC Smart Quick View - Admin Styles */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
+:root {
+  --wpc-primary: #10b981;
+  --wpc-primary-dark: #059669;
+  --wpc-primary-light: #ecfdf5;
+  --wpc-border: #e2e8f0;
+  --wpc-bg: #f8fafc;
+  --wpc-text: #1e293b;
+  --wpc-muted: #64748b;
+  --wpc-radius: 10px;
+  --wpc-shadow: 0 1px 3px 0 rgba(0, 0, 0, .1), 0 1px 2px -1px rgba(0, 0, 0, .1);
+  --wpc-shadow-md: 0 4px 6px -1px rgba(0, 0, 0, .1), 0 2px 4px -2px rgba(0, 0, 0, .1);
+  --woosc-primary: var(--wpc-primary);
+  --woosc-primary-dark: var(--wpc-primary-dark);
+  --woosc-primary-light: var(--wpc-primary-light);
+  --woosc-border: var(--wpc-border);
+  --woosc-bg: var(--wpc-bg);
+  --woosc-text: var(--wpc-text);
+  --woosc-muted: var(--wpc-muted);
+  --woosc-radius: var(--wpc-radius);
+  --woosc-shadow: var(--wpc-shadow);
+  --woosc-shadow-md: var(--wpc-shadow-md);
+}
+
+/* === Settings Wrap === */
+.woosc-settings-wrap {
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  width: 90%;
+  max-width: 960px;
+  margin: 20px auto;
+  color: var(--wpc-text);
+}
+
+/* === Header === */
+.woosc-settings-header {
+  background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+  border-radius: var(--wpc-radius) var(--wpc-radius) 0 0;
+  padding: 28px 32px;
+  margin-bottom: 0;
+  color: #fff;
+  position: relative;
+  overflow: hidden;
+}
+
+.woosc-settings-header::before {
+  content: "";
+  position: absolute;
+  top: -40%;
+  right: -10%;
+  width: 300px;
+  height: 300px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.woosc-settings-header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  position: relative;
+  z-index: 1;
+}
+
+.woosc-settings-header-inner .notice,
+.woosc-settings-header-inner .updated {
+  display: none !important;
+}
+
+.woosc-header-left {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.woosc-logo {
+  width: 60px;
+  height: 60px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.woosc-logo img {
+  width: 52px;
+  height: 52px;
+  filter: brightness(0) invert(1);
+}
+
+.woosc-logo svg {
+  width: 32px;
+  height: 32px;
+  stroke: #fff;
+  fill: none;
+}
+
+.woosc-settings-header h1 {
+  color: #fff;
+  font-size: 22px;
+  font-weight: 800;
+  margin: 0 0 4px;
+  padding: 0;
+  line-height: 1.2;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.woosc-settings-header h1 .premium {
+  background: #e11d48;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-left: 0;
+  vertical-align: baseline;
+}
+
+.woosc-tagline {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 13px;
+  margin: 0;
+}
+
+.woosc-settings-status-badge {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+  display: inline-block;
+}
+
+/* === Navigation === */
+.woosc-admin-nav {
+  background: #fff;
+  border-bottom: 2px solid var(--wpc-border);
+  border-top: 0;
+  border-radius: 0 0 var(--wpc-radius) var(--wpc-radius);
+  padding: 0 10px;
+  margin-bottom: 30px;
+  box-shadow: var(--wpc-shadow);
+}
+
+.woosc-nav-container {
+  display: flex;
+  gap: 0;
+  margin-bottom: -2px;
+}
+
+.woosc-nav-item {
+  position: relative;
+  padding: 14px 28px;
+  text-decoration: none;
+  color: var(--wpc-muted);
+  font-weight: 600;
+  transition: all 0.25s ease;
+  font-size: 13.5px;
+  outline: none !important;
+  box-shadow: none !important;
+  border-bottom: none;
+}
+
+.woosc-nav-item::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 0;
+  height: 3px;
+  background: var(--wpc-primary);
+  transition: all 0.25s ease;
+  transform: translateX(-50%);
+  border-radius: 3px 3px 0 0;
+}
+
+.woosc-nav-item.wpc-premium::after {
+  background: #c9356e;
+}
+
+.woosc-nav-item:hover {
+  color: var(--wpc-primary) !important;
+}
+
+.woosc-nav-item:hover::after,
+.woosc-nav-item.active::after {
+  width: 100%;
+}
+
+.woosc-nav-item.active {
+  color: var(--wpc-primary) !important;
+  background: var(--wpc-bg);
+}
+
+/* === Cards === */
+.woosc-card {
+  background: #fff;
+  border: 1px solid var(--wpc-border);
+  border-radius: var(--wpc-radius);
+  padding: 28px 32px;
+  margin-bottom: 24px;
+  box-shadow: var(--wpc-shadow);
+  transition: box-shadow 0.2s ease;
+}
+
+.woosc-card:hover {
+  box-shadow: var(--wpc-shadow-md);
+}
+
+.woosc-card-title {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.woosc-card-desc {
+  margin: 0 0 20px;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.woosc-card-localization .regular-text {
+  width: 100%;
+}
+
+/* === Form Table === */
+.woosc-form-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.woosc-form-table tr {
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.woosc-form-table tr:last-child {
+  border-bottom: none;
+}
+
+.woosc-form-table th {
+  text-align: left;
+  padding: 14px 16px 14px 0;
+  font-weight: 500;
+  color: #374151;
+  width: 240px;
+  font-size: 13px;
+  vertical-align: top;
+}
+
+.woosc-form-table td {
+  padding: 14px 0;
+  font-size: 13px;
+  color: #4b5563;
+}
+
+.woosc-form-table select,
+.woosc-form-table input[type=text],
+.woosc-form-table input[type=number],
+.woosc-form-table input[type=url],
+.woosc-form-table textarea {
+  min-width: 200px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  color: #374151;
+  background-color: #fff;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.woosc-form-table select:focus,
+.woosc-form-table input[type=text]:focus,
+.woosc-form-table input[type=number]:focus,
+.woosc-form-table input[type=url]:focus,
+.woosc-form-table textarea:focus {
+  border-color: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+  outline: none;
+}
+
+.woosc-form-table .description {
+  color: #6b7280;
+  font-size: 12px;
+  margin-top: 4px;
+  display: block;
+}
+
+.woosc-form-table ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.woosc-form-table ul li {
+  margin-bottom: 6px;
+}
+
+.woosc-form-table ul li label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #374151;
+}
+
+.woosc-form-table input[type=checkbox] {
+  width: 15px;
+  height: 15px;
+  accent-color: #10b981;
+}
+
+.woosc-form-table .button {
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 6px 14px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: #374151;
+  transition: all 0.2s;
+  height: auto;
+  line-height: normal;
+}
+
+.woosc-form-table .button:hover {
+  background: #e5e7eb;
+  border-color: #9ca3af;
+  color: #111827;
+}
+
+.woosc-form-table .wp-picker-container {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+}
+
+.woosc-form-table .wp-picker-container .wp-color-result.button {
+  height: 34px !important;
+  min-height: 34px !important;
+  border-radius: 6px;
+  padding: 0 0 0 34px;
+  margin-bottom: 0;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  border-color: #d1d5db;
+}
+
+.woosc-form-table .wp-picker-container .wp-color-result.button .wp-color-result-text {
+  height: 32px;
+  line-height: 32px;
+  border-radius: 0 5px 5px 0;
+  padding: 0 10px;
+  font-size: 13px;
+  border-color: #d1d5db;
+}
+
+.woosc-form-table .wp-picker-container .wp-picker-input-wrap input[type=text] {
+  min-width: 80px;
+  width: 80px;
+}
+
+.woosc-form-table .wp-picker-container .wp-picker-holder {
+  position: absolute;
+  top: 34px;
+  z-index: 10;
+}
+
+/* === Submit Row === */
+.woosc-submit-row {
+  margin-top: 28px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.woosc-submit-row #submit {
+  background: #10b981 !important;
+  border: none !important;
+  padding: 12px 40px !important;
+  height: auto !important;
+  font-weight: 700 !important;
+  border-radius: 8px !important;
+  font-size: 14px !important;
+  font-family: inherit !important;
+  box-shadow: 0 4px 6px -1px rgba(16, 185, 129, 0.2) !important;
+  transition: all 0.2s !important;
+  cursor: pointer;
+  color: #fff !important;
+}
+
+.woosc-submit-row #submit:hover {
+  background: #059669 !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 6px 12px -1px rgba(16, 185, 129, 0.3) !important;
+}
+
+.woosc-submit-row .wpc-last-saved {
+  color: #6b7280;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.woosc-submit-row .wpc-last-saved .dashicons {
+  font-size: 16px;
+  width: 16px;
+  height: 16px;
+  color: #10b981;
+}
+
+.woosc-export-btn {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #fff;
+  border: 1px solid #d1d5db;
+  color: #64748b;
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 400;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.woosc-export-btn .dashicons {
+  font-size: 16px;
+  width: 16px;
+  height: 16px;
+  line-height: 16px;
+}
+
+.woosc-export-btn:hover {
+  border-color: #10b981;
+  color: #10b981;
+  background: #f8fafc;
+}
+
+.wpc-premium, .wpc-premium a,
+.woosc-nav-item.wpc-premium {
+  color: #c9356e !important;
+}
+
+.woosc-disabled-row {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.woosc-premium-features {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.woosc-premium-features li {
+  margin-bottom: 6px;
+  color: #4b5563;
+}
+
+/* === Icon Picker === */
+.icons-selector,
+.woosc-settings-wrap .icons-selector {
+  background-color: #ffffff;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+}
+
+.icons-selector .selector-button,
+.woosc-settings-wrap .icons-selector .selector-button {
+  border-left: 1px solid #d1d5db;
+  background-color: #fafafa;
+}
+
+.icons-selector .selector-popup,
+.woosc-settings-wrap .icons-selector .selector-popup {
+  width: 330px;
+  padding: 10px;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  border: 1px solid #e5e7eb;
+}
+
+.icons-selector .selector-popup .selector-search input,
+.woosc-settings-wrap .icons-selector .selector-popup .selector-search input {
+  border-radius: 6px;
+  background-color: #fafafa;
+  margin-bottom: 10px;
+  border: 1px solid #d1d5db;
+}
+
+.icons-selector .selector-popup .fip-icons-container,
+.woosc-settings-wrap .icons-selector .selector-popup .fip-icons-container {
+  padding: 0;
+}
+
+.icons-selector .selector-popup .fip-box,
+.woosc-settings-wrap .icons-selector .selector-popup .fip-box {
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background-color: #fafafa;
+}
+
+.icons-selector .selector-popup .fip-box:hover,
+.woosc-settings-wrap .icons-selector .selector-popup .fip-box:hover {
+  background-color: #10b981;
+  color: #ffffff;
+}
+
+.icons-selector .selector-popup .fip-box.current-icon,
+.woosc-settings-wrap .icons-selector .selector-popup .fip-box.current-icon {
+  background-color: #10b981;
+  color: #ffffff;
+}
+
+/* === Select2 / selectWoo === */
+.woosc-settings-wrap .select2-container,
+.wpclever_settings_page .select2-container {
+  width: 100% !important;
+}
+
+.woosc-settings-wrap .select2-container--default .select2-selection--multiple,
+.woosc-settings-wrap .select2-container--default .select2-selection--single {
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 2px 6px;
+  min-height: 35px;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.woosc-settings-wrap .select2-container--default.select2-container--focus .select2-selection--multiple,
+.woosc-settings-wrap .select2-container--default.select2-container--focus .select2-selection--single {
+  border-color: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+}
+
+.woosc-settings-wrap .select2-container--default .select2-search__field {
+  box-shadow: none !important;
+}
+
+/* === Responsive === */
+@media (max-width: 782px) {
+  .woosc-form-table th {
+    width: 100%;
+    display: block;
+    padding-bottom: 4px;
+  }
+  .woosc-form-table td {
+    display: block;
+    padding-top: 0;
+  }
+  .woosc-settings-header {
+    padding: 20px;
+  }
+  .woosc-settings-header-inner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .woosc-settings-status-badge {
+    align-self: flex-start;
+  }
+  .woosc-nav-container {
+    flex-wrap: wrap;
+  }
+  .woosc-nav-item {
+    padding: 10px 15px;
+  }
+}
+/* === WPC Dialog === */
+.ui-dialog.wpc-dialog {
+  position: absolute;
+  top: 0;
+  left: 0;
+  padding: 0;
+  outline: 0;
+  border-radius: 8px;
+  border: 1px solid #d1d5db;
+  background-color: #ffffff;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.ui-dialog.wpc-dialog + .ui-widget-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
+}
+
+.ui-dialog.wpc-dialog .ui-dialog-titlebar {
+  position: relative;
+  border: 0;
+  border-bottom: 1px solid #e5e7eb;
+  background-color: #f8fafc;
+  color: #1e293b;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 36px;
+  padding: 0 36px 0 16px;
+}
+
+.ui-dialog.wpc-dialog .ui-dialog-titlebar .ui-dialog-title {
+  float: none;
+  white-space: nowrap;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ui-dialog.wpc-dialog .ui-dialog-titlebar .ui-dialog-titlebar-close {
+  position: absolute;
+  right: 0;
+  top: 0;
+  margin: 0;
+  padding: 0;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  cursor: pointer;
+  outline: none;
+}
+
+.ui-dialog.wpc-dialog .ui-dialog-titlebar .ui-dialog-titlebar-close:before {
+  content: "\f335";
+  display: inline-block;
+  vertical-align: top;
+  font-family: dashicons;
+  font-size: 20px;
+  line-height: 36px;
+  width: 36px;
+  height: 36px;
+  text-align: center;
+  color: #64748b;
+  transition: color 0.2s;
+}
+
+.ui-dialog.wpc-dialog .ui-dialog-titlebar .ui-dialog-titlebar-close:hover:before {
+  color: #ef4444;
+}
+
+.ui-dialog.wpc-dialog .ui-dialog-titlebar .ui-dialog-titlebar-close span {
+  display: none;
+}
+
+.ui-dialog.wpc-dialog .ui-dialog-content {
+  position: relative;
+  border: 0;
+  padding: 16px;
+  overflow: auto;
+}
+
+/* === Product Summary Fields (Ver 4.0) === */
+@keyframes woosc-spinner {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@-webkit-keyframes woosc-spinner {
+  to {
+    -webkit-transform: rotate(360deg);
+  }
+}
+.woosc-fields-wrapper {
+  position: relative;
+}
+
+.woosc-fields-wrapper.woosc-fields-wrapper-loading:before {
+  content: "";
+  display: block;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(2px);
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 9;
+  border-radius: 8px;
+}
+
+.woosc-fields-wrapper.woosc-fields-wrapper-loading:after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 10;
+  display: block;
+  width: 32px;
+  height: 32px;
+  margin-top: -16px;
+  margin-left: -16px;
+  border-width: 3px;
+  border-style: solid;
+  border-radius: 50%;
+  border-top-color: var(--woosc-primary);
+  border-left-color: rgba(16, 185, 129, 0.15);
+  border-bottom-color: rgba(16, 185, 129, 0.15);
+  border-right-color: rgba(16, 185, 129, 0.15);
+  animation: woosc-spinner 0.8s linear infinite;
+  -webkit-animation: woosc-spinner 0.8s linear infinite;
+}
+
+.woosc-fields-wrapper .woosc-fields {
+  position: relative;
+  margin: 12px 0;
+  max-width: 720px;
+}
+
+.woosc-fields-wrapper .woosc-fields .woosc-field {
+  padding: 6px 10px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background-color: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.woosc-fields-wrapper .woosc-fields .woosc-field.ui-sortable-placeholder {
+  height: 42px;
+  background-color: #f0fdf4;
+  border: 1px dashed #10b981;
+  visibility: visible !important;
+}
+
+.woosc-fields-wrapper .woosc-fields .woosc-field:hover {
+  border-color: #10b981;
+  box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.05);
+}
+
+.woosc-fields-wrapper .woosc-fields .woosc-field:last-child {
+  margin-bottom: 0;
+}
+
+.woosc-fields-wrapper .woosc-fields .woosc-field .move {
+  width: 32px;
+  height: 32px;
+  line-height: 32px;
+  border-radius: 6px;
+  text-align: center;
+  font-size: 0;
+  flex: 0 0 32px;
+  background-color: #f3f4f6;
+  cursor: move;
+  transition: background-color 0.2s, color 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.woosc-fields-wrapper .woosc-fields .woosc-field .move:before {
+  content: "\f545";
+  font-family: dashicons;
+  font-size: 14px;
+  color: #9ca3af;
+}
+
+.woosc-fields-wrapper .woosc-fields .woosc-field:hover .move:before {
+  color: #4b5563;
+}
+
+.woosc-fields-wrapper .woosc-fields .woosc-field .info {
+  flex-grow: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.woosc-fields-wrapper .woosc-fields .woosc-field .info > * {
+  margin: 0 4px;
+}
+
+.woosc-fields-wrapper .woosc-fields .woosc-field .info .woosc-field-name {
+  flex-grow: 1;
+}
+
+.woosc-fields-wrapper .woosc-fields .woosc-field .remove {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  line-height: 32px;
+  border-radius: 6px;
+  text-align: center;
+  background-color: #f9fafb;
+  color: #9ca3af;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.woosc-fields-wrapper .woosc-fields .woosc-field .remove:hover {
+  background-color: #fee2e2;
+  color: #ef4444;
+}
+
+.woosc-fields-wrapper .woosc-fields .woosc-field.woosc-field-type-default .woosc-field-name {
+  display: none;
+}
+
+.woosc-fields-wrapper .woosc-fields .woosc-field.woosc-field-type-default:not(.woosc-field-weight, .woosc-field-dimensions) .woosc-field-label {
+  display: none;
+}
+
+.woosc-fields-wrapper .woosc-fields .woosc-field.woosc-field-type-attribute .woosc-field-name {
+  display: none;
+}
+
+.woosc-fields-wrapper .woosc-fields .woosc-field.woosc-field-type-attribute .title:after {
+  content: "attribute";
+  font-size: 11px;
+  font-style: italic;
+  line-height: 1;
+  color: #64748b;
+  margin-left: 6px;
+  background-color: #f1f5f9;
+  padding: 3px 6px;
+  border-radius: 4px;
+}
+
+.woosc-fields-wrapper .woosc-fields-more {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+/*# sourceMappingURL=backend.css.map */

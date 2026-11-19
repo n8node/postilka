@@ -1,0 +1,255 @@
+.woocommerce:where(body:not(.woocommerce-block-theme-has-button-styles)) #respond input#submit.disabled,
+.woocommerce:where(body:not(.woocommerce-block-theme-has-button-styles)) #respond input#submit:disabled,
+.woocommerce:where(body:not(.woocommerce-block-theme-has-button-styles)) #respond input#submit:disabled[disabled],
+.woocommerce:where(body:not(.woocommerce-block-theme-has-button-styles)) a.button.disabled,
+.woocommerce:where(body:not(.woocommerce-block-theme-has-button-styles)) a.button:disabled,
+.woocommerce:where(body:not(.woocommerce-block-theme-has-button-styles)) a.button:disabled[disabled],
+.woocommerce:where(body:not(.woocommerce-block-theme-has-button-styles)) button.button.disabled,
+.woocommerce:where(body:not(.woocommerce-block-theme-has-button-styles)) button.button:disabled,
+.woocommerce:where(body:not(.woocommerce-block-theme-has-button-styles)) button.button:disabled[disabled],
+.woocommerce:where(body:not(.woocommerce-block-theme-has-button-styles)) input.button.disabled,
+.woocommerce:where(body:not(.woocommerce-block-theme-has-button-styles)) input.button:disabled,
+.woocommerce:where(body:not(.woocommerce-block-theme-has-button-styles)) input.button:disabled[disabled],
+:where(body:not(.woocommerce-block-theme-has-button-styles)):where(:not(.edit-post-visual-editor)) .woocommerce #respond input#submit.disabled,
+:where(body:not(.woocommerce-block-theme-has-button-styles)):where(:not(.edit-post-visual-editor)) .woocommerce #respond input#submit:disabled,
+:where(body:not(.woocommerce-block-theme-has-button-styles)):where(:not(.edit-post-visual-editor)) .woocommerce #respond input#submit:disabled[disabled],
+:where(body:not(.woocommerce-block-theme-has-button-styles)):where(:not(.edit-post-visual-editor)) .woocommerce a.button.disabled,
+:where(body:not(.woocommerce-block-theme-has-button-styles)):where(:not(.edit-post-visual-editor)) .woocommerce a.button:disabled,
+:where(body:not(.woocommerce-block-theme-has-button-styles)):where(:not(.edit-post-visual-editor)) .woocommerce a.button:disabled[disabled],
+:where(body:not(.woocommerce-block-theme-has-button-styles)):where(:not(.edit-post-visual-editor)) .woocommerce button.button.disabled,
+:where(body:not(.woocommerce-block-theme-has-button-styles)):where(:not(.edit-post-visual-editor)) .woocommerce button.button:disabled,
+:where(body:not(.woocommerce-block-theme-has-button-styles)):where(:not(.edit-post-visual-editor)) .woocommerce button.button:disabled[disabled],
+:where(body:not(.woocommerce-block-theme-has-button-styles)):where(:not(.edit-post-visual-editor)) .woocommerce input.button.disabled,
+:where(body:not(.woocommerce-block-theme-has-button-styles)):where(:not(.edit-post-visual-editor)) .woocommerce input.button:disabled,
+:where(body:not(.woocommerce-block-theme-has-button-styles)):where(:not(.edit-post-visual-editor)) .woocommerce input.button:disabled[disabled] {
+    opacity: 0.9;
+}
+
+.pxl-filter {
+    margin-bottom: 30px;
+}
+
+.pxl-filter__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.pxl-filter__toggle {
+    display: none;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    padding: 10px 15px;
+    border-radius: 4px;
+    cursor: pointer;
+    align-items: center;
+    gap: 8px;
+}
+
+.pxl-filter__content {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 8px;
+}
+
+.pxl-filter__block {
+    background: white;
+    padding: 20px;
+    border-radius: 6px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.pxl-filter__block h4 {
+    margin: 0 0 15px 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #333;
+    border-bottom: 2px solid #000;
+    padding-bottom: 8px;
+}
+
+.pxl-categories-list,
+.pxl-attribute-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.pxl-categories-list li,
+.pxl-attribute-list li {
+    margin-bottom: 8px;
+}
+
+.pxl-categories-list label,
+.pxl-attribute-list label {
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+    padding: 5px 0;
+    transition: color 0.2s;
+}
+
+.checkbox-custom {
+    width: 16px;
+    height: 16px;
+    border: 2px solid #ddd;
+    border-radius: 3px;
+    margin-right: 8px;
+    position: relative;
+    transition: all 0.2s;
+}
+
+.pxl-filter__form input[type="checkbox"] {
+    display: none;
+}
+
+.pxl-filter__form input[type="checkbox"]:checked+.checkbox-custom {
+    background: #007cba;
+    border-color: #007cba;
+}
+
+.pxl-filter__form input[type="checkbox"]:checked+.checkbox-custom::after {
+    content: "✓";
+    position: absolute;
+    color: white;
+    font-size: 12px;
+    top: -2px;
+    left: 2px;
+}
+
+.count {
+    color: #666;
+    font-size: 12px;
+    margin-left: auto;
+}
+
+.pxl-price-inputs {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.pxl-price-input {
+    flex: 1;
+}
+
+.pxl-price-input label {
+    display: block;
+    font-size: 12px;
+    color: #666;
+    margin-bottom: 5px;
+}
+
+.pxl-price-input input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.separator {
+    color: #666;
+    font-weight: bold;
+}
+
+.pxl-price-range {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 10px;
+    font-size: 12px;
+    color: #666;
+}
+
+.pxl-filter__actions button,
+.pxl-filter__actions-mobile button {
+    background: #dc3545;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+}
+
+.pxl-filter__actions button:hover {
+    background: #c82333;
+}
+
+.pxl-filter-apply {
+    background: #28a745 !important;
+}
+
+.pxl-filter-apply:hover {
+    background: #218838 !important;
+}
+
+.pxl-filter__actions-mobile {
+    display: none;
+    grid-column: 1 / -1;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.pxl-filter__actions-mobile button {
+    flex: 1;
+    padding: 12px;
+}
+
+/* Pagination */
+.woocommerce-pagination {
+    margin: 30px 0;
+    text-align: center;
+}
+
+.woocommerce-pagination a,
+.woocommerce-pagination span {
+    display: inline-block;
+    padding: 10px 15px;
+    margin: 0 2px;
+    border: 1px solid #ddd;
+    background: white;
+    color: #333;
+    text-decoration: none;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.woocommerce-pagination a:hover,
+.woocommerce-pagination .current {
+    background: #000;
+    color: white;
+    border-color: #000;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .pxl-filter__toggle {
+        display: flex;
+    }
+
+    .pxl-filter__content {
+        display: none;
+        grid-template-columns: 1fr;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        right: 0;
+        z-index: 999;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+
+    .pxl-filter__actions-mobile {
+        display: flex;
+    }
+
+    .pxl-filter__header .pxl-filter__actions {
+        display: none;
+    }
+}

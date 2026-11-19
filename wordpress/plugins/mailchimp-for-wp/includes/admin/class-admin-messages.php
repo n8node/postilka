@@ -1,0 +1,96 @@
+<?php
+
+defined('ABSPATH') || exit;
+
+
+/**
+ * Class MC4WP_Admin_Messages
+ *
+ * @ignore
+ * @since 3.0
+ */
+class MC4WP_Admin_Messages
+{
+    /**
+     * @var array
+     */
+    protected $bag;
+
+    /**
+     * @var bool
+     */
+    protected $dirty = false;
+
+    /**
+     * Add hooks
+     */
+    public function add_hooks()
+    {
+        add_action('admin_notices', [ $this, 'show' ]);
+        register_shutdown_function([ $this, 'save' ]);
+    }
+
+    private function load()
+    {
+        if ($this->bag === null) {
+            $this->bag = get_option('mc4wp_flash_messages', []);
+        }
+    }
+
+    // empty flash bag
+    private function reset()
+    {
+        $this->bag   = [];
+        $this->dirty = true;
+    }
+
+    /**
+     * Flash a message (shows on next pageload)
+     *
+     * @param string $message
+     * @param string $type
+     */
+    public function flash($message, $type = 'success')
+    {
+        $this->load();
+        $this->bag[] = [
+            'text' => $message,
+            'type' => $type,
+        ];
+        $this->dirty = true;
+    }
+
+
+
+    /**
+     * Show queued flash messages
+     */
+    public function show()
+    {
+        $this->load();
+
+        $allowed_html = [
+            'a' => [ 'href' => [] ],
+            'br' => [],
+            'strong' => [],
+        ];
+
+        foreach ($this->bag as $message) {
+            printf('<div class="notice notice-%s is-dismissible"><p>%s</p></div>', esc_attr($message['type']), wp_kses($message['text'], $allowed_html));
+        }
+
+        $this->reset();
+    }
+
+    /**
+     * Save queued messages
+     *
+     * @hooked `shutdown`
+     */
+    public function save()
+    {
+        if ($this->dirty) {
+            update_option('mc4wp_flash_messages', $this->bag, false);
+        }
+    }
+}

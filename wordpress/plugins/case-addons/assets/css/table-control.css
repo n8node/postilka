@@ -1,0 +1,222 @@
+.elementor-control-type-pxl_table .elementor-control-field {
+    flex-direction: column;
+    align-items: start;
+    gap: 10px;
+}
+
+
+.pxl-table-wrapper {
+    width: 100%;
+    overflow: auto;
+    max-height: 500px;
+    margin-bottom: 10px;
+    border: 1px solid #d5dadf;
+    border-radius: 3px;
+    background-color: #fff;
+}
+
+.pxl-table-control {
+    width: 100%;
+    border-collapse: collapse;
+    background-color: #fff;
+}
+
+.pxl-table-control thead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.pxl-table-control thead th {
+    background-color: #f7f7f7;
+    border-bottom: 1px solid #d5dadf;
+    padding: 8px;
+    position: relative;
+    font-weight: 500;
+    color: #556068;
+    text-align: left;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.pxl-table-control thead th span {
+    margin-right: 25px;
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.pxl-table-control td,
+.pxl-table-control tbody th {
+    border: 1px solid #e6e9ec;
+    padding: 0;
+    vertical-align: top;
+    background-color: #fff;
+    position: relative;
+}
+
+.pxl-table-cell-container {
+    position: relative;
+    padding: 4px;
+    min-height: 30px;
+}
+
+.pxl-table-cell-input {
+    width: 100%;
+    resize: none;
+    border: none;
+    background: transparent;
+    font-size: 12px;
+    line-height: 1.5;
+    padding: 0;
+    margin: 0;
+    overflow: hidden;
+    color: #495157;
+    min-height: 22px;
+}
+
+.pxl-table-cell-input:focus {
+    outline: none;
+    background-color: #f7f7f7;
+}
+
+.pxl-cell-focused {
+    border: 1px solid #2271b1 !important;
+    box-shadow: 0 0 4px rgba(34, 113, 177, 0.3);
+    z-index: 5;
+}
+
+.pxl-table-add-row-wrapper {
+    padding: 10px;
+    text-align: center;
+    background-color: #f7f7f7;
+    border-top: 1px solid #d5dadf;
+}
+
+.pxl-table-add-row {
+    padding: 8px 12px !important;
+    font-size: 11px !important;
+}
+
+.pxl-table-col-delete,
+.pxl-table-row-delete {
+    position: absolute;
+    right: 5px;
+    top: 50%;
+    transform: translateY(-50%);
+    border: none;
+    background: none;
+    color: #a4afb7;
+    font-size: 12px;
+    padding: 0;
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+    opacity: 0.5;
+    transition: opacity 0.2s;
+    z-index: 5;
+}
+
+.pxl-table-col-delete {
+    right: 5px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.pxl-table-row-delete {
+    right: 5px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.pxl-table-col-delete:hover,
+.pxl-table-row-delete:hover {
+    opacity: 1;
+    color: #d72b3f;
+}
+
+.pxl-table-col-actions,
+.pxl-table-row-actions {
+    width: 30px;
+    min-width: 30px;
+    position: relative;
+    padding: 0;
+    vertical-align: middle;
+    text-align: center;
+    background-color: #f7f7f7;
+    border: 1px solid #e6e9ec;
+}
+
+.pxl-table-add-col {
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-height: 30px;
+    padding: 8px 0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #6d7882;
+    transition: color 0.2s;
+}
+
+.pxl-table-add-col:hover {
+    color: #2271b1;
+}
+
+.pxl-table-control tbody tr:first-child th {
+    background-color: #f7f7f7;
+    font-weight: 500;
+}
+
+.pxl-table-loading {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(255, 255, 255, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+}
+
+.pxl-table-loading-spinner {
+    width: 30px;
+    height: 30px;
+    border: 3px solid #f3f3f3;
+    border-top: 3px solid #3498db;
+    border-radius: 50%;
+    animation: pxl-spin 1s linear infinite;
+}
+
+.pxl-table-cell-input::placeholder {
+    color: #c5c5c5;
+}
+
+.pxl-table-control th,
+.pxl-table-control td {
+    min-width: 100px;
+}
+
+.pxl-table-debug {
+    margin-top: 10px;
+    padding: 8px;
+    background: #f7f7f7;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    font-size: 11px;
+    color: #666;
+}
+
+@keyframes pxl-spin {
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
+}

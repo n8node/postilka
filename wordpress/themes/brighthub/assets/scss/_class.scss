@@ -1,0 +1,113 @@
+.fs-body{
+    font-size: 16px;
+    font-weight: 400;
+    line-height: 1.35;
+    letter-spacing: -0.32px;
+}
+
+.fs-8{
+    font-size: 8px;
+    font-style: normal;
+    font-weight: 500;
+    line-height: 1.2;
+}
+
+.fs-10{
+    font-size: 10px;
+    font-weight: 500;
+    line-height: 1.4;
+    letter-spacing: -0.2px;
+}
+
+.fs-12{
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.2;
+    letter-spacing: -0.24px;
+}
+
+.fs-14{
+    font-size: 14px;
+    font-weight: 500;
+    line-height: 1.3;
+    letter-spacing: -0.28px;
+}
+
+.fs-18{
+    font-size: 18px;
+    font-weight: 500;
+    line-height: 1.35;
+    letter-spacing: -0.36px;
+}
+
+.fs-20{
+    font-size: 20px;
+    font-weight: 500;
+    line-height: 1.2;
+    letter-spacing: -0.8px;
+}
+
+.flex-center{
+    display: flex;
+    justify-content: center;
+}
+
+.flex-center__col{
+    display: flex;
+    justify-content: center;
+}
+
+.flex-middle{
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.abs-center__top{
+    position: absolute;
+    top: 50%;
+    transform: translate(0, -50%);
+}
+
+.abs-center__left{
+    position: absolute;
+    left: 50%;
+    transform: translate(-50%, 0);
+}
+
+.abs-middle{
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.pxl-hide{
+    display: none;
+}
+
+.pxl-star {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    top: 0;
+    left: 0;
+    display:block;
+    opacity: 0;
+    transition: opacity 1s ease;
+    .dot{
+        position: absolute;
+        width: 2px;
+        height: 2px;
+        background: #ffffff;
+        border-radius: 50%;
+        box-shadow: 0 0 3px rgba(255, 255, 255, 0.5);
+        transition: opacity 0.5s ease;
+    }
+}
+
+.pxl-hide-xl{
+    @media (min-width: 1201px) {
+        display: none;
+    }
+}

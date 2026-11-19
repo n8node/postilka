@@ -1,0 +1,16 @@
+.pxl-grid__career-1{
+    position: relative;
+    .pxl-grid__item-inner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px;
+        border-radius: 16px;
+        .pxl-grid__item-left{
+            display: flex;  
+            align-items: center;
+            gap: 40px;
+            .pxl-grid__item-featured
+        }
+    }
+}

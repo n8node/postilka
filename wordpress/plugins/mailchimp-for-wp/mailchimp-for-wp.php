@@ -1,0 +1,115 @@
+<?php
+
+/*
+Plugin Name: MC4WP: Mailchimp for WordPress
+Plugin URI: https://www.mc4wp.com/#utm_source=wp-plugin&utm_medium=mailchimp-for-wp&utm_campaign=plugins-page
+Description: Mailchimp for WordPress by ibericode. Adds various highly effective sign-up methods to your site.
+Version: 4.15.0
+Author: ibericode
+Author URI: https://www.ibericode.com/
+Text Domain: mailchimp-for-wp
+Domain Path: /languages
+License: GPL-3.0-or-later
+License URI: http://www.gnu.org/licenses/gpl-3.0.html
+
+Mailchimp for WordPress
+Copyright (C) 2012 - 2026, Danny van Kooten, hi@dannyvankooten.com
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+phpcs:disable:PSR1.Files.SideEffects.FoundWithSymbols
+ */
+
+// Prevent direct file access
+defined('ABSPATH') || exit;
+
+// bootstrap main plugin
+add_action('plugins_loaded', function () {
+    global $mc4wp;
+
+    // don't run if Mailchimp for WP Pro 2.x is activated
+    // don't run if PHP version is lower than 7.4.0
+    if (defined('MC4WP_VERSION') || PHP_VERSION_ID < 70400) {
+        return;
+    }
+
+    // bootstrap the core plugin
+    define('MC4WP_VERSION', '4.15.0');
+    define('MC4WP_PLUGIN_DIR', __DIR__);
+    define('MC4WP_PLUGIN_FILE', __FILE__);
+
+    require __DIR__ . '/autoload.php';
+    require __DIR__ . '/includes/default-actions.php';
+    require __DIR__ . '/includes/default-filters.php';
+
+    /**
+     * @var MC4WP_Container $mc4wp
+     */
+    $mc4wp        = mc4wp_get_container();
+    $mc4wp['api'] = 'mc4wp_get_api_v3';
+    $mc4wp['log'] = 'mc4wp_get_debug_log';
+
+    // forms
+    $form_manager = new MC4WP_Form_Manager();
+    $form_manager->add_hooks();
+    $mc4wp['forms'] = $form_manager;
+
+    // campaign archive
+    (new MC4WP_Campaign_Archive())->add_hooks();
+
+    // integration core
+    $integration_manager = new MC4WP_Integration_Manager();
+    $integration_manager->add_hooks();
+    $mc4wp['integrations'] = $integration_manager;
+
+    $opts = mc4wp_get_options();
+
+    // Initialize admin section of plugin
+    if (is_admin()) {
+        $admin_tools = new MC4WP_Admin_Tools();
+
+        if (wp_doing_ajax()) {
+            $ajax = new MC4WP_Admin_Ajax($admin_tools);
+            $ajax->add_hooks();
+        } else {
+            $messages                = new MC4WP_Admin_Messages();
+            $mc4wp['admin.messages'] = $messages;
+
+            (new MC4WP_Admin($admin_tools, $messages))->add_hooks();
+            (new MC4WP_Forms_Admin($messages))->add_hooks();
+            (new MC4WP_Integration_Admin($integration_manager, $messages))->add_hooks();
+        }
+    } else {
+        // Initialize tracking pixel on frontend
+        if (! empty($opts['tracking_pixel_enabled']) && !empty($opts['tracking_pixel_site_id'])) {
+            (new MC4WP_Tracking_Pixel($opts['tracking_pixel_site_id']))->add_hooks();
+        }
+    }
+
+    // bootstrap integrations
+    require __DIR__ . '/integrations/bootstrap.php';
+}, 8);
+
+// schedule the action hook to refresh the stored Mailchimp lists on a daily basis
+register_activation_hook(__FILE__, function () {
+    $timezone = wp_timezone();
+    $datetime = new DateTimeImmutable('tomorrow', $timezone);
+    $datetime = $datetime->setTime(wp_rand(0, 6), wp_rand(0, 59));
+    wp_schedule_event($datetime->getTimestamp(), 'daily', 'mc4wp_refresh_mailchimp_lists');
+});
+
+// remove scheduled hook when plugin is deactivated
+register_deactivation_hook(__FILE__, function () {
+    wp_clear_scheduled_hook('mc4wp_refresh_mailchimp_lists');
+});

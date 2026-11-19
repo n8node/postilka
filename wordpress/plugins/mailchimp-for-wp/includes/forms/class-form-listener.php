@@ -1,0 +1,321 @@
+<?php
+
+defined('ABSPATH') || exit;
+
+
+/**
+ * Class MC4WP_Form_Listener
+ *
+ * @since 3.0
+ * @access private
+ */
+class MC4WP_Form_Listener
+{
+    /**
+     * @var MC4WP_Form The submitted form instance
+     */
+    public $submitted_form;
+
+    public function add_hooks()
+    {
+        add_action('init', [$this, 'action_init'], 10, 0);
+    }
+
+    public function action_init()
+    {
+        // phpcs:ignore WordPress.Security.NonceVerification.Missing -- forms are for logged-out visitors, explicitly not using a nonce here
+        $form_data = $_POST;
+        if (empty($form_data['_mc4wp_form_id'])) {
+            return;
+        }
+
+        // get form instance
+        try {
+            $form_id = (int) $form_data['_mc4wp_form_id'];
+            $form    = mc4wp_get_form($form_id);
+
+            // only accept submissions on published forms
+            if ($form->status !== 'publish') {
+                return;
+            }
+        } catch (Exception $e) {
+            return;
+        }
+
+
+        // sanitize request data
+        $request_data = mc4wp_sanitize_deep($form_data);
+
+        // bind request to form & validate
+        $form->handle_request($request_data);
+        $form->validate();
+
+        // store submitted form
+        $this->submitted_form = $form;
+
+        // did form have errors?
+        if (! $form->has_errors()) {
+            switch ($form->get_action()) {
+                case 'subscribe':
+                    $this->process_subscribe_form($form);
+                    break;
+
+                case 'unsubscribe':
+                    $this->process_unsubscribe_form($form);
+                    break;
+            }
+        } else {
+            foreach ($form->errors as $error_code) {
+                $form->add_notice($form->get_message($error_code), 'error');
+            }
+
+            $this->get_log()->info(sprintf('Form %d > Submitted with errors: %s', $form->ID, join(', ', $form->errors)));
+        }
+
+        $this->respond($form);
+    }
+
+    /**
+     * Process a subscribe form.
+     *
+     * @param MC4WP_Form $form
+     */
+    public function process_subscribe_form(MC4WP_Form $form): void
+    {
+        $result     = false;
+        $mailchimp  = new MC4WP_MailChimp();
+        $email_type = $form->get_email_type();
+        $data       = $form->get_data();
+        $ip_address = mc4wp_get_request_ip_address();
+
+        /** @var null|MC4WP_MailChimp_Subscriber $subscriber */
+        $subscriber = null;
+
+        // create a map of all lists with list-specific data
+        $mapper = new MC4WP_List_Data_Mapper($data, $form->get_lists());
+
+        /** @var MC4WP_MailChimp_Subscriber[] $map */
+        $map = $mapper->map();
+
+        // loop through lists
+        foreach ($map as $list_id => $subscriber) {
+            $subscriber->status     = $form->settings['double_optin'] ? 'pending' : 'subscribed';
+            $subscriber->email_type = $email_type;
+            $subscriber->ip_signup  = $ip_address;
+            $subscriber->tags       = $form->get_subscriber_tags();
+
+            /**
+             * Filters subscriber data before it is sent to Mailchimp. Fires for both form & integration requests.
+             *
+             * @param MC4WP_MailChimp_Subscriber $subscriber
+             * @param string $list_id ID of the Mailchimp list this subscriber will be added/updated in
+             */
+            $subscriber = apply_filters('mc4wp_subscriber_data', $subscriber, $list_id);
+            if (! $subscriber instanceof MC4WP_MailChimp_Subscriber) {
+                continue;
+            }
+
+            /**
+             * Filters subscriber data before it is sent to Mailchimp. Only fires for form requests.
+             *
+             * @param MC4WP_MailChimp_Subscriber $subscriber
+             * @param string $list_id ID of the Mailchimp list this subscriber will be added/updated in
+             */
+            $subscriber = apply_filters('mc4wp_form_subscriber_data', $subscriber, $list_id);
+            if (! $subscriber instanceof MC4WP_MailChimp_Subscriber) {
+                continue;
+            }
+
+            // send a subscribe request to Mailchimp for each list
+            $result = $mailchimp->list_subscribe($list_id, $subscriber->email_address, $subscriber->to_array(), $form->settings['update_existing'], $form->settings['replace_interests'], $form->settings['update_only_empty_fields']);
+        }
+
+        $log = $this->get_log();
+
+        // do stuff on failure
+        if (! is_object($result) || empty($result->id)) {
+            $error_code    = $mailchimp->get_error_code();
+            $error_message = $mailchimp->get_error_message();
+
+            if ((int) $mailchimp->get_error_code() === 214) {
+                $form->add_error('already_subscribed');
+                $form->add_notice($form->messages['already_subscribed'], 'notice');
+                $log->warning(sprintf('Form %d > %s is already subscribed to the selected list(s)', $form->ID, $data['EMAIL']));
+            } else {
+                $form->add_error($error_code);
+                $form->add_notice($form->messages['error'], 'error');
+                $log->error(sprintf('Form %d > Mailchimp API error: %s %s', $form->ID, $error_code, $error_message));
+
+                /**
+                 * Fire action hook so API errors can be hooked into.
+                 *
+                 * @param MC4WP_Form $form
+                 * @param string $error_message
+                 */
+                do_action('mc4wp_form_api_error', $form, $error_message);
+            }
+
+            // bail
+            return;
+        }
+
+        // Success! Did we update or newly subscribe?
+        if ($result->status === 'subscribed' && $result->was_already_on_list) {
+            $form->last_event = 'updated_subscriber';
+            $form->add_notice($form->messages['updated'], 'success');
+            $log->info(sprintf('Form %d > Successfully updated %s', $form->ID, $data['EMAIL']));
+
+            /**
+             * Fires right after a form was used to update an existing subscriber.
+             *
+             * @since 3.0
+             *
+             * @param MC4WP_Form $form Instance of the submitted form
+             * @param string $email
+             * @param array $data
+             */
+            do_action('mc4wp_form_updated_subscriber', $form, $subscriber->email_address, $data);
+        } else {
+            $form->last_event = 'subscribed';
+            $form->add_notice($form->messages['subscribed'], 'success');
+            $log->info(sprintf('Form %d > Successfully subscribed %s', $form->ID, $data['EMAIL']));
+
+            /**
+             * Fires right after a form was used to add a new subscriber.
+             *
+             * @since 4.8.13
+             *
+             * @param MC4WP_Form $form Instance of the submitted form
+             * @param string $email
+             * @param array $data
+             */
+            do_action('mc4wp_form_added_subscriber', $form, $subscriber->email_address, $data);
+        }
+
+        /**
+         * Fires right after a form was used to add a new subscriber (or update an existing one).
+         *
+         * @since 3.0
+         *
+         * @param MC4WP_Form $form Instance of the submitted form
+         * @param string $email
+         * @param array $data
+         * @param MC4WP_MailChimp_Subscriber[] $subscriber
+         */
+        do_action('mc4wp_form_subscribed', $form, $subscriber->email_address, $data, $map);
+    }
+
+    /**
+     * @param MC4WP_Form $form
+     */
+    public function process_unsubscribe_form(MC4WP_Form $form): void
+    {
+        $form->add_error('unauthorized');
+        $this->get_log()->warning(
+            sprintf('Form %d > Unsubscribe forms used but this feature is no longer supported because of security implications', $form->ID)
+        );
+        _deprecated_function('MC4WP_Form_Listener::process_unsubscribe_form', '4.11.2', 'Unsubscribe forms are no longer supported');
+
+        // This feature was removed in version 4.11.2 and unsubscribe forms are now no longer functional
+        // We log the message here to give site admins a chance to remove the forms from their site
+        // and we don't want to silently turn them into subscribe forms
+        // TODO (Mar 2027): Remove this method entirely in a future major release, along with the "unsubscribe" action and related code in the MC4WP_Form class.
+    }
+
+    /**
+     * @param MC4WP_Form $form
+     */
+    public function respond(MC4WP_Form $form)
+    {
+        $success = ! $form->has_errors();
+
+        if ($success) {
+
+            /**
+             * Fires right after a form is submitted without any errors (success).
+             *
+             * @since 3.0
+             *
+             * @param MC4WP_Form $form Instance of the submitted form
+             */
+            do_action('mc4wp_form_success', $form);
+        } else {
+
+            /**
+             * Fires right after a form is submitted with errors.
+             *
+             * @since 3.0
+             *
+             * @param MC4WP_Form $form The submitted form instance.
+             */
+            do_action('mc4wp_form_error', $form);
+
+            // fire a dedicated event for each error
+            foreach ($form->errors as $error) {
+
+                /**
+                 * Fires right after a form was submitted with errors.
+                 *
+                 * The dynamic portion of the hook, `$error`, refers to the error that occurred.
+                 *
+                 * Default errors give us the following possible hooks:
+                 *
+                 * - mc4wp_form_error_error                     General errors
+                 * - mc4wp_form_error_spam
+                 * - mc4wp_form_error_invalid_email             Invalid email address
+                 * - mc4wp_form_error_already_subscribed        Email is already on selected list(s)
+                 * - mc4wp_form_error_required_field_missing    One or more required fields are missing
+                 * - mc4wp_form_error_no_lists_selected         No Mailchimp lists were selected
+                 *
+                 * @since 3.0
+                 *
+                 * @param   MC4WP_Form     $form        The form instance of the submitted form.
+                 */
+                do_action('mc4wp_form_error_' . $error, $form);
+            }
+        }
+
+        /**
+         * Fires right before responding to the form request.
+         *
+         * @since 3.0
+         *
+         * @param MC4WP_Form $form Instance of the submitted form.
+         */
+        do_action('mc4wp_form_respond', $form);
+
+        // do stuff on success (if form was submitted over plain HTTP, not for AJAX or REST requests)
+        if ($success && ! $this->request_wants_json()) {
+            $redirect_url = $form->get_redirect_url();
+            if (! empty($redirect_url)) {
+                wp_redirect($redirect_url);
+                exit;
+            }
+        }
+    }
+
+    private function request_wants_json()
+    {
+        if (isset($_SERVER['HTTP_ACCEPT']) && false !== strpos(wp_unslash($_SERVER['HTTP_ACCEPT']), 'application/json')) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * @return MC4WP_API_V3
+     */
+    protected function get_api()
+    {
+        return mc4wp_get_service('api');
+    }
+
+    /**
+     * @return MC4WP_Debug_Log
+     */
+    protected function get_log()
+    {
+        return mc4wp_get_service('log');
+    }
+}

@@ -146,9 +146,9 @@ services:
       # Same gost hop as Telegram (host :8889 → TELEGRAM_UPSTREAM). Used only by Hub mu-plugin.
       HUB_OUTBOUND_PROXY: http://host.docker.internal:8889
     volumes:
-      - ./wordpress/plugins/postilka-voxel:/var/www/html/wp-content/plugins/postilka-voxel
-      - ./wordpress/plugins/postilka-studio-examples:/var/www/html/wp-content/plugins/postilka-studio-examples
+      - ./wordpress/plugins:/var/www/html/wp-content/plugins
       - ./wordpress/mu-plugins:/var/www/html/wp-content/mu-plugins
+      - ./wordpress/themes/brighthub:/var/www/html/wp-content/themes/brighthub
     logging:
       driver: json-file
       options:

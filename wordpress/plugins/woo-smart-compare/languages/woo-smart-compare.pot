@@ -1,0 +1,1260 @@
+# Copyright (C) 2026 WPClever
+# This file is distributed under the GPLv2 or later.
+msgid ""
+msgstr ""
+"Project-Id-Version: WPC Smart Compare for WooCommerce 6.7.1\n"
+"Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/woo-smart-compare\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"POT-Creation-Date: 2026-11-07T04:38:37+00:00\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"X-Generator: WP-CLI 2.12.0\n"
+"X-Domain: woo-smart-compare\n"
+
+#. Plugin Name of the plugin
+#: wpc-smart-compare.php
+msgid "WPC Smart Compare for WooCommerce"
+msgstr ""
+
+#. Plugin URI of the plugin
+#: wpc-smart-compare.php
+msgid "https://wpclever.net/"
+msgstr ""
+
+#. Description of the plugin
+#: wpc-smart-compare.php
+msgid "Smart products compare for WooCommerce."
+msgstr ""
+
+#. Author of the plugin
+#: wpc-smart-compare.php
+msgid "WPClever"
+msgstr ""
+
+#. Author URI of the plugin
+#: wpc-smart-compare.php
+msgid "https://wpclever.net"
+msgstr ""
+
+#: wpc-smart-compare.php:164
+#: wpc-smart-compare.php:1950
+#: wpc-smart-compare.php:1956
+msgid "Image"
+msgstr ""
+
+#: wpc-smart-compare.php:165
+#: wpc-smart-compare.php:1961
+#: wpc-smart-compare.php:1967
+msgid "SKU"
+msgstr ""
+
+#: wpc-smart-compare.php:166
+#: wpc-smart-compare.php:1972
+#: wpc-smart-compare.php:1978
+msgid "Rating"
+msgstr ""
+
+#: wpc-smart-compare.php:167
+#: wpc-smart-compare.php:1983
+#: wpc-smart-compare.php:1989
+msgid "Price"
+msgstr ""
+
+#: wpc-smart-compare.php:168
+#: wpc-smart-compare.php:1994
+#: wpc-smart-compare.php:2000
+msgid "Stock"
+msgstr ""
+
+#: wpc-smart-compare.php:169
+#: wpc-smart-compare.php:2005
+#: wpc-smart-compare.php:2011
+msgid "Availability"
+msgstr ""
+
+#: wpc-smart-compare.php:170
+#: wpc-smart-compare.php:2016
+#: wpc-smart-compare.php:2022
+msgid "Add to cart"
+msgstr ""
+
+#: wpc-smart-compare.php:171
+#: wpc-smart-compare.php:2027
+#: wpc-smart-compare.php:2033
+msgid "Description"
+msgstr ""
+
+#: wpc-smart-compare.php:172
+#: wpc-smart-compare.php:2038
+#: wpc-smart-compare.php:2044
+msgid "Content"
+msgstr ""
+
+#: wpc-smart-compare.php:173
+#: wpc-smart-compare.php:2049
+#: wpc-smart-compare.php:2055
+msgid "Weight"
+msgstr ""
+
+#: wpc-smart-compare.php:174
+#: wpc-smart-compare.php:2060
+#: wpc-smart-compare.php:2066
+msgid "Dimensions"
+msgstr ""
+
+#: wpc-smart-compare.php:175
+#: wpc-smart-compare.php:2071
+#: wpc-smart-compare.php:2077
+msgid "Additional information"
+msgstr ""
+
+#: wpc-smart-compare.php:311
+#: wpc-smart-compare.php:1511
+msgid "{name} has been added to Compare list."
+msgstr ""
+
+#: wpc-smart-compare.php:312
+#: wpc-smart-compare.php:1523
+msgid "{name} has been removed from the Compare list."
+msgstr ""
+
+#: wpc-smart-compare.php:313
+#: wpc-smart-compare.php:1535
+msgid "{name} is already in the Compare list."
+msgstr ""
+
+#: wpc-smart-compare.php:326
+#: wpc-smart-compare.php:1804
+msgid "Do you want to remove all products from the compare?"
+msgstr ""
+
+#: wpc-smart-compare.php:327
+#: wpc-smart-compare.php:1490
+msgid "You can add a maximum of {limit} products to the comparison table."
+msgstr ""
+
+#. translators: link
+#: wpc-smart-compare.php:328
+#: wpc-smart-compare.php:1860
+#, php-format
+msgid "Share link %s was copied to clipboard!"
+msgstr ""
+
+#. translators: link
+#: wpc-smart-compare.php:329
+#: wpc-smart-compare.php:330
+#: wpc-smart-compare.php:1556
+#: wpc-smart-compare.php:1567
+#: wpc-smart-compare.php:1673
+#: wpc-smart-compare.php:1737
+#: wpc-smart-compare.php:2097
+#: wpc-smart-compare.php:2818
+#: wpc-smart-compare.php:2819
+#: wpc-smart-compare.php:2860
+#: wpc-smart-compare.php:3050
+#: wpc-smart-compare.php:3057
+#: wpc-smart-compare.php:3140
+#: wpc-smart-compare.php:3156
+msgid "Compare"
+msgstr ""
+
+#: wpc-smart-compare.php:369
+#: wpc-smart-compare.php:429
+#: wpc-smart-compare.php:462
+#: wpc-smart-compare.php:471
+#: wpc-smart-compare.php:1614
+#: wpc-smart-compare.php:1620
+#: wpc-smart-compare.php:2473
+msgid "Settings"
+msgstr ""
+
+#: wpc-smart-compare.php:370
+#: wpc-smart-compare.php:480
+msgid "Premium Version"
+msgstr ""
+
+#: wpc-smart-compare.php:386
+msgid "Community support"
+msgstr ""
+
+#: wpc-smart-compare.php:419
+#: wpc-smart-compare.php:451
+msgid "WPC Smart Compare"
+msgstr ""
+
+#: wpc-smart-compare.php:419
+msgid "Smart Compare"
+msgstr ""
+
+#: wpc-smart-compare.php:431
+#: wpc-smart-compare.php:475
+msgid "Localization"
+msgstr ""
+
+#: wpc-smart-compare.php:433
+#: wpc-smart-compare.php:453
+msgid "Premium"
+msgstr ""
+
+#: wpc-smart-compare.php:457
+msgid "An ultimate compare solution for WooCommerce."
+msgstr ""
+
+#: wpc-smart-compare.php:486
+msgid "Support"
+msgstr ""
+
+#: wpc-smart-compare.php:491
+msgid "Essential Kit"
+msgstr ""
+
+#: wpc-smart-compare.php:500
+msgid "Settings updated."
+msgstr ""
+
+#: wpc-smart-compare.php:549
+#: wpc-smart-compare.php:1468
+msgid "General"
+msgstr ""
+
+#: wpc-smart-compare.php:550
+msgid "General settings for product comparison."
+msgstr ""
+
+#: wpc-smart-compare.php:555
+msgid "Disable for unauthenticated users"
+msgstr ""
+
+#: wpc-smart-compare.php:558
+#: wpc-smart-compare.php:577
+#: wpc-smart-compare.php:587
+#: wpc-smart-compare.php:597
+#: wpc-smart-compare.php:630
+#: wpc-smart-compare.php:824
+#: wpc-smart-compare.php:995
+#: wpc-smart-compare.php:1025
+#: wpc-smart-compare.php:1035
+#: wpc-smart-compare.php:1045
+#: wpc-smart-compare.php:1055
+#: wpc-smart-compare.php:1065
+#: wpc-smart-compare.php:1094
+#: wpc-smart-compare.php:1120
+#: wpc-smart-compare.php:1130
+#: wpc-smart-compare.php:1140
+#: wpc-smart-compare.php:1161
+#: wpc-smart-compare.php:1213
+#: wpc-smart-compare.php:1223
+#: wpc-smart-compare.php:1241
+#: wpc-smart-compare.php:1414
+msgid "Yes"
+msgstr ""
+
+#: wpc-smart-compare.php:559
+#: wpc-smart-compare.php:578
+#: wpc-smart-compare.php:588
+#: wpc-smart-compare.php:598
+#: wpc-smart-compare.php:631
+#: wpc-smart-compare.php:663
+#: wpc-smart-compare.php:825
+#: wpc-smart-compare.php:985
+#: wpc-smart-compare.php:996
+#: wpc-smart-compare.php:1026
+#: wpc-smart-compare.php:1036
+#: wpc-smart-compare.php:1046
+#: wpc-smart-compare.php:1056
+#: wpc-smart-compare.php:1066
+#: wpc-smart-compare.php:1095
+#: wpc-smart-compare.php:1121
+#: wpc-smart-compare.php:1131
+#: wpc-smart-compare.php:1141
+#: wpc-smart-compare.php:1162
+#: wpc-smart-compare.php:1215
+#: wpc-smart-compare.php:1224
+#: wpc-smart-compare.php:1242
+#: wpc-smart-compare.php:1415
+msgid "No"
+msgstr ""
+
+#: wpc-smart-compare.php:564
+msgid "Product adding"
+msgstr ""
+
+#: wpc-smart-compare.php:567
+msgid "Prepend"
+msgstr ""
+
+#: wpc-smart-compare.php:568
+msgid "Append"
+msgstr ""
+
+#: wpc-smart-compare.php:570
+msgid "The new product will be added to the first or last of the list?"
+msgstr ""
+
+#: wpc-smart-compare.php:574
+msgid "Hide on cart & checkout page"
+msgstr ""
+
+#: wpc-smart-compare.php:580
+msgid "Hide the comparison table and comparison bar on the cart & checkout page?"
+msgstr ""
+
+#: wpc-smart-compare.php:584
+msgid "Hide if empty"
+msgstr ""
+
+#: wpc-smart-compare.php:590
+msgid "Hide the comparison table and comparison bar if haven't any product."
+msgstr ""
+
+#: wpc-smart-compare.php:594
+msgid "Compare variations"
+msgstr ""
+
+#: wpc-smart-compare.php:600
+msgid "Compare selected variation instead of the main variable product."
+msgstr ""
+
+#: wpc-smart-compare.php:604
+msgid "Limit"
+msgstr ""
+
+#: wpc-smart-compare.php:611
+msgid "The maximum of products can be added to the comparison table."
+msgstr ""
+
+#: wpc-smart-compare.php:615
+msgid "Comparison page"
+msgstr ""
+
+#: wpc-smart-compare.php:620
+msgid "Choose a page"
+msgstr ""
+
+#. translators: shortcode
+#: wpc-smart-compare.php:623
+#, php-format
+msgid "Add shortcode %s to display the comparison table on this page."
+msgstr ""
+
+#: wpc-smart-compare.php:627
+msgid "Reload the count"
+msgstr ""
+
+#: wpc-smart-compare.php:633
+msgid "Reload the count when opening the page?"
+msgstr ""
+
+#: wpc-smart-compare.php:640
+#: wpc-smart-compare.php:1544
+msgid "Compare button"
+msgstr ""
+
+#: wpc-smart-compare.php:641
+#: wpc-smart-compare.php:1545
+msgid "Settings for the compare button on product list and single product page."
+msgstr ""
+
+#: wpc-smart-compare.php:646
+msgid "Type"
+msgstr ""
+
+#: wpc-smart-compare.php:649
+msgid "Button"
+msgstr ""
+
+#: wpc-smart-compare.php:650
+msgid "Link"
+msgstr ""
+
+#: wpc-smart-compare.php:655
+msgid "Use icon"
+msgstr ""
+
+#: wpc-smart-compare.php:660
+msgid "Icon on the left"
+msgstr ""
+
+#: wpc-smart-compare.php:661
+msgid "Icon on the right"
+msgstr ""
+
+#: wpc-smart-compare.php:662
+msgid "Icon only"
+msgstr ""
+
+#: wpc-smart-compare.php:668
+msgid "Normal icon"
+msgstr ""
+
+#: wpc-smart-compare.php:680
+msgid "Added icon"
+msgstr ""
+
+#: wpc-smart-compare.php:692
+#: wpc-smart-compare.php:1400
+msgid "Action"
+msgstr ""
+
+#: wpc-smart-compare.php:697
+msgid "Open comparison bar"
+msgstr ""
+
+#: wpc-smart-compare.php:698
+#: wpc-smart-compare.php:1404
+#: wpc-smart-compare.php:1437
+msgid "Open comparison table"
+msgstr ""
+
+#: wpc-smart-compare.php:699
+#: wpc-smart-compare.php:1405
+#: wpc-smart-compare.php:1438
+msgid "Open comparison sidebar"
+msgstr ""
+
+#: wpc-smart-compare.php:700
+msgid "Show message"
+msgstr ""
+
+#: wpc-smart-compare.php:701
+msgid "Add to compare solely"
+msgstr ""
+
+#: wpc-smart-compare.php:703
+msgid "Action triggered by clicking on the compare button."
+msgstr ""
+
+#: wpc-smart-compare.php:707
+msgid "Message position"
+msgstr ""
+
+#: wpc-smart-compare.php:710
+msgid "right-top"
+msgstr ""
+
+#: wpc-smart-compare.php:711
+msgid "right-bottom"
+msgstr ""
+
+#: wpc-smart-compare.php:712
+msgid "center-top"
+msgstr ""
+
+#: wpc-smart-compare.php:713
+msgid "center-bottom"
+msgstr ""
+
+#: wpc-smart-compare.php:714
+msgid "left-top"
+msgstr ""
+
+#: wpc-smart-compare.php:715
+msgid "left-bottom"
+msgstr ""
+
+#: wpc-smart-compare.php:720
+msgid "Extra class (optional)"
+msgstr ""
+
+#: wpc-smart-compare.php:727
+msgid "Add extra class for action button/link, split by one space."
+msgstr ""
+
+#: wpc-smart-compare.php:731
+msgid "Position on archive page"
+msgstr ""
+
+#: wpc-smart-compare.php:736
+msgid "Above title"
+msgstr ""
+
+#: wpc-smart-compare.php:737
+#: wpc-smart-compare.php:765
+msgid "Under title"
+msgstr ""
+
+#: wpc-smart-compare.php:738
+#: wpc-smart-compare.php:766
+msgid "Under rating"
+msgstr ""
+
+#: wpc-smart-compare.php:739
+msgid "Under price"
+msgstr ""
+
+#: wpc-smart-compare.php:740
+#: wpc-smart-compare.php:768
+msgid "Above add to cart button"
+msgstr ""
+
+#: wpc-smart-compare.php:741
+#: wpc-smart-compare.php:769
+msgid "Under add to cart button"
+msgstr ""
+
+#: wpc-smart-compare.php:742
+#: wpc-smart-compare.php:772
+msgid "None (hide it)"
+msgstr ""
+
+#: wpc-smart-compare.php:760
+msgid "Position on single page"
+msgstr ""
+
+#: wpc-smart-compare.php:767
+msgid "Under excerpt"
+msgstr ""
+
+#: wpc-smart-compare.php:770
+msgid "Under meta"
+msgstr ""
+
+#: wpc-smart-compare.php:771
+msgid "Under sharing"
+msgstr ""
+
+#: wpc-smart-compare.php:790
+msgid "Manual"
+msgstr ""
+
+#. translators: shortcode
+#: wpc-smart-compare.php:792
+#, php-format
+msgid "You can use the shortcode %1$s, e.g. %2$s for the product with ID is 99."
+msgstr ""
+
+#: wpc-smart-compare.php:796
+msgid "Categories"
+msgstr ""
+
+#: wpc-smart-compare.php:812
+msgid "All categories"
+msgstr ""
+
+#: wpc-smart-compare.php:817
+msgid "Only show the compare button for products in selected categories."
+msgstr ""
+
+#: wpc-smart-compare.php:821
+msgid "Remove when clicking again"
+msgstr ""
+
+#: wpc-smart-compare.php:827
+msgid "Do you want to remove product when clicking again?"
+msgstr ""
+
+#: wpc-smart-compare.php:834
+#: wpc-smart-compare.php:1661
+msgid "Comparison sidebar"
+msgstr ""
+
+#: wpc-smart-compare.php:835
+#: wpc-smart-compare.php:1662
+msgid "Settings for the sticky comparison sidebar."
+msgstr ""
+
+#: wpc-smart-compare.php:840
+#: wpc-smart-compare.php:1192
+#: wpc-smart-compare.php:1249
+msgid "Position"
+msgstr ""
+
+#: wpc-smart-compare.php:843
+#: wpc-smart-compare.php:1204
+msgid "Right"
+msgstr ""
+
+#: wpc-smart-compare.php:844
+#: wpc-smart-compare.php:1205
+msgid "Left"
+msgstr ""
+
+#: wpc-smart-compare.php:852
+#: wpc-smart-compare.php:1575
+msgid "Comparison table"
+msgstr ""
+
+#: wpc-smart-compare.php:853
+#: wpc-smart-compare.php:1576
+msgid "Settings for the layout and content of the comparison table."
+msgstr ""
+
+#: wpc-smart-compare.php:858
+#: wpc-smart-compare.php:1268
+#: wpc-smart-compare.php:1933
+msgid "Fields"
+msgstr ""
+
+#: wpc-smart-compare.php:860
+#: wpc-smart-compare.php:1270
+msgid "Choose fields that you want to show on the comparison table. You also can drag/drop to rearrange these fields."
+msgstr ""
+
+#: wpc-smart-compare.php:888
+#: wpc-smart-compare.php:938
+#: wpc-smart-compare.php:1298
+#: wpc-smart-compare.php:1348
+#: wpc-smart-compare.php:3287
+msgid "Custom attribute"
+msgstr ""
+
+#: wpc-smart-compare.php:892
+#: wpc-smart-compare.php:935
+#: wpc-smart-compare.php:1302
+#: wpc-smart-compare.php:1345
+#: wpc-smart-compare.php:3291
+msgid "Custom field"
+msgstr ""
+
+#: wpc-smart-compare.php:896
+#: wpc-smart-compare.php:940
+#: wpc-smart-compare.php:1306
+#: wpc-smart-compare.php:1350
+#: wpc-smart-compare.php:3295
+msgid "Custom text/shortcode"
+msgstr ""
+
+#: wpc-smart-compare.php:910
+#: wpc-smart-compare.php:1320
+msgid "Default"
+msgstr ""
+
+#: wpc-smart-compare.php:921
+#: wpc-smart-compare.php:1331
+msgid "Attributes"
+msgstr ""
+
+#: wpc-smart-compare.php:922
+#: wpc-smart-compare.php:1332
+msgid "All attributes"
+msgstr ""
+
+#: wpc-smart-compare.php:932
+#: wpc-smart-compare.php:1342
+msgid "Custom"
+msgstr ""
+
+#: wpc-smart-compare.php:944
+#: wpc-smart-compare.php:1354
+msgid "+ Add"
+msgstr ""
+
+#: wpc-smart-compare.php:955
+msgid "Image size"
+msgstr ""
+
+#: wpc-smart-compare.php:979
+msgid "Link to individual product"
+msgstr ""
+
+#: wpc-smart-compare.php:982
+msgid "Yes, open in the same tab"
+msgstr ""
+
+#: wpc-smart-compare.php:983
+msgid "Yes, open in the new tab"
+msgstr ""
+
+#: wpc-smart-compare.php:984
+msgid "Yes, open quick view popup"
+msgstr ""
+
+#: wpc-smart-compare.php:992
+msgid "\"Settings\" button"
+msgstr ""
+
+#: wpc-smart-compare.php:998
+msgid "Show the settings popup to customize fields (show/ hide / rearrange)."
+msgstr ""
+
+#: wpc-smart-compare.php:1002
+msgid "Default settings"
+msgstr ""
+
+#: wpc-smart-compare.php:1009
+#: wpc-smart-compare.php:1625
+#: wpc-smart-compare.php:1631
+#: wpc-smart-compare.php:2933
+msgid "Hide similarities"
+msgstr ""
+
+#: wpc-smart-compare.php:1015
+#: wpc-smart-compare.php:1636
+#: wpc-smart-compare.php:1642
+#: wpc-smart-compare.php:2938
+msgid "Highlight differences"
+msgstr ""
+
+#: wpc-smart-compare.php:1018
+msgid "Check the settings that you want to enable by default."
+msgstr ""
+
+#: wpc-smart-compare.php:1022
+msgid "\"Remove\" button"
+msgstr ""
+
+#: wpc-smart-compare.php:1028
+msgid "Show remove button beside product name."
+msgstr ""
+
+#: wpc-smart-compare.php:1032
+msgid "Freeze first column"
+msgstr ""
+
+#: wpc-smart-compare.php:1038
+msgid "Freeze the first column (fields and attributes title) when scrolling horizontally."
+msgstr ""
+
+#: wpc-smart-compare.php:1042
+msgid "Freeze first row"
+msgstr ""
+
+#: wpc-smart-compare.php:1048
+msgid "Freeze the first row (product name) when scrolling vertically."
+msgstr ""
+
+#: wpc-smart-compare.php:1052
+msgid "Use perfect-scrollbar"
+msgstr ""
+
+#. translators: link
+#: wpc-smart-compare.php:1058
+#, php-format
+msgid "Read more about %s"
+msgstr ""
+
+#: wpc-smart-compare.php:1062
+msgid "Close button"
+msgstr ""
+
+#: wpc-smart-compare.php:1068
+msgid "Enable the close button at top-right conner of comparison table?"
+msgstr ""
+
+#: wpc-smart-compare.php:1075
+#: wpc-smart-compare.php:1725
+msgid "Comparison bar"
+msgstr ""
+
+#: wpc-smart-compare.php:1076
+#: wpc-smart-compare.php:1726
+msgid "Settings for the sticky comparison bar showing added products."
+msgstr ""
+
+#: wpc-smart-compare.php:1081
+msgid "Open immediately"
+msgstr ""
+
+#: wpc-smart-compare.php:1087
+msgid "Check it if you want to open the comparison bar immediately on page loaded."
+msgstr ""
+
+#: wpc-smart-compare.php:1091
+msgid "Bubble"
+msgstr ""
+
+#: wpc-smart-compare.php:1097
+msgid "Use the bubble instead of a fully comparison bar."
+msgstr ""
+
+#: wpc-smart-compare.php:1101
+msgid "Smart filter"
+msgstr ""
+
+#: wpc-smart-compare.php:1104
+msgid "None (disable)"
+msgstr ""
+
+#: wpc-smart-compare.php:1113
+msgid "Enable smart filter by selected taxonomy."
+msgstr ""
+
+#: wpc-smart-compare.php:1117
+msgid "\"Print\" button"
+msgstr ""
+
+#: wpc-smart-compare.php:1123
+msgid "Show the print button."
+msgstr ""
+
+#: wpc-smart-compare.php:1127
+msgid "\"Share\" button"
+msgstr ""
+
+#: wpc-smart-compare.php:1133
+msgid "Show the share button."
+msgstr ""
+
+#: wpc-smart-compare.php:1137
+msgid "\"Add more\" button"
+msgstr ""
+
+#: wpc-smart-compare.php:1143
+msgid "Add the button to search product and add to compare list immediately."
+msgstr ""
+
+#: wpc-smart-compare.php:1147
+msgid "\"Add more\" count"
+msgstr ""
+
+#: wpc-smart-compare.php:1154
+msgid "The result count of search function when clicking on \"Add more\" button."
+msgstr ""
+
+#: wpc-smart-compare.php:1158
+msgid "\"Remove all\" button"
+msgstr ""
+
+#: wpc-smart-compare.php:1164
+msgid "Add the button to remove all products from compare immediately."
+msgstr ""
+
+#: wpc-smart-compare.php:1168
+msgid "Background color"
+msgstr ""
+
+#. translators: color
+#: wpc-smart-compare.php:1176
+#, php-format
+msgid "Choose the background color for the comparison bar, default %s"
+msgstr ""
+
+#: wpc-smart-compare.php:1180
+msgid "Button color"
+msgstr ""
+
+#. translators: color
+#: wpc-smart-compare.php:1188
+#, php-format
+msgid "Choose the color for the button on comparison bar, default %s"
+msgstr ""
+
+#: wpc-smart-compare.php:1195
+msgid "Bottom"
+msgstr ""
+
+#: wpc-smart-compare.php:1196
+msgid "Top"
+msgstr ""
+
+#: wpc-smart-compare.php:1201
+msgid "Align"
+msgstr ""
+
+#: wpc-smart-compare.php:1210
+msgid "Click outside to hide"
+msgstr ""
+
+#: wpc-smart-compare.php:1214
+msgid "Yes if empty"
+msgstr ""
+
+#: wpc-smart-compare.php:1220
+msgid "Hide when closed"
+msgstr ""
+
+#: wpc-smart-compare.php:1232
+#: wpc-smart-compare.php:1913
+msgid "Quick comparison table"
+msgstr ""
+
+#: wpc-smart-compare.php:1233
+#: wpc-smart-compare.php:1914
+msgid "Settings for the quick comparison table displayed on single product page."
+msgstr ""
+
+#: wpc-smart-compare.php:1238
+msgid "Enable"
+msgstr ""
+
+#: wpc-smart-compare.php:1252
+msgid "Above related"
+msgstr ""
+
+#: wpc-smart-compare.php:1253
+msgid "Under related"
+msgstr ""
+
+#: wpc-smart-compare.php:1254
+msgid "Replace related"
+msgstr ""
+
+#: wpc-smart-compare.php:1259
+msgid "Label column"
+msgstr ""
+
+#: wpc-smart-compare.php:1262
+msgid "Show"
+msgstr ""
+
+#: wpc-smart-compare.php:1263
+msgid "Hide"
+msgstr ""
+
+#: wpc-smart-compare.php:1368
+#: wpc-smart-compare.php:2085
+msgid "Menu"
+msgstr ""
+
+#: wpc-smart-compare.php:1369
+#: wpc-smart-compare.php:2086
+msgid "Settings for the comparison link/button inside the navigation menu."
+msgstr ""
+
+#: wpc-smart-compare.php:1374
+msgid "Menu(s)"
+msgstr ""
+
+#: wpc-smart-compare.php:1393
+msgid "Haven't any menu yet. Please go to Appearance > Menus to create one."
+msgstr ""
+
+#: wpc-smart-compare.php:1396
+msgid "Choose the menu(s) you want to add the \"compare menu\" at the end."
+msgstr ""
+
+#: wpc-smart-compare.php:1403
+#: wpc-smart-compare.php:1436
+msgid "Open comparison page"
+msgstr ""
+
+#: wpc-smart-compare.php:1407
+msgid "Action when clicking on the \"compare menu\"."
+msgstr ""
+
+#: wpc-smart-compare.php:1411
+msgid "Add Comparison page to My Account"
+msgstr ""
+
+#: wpc-smart-compare.php:1420
+msgid "Custom menu"
+msgstr ""
+
+#: wpc-smart-compare.php:1426
+msgid "button class or id"
+msgstr ""
+
+#. translators: selector
+#: wpc-smart-compare.php:1428
+#, php-format
+msgid "Example %1$s or %2$s"
+msgstr ""
+
+#. translators: selector
+#: wpc-smart-compare.php:1429
+msgid "The class or id of the menu, when clicking on this menu the comparison page or comparison table will be opened."
+msgstr ""
+
+#: wpc-smart-compare.php:1433
+msgid "Custom menu action"
+msgstr ""
+
+#: wpc-smart-compare.php:1440
+msgid "Action when clicking on the \"custom menu\"."
+msgstr ""
+
+#: wpc-smart-compare.php:1450
+#: wpc-smart-compare.php:2108
+msgid "Save Changes"
+msgstr ""
+
+#: wpc-smart-compare.php:1460
+#: wpc-smart-compare.php:2118
+msgid "Import / Export"
+msgstr ""
+
+#: wpc-smart-compare.php:1469
+msgid "Leave blank to use the default text and its equivalent translation in multiple languages."
+msgstr ""
+
+#: wpc-smart-compare.php:1473
+msgid "Need to login"
+msgstr ""
+
+#: wpc-smart-compare.php:1479
+#: wpc-smart-compare.php:2281
+msgid "Please log in to use the product comparison!"
+msgstr ""
+
+#: wpc-smart-compare.php:1484
+msgid "Limit notice"
+msgstr ""
+
+#: wpc-smart-compare.php:1492
+msgid "The notice when reaching the limit. Use {limit} to show the number."
+msgstr ""
+
+#: wpc-smart-compare.php:1499
+msgid "Message"
+msgstr ""
+
+#: wpc-smart-compare.php:1500
+msgid "Settings for the alert messages when interacting with the comparison feature."
+msgstr ""
+
+#: wpc-smart-compare.php:1505
+msgid "Added"
+msgstr ""
+
+#: wpc-smart-compare.php:1513
+#: wpc-smart-compare.php:1525
+#: wpc-smart-compare.php:1537
+msgid "Use {name} for product name."
+msgstr ""
+
+#: wpc-smart-compare.php:1517
+msgid "Removed"
+msgstr ""
+
+#: wpc-smart-compare.php:1529
+msgid "Exists"
+msgstr ""
+
+#: wpc-smart-compare.php:1550
+#: wpc-smart-compare.php:1700
+#: wpc-smart-compare.php:1731
+msgid "Button text"
+msgstr ""
+
+#: wpc-smart-compare.php:1561
+msgid "Button (added) text"
+msgstr ""
+
+#: wpc-smart-compare.php:1581
+#: wpc-smart-compare.php:1689
+#: wpc-smart-compare.php:1695
+#: wpc-smart-compare.php:1776
+#: wpc-smart-compare.php:1782
+#: wpc-smart-compare.php:2223
+#: wpc-smart-compare.php:2256
+msgid "Remove"
+msgstr ""
+
+#: wpc-smart-compare.php:1587
+#: wpc-smart-compare.php:2336
+msgid "remove"
+msgstr ""
+
+#: wpc-smart-compare.php:1592
+#: wpc-smart-compare.php:1598
+#: wpc-smart-compare.php:1678
+#: wpc-smart-compare.php:1684
+#: wpc-smart-compare.php:3005
+#: wpc-smart-compare.php:3060
+msgid "Close"
+msgstr ""
+
+#: wpc-smart-compare.php:1603
+msgid "Empty"
+msgstr ""
+
+#: wpc-smart-compare.php:1609
+#: wpc-smart-compare.php:2452
+#: wpc-smart-compare.php:2575
+#: wpc-smart-compare.php:2735
+msgid "No product is added to the comparison table."
+msgstr ""
+
+#: wpc-smart-compare.php:1647
+msgid "Select fields description"
+msgstr ""
+
+#: wpc-smart-compare.php:1653
+#: wpc-smart-compare.php:2941
+msgid "Select the fields to be shown. Others will be hidden. Drag and drop to rearrange the order."
+msgstr ""
+
+#: wpc-smart-compare.php:1667
+#: wpc-smart-compare.php:1919
+msgid "Heading"
+msgstr ""
+
+#: wpc-smart-compare.php:1706
+#: wpc-smart-compare.php:3064
+msgid "Let's Compare!"
+msgstr ""
+
+#: wpc-smart-compare.php:1711
+#: wpc-smart-compare.php:1717
+#: wpc-smart-compare.php:3065
+msgid "Continue shopping"
+msgstr ""
+
+#: wpc-smart-compare.php:1742
+#: wpc-smart-compare.php:1748
+#: wpc-smart-compare.php:3031
+msgid "Add product"
+msgstr ""
+
+#: wpc-smart-compare.php:1753
+msgid "Search placeholder"
+msgstr ""
+
+#: wpc-smart-compare.php:1759
+#: wpc-smart-compare.php:2910
+msgid "Type any keyword to search..."
+msgstr ""
+
+#: wpc-smart-compare.php:1764
+msgid "No results"
+msgstr ""
+
+#. translators: keyword
+#: wpc-smart-compare.php:1771
+#: wpc-smart-compare.php:2690
+#, php-format
+msgid "No results found for \"%s\""
+msgstr ""
+
+#: wpc-smart-compare.php:1787
+#: wpc-smart-compare.php:1793
+#: wpc-smart-compare.php:2478
+#: wpc-smart-compare.php:3042
+msgid "Remove all"
+msgstr ""
+
+#: wpc-smart-compare.php:1798
+msgid "Remove all confirmation"
+msgstr ""
+
+#: wpc-smart-compare.php:1809
+#: wpc-smart-compare.php:1815
+#: wpc-smart-compare.php:3021
+msgid "Print"
+msgstr ""
+
+#: wpc-smart-compare.php:1820
+#: wpc-smart-compare.php:1826
+#: wpc-smart-compare.php:3026
+msgid "Share"
+msgstr ""
+
+#: wpc-smart-compare.php:1831
+msgid "Share description"
+msgstr ""
+
+#: wpc-smart-compare.php:1837
+#: wpc-smart-compare.php:2724
+msgid "Share link was generated! Now you can copy below link to share."
+msgstr ""
+
+#: wpc-smart-compare.php:1842
+msgid "Share on"
+msgstr ""
+
+#: wpc-smart-compare.php:1848
+#: wpc-smart-compare.php:3364
+msgid "Share on:"
+msgstr ""
+
+#: wpc-smart-compare.php:1853
+msgid "Share link was copied"
+msgstr ""
+
+#: wpc-smart-compare.php:1865
+msgid "Click outside"
+msgstr ""
+
+#: wpc-smart-compare.php:1871
+#: wpc-smart-compare.php:3015
+msgid "Click outside to hide the comparison bar"
+msgstr ""
+
+#. translators: count
+#: wpc-smart-compare.php:1876
+#: wpc-smart-compare.php:1883
+#: wpc-smart-compare.php:3035
+msgid "Filter"
+msgstr ""
+
+#: wpc-smart-compare.php:1887
+msgid "Filter all"
+msgstr ""
+
+#. translators: count
+#: wpc-smart-compare.php:1894
+#: wpc-smart-compare.php:2182
+#, php-format
+msgid "All (%d)"
+msgstr ""
+
+#: wpc-smart-compare.php:1898
+msgid "Filter other"
+msgstr ""
+
+#. translators: term & count
+#: wpc-smart-compare.php:1905
+#: wpc-smart-compare.php:2186
+#, php-format
+msgid "%1$s (%2$d)"
+msgstr ""
+
+#: wpc-smart-compare.php:1925
+#: wpc-smart-compare.php:3198
+msgid "Quick Comparison"
+msgstr ""
+
+#: wpc-smart-compare.php:1934
+msgid "Configure which product data fields should be displayed on the comparison table."
+msgstr ""
+
+#: wpc-smart-compare.php:1939
+#: wpc-smart-compare.php:1945
+#: wpc-smart-compare.php:2503
+msgid "Name"
+msgstr ""
+
+#: wpc-smart-compare.php:2091
+msgid "Menu item label"
+msgstr ""
+
+#: wpc-smart-compare.php:2268
+msgid "There are no products on the Compare!"
+msgstr ""
+
+#: wpc-smart-compare.php:3221
+msgid "Before quick table"
+msgstr ""
+
+#: wpc-smart-compare.php:3222
+msgid "After quick table"
+msgstr ""
+
+#: wpc-smart-compare.php:3223
+msgid "Before quick table products"
+msgstr ""
+
+#: wpc-smart-compare.php:3224
+msgid "After quick table products"
+msgstr ""
+
+#: wpc-smart-compare.php:3309
+msgid "move"
+msgstr ""
+
+#: wpc-smart-compare.php:3323
+msgid "name"
+msgstr ""
+
+#: wpc-smart-compare.php:3326
+msgid "label"
+msgstr ""
+
+#: wpc-smart-compare.php:3356
+msgid "Facebook"
+msgstr ""
+
+#: wpc-smart-compare.php:3357
+msgid "Twitter"
+msgstr ""
+
+#: wpc-smart-compare.php:3358
+msgid "Pinterest"
+msgstr ""
+
+#: wpc-smart-compare.php:3359
+msgid "Mail"
+msgstr ""

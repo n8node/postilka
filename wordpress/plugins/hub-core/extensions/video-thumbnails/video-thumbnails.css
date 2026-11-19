@@ -1,0 +1,33 @@
+#liquid-video-thumbnails .liquid-video-thumbnails-upload {
+    margin: 0;
+}
+
+#liquid-video-thumbnails.liquid-has-video .liquid-video-thumbnails-upload {
+    display: none;
+}
+
+#liquid-video-thumbnails .tabs-panel {
+    padding-top: 10px;
+    overflow: hidden;
+    max-height: none;
+}
+
+#liquid-video-thumbnails .tabs-panel input[type="text"] {
+    width: 100%;
+}
+
+#liquid-video-thumbnails .tabs-panel video {
+    width: 100%;
+    height: auto;
+}
+
+#liquid-video-thumbnails:not(.liquid-has-video) .liquid-video-thumbnails-preview {
+    display: none;
+}
+
+#liquid-remove-post-thumbnail {
+    color: #b32d2e;
+    padding-bottom: 10px;
+    padding-top: 10px;
+    display: block;
+}

@@ -1,0 +1,126 @@
+.pxl-counter {
+	.pxl-counter__number {
+		display: inline-flex;
+		flex-wrap: wrap;
+		align-items: center;
+	}
+    &--style-default{
+        .pxl-counter__number{
+            @extend h3;
+            color: $primary_color;
+            letter-spacing: 0;
+        }
+    }
+    &--style-gradient-2-color{
+        --gradient-color-1: #E5CCFF;
+        --gradient-color-2: #CCF3FF;
+        .pxl-counter__number{
+            background: linear-gradient(90deg, var(--gradient-color-1) 0%, var(--gradient-color-2) 100%);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-family: 'Sora', sans-serif;
+            font-size: 40px;
+            font-weight: 400;
+            line-height: 120%;
+            letter-spacing: -2.8px;
+        }
+    }
+    &--style-liquid-glass{
+        --color-gradient-0: #ed64f0;
+        --color-gradient-1: #E5496A;
+        --color-gradient-2: #C44A92;
+        --color-gradient-3: #9049CD;
+        --color-gradient-4: #6B49F6;
+        --color-gradient-5: #6248FF;
+        display: flex;
+        
+        .pxl-counter__holder{
+            position: relative;
+            width: 84px;
+            height: 84px;
+            border-radius: 138px;
+            border: 3px solid rgba(255, 255, 255, 0.88);
+            animation: shake-button 10s linear infinite;
+            &::before{
+                content: '';
+                background: linear-gradient(89deg, #fff 0%, var(--color-gradient-0) 100%);
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                z-index: 1;
+                border-radius: 138px;
+            }
+            &::after{
+                content: '';
+                position: absolute;
+                top: -1px;
+                left: -1px;
+                border-radius: 99px;
+                background-blend-mode: screen, screen, color-burn;
+                box-shadow: 23px 32px 13px -34px #fff inset, -23px -30px 21px -34px #fff inset, 4px 4px 2px -4px rgba(255, 255, 255, 0.2) inset, 0px 0px 44px 0px rgba(255, 255, 255, 0.2) inset;
+                backdrop-filter: blur(20px);
+                z-index: 2;
+                height: calc(100% + 2px);
+                width: calc(100% + 2px);
+                z-index: 2;
+            }
+        }
+       
+        .pxl-counter__number{
+            position: absolute;
+            z-index: 3;
+            top: 50%;
+            flex-wrap: nowrap;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            font-family: Inter;
+            font-size: 32px;
+            font-style: normal;
+            font-weight: 600;
+            line-height: 1.2;
+            letter-spacing: -0.88px;
+            background: linear-gradient(89deg, var(--color-gradient-1) 0.48%, var(--color-gradient-2) 27.38%, var(--color-gradient-3) 51.79%, var(--color-gradient-4) 75.69%, var(--color-gradient-5) 99.52%);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+    }
+    &--style-gradient{
+        --gradient-color-1: #E5496A;
+        --gradient-color-2: #C44A92;
+        --gradient-color-3: #9049CD;
+        --gradient-color-4: #6B49F6;
+        --gradient-color-5: #6248FF;
+        .pxl-counter__number{
+            background: linear-gradient(89deg, var(--gradient-color-1) 0.48%, var(--gradient-color-2) 27.38%, var(--gradient-color-3) 51.79%, var(--gradient-color-4) 75.69%, var(--gradient-color-5) 99.52%);
+            font-size: 240px;
+            font-weight: 500;
+            line-height: 110%;
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: 0px;
+        }
+    }
+    &--style-gradient-3-color{
+        --gradient-color-1: #957EFC;
+        --gradient-color-2: #DEB1FF;
+        --gradient-color-3: #F7F7FB;
+        .pxl-counter__number{
+            background: linear-gradient(91deg, var(--gradient-color-1) -1.38%, var(--gradient-color-2) 69.51%, var(--gradient-color-3) 101.01%);
+            font-size: 80px;
+            font-weight: 400;
+            line-height: 100%;
+            letter-spacing: -4px;
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+    }
+}
+
+
