@@ -139,6 +139,9 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	localMedia := service.NewLocalMediaStore()
 	authScreenSvc := service.NewAuthScreenService(authScreenRepo, objectStorage, localMedia)
 	authScreenHandler := handler.NewAuthScreenHandler(authScreenSvc)
+	shortsRepo := repository.NewShortsRepository(db.Pool)
+	shortsSvc := service.NewShortsService(shortsRepo, fileStorageRepo, wsSvc)
+	shortsHandler := handler.NewShortsHandler(shortsSvc)
 	postRepo := repository.NewPostRepository(db.Pool)
 	linkCodeRepo := repository.NewLinkCodeRepository(db.Pool)
 	linkShortener := service.NewLinkShortenerService(linkCodeRepo, cfg.LinkBaseURL)
@@ -560,6 +563,13 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Get("/analytics/metrika/utm-bindings", analyticsHandler.MetrikaUTMBindings)
 			r.Delete("/analytics/metrika/counters/{counter_id}", analyticsHandler.MetrikaDisconnectCounter)
 			r.Delete("/analytics/metrika/disconnect", analyticsHandler.MetrikaDisconnect)
+		})
+
+		r.Group(func(r chi.Router) {
+			r.Use(authMW.Required)
+			r.Post("/shorts/projects", shortsHandler.CreateProject)
+			r.Get("/shorts/projects/{id}", shortsHandler.GetProject)
+			r.Get("/shorts/jobs/{id}", shortsHandler.GetJob)
 		})
 
 		r.Group(func(r chi.Router) {
