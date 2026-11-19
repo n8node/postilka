@@ -167,6 +167,17 @@ func (r *ShortsRepository) CreateJob(ctx context.Context, projectID, jobType str
 	return &j, err
 }
 
+func (r *ShortsRepository) CreateRerenderJob(ctx context.Context, workspaceID, projectID string) (*model.ShortsJob, error) {
+	var j model.ShortsJob
+	var status string
+	err := r.pool.QueryRow(ctx, `INSERT INTO shorts_jobs (project_id, job_type) SELECT $1, 'rerender' WHERE EXISTS (SELECT 1 FROM shorts_projects WHERE id = $1 AND workspace_id = $2) RETURNING id, project_id, job_type, status, current_step, progress, attempts, available_at, last_error, created_at, updated_at`, projectID, workspaceID).Scan(&j.ID, &j.ProjectID, &j.JobType, &status, &j.CurrentStep, &j.Progress, &j.Attempts, &j.AvailableAt, &j.LastError, &j.CreatedAt, &j.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	j.Status = model.ShortsJobStatus(status)
+	return &j, err
+}
+
 func (r *ShortsRepository) GetJob(ctx context.Context, workspaceID, jobID string) (*model.ShortsJob, error) {
 	var j model.ShortsJob
 	var status string

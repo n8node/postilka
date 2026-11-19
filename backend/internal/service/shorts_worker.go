@@ -47,6 +47,9 @@ func (w *ShortsWorker) ProcessDue(ctx context.Context, limit int) (int, error) {
 }
 
 func (w *ShortsWorker) process(ctx context.Context, job repository.ClaimedShortsJob) error {
+	if job.JobType == "rerender" {
+		return w.processRerender(ctx, job)
+	}
 	if job.JobType != "analyze" {
 		return fmt.Errorf("unsupported shorts job type %q", job.JobType)
 	}
@@ -138,6 +141,96 @@ func (w *ShortsWorker) process(ctx context.Context, job repository.ClaimedShorts
 		return err
 	}
 	return w.repo.SucceedJob(ctx, job.ID, w.owner)
+}
+
+func (w *ShortsWorker) processRerender(ctx context.Context, job repository.ClaimedShortsJob) error {
+	project, err := w.repo.GetProject(ctx, job.WorkspaceID, job.ProjectID)
+	if err != nil {
+		return err
+	}
+	if project.SourceFileID == nil {
+		return ErrShortsSourceRequired
+	}
+	file, err := w.files.GetByID(ctx, job.WorkspaceID, *project.SourceFileID, false)
+	if err != nil {
+		return err
+	}
+	if err := w.repo.UpdateJobProgress(ctx, job.ID, w.owner, "download_source", 10); err != nil {
+		return err
+	}
+	sourcePath, err := w.downloadObject(ctx, file.S3Key, filepath.Ext(file.Name))
+	if err != nil {
+		return err
+	}
+	defer os.Remove(sourcePath)
+	transcript, err := transcriptFromSettings(project.Settings)
+	if err != nil {
+		return err
+	}
+	clips, err := w.repo.ListClips(ctx, job.WorkspaceID, project.ID)
+	if err != nil {
+		return err
+	}
+	config := ShortsSubtitleConfigFromSettings(project.Settings)
+	for index, clip := range clips {
+		if clip.Status != "draft" && clip.Status != "candidate" {
+			continue
+		}
+		if err := w.repo.UpdateJobProgress(ctx, job.ID, w.owner, "render_draft", 20+(index*70/maxInt(1, len(clips)))); err != nil {
+			return err
+		}
+		path, err := RenderShortsDraft(ctx, sourcePath, clip.StartSeconds, clip.EndSeconds, transcript.Segments, config)
+		if err != nil {
+			return err
+		}
+		info, err := os.Stat(path)
+		if err != nil {
+			os.Remove(path)
+			return err
+		}
+		key := fmt.Sprintf("workspaces/%s/shorts/%s/drafts/%02d-rerender.mp4", job.WorkspaceID, project.ID, index)
+		if err := w.storage.PutObjectFromFile(ctx, key, "video/mp4", path); err != nil {
+			os.Remove(path)
+			return err
+		}
+		uid := project.CreatedByUserID
+		newFile, err := w.fileStore.RegisterWorkspaceFile(ctx, &model.WorkspaceFile{WorkspaceID: job.WorkspaceID, UploadedByUserID: &uid, Name: fmt.Sprintf("shorts-draft-%02d.mp4", index+1), MimeType: "video/mp4", Size: info.Size(), S3Key: key})
+		os.Remove(path)
+		if err != nil {
+			_ = w.storage.DeleteObject(ctx, key)
+			return err
+		}
+		oldFileID := clip.DraftFileID
+		if err := w.repo.SetClipDraft(ctx, job.WorkspaceID, clip.ID, newFile.ID); err != nil {
+			return err
+		}
+		if oldFileID != nil && *oldFileID != newFile.ID {
+			if err := w.fileStore.PermanentDeleteWorkspaceFile(ctx, job.WorkspaceID, *oldFileID); err != nil {
+				return err
+			}
+		}
+	}
+	return w.repo.SucceedJob(ctx, job.ID, w.owner)
+}
+
+func transcriptFromSettings(settings json.RawMessage) (ShortsTranscript, error) {
+	var envelope struct {
+		Transcript ShortsTranscript `json:"transcript"`
+	}
+	if err := json.Unmarshal(settings, &envelope); err != nil {
+		return ShortsTranscript{}, fmt.Errorf("parse saved transcript: %w", err)
+	}
+	if len(envelope.Transcript.Segments) == 0 {
+		return ShortsTranscript{}, fmt.Errorf("saved transcript is empty")
+	}
+	return envelope.Transcript, nil
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 func (w *ShortsWorker) renderDrafts(ctx context.Context, job repository.ClaimedShortsJob, project *model.ShortsProject, sourcePath string, candidates []ShortsCandidate, transcript []ShortsTranscriptSegment, subtitleConfig ShortsSubtitleConfig) error {

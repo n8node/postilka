@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createShortsProject, getShortsDraftDownloadUrl, getShortsJob, getShortsProject, updateShortsSubtitleSettings, type ShortsClip, type ShortsJob, type ShortsProject } from "@/lib/shorts-api";
+import { createShortsProject, getShortsDraftDownloadUrl, getShortsJob, getShortsProject, rerenderShortsProject, updateShortsSubtitleSettings, type ShortsClip, type ShortsJob, type ShortsProject } from "@/lib/shorts-api";
 
 const contentTypes = [
   ["podcast", "Подкаст"],
@@ -50,7 +50,7 @@ export function ShortsStudioPage() {
 
   async function saveSubtitleSettings() {
     if (!project?.id) return;
-    try { await updateShortsSubtitleSettings(project.id, { style: subtitleStyle, position: subtitlePosition }); setJobMessage("Настройки субтитров сохранены. Для нового preview запустите повторный анализ."); } catch (error) { setJobMessage(error instanceof Error ? error.message : "Не удалось сохранить настройки"); }
+    try { await updateShortsSubtitleSettings(project.id, { style: subtitleStyle, position: subtitlePosition }); const result = await rerenderShortsProject(project.id); setJob(result.job); setDraftUrls({}); setJobMessage("Настройки сохранены. Draft-предпросмотры перерендериваются."); } catch (error) { setJobMessage(error instanceof Error ? error.message : "Не удалось перерендерить preview"); }
   }
 
   async function submit() {

@@ -224,3 +224,17 @@ func (s *ShortsService) UpdateSubtitleSettings(ctx context.Context, userID strin
 	config = NormalizeShortsSubtitleConfig(config)
 	return s.repo.SetSubtitleSettings(ctx, ws.ID, projectID, config.Style, config.Position)
 }
+
+func (s *ShortsService) RerenderProject(ctx context.Context, userID string, r *http.Request, projectID string) (*model.ShortsJob, error) {
+	ws, _, err := s.wsSvc.ResolveActive(ctx, userID, r)
+	if err != nil {
+		return nil, err
+	}
+	if ws == nil {
+		return nil, ErrWorkspaceNotFound
+	}
+	if _, err := s.wsSvc.RequireMembership(ctx, userID, ws.ID, model.RoleEditor); err != nil {
+		return nil, err
+	}
+	return s.repo.CreateRerenderJob(ctx, ws.ID, projectID)
+}

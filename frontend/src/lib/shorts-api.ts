@@ -78,3 +78,7 @@ export function getShortsDraftDownloadUrl(clipId: string) {
 export function updateShortsSubtitleSettings(projectId: string, input: { style: string; position: string }) {
   return request<{ ok: boolean }>(`/shorts/projects/${projectId}/subtitle-settings`, { method: "PATCH", body: JSON.stringify(input) });
 }
+
+export function rerenderShortsProject(projectId: string) {
+  return request<{ job: ShortsJob }>(`/shorts/projects/${projectId}/rerender`, { method: "POST" });
+}
