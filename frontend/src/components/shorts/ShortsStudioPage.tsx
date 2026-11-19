@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FileVideo, FolderOpen, Loader2, RefreshCw, Trash2, Upload } from "lucide-react";
+import { ArrowDown, ArrowUp, CheckCircle2, FileVideo, FolderOpen, Loader2, RefreshCw, Trash2, Upload, Video } from "lucide-react";
 import { WorkspaceMediaPickerModal } from "@/components/generation/WorkspaceMediaPickerModal";
 import { uploadFile, type WorkspaceFile } from "@/lib/files-api";
 import { analyzeShortsProject, createShortsProject, deleteShortsProject, exportShortsProject, getShortsDraftDownloadUrl, getShortsFinalDownloadUrl, getShortsJob, getShortsProject, listShortsProjects, rerenderShortsProject, updateShortsClip, updateShortsClipOrder, updateShortsSubtitleSettings, type ShortsClip, type ShortsJob, type ShortsProject, type ShortsProjectListItem } from "@/lib/shorts-api";
@@ -45,7 +45,7 @@ export function ShortsStudioPage() {
   const [clipDrafts, setClipDrafts] = useState<Record<string, { start: string; end: string; text: string; selected: boolean }>>({});
 
   useEffect(() => {
-    void listShortsProjects().then((result) => setHistory(result.projects)).catch(() => undefined).finally(() => setHistoryLoading(false));
+    void listShortsProjects().then((result) => setHistory(result.projects)).catch((error) => setJobMessage(error instanceof Error ? error.message : "Не удалось загрузить историю проектов")).finally(() => setHistoryLoading(false));
   }, []);
 
   useEffect(() => {
@@ -205,53 +205,53 @@ export function ShortsStudioPage() {
   }
 
   return (
-    <main className="space-y-6">
-      <div className="mb-8">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted">Инструменты · видео</p>
-        <h1 className="mt-2 text-2xl font-semibold text-text">Shorts Studio</h1>
-        <p className="mt-2 max-w-2xl text-white/60">
+    <main className="min-h-screen space-y-8 bg-[#f6f8fc] px-1 pb-12 text-slate-900">
+      <div className="rounded-2xl bg-gradient-to-br from-slate-950 via-indigo-950 to-violet-900 px-6 py-8 text-white shadow-xl sm:px-8">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-200">Инструменты · видео</p>
+        <h1 className="mt-2 text-3xl font-bold tracking-tight">Shorts Studio</h1>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-200">
           Подготовка длинного видео к анализу и автоматической нарезке. Исходные материалы хранятся временно и не отправляются в KIE.ai.
         </p>
       </div>
 
-        <section className="grid gap-5 rounded-xl border border-border bg-surface p-5 shadow-sm lg:grid-cols-2">
-        <label className="block text-sm text-white/70">
+        <section className="grid gap-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm lg:grid-cols-2">
+        <label className="block text-sm font-medium text-slate-700">
           ID видео в медиатеке
           <div onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); const file = event.dataTransfer.files[0]; if (file) void handleUpload(file); }} className="mt-2 rounded-lg border border-dashed border-border bg-bg p-3">
-            <div className="flex items-center gap-3"><FileVideo className="h-5 w-5 text-accent" /><span className="min-w-0 flex-1 truncate text-sm text-text">{sourceFile?.name ?? "Перетащите видео сюда или выберите из файлов"}</span><button type="button" onClick={() => setPickerOpen(true)} className="rounded-md border border-border bg-surface px-3 py-2 text-xs font-medium text-text hover:border-accent"><FolderOpen className="mr-1 inline h-4 w-4" />Медиатека</button><label className="cursor-pointer rounded-md bg-accent px-3 py-2 text-xs font-semibold text-white hover:bg-accent/90"><Upload className="mr-1 inline h-4 w-4" />Загрузить<input type="file" accept="video/*" className="hidden" disabled={uploading} onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleUpload(file); event.currentTarget.value = ""; }} /></label></div>
+            <div className="flex items-center gap-3"><FileVideo className="h-5 w-5 shrink-0 text-indigo-600" /><span className="min-w-0 flex-1 truncate text-sm text-slate-800">{sourceFile?.name ?? "Перетащите видео сюда или выберите из файлов"}</span><button type="button" onClick={() => setPickerOpen(true)} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:border-indigo-400"><FolderOpen className="mr-1 inline h-4 w-4" />Медиатека</button><label className="cursor-pointer rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-700"><Upload className="mr-1 inline h-4 w-4" />Загрузить<input type="file" accept="video/*" className="hidden" disabled={uploading} onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleUpload(file); event.currentTarget.value = ""; }} /></label></div>
             {uploading && <div className="mt-3"><div className="h-1.5 overflow-hidden rounded-full bg-border"><div className="h-full bg-accent transition-all" style={{ width: `${uploadProgress}%` }} /></div><p className="mt-1 text-xs text-muted">Загрузка видео…</p></div>}
           </div>
         </label>
-        <label className="block text-sm text-white/70">
+        <label className="block text-sm font-medium text-slate-700">
           Тип видео
-          <select value={contentType} onChange={(e) => setContentType(e.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none">
+          <select value={contentType} onChange={(e) => setContentType(e.target.value)} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100">
             {contentTypes.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select>
         </label>
-        <label className="block text-sm text-white/70">
+        <label className="block text-sm font-medium text-slate-700">
           Длительность исходника, сек.
-          <input type="number" min={1} value={duration} onChange={(e) => { const value = Math.max(1, Number(e.target.value)); setDuration(value); setRangeEnd(Math.min(value, rangeEnd)); }} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none" />
+          <input type="number" min={1} value={duration} onChange={(e) => { const value = Math.max(1, Number(e.target.value)); setDuration(value); setRangeEnd(Math.min(value, rangeEnd)); }} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none" />
         </label>
-        <div className="text-sm text-white/70">
+        <div className="text-sm text-slate-700">
           <p>Диапазон обработки</p>
           <div className="mt-2 grid grid-cols-2 gap-3">
-            <input type="number" min={0} max={duration} value={rangeStart} onChange={(e) => setRangeStart(Math.max(0, Number(e.target.value)))} className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none" aria-label="Начало диапазона" />
-            <input type="number" min={1} max={duration} value={rangeEnd} onChange={(e) => setRangeEnd(Math.min(duration, Math.max(1, Number(e.target.value))))} className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none" aria-label="Конец диапазона" />
+            <input type="number" min={0} max={duration} value={rangeStart} onChange={(e) => setRangeStart(Math.max(0, Number(e.target.value)))} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none" aria-label="Начало диапазона" />
+            <input type="number" min={1} max={duration} value={rangeEnd} onChange={(e) => setRangeEnd(Math.min(duration, Math.max(1, Number(e.target.value))))} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none" aria-label="Конец диапазона" />
           </div>
-          <p className="mt-2 text-xs text-white/40">Можно обработать только часть видео, если минут тарифа недостаточно.</p>
+          <p className="mt-2 text-xs text-slate-500">Можно обработать только часть видео, если минут тарифа недостаточно.</p>
         </div>
       </section>
 
-      <div className="mt-6 flex items-center gap-4">
-        <button type="button" onClick={submit} disabled={busy} className="rounded-md bg-accent px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50">
+      <div className="mt-6 flex flex-wrap items-center gap-4">
+        <button type="button" onClick={submit} disabled={busy} className="rounded-xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50">
           {busy ? <><Loader2 className="mr-2 inline h-4 w-4 animate-spin" />Создание проекта…</> : "Запустить анализ"}
         </button>
-        {jobMessage && <p className="text-sm text-white/65">{jobMessage}</p>}
+        {jobMessage && <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">{jobMessage}</p>}
       </div>
       <WorkspaceMediaPickerModal open={pickerOpen} mediaKind="video" onClose={() => setPickerOpen(false)} onSelect={(file) => { setSourceFile(file); setSourceFileId(file.id); const nextDuration = Math.max(1, Math.round(file.media_metadata?.duration_seconds ?? 60)); setDuration(nextDuration); setRangeEnd(nextDuration); setPickerOpen(false); }} />
-      {project && <section className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] p-6"><h2 className="text-lg font-semibold">Стиль субтитров</h2><div className="mt-4 grid gap-4 sm:grid-cols-3 lg:grid-cols-5"><label className="text-sm text-white/70">Стиль<select value={subtitleStyle} onChange={(e) => setSubtitleStyle(e.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white"><option value="classic">Classic</option><option value="bold">Bold</option><option value="minimal">Minimal</option></select></label><label className="text-sm text-white/70">Позиция<select value={subtitlePosition} onChange={(e) => setSubtitlePosition(e.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white"><option value="top">Сверху</option><option value="center">По центру</option><option value="bottom">Снизу</option></select></label><label className="text-sm text-white/70">Размер<input type="number" min="24" max="120" value={subtitleFontSize} onChange={(e) => setSubtitleFontSize(Number(e.target.value))} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white" /></label><label className="text-sm text-white/70">Цвет<input type="color" value={subtitleTextColor} onChange={(e) => setSubtitleTextColor(e.target.value)} className="mt-2 h-10 w-full rounded-xl border border-white/10 bg-black/20" /></label><label className="text-sm text-white/70">Фон<input type="color" value={subtitleBackground} onChange={(e) => setSubtitleBackground(e.target.value)} className="mt-2 h-10 w-full rounded-xl border border-white/10 bg-black/20" /></label></div><label className="mt-4 block text-sm text-white/70">Watermark<input value={watermark} onChange={(e) => setWatermark(e.target.value)} placeholder="@brand" className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white" /></label><button type="button" onClick={saveSubtitleSettings} className="mt-4 rounded-xl border border-white/15 px-4 py-2 text-sm hover:bg-white/10">Сохранить настройки</button></section>}
-      <section className="mt-8 rounded-2xl border border-white/10 bg-white/[0.03] p-6">
-        <div className="flex items-center justify-between gap-3"><div><h2 className="text-lg font-semibold">История проектов</h2><p className="mt-1 text-sm text-white/50">Проекты сохраняются после обновления страницы.</p></div>{historyLoading && <Loader2 className="h-4 w-4 animate-spin text-white/50" />}</div>
+      {project && <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><h2 className="text-lg font-bold text-slate-900">Субтитры и safe zone</h2><div className="mt-4 grid gap-4 sm:grid-cols-3 lg:grid-cols-6"><label className="text-sm font-medium text-slate-700">Стиль<select value={subtitleStyle} onChange={(e) => setSubtitleStyle(e.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"><option value="classic">Classic</option><option value="bold">Bold</option><option value="minimal">Minimal</option></select></label><label className="text-sm font-medium text-slate-700">Позиция<select value={subtitlePosition} onChange={(e) => setSubtitlePosition(e.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"><option value="top">Сверху</option><option value="center">По центру</option><option value="bottom">Снизу</option></select></label><label className="text-sm font-medium text-slate-700">Размер<input type="number" min="24" max="120" value={subtitleFontSize} onChange={(e) => setSubtitleFontSize(Number(e.target.value))} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900" /></label><label className="text-sm font-medium text-slate-700">Цвет<input type="color" value={subtitleTextColor} onChange={(e) => setSubtitleTextColor(e.target.value)} className="mt-2 h-10 w-full rounded-lg border border-slate-200 bg-white" /></label><label className="text-sm font-medium text-slate-700">Фон<input type="color" value={subtitleBackground} onChange={(e) => setSubtitleBackground(e.target.value)} className="mt-2 h-10 w-full rounded-lg border border-slate-200 bg-white" /></label><label className="text-sm font-medium text-slate-700">Safe zone<input type="number" min="0" max="300" value={safeZone} onChange={(e) => setSafeZone(Number(e.target.value))} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900" /></label></div><label className="mt-4 block text-sm font-medium text-slate-700">Watermark<input value={watermark} onChange={(e) => setWatermark(e.target.value)} placeholder="@brand" className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900" /></label><button type="button" onClick={saveSubtitleSettings} className="mt-4 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800">Сохранить настройки</button></section>}
+      <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="flex items-center justify-between gap-3"><div><h2 className="text-lg font-bold text-slate-900">История проектов</h2><p className="mt-1 text-sm text-slate-500">Проекты сохраняются после обновления страницы.</p></div>{historyLoading && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}</div>
         {!historyLoading && history.length === 0 ? <p className="mt-5 text-sm text-white/50">Пока нет созданных проектов.</p> : <div className="mt-5 space-y-3">
           {history.map((item) => <article key={item.project.id} className={`flex flex-wrap items-center gap-4 rounded-xl border p-3 ${project?.id === item.project.id ? "border-violet-400/60 bg-violet-400/10" : "border-white/10 bg-black/10"}`}>
             <div className="h-16 w-12 overflow-hidden rounded-md bg-black">{item.source_file?.id ? <video src={`/app/api/v1/files/${item.source_file.id}/download?disposition=inline`} muted playsInline className="h-full w-full object-cover" /> : <FileVideo className="m-3 h-6 w-6 text-white/40" />}</div>
@@ -260,19 +260,19 @@ export function ShortsStudioPage() {
           </article>)}
         </div>}
       </section>
-      {(project || job) && <section className="mt-8 rounded-xl border border-border bg-surface p-6 shadow-sm">
-        <div className="mb-4 flex flex-wrap items-center gap-3"><button type="button" onClick={() => void exportProject()} disabled={!clips.some((clip) => clip.status === "selected" || clip.status === "draft") || job?.status === "queued" || job?.status === "running"} className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Export final MP4</button>{project?.status === "completed" ? <button type="button" onClick={() => void downloadFinal()} className="rounded-lg border border-white/15 px-4 py-2 text-sm hover:bg-white/10">Download final MP4</button> : null}{job?.job_type === "export" && <span className="text-sm text-white/60">{job.current_step || job.status} · {job.progress}%</span>}</div>
+      {(project || job) && <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+        <div className="mb-4 flex flex-wrap items-center gap-3"><h2 className="mr-auto text-lg font-bold text-slate-900">Клипы</h2><button type="button" onClick={() => void exportProject()} disabled={!clips.some((clip) => clip.status === "selected" || clip.status === "draft") || job?.status === "queued" || job?.status === "running"} className="rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm disabled:opacity-50">Экспортировать MP4</button>{project?.status === "completed" ? <button type="button" onClick={() => void downloadFinal()} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50">Скачать MP4</button> : null}{job?.job_type === "export" && <span className="rounded-lg bg-violet-50 px-3 py-2 text-sm font-medium text-violet-700">{job.current_step || job.status} · {job.progress}%</span>}</div>
                   {clips.length === 0 ? <p className="mt-6 text-sm text-white/50">Candidates will appear after worker processing.</p> : <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {clips.map((clip, clipIndex) => {
             const draft = clipDraft(clip);
-            return <article key={clip.id} className="overflow-hidden rounded-xl border border-white/10 bg-black/20">
-              <div className="aspect-[9/16] bg-black">{draftUrls[clip.id] ? <video src={draftUrls[clip.id]} controls playsInline className="h-full w-full object-contain" /> : <button type="button" onClick={() => loadDraft(clip.id)} className="flex h-full w-full items-center justify-center text-sm text-violet-200 hover:bg-white/5">Load preview</button>}</div>
+            return <article key={clip.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+              <div className="aspect-[9/16] bg-slate-950">{draftUrls[clip.id] ? <video src={draftUrls[clip.id]} controls playsInline className="h-full w-full object-contain" /> : <button type="button" onClick={() => loadDraft(clip.id)} className="flex h-full w-full items-center justify-center text-sm font-medium text-violet-200 hover:bg-slate-900"><Video className="mr-2 h-5 w-5" />Загрузить превью</button>}</div>
               <div className="space-y-3 p-4">
-                <div className="flex items-center justify-between"><p className="text-xs text-white/45">Клип {clipIndex + 1} · score {clip.score.toFixed(2)}</p><div className="flex gap-1"><button type="button" disabled={clipIndex === 0} onClick={() => void moveClip(clipIndex, -1)} className="rounded border border-white/15 px-2 py-1 text-xs disabled:opacity-30">↑</button><button type="button" disabled={clipIndex === clips.length - 1} onClick={() => void moveClip(clipIndex, 1)} className="rounded border border-white/15 px-2 py-1 text-xs disabled:opacity-30">↓</button></div></div>
+                <div className="flex items-center justify-between"><p className="text-xs font-medium text-slate-500">Клип {clipIndex + 1} · score {clip.score.toFixed(2)}</p><div className="flex gap-1"><button type="button" disabled={clipIndex === 0} onClick={() => void moveClip(clipIndex, -1)} className="rounded-lg border border-slate-200 p-1.5 text-slate-600 disabled:opacity-30"><ArrowUp className="h-4 w-4" /></button><button type="button" disabled={clipIndex === clips.length - 1} onClick={() => void moveClip(clipIndex, 1)} className="rounded-lg border border-slate-200 p-1.5 text-slate-600 disabled:opacity-30"><ArrowDown className="h-4 w-4" /></button></div></div>
                 <div className="grid grid-cols-2 gap-2"><label className="text-xs text-white/60">Start<input type="number" min="0" step="0.1" value={draft.start} onChange={(e) => setClipDrafts((items) => ({ ...items, [clip.id]: { ...draft, start: e.target.value } }))} className="mt-1 w-full rounded-lg border border-white/10 bg-black/20 px-2 py-1.5 text-sm text-white" /></label><label className="text-xs text-white/60">End<input type="number" min="0" step="0.1" value={draft.end} onChange={(e) => setClipDrafts((items) => ({ ...items, [clip.id]: { ...draft, end: e.target.value } }))} className="mt-1 w-full rounded-lg border border-white/10 bg-black/20 px-2 py-1.5 text-sm text-white" /></label></div>
                 <label className="block text-xs text-white/60">Subtitles<textarea value={draft.text} onChange={(e) => setClipDrafts((items) => ({ ...items, [clip.id]: { ...draft, text: e.target.value } }))} rows={4} className="mt-1 w-full resize-y rounded-lg border border-white/10 bg-black/20 px-2 py-1.5 text-sm text-white" /></label>
-                <label className="flex items-center gap-2 text-sm text-white/75"><input type="checkbox" checked={draft.selected} onChange={(e) => setClipDrafts((items) => ({ ...items, [clip.id]: { ...draft, selected: e.target.checked } }))} />Select for final render</label>
-                <button type="button" onClick={() => void saveClip(clip)} disabled={clipSaving[clip.id]} className="rounded-lg border border-violet-400/30 px-3 py-2 text-sm text-violet-100 hover:bg-violet-400/10 disabled:opacity-50">{clipSaving[clip.id] ? "Saving..." : "Save clip"}</button>
+                <label className="flex items-center gap-2 text-sm font-medium text-slate-700"><input type="checkbox" checked={draft.selected} onChange={(e) => setClipDrafts((items) => ({ ...items, [clip.id]: { ...draft, selected: e.target.checked } }))} className="h-4 w-4 rounded border-slate-300 text-indigo-600" />Выбрать для финального экспорта</label>
+                <button type="button" onClick={() => void saveClip(clip)} disabled={clipSaving[clip.id]} className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50">{clipSaving[clip.id] ? "Сохранение…" : "Сохранить клип"}</button>
               </div>
             </article>;
           })}

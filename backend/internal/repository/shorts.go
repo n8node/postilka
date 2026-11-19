@@ -65,7 +65,7 @@ func (r *ShortsRepository) ListForWorkspace(ctx context.Context, workspaceID str
 		LEFT JOIN LATERAL (
 			SELECT * FROM shorts_jobs WHERE project_id = p.id ORDER BY created_at DESC LIMIT 1
 		) j ON true
-		LEFT JOIN workspace_files f ON f.id = p.source_file_id AND f.deleted_at IS NULL
+		LEFT JOIN workspace_files f ON f.id = p.source_file_id
 		WHERE p.workspace_id = $1
 		ORDER BY p.created_at DESC
 		LIMIT $2 OFFSET $3

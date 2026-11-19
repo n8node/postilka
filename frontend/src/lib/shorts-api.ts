@@ -50,7 +50,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   });
   if (!response.ok) {
     const body = await response.json().catch(() => null);
-    throw new Error(body?.message ?? "Не удалось выполнить запрос");
+    throw new Error(body?.message ?? body?.error ?? `Не удалось выполнить запрос (${response.status})`);
   }
   return response.json() as Promise<T>;
 }
