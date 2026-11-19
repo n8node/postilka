@@ -16,19 +16,20 @@ import (
 )
 
 type ShortsWorker struct {
-	repo      *repository.ShortsRepository
-	files     *repository.WorkspaceFileRepository
-	storage   *ObjectStorage
-	fileStore *FileStorageService
-	owner     string
+	repo        *repository.ShortsRepository
+	files       *repository.WorkspaceFileRepository
+	storage     *ObjectStorage
+	fileStore   *FileStorageService
+	transcriber ShortsTranscriber
+	owner       string
 }
 
-func NewShortsWorker(repo *repository.ShortsRepository, files *repository.WorkspaceFileRepository, storage *ObjectStorage, fileStore *FileStorageService, owner string) *ShortsWorker {
-	return &ShortsWorker{repo: repo, files: files, storage: storage, fileStore: fileStore, owner: owner}
+func NewShortsWorker(repo *repository.ShortsRepository, files *repository.WorkspaceFileRepository, storage *ObjectStorage, fileStore *FileStorageService, transcriber ShortsTranscriber, owner string) *ShortsWorker {
+	return &ShortsWorker{repo: repo, files: files, storage: storage, fileStore: fileStore, transcriber: transcriber, owner: owner}
 }
 
 func (w *ShortsWorker) ProcessDue(ctx context.Context, limit int) (int, error) {
-	if w.repo == nil || w.files == nil || w.storage == nil || w.fileStore == nil {
+	if w.repo == nil || w.files == nil || w.storage == nil || w.fileStore == nil || w.transcriber == nil {
 		return 0, fmt.Errorf("shorts worker dependencies are not configured")
 	}
 	jobs, err := w.repo.ClaimDueJobs(ctx, w.owner, limit, 15*time.Minute)
@@ -87,6 +88,13 @@ func (w *ShortsWorker) process(ctx context.Context, job repository.ClaimedShorts
 		return err
 	}
 	defer os.Remove(audioPath)
+	if err := w.repo.UpdateJobProgress(ctx, job.ID, w.owner, "transcribe", 55); err != nil {
+		return err
+	}
+	transcript, err := w.transcriber.Transcribe(ctx, audioPath)
+	if err != nil {
+		return err
+	}
 	audioInfo, err := os.Stat(audioPath)
 	if err != nil {
 		return err
@@ -95,7 +103,7 @@ func (w *ShortsWorker) process(ctx context.Context, job repository.ClaimedShorts
 	if err := w.storage.PutObjectFromFile(ctx, key, "audio/mpeg", audioPath); err != nil {
 		return err
 	}
-	meta, _ := json.Marshal(map[string]string{"source": "shorts_audio", "project_id": project.ID, "duration_seconds": fmt.Sprintf("%.3f", duration)})
+	meta, _ := json.Marshal(map[string]any{"source": "shorts_audio", "project_id": project.ID, "duration_seconds": duration, "transcript": transcript})
 	uid := project.CreatedByUserID
 	audioFile, err := w.fileStore.RegisterWorkspaceFile(ctx, &model.WorkspaceFile{WorkspaceID: job.WorkspaceID, UploadedByUserID: &uid, Name: "shorts-audio.mp3", MimeType: "audio/mpeg", Size: audioInfo.Size(), S3Key: key, MediaMetadata: meta})
 	if err != nil {
@@ -105,7 +113,10 @@ func (w *ShortsWorker) process(ctx context.Context, job repository.ClaimedShorts
 	if err := w.repo.SetAudio(ctx, job.WorkspaceID, project.ID, audioFile.ID, time.Now().UTC().Add(48*time.Hour)); err != nil {
 		return err
 	}
-	if err := w.repo.UpdateProjectStatus(ctx, job.WorkspaceID, job.ProjectID, model.ShortsProjectAnalyzing, "audio_ready"); err != nil {
+	if err := w.repo.SetTranscript(ctx, job.WorkspaceID, project.ID, transcript); err != nil {
+		return err
+	}
+	if err := w.repo.UpdateProjectStatus(ctx, job.WorkspaceID, job.ProjectID, model.ShortsProjectAnalyzing, "transcript_ready"); err != nil {
 		return err
 	}
 	return w.repo.SucceedJob(ctx, job.ID, w.owner)

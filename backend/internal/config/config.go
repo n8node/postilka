@@ -43,7 +43,8 @@ type Config struct {
 	YandexMetrikaClientID     string `env:"YANDEX_METRIKA_CLIENT_ID"`
 	YandexMetrikaClientSecret string `env:"YANDEX_METRIKA_CLIENT_SECRET"`
 
-	PhotochkaAPIBaseURL string `env:"PHOTOCHKA_API_BASE_URL" envDefault:"https://photochka.ru/api/v1/integration"`
+	PhotochkaAPIBaseURL      string `env:"PHOTOCHKA_API_BASE_URL" envDefault:"https://photochka.ru/api/v1/integration"`
+	ShortsTranscriberCommand string `env:"SHORTS_TRANSCRIBER_COMMAND"`
 }
 
 func Load() (*Config, error) {
