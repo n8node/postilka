@@ -739,7 +739,7 @@ func (s *FileStorageService) PermanentDeleteFile(ctx context.Context, userID str
 // It keeps object deletion, database deletion and storage quota accounting in
 // the same path as the user-facing permanent delete operation.
 func (s *FileStorageService) PermanentDeleteWorkspaceFile(ctx context.Context, workspaceID, fileID string) error {
-	f, err := s.files.DeletePermanent(ctx, workspaceID, fileID)
+	f, err := s.files.DeletePermanentByID(ctx, workspaceID, fileID)
 	if errors.Is(err, repository.ErrNotFound) {
 		return nil
 	}
@@ -752,6 +752,23 @@ func (s *FileStorageService) PermanentDeleteWorkspaceFile(ctx context.Context, w
 		}
 	}
 	return s.releaseStorage(ctx, workspaceID, f.Size)
+}
+
+// RegisterWorkspaceFile registers an already uploaded object and accounts for
+// its size. It is used by trusted internal workers after a successful S3 put.
+func (s *FileStorageService) RegisterWorkspaceFile(ctx context.Context, file *model.WorkspaceFile) (*model.WorkspaceFile, error) {
+	if file == nil || file.Size <= 0 {
+		return nil, ErrEmptyFile
+	}
+	if err := s.reserveStorage(ctx, file.WorkspaceID, file.Size); err != nil {
+		return nil, err
+	}
+	created, err := s.files.Create(ctx, file)
+	if err != nil {
+		_ = s.releaseStorage(ctx, file.WorkspaceID, file.Size)
+		return nil, err
+	}
+	return created, nil
 }
 
 func (s *FileStorageService) PermanentDeleteFolder(ctx context.Context, userID string, r *http.Request, folderID string) error {

@@ -111,6 +111,66 @@ type ShortsExpiredProject struct {
 	AudioFileID  *string
 }
 
+type ClaimedShortsJob struct {
+	ID          string
+	ProjectID   string
+	WorkspaceID string
+	JobType     string
+}
+
+func (r *ShortsRepository) ClaimDueJobs(ctx context.Context, owner string, limit int, lease time.Duration) ([]ClaimedShortsJob, error) {
+	if limit <= 0 || limit > 50 {
+		limit = 10
+	}
+	if lease <= 0 {
+		lease = 10 * time.Minute
+	}
+	rows, err := r.pool.Query(ctx, `
+		WITH due AS (
+			SELECT j.id
+			FROM shorts_jobs j
+			WHERE j.status = 'queued' AND j.available_at <= now()
+			ORDER BY j.available_at, j.created_at
+			FOR UPDATE SKIP LOCKED
+			LIMIT $1
+		)
+		UPDATE shorts_jobs j
+		SET status = 'running', lease_owner = $2, lease_until = now() + $3::interval,
+			attempts = j.attempts + 1, current_step = 'claimed', updated_at = now()
+		FROM due, shorts_projects p
+		WHERE j.id = due.id AND p.id = j.project_id
+		RETURNING j.id, j.project_id, p.workspace_id, j.job_type
+	`, limit, owner, lease.String())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]ClaimedShortsJob, 0)
+	for rows.Next() {
+		var item ClaimedShortsJob
+		if err := rows.Scan(&item.ID, &item.ProjectID, &item.WorkspaceID, &item.JobType); err != nil {
+			return nil, err
+		}
+		out = append(out, item)
+	}
+	return out, rows.Err()
+}
+
+func (r *ShortsRepository) UpdateJobProgress(ctx context.Context, jobID, owner, step string, progress int) error {
+	_, err := r.pool.Exec(ctx, `UPDATE shorts_jobs SET current_step = $1, progress = $2, updated_at = now() WHERE id = $3 AND lease_owner = $4`, step, progress, jobID, owner)
+	return err
+}
+
+func (r *ShortsRepository) SucceedJob(ctx context.Context, jobID, owner string) error {
+	_, err := r.pool.Exec(ctx, `UPDATE shorts_jobs SET status = 'succeeded', progress = 100, current_step = 'completed', lease_owner = NULL, lease_until = NULL, updated_at = now() WHERE id = $1 AND lease_owner = $2`, jobID, owner)
+	return err
+}
+
+func (r *ShortsRepository) FailJob(ctx context.Context, jobID, owner, message string, retryAt time.Time) error {
+	_, err := r.pool.Exec(ctx, `UPDATE shorts_jobs SET status = CASE WHEN attempts < 3 THEN 'queued' ELSE 'failed' END, available_at = $1, current_step = 'failed', last_error = $2, lease_owner = NULL, lease_until = NULL, updated_at = now() WHERE id = $3 AND lease_owner = $4`, retryAt, message, jobID, owner)
+	return err
+}
+
 func (r *ShortsRepository) ListExpiredProjects(ctx context.Context, before time.Time) ([]ShortsExpiredProject, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT id, workspace_id, source_file_id, audio_file_id

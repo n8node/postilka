@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -109,6 +110,7 @@ func main() {
 	objectStorage := service.NewObjectStorage(storageSettingsSvc)
 	fileStorageSvc := service.NewFileStorageService(fileStorageRepo, folderStorageRepo, workspaceRepo, planRepo, wsSvc, objectStorage, nil, nil)
 	shortsRetentionSvc := service.NewShortsRetentionService(shortsRepo, fileStorageSvc, logger)
+	shortsWorker := service.NewShortsWorker(shortsRepo, fileStorageRepo, objectStorage, fileStorageSvc, fmt.Sprintf("maintenance-%d", os.Getpid()))
 	backupSvc := service.NewBackupService(backupRepo, objectStorage, cfg, logger)
 
 	// Сервисы для оповещений
@@ -153,6 +155,11 @@ func main() {
 				if err := db.Ping(ctx); err != nil {
 					logger.Warn("maintenance worker db ping failed", "error", err)
 					continue
+				}
+				if n, err := shortsWorker.ProcessDue(ctx, 2); err != nil {
+					logger.Warn("shorts worker tick failed", "error", err)
+				} else if n > 0 {
+					logger.Info("processed shorts jobs", "count", n)
 				}
 
 				// Обновление heartbeat
