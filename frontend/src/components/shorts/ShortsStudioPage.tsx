@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FileVideo, FolderOpen, Loader2 } from "lucide-react";
+import { FileVideo, FolderOpen, Loader2, Upload } from "lucide-react";
 import { WorkspaceMediaPickerModal } from "@/components/generation/WorkspaceMediaPickerModal";
-import type { WorkspaceFile } from "@/lib/files-api";
+import { uploadFile, type WorkspaceFile } from "@/lib/files-api";
 import { createShortsProject, getShortsDraftDownloadUrl, getShortsJob, getShortsProject, rerenderShortsProject, updateShortsSubtitleSettings, type ShortsClip, type ShortsJob, type ShortsProject } from "@/lib/shorts-api";
 
 const contentTypes = [
@@ -20,6 +20,8 @@ export function ShortsStudioPage() {
   const [sourceFileId, setSourceFileId] = useState("");
   const [sourceFile, setSourceFile] = useState<WorkspaceFile | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [duration, setDuration] = useState(60);
   const [rangeStart, setRangeStart] = useState(0);
   const [rangeEnd, setRangeEnd] = useState(60);
@@ -81,6 +83,18 @@ export function ShortsStudioPage() {
     }
   }
 
+  async function handleUpload(file: File) {
+    if (!file.type.startsWith("video/")) { setJobMessage("Выберите видеофайл."); return; }
+    setUploading(true); setUploadProgress(0); setJobMessage("");
+    try {
+      const uploaded = await uploadFile(file, null, setUploadProgress);
+      setSourceFile(uploaded); setSourceFileId(uploaded.id);
+      const nextDuration = Math.max(1, Math.round(uploaded.media_metadata?.duration_seconds ?? duration));
+      setDuration(nextDuration); setRangeEnd(nextDuration); setUploadProgress(100); setJobMessage("Видео загружено и выбрано для анализа.");
+    } catch (error) { setJobMessage(error instanceof Error ? error.message : "Не удалось загрузить видео"); }
+    finally { setUploading(false); }
+  }
+
   return (
     <main className="space-y-6">
       <div className="mb-8">
@@ -94,7 +108,10 @@ export function ShortsStudioPage() {
         <section className="grid gap-5 rounded-xl border border-border bg-surface p-5 shadow-sm lg:grid-cols-2">
         <label className="block text-sm text-white/70">
           ID видео в медиатеке
-          <button type="button" onClick={() => setPickerOpen(true)} className="mt-2 flex w-full items-center gap-3 rounded-lg border border-border bg-bg px-4 py-3 text-left hover:border-accent"><FileVideo className="h-5 w-5 text-accent" /><span className="min-w-0 flex-1 truncate text-sm text-text">{sourceFile?.name ?? "Выбрать видео из файлов"}</span><FolderOpen className="h-4 w-4 text-muted" /></button>
+          <div onDragOver={(event) => event.preventDefault()} onDrop={(event) => { event.preventDefault(); const file = event.dataTransfer.files[0]; if (file) void handleUpload(file); }} className="mt-2 rounded-lg border border-dashed border-border bg-bg p-3">
+            <div className="flex items-center gap-3"><FileVideo className="h-5 w-5 text-accent" /><span className="min-w-0 flex-1 truncate text-sm text-text">{sourceFile?.name ?? "Перетащите видео сюда или выберите из файлов"}</span><button type="button" onClick={() => setPickerOpen(true)} className="rounded-md border border-border bg-surface px-3 py-2 text-xs font-medium text-text hover:border-accent"><FolderOpen className="mr-1 inline h-4 w-4" />Медиатека</button><label className="cursor-pointer rounded-md bg-accent px-3 py-2 text-xs font-semibold text-white hover:bg-accent/90"><Upload className="mr-1 inline h-4 w-4" />Загрузить<input type="file" accept="video/*" className="hidden" disabled={uploading} onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleUpload(file); event.currentTarget.value = ""; }} /></label></div>
+            {uploading && <div className="mt-3"><div className="h-1.5 overflow-hidden rounded-full bg-border"><div className="h-full bg-accent transition-all" style={{ width: `${uploadProgress}%` }} /></div><p className="mt-1 text-xs text-muted">Загрузка видео…</p></div>}
+          </div>
         </label>
         <label className="block text-sm text-white/70">
           Тип видео

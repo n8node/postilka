@@ -113,7 +113,7 @@ export function initUpload(input: {
   });
 }
 
-export async function uploadFile(file: File, folderId?: string | null) {
+export async function uploadFile(file: File, folderId?: string | null, onProgress?: (progress: number) => void) {
   const mimeType = file.type || "application/octet-stream";
   let mediaDurationSeconds: number | undefined;
   let mediaWidth: number | undefined;
@@ -138,14 +138,17 @@ export async function uploadFile(file: File, folderId?: string | null) {
     ...(mediaHeight ? { media_height: mediaHeight } : {}),
   });
   const headers = new Headers(init.upload_headers);
-  const res = await fetch(init.upload_url, {
-    method: "PUT",
-    body: file,
-    headers,
+  await new Promise<void>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("PUT", init.upload_url);
+    headers.forEach((value, key) => xhr.setRequestHeader(key, value));
+    xhr.upload.onprogress = (event) => {
+      if (event.lengthComputable) onProgress?.(Math.round((event.loaded / event.total) * 100));
+    };
+    xhr.onload = () => xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error("Не удалось загрузить файл в хранилище"));
+    xhr.onerror = () => reject(new Error("Не удалось загрузить файл в хранилище"));
+    xhr.send(file);
   });
-  if (!res.ok) {
-    throw new Error("Не удалось загрузить файл в хранилище");
-  }
   return apiFetch<WorkspaceFile>("/files/upload/complete", {
     method: "POST",
     body: JSON.stringify({ upload_session_token: init.upload_session_token }),
