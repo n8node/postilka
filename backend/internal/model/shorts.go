@@ -77,6 +77,13 @@ type ShortsClip struct {
 	UpdatedAt      time.Time       `json:"updated_at"`
 }
 
+type ShortsClipUpdate struct {
+	StartSeconds   float64 `json:"start_seconds"`
+	EndSeconds     float64 `json:"end_seconds"`
+	TranscriptText string  `json:"transcript_text"`
+	Status         string  `json:"status"`
+}
+
 type ShortsJob struct {
 	ID          string          `json:"id"`
 	ProjectID   string          `json:"project_id"`

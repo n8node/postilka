@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/postilka/postilka/internal/middleware"
+	"github.com/postilka/postilka/internal/model"
 	"github.com/postilka/postilka/internal/repository"
 	"github.com/postilka/postilka/internal/service"
 )
@@ -95,6 +96,25 @@ func (h *ShortsHandler) GetProject(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"project": project, "clips": clips})
 }
 
+func (h *ShortsHandler) UpdateClip(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
+		return
+	}
+	var input model.ShortsClipUpdate
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeError(w, http.StatusBadRequest, "Некорректные данные клипа")
+		return
+	}
+	clip, err := h.shorts.UpdateClip(r.Context(), userID, r, chi.URLParam(r, "id"), input)
+	if err != nil {
+		h.mapError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"clip": clip})
+}
+
 func (h *ShortsHandler) GetJob(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
@@ -175,6 +195,8 @@ func (h *ShortsHandler) mapError(w http.ResponseWriter, err error) {
 		writeErrorWithCode(w, http.StatusBadRequest, "shorts_source_required", "Загрузите исходное видео")
 	case errors.Is(err, service.ErrShortsDurationRequired), errors.Is(err, service.ErrInvalidShortsRange), errors.Is(err, service.ErrShortsRangeOutsideVideo):
 		writeErrorWithCode(w, http.StatusBadRequest, "shorts_invalid_range", "Укажите корректный диапазон обработки видео")
+	case errors.Is(err, service.ErrInvalidShortsClip):
+		writeErrorWithCode(w, http.StatusBadRequest, "shorts_invalid_clip", "Проверьте диапазон, текст и статус клипа")
 	case errors.Is(err, service.ErrShortsProjectNotFound):
 		writeErrorWithCode(w, http.StatusNotFound, "shorts_project_not_found", "Проект Shorts не найден")
 	case errors.Is(err, repository.ErrNotFound):

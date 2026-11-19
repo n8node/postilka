@@ -341,6 +341,29 @@ func (r *ShortsRepository) GetClip(ctx context.Context, workspaceID, clipID stri
 	return &c, nil
 }
 
+func (r *ShortsRepository) GetProjectByClip(ctx context.Context, workspaceID, clipID string) (*model.ShortsProject, error) {
+	return scanShortsProject(r.pool.QueryRow(ctx, `SELECT `+shortsProjectColumns+` FROM shorts_projects p JOIN shorts_clips c ON c.project_id = p.id WHERE c.id = $1 AND p.workspace_id = $2`, clipID, workspaceID))
+}
+
+func (r *ShortsRepository) UpdateClip(ctx context.Context, workspaceID, clipID string, input model.ShortsClipUpdate) (*model.ShortsClip, error) {
+	var c model.ShortsClip
+	var status string
+	var scoreDetails, crop, subtitle, overlays []byte
+	err := r.pool.QueryRow(ctx, `
+		UPDATE shorts_clips c
+		SET start_seconds = $1, end_seconds = $2, transcript_text = $3, status = $4, updated_at = now()
+		FROM shorts_projects p
+		WHERE c.id = $5 AND p.id = c.project_id AND p.workspace_id = $6
+		RETURNING c.id, c.project_id, c.start_seconds, c.end_seconds, c.transcript_text, c.score, c.score_details, c.crop_config, c.subtitle_config, c.overlay_config, c.status, c.draft_file_id, c.final_file_id, c.created_at, c.updated_at
+	`, input.StartSeconds, input.EndSeconds, input.TranscriptText, input.Status, clipID, workspaceID).Scan(&c.ID, &c.ProjectID, &c.StartSeconds, &c.EndSeconds, &c.TranscriptText, &c.Score, &scoreDetails, &crop, &subtitle, &overlays, &status, &c.DraftFileID, &c.FinalFileID, &c.CreatedAt, &c.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	c.Status = status
+	c.ScoreDetails, c.CropConfig, c.SubtitleConfig, c.OverlayConfig = json.RawMessage(scoreDetails), json.RawMessage(crop), json.RawMessage(subtitle), json.RawMessage(overlays)
+	return &c, err
+}
+
 func (r *ShortsRepository) CreateJob(ctx context.Context, projectID, jobType string) (*model.ShortsJob, error) {
 	var j model.ShortsJob
 	var status string

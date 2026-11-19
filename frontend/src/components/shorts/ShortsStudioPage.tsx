@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { FileVideo, FolderOpen, Loader2, RefreshCw, Trash2, Upload } from "lucide-react";
 import { WorkspaceMediaPickerModal } from "@/components/generation/WorkspaceMediaPickerModal";
 import { uploadFile, type WorkspaceFile } from "@/lib/files-api";
-import { analyzeShortsProject, createShortsProject, deleteShortsProject, getShortsDraftDownloadUrl, getShortsJob, getShortsProject, listShortsProjects, rerenderShortsProject, updateShortsSubtitleSettings, type ShortsClip, type ShortsJob, type ShortsProject, type ShortsProjectListItem } from "@/lib/shorts-api";
+import { analyzeShortsProject, createShortsProject, deleteShortsProject, getShortsDraftDownloadUrl, getShortsJob, getShortsProject, listShortsProjects, rerenderShortsProject, updateShortsClip, updateShortsSubtitleSettings, type ShortsClip, type ShortsJob, type ShortsProject, type ShortsProjectListItem } from "@/lib/shorts-api";
 
 const contentTypes = [
   ["podcast", "Подкаст"],
@@ -36,6 +36,8 @@ export function ShortsStudioPage() {
   const [subtitlePosition, setSubtitlePosition] = useState("bottom");
   const [history, setHistory] = useState<ShortsProjectListItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
+  const [clipSaving, setClipSaving] = useState<Record<string, boolean>>({});
+  const [clipDrafts, setClipDrafts] = useState<Record<string, { start: string; end: string; text: string; selected: boolean }>>({});
 
   useEffect(() => {
     void listShortsProjects().then((result) => setHistory(result.projects)).catch(() => undefined).finally(() => setHistoryLoading(false));
@@ -102,6 +104,27 @@ export function ShortsStudioPage() {
   async function loadDraft(clipId: string) {
     if (draftUrls[clipId]) return;
     try { const result = await getShortsDraftDownloadUrl(clipId); setDraftUrls((current) => ({ ...current, [clipId]: result.url })); } catch { /* draft may not be ready */ }
+  }
+
+  function clipDraft(clip: ShortsClip) {
+    return clipDrafts[clip.id] ?? { start: String(clip.start_seconds), end: String(clip.end_seconds), text: clip.transcript_text, selected: clip.status === "selected" || clip.status === "draft" };
+  }
+
+  async function saveClip(clip: ShortsClip) {
+    const draft = clipDraft(clip);
+    const start = Number(draft.start);
+    const end = Number(draft.end);
+    setClipSaving((value) => ({ ...value, [clip.id]: true }));
+    try {
+      const result = await updateShortsClip(clip.id, { start_seconds: start, end_seconds: end, transcript_text: draft.text, status: draft.selected ? "selected" : "candidate" });
+      setClips((items) => items.map((item) => item.id === clip.id ? result.clip : item));
+      setClipDrafts((items) => ({ ...items, [clip.id]: { ...draft, start: String(result.clip.start_seconds), end: String(result.clip.end_seconds), text: result.clip.transcript_text } }));
+      setJobMessage("Настройки клипа сохранены.");
+    } catch (error) {
+      setJobMessage(error instanceof Error ? error.message : "Не удалось сохранить клип");
+    } finally {
+      setClipSaving((value) => ({ ...value, [clip.id]: false }));
+    }
   }
 
   async function saveSubtitleSettings() {
@@ -203,15 +226,20 @@ export function ShortsStudioPage() {
         </div>}
       </section>
       {(project || job) && <section className="mt-8 rounded-xl border border-border bg-surface p-6 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div><h2 className="text-xl font-semibold">Результаты анализа</h2><p className="mt-1 text-sm text-white/55">{job?.current_step ?? project?.status ?? "Ожидание"}</p></div>
-          {job && <span className="rounded-full bg-violet-400/15 px-3 py-1 text-sm text-violet-200">{job.progress}% · {job.status}</span>}
-        </div>
-        {clips.length === 0 ? <p className="mt-6 text-sm text-white/50">Кандидаты появятся после транскрибации и обработки worker.</p> : <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {clips.map((clip) => <article key={clip.id} className="overflow-hidden rounded-xl border border-white/10 bg-black/20">
-            <div className="aspect-[9/16] bg-black">{draftUrls[clip.id] ? <video src={draftUrls[clip.id]} controls playsInline className="h-full w-full object-contain" /> : <button type="button" onClick={() => loadDraft(clip.id)} className="flex h-full w-full items-center justify-center text-sm text-violet-200 hover:bg-white/5">Загрузить preview</button>}</div>
-            <div className="p-4"><p className="text-xs text-white/45">{clip.start_seconds.toFixed(1)}–{clip.end_seconds.toFixed(1)} сек. · score {clip.score.toFixed(2)}</p><p className="mt-2 line-clamp-4 text-sm text-white/80">{clip.transcript_text}</p></div>
-          </article>)}
+                  {clips.length === 0 ? <p className="mt-6 text-sm text-white/50">Candidates will appear after worker processing.</p> : <div className="mt-6 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {clips.map((clip) => {
+            const draft = clipDraft(clip);
+            return <article key={clip.id} className="overflow-hidden rounded-xl border border-white/10 bg-black/20">
+              <div className="aspect-[9/16] bg-black">{draftUrls[clip.id] ? <video src={draftUrls[clip.id]} controls playsInline className="h-full w-full object-contain" /> : <button type="button" onClick={() => loadDraft(clip.id)} className="flex h-full w-full items-center justify-center text-sm text-violet-200 hover:bg-white/5">Load preview</button>}</div>
+              <div className="space-y-3 p-4">
+                <p className="text-xs text-white/45">score {clip.score.toFixed(2)}</p>
+                <div className="grid grid-cols-2 gap-2"><label className="text-xs text-white/60">Start<input type="number" min="0" step="0.1" value={draft.start} onChange={(e) => setClipDrafts((items) => ({ ...items, [clip.id]: { ...draft, start: e.target.value } }))} className="mt-1 w-full rounded-lg border border-white/10 bg-black/20 px-2 py-1.5 text-sm text-white" /></label><label className="text-xs text-white/60">End<input type="number" min="0" step="0.1" value={draft.end} onChange={(e) => setClipDrafts((items) => ({ ...items, [clip.id]: { ...draft, end: e.target.value } }))} className="mt-1 w-full rounded-lg border border-white/10 bg-black/20 px-2 py-1.5 text-sm text-white" /></label></div>
+                <label className="block text-xs text-white/60">Subtitles<textarea value={draft.text} onChange={(e) => setClipDrafts((items) => ({ ...items, [clip.id]: { ...draft, text: e.target.value } }))} rows={4} className="mt-1 w-full resize-y rounded-lg border border-white/10 bg-black/20 px-2 py-1.5 text-sm text-white" /></label>
+                <label className="flex items-center gap-2 text-sm text-white/75"><input type="checkbox" checked={draft.selected} onChange={(e) => setClipDrafts((items) => ({ ...items, [clip.id]: { ...draft, selected: e.target.checked } }))} />Select for final render</label>
+                <button type="button" onClick={() => void saveClip(clip)} disabled={clipSaving[clip.id]} className="rounded-lg border border-violet-400/30 px-3 py-2 text-sm text-violet-100 hover:bg-violet-400/10 disabled:opacity-50">{clipSaving[clip.id] ? "Saving..." : "Save clip"}</button>
+              </div>
+            </article>;
+          })}
         </div>}
       </section>}
     </main>

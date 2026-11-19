@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/postilka/postilka/internal/model"
@@ -15,6 +16,7 @@ var (
 	ErrShortsProjectNotFound  = errors.New("shorts project not found")
 	ErrShortsSourceRequired   = errors.New("shorts source video is required")
 	ErrShortsDurationRequired = errors.New("shorts source duration is required")
+	ErrInvalidShortsClip      = errors.New("invalid shorts clip")
 )
 
 type ShortsService struct {
@@ -125,6 +127,34 @@ func (s *ShortsService) GetProject(ctx context.Context, userID string, r *http.R
 	}
 	clips, err := s.repo.ListClips(ctx, ws.ID, projectID)
 	return project, clips, err
+}
+
+func (s *ShortsService) UpdateClip(ctx context.Context, userID string, r *http.Request, clipID string, input model.ShortsClipUpdate) (*model.ShortsClip, error) {
+	ws, _, err := s.wsSvc.ResolveActive(ctx, userID, r)
+	if err != nil {
+		return nil, err
+	}
+	if ws == nil {
+		return nil, ErrWorkspaceNotFound
+	}
+	if _, err := s.wsSvc.RequireMembership(ctx, userID, ws.ID, model.RoleEditor); err != nil {
+		return nil, err
+	}
+	project, err := s.repo.GetProjectByClip(ctx, ws.ID, clipID)
+	if errors.Is(err, repository.ErrNotFound) {
+		return nil, ErrShortsProjectNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	if input.StartSeconds < 0 || input.EndSeconds <= input.StartSeconds || input.EndSeconds > project.SourceDurationSeconds || strings.TrimSpace(input.Status) == "" {
+		return nil, ErrInvalidShortsClip
+	}
+	if input.Status != "candidate" && input.Status != "selected" && input.Status != "draft" {
+		return nil, ErrInvalidShortsClip
+	}
+	input.TranscriptText = strings.TrimSpace(input.TranscriptText)
+	return s.repo.UpdateClip(ctx, ws.ID, clipID, input)
 }
 
 func (s *ShortsService) ListProjects(ctx context.Context, userID string, r *http.Request, limit, offset int) ([]model.ShortsProjectListItem, int, error) {
