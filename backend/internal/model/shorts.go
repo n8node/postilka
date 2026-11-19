@@ -91,6 +91,20 @@ type ShortsJob struct {
 	UpdatedAt   time.Time       `json:"updated_at"`
 }
 
+type AdminShortsProject struct {
+	Project *ShortsProject `json:"project"`
+	Job     *ShortsJob     `json:"job,omitempty"`
+	Clips   int            `json:"clips"`
+}
+
+type AdminShortsStats struct {
+	Total      int64 `json:"total"`
+	Active     int64 `json:"active"`
+	Completed  int64 `json:"completed"`
+	Failed     int64 `json:"failed"`
+	QueuedJobs int64 `json:"queued_jobs"`
+}
+
 type ShortsSubtitleStyle struct {
 	ID            string          `json:"id"`
 	Name          string          `json:"name"`

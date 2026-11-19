@@ -1447,6 +1447,10 @@ export function fetchAdminFiles(query: AdminFilesQuery = {}) {
   return apiFetch<AdminFilesResponse>(`/admin/files${qs ? `?${qs}` : ""}`);
 }
 
+export type AdminShortsProject = { project: { id: string; workspace_id: string; created_by_user_id: string; content_type: string; language: string; status: string; source_duration_seconds: number; processing_minutes_reserved: number; processing_minutes_consumed: number; created_at: string; updated_at: string }; job?: { id: string; job_type: string; status: string; current_step: string; progress: number; attempts: number; last_error?: string; updated_at: string }; clips: number };
+export type AdminShortsStats = { total: number; active: number; completed: number; failed: number; queued_jobs: number };
+export function fetchAdminShorts(query: { status?: string; limit?: number; offset?: number } = {}) { const params = new URLSearchParams(); if (query.status) params.set("status", query.status); if (query.limit != null) params.set("limit", String(query.limit)); if (query.offset != null) params.set("offset", String(query.offset)); const qs = params.toString(); return apiFetch<{ projects: AdminShortsProject[]; total: number; stats: AdminShortsStats }>(`/admin/shorts${qs ? `?${qs}` : ""}`); }
+
 export function fetchAdminFileFolders(workspaceId: string, includeDeleted = false) {
   const params = new URLSearchParams({ workspace_id: workspaceId });
   if (includeDeleted) params.set("include_deleted", "true");

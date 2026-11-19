@@ -273,6 +273,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	shortsRepo := repository.NewShortsRepository(db.Pool)
 	shortsSvc := service.NewShortsService(shortsRepo, fileStorageRepo, fileStorageSvc, wsSvc)
 	shortsHandler := handler.NewShortsHandler(shortsSvc)
+	adminShortsHandler := handler.NewAdminShortsHandler(shortsRepo)
 	helpArticleRepo := repository.NewHelpArticleRepository(db.Pool)
 	helpArticleSvc := service.NewHelpArticleService(helpArticleRepo, objectStorage)
 	helpArticleHandler := handler.NewHelpArticleHandler(helpArticleSvc)
@@ -869,6 +870,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Get("/analytics", adminHandler.Analytics)
 				r.Post("/analytics/reset", adminHandler.ResetAnalytics)
 				r.Get("/generations/active", adminHandler.ListActiveGenerations)
+				r.Get("/shorts", adminShortsHandler.List)
 				r.Post("/generations/{jobID}/reset", adminHandler.ResetGeneration)
 				r.Delete("/generations/{jobID}", adminHandler.DeleteGeneration)
 

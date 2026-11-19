@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strconv"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -40,6 +41,69 @@ func (r *ShortsRepository) GetProject(ctx context.Context, workspaceID, projectI
 		return nil, ErrNotFound
 	}
 	return p, err
+}
+
+type ListShortsAdminFilter struct {
+	Status string
+	Limit  int
+	Offset int
+}
+
+func (r *ShortsRepository) ListForAdmin(ctx context.Context, f ListShortsAdminFilter) ([]model.AdminShortsProject, int, *model.AdminShortsStats, error) {
+	if f.Limit <= 0 || f.Limit > 200 {
+		f.Limit = 50
+	}
+	if f.Offset < 0 {
+		f.Offset = 0
+	}
+	where := ""
+	args := []any{}
+	if f.Status != "" {
+		where = " WHERE p.status = $1"
+		args = append(args, f.Status)
+	}
+	var total int
+	if err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM shorts_projects p`+where, args...).Scan(&total); err != nil {
+		return nil, 0, nil, err
+	}
+	args = append(args, f.Limit, f.Offset)
+	rows, err := r.pool.Query(ctx, `SELECT `+shortsProjectColumns+`, (SELECT COUNT(*) FROM shorts_clips c WHERE c.project_id = p.id), j.id, j.job_type, j.status, j.current_step, j.progress, j.attempts, j.available_at, j.last_error, j.created_at, j.updated_at FROM shorts_projects p LEFT JOIN LATERAL (SELECT * FROM shorts_jobs WHERE project_id = p.id ORDER BY created_at DESC LIMIT 1) j ON true`+where+` ORDER BY p.created_at DESC LIMIT $`+strconv.Itoa(len(args)-1)+` OFFSET $`+strconv.Itoa(len(args)), args...)
+	if err != nil {
+		return nil, 0, nil, err
+	}
+	defer rows.Close()
+	items := make([]model.AdminShortsProject, 0)
+	for rows.Next() {
+		var p model.ShortsProject
+		var contentType, status string
+		var settings []byte
+		var clips int
+		var jobID, jobType, jobStatus, step, lastError *string
+		var progress, attempts *int
+		var available, jobCreated, jobUpdated *time.Time
+		if err := rows.Scan(&p.ID, &p.WorkspaceID, &p.CreatedByUserID, &p.SourceFileID, &contentType, &p.Language, &status, &p.SourceDurationSeconds, &p.ProcessingMinutesReserved, &p.ProcessingMinutesConsumed, &p.SourceExpiresAt, &p.AudioFileID, &p.AudioExpiresAt, &settings, &p.CreatedAt, &p.UpdatedAt, &clips, &jobID, &jobType, &jobStatus, &step, &progress, &attempts, &available, &lastError, &jobCreated, &jobUpdated); err != nil {
+			return nil, 0, nil, err
+		}
+		p.ContentType = model.ShortsContentType(contentType)
+		p.Status = model.ShortsProjectStatus(status)
+		p.Settings = json.RawMessage(settings)
+		item := model.AdminShortsProject{Project: &p, Clips: clips}
+		if jobID != nil {
+			item.Job = &model.ShortsJob{ID: *jobID, ProjectID: p.ID, JobType: *jobType, Status: model.ShortsJobStatus(*jobStatus), CurrentStep: *step, Progress: *progress, Attempts: *attempts, AvailableAt: *available, LastError: *lastError, CreatedAt: *jobCreated, UpdatedAt: *jobUpdated}
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, nil, err
+	}
+	stats := &model.AdminShortsStats{}
+	if err := r.pool.QueryRow(ctx, `SELECT COUNT(*), COUNT(*) FILTER (WHERE status IN ('draft','analyzing','rendering')), COUNT(*) FILTER (WHERE status='completed'), COUNT(*) FILTER (WHERE status='failed') FROM shorts_projects`).Scan(&stats.Total, &stats.Active, &stats.Completed, &stats.Failed); err != nil {
+		return nil, 0, nil, err
+	}
+	if err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM shorts_jobs WHERE status='queued'`).Scan(&stats.QueuedJobs); err != nil {
+		return nil, 0, nil, err
+	}
+	return items, total, stats, nil
 }
 
 func (r *ShortsRepository) CreateProject(ctx context.Context, p *model.ShortsProject) (*model.ShortsProject, error) {
