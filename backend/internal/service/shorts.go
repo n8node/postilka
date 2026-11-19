@@ -209,3 +209,18 @@ func (s *ShortsService) DraftDownloadURL(ctx context.Context, userID string, r *
 	}
 	return s.fileStorage.DownloadURL(ctx, userID, r, file.ID, true)
 }
+
+func (s *ShortsService) UpdateSubtitleSettings(ctx context.Context, userID string, r *http.Request, projectID string, config ShortsSubtitleConfig) error {
+	ws, _, err := s.wsSvc.ResolveActive(ctx, userID, r)
+	if err != nil {
+		return err
+	}
+	if ws == nil {
+		return ErrWorkspaceNotFound
+	}
+	if _, err := s.wsSvc.RequireMembership(ctx, userID, ws.ID, model.RoleEditor); err != nil {
+		return err
+	}
+	config = NormalizeShortsSubtitleConfig(config)
+	return s.repo.SetSubtitleSettings(ctx, ws.ID, projectID, config.Style, config.Position)
+}

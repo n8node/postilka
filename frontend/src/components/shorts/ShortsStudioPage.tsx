@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createShortsProject, getShortsDraftDownloadUrl, getShortsJob, getShortsProject, type ShortsClip, type ShortsJob, type ShortsProject } from "@/lib/shorts-api";
+import { createShortsProject, getShortsDraftDownloadUrl, getShortsJob, getShortsProject, updateShortsSubtitleSettings, type ShortsClip, type ShortsJob, type ShortsProject } from "@/lib/shorts-api";
 
 const contentTypes = [
   ["podcast", "Подкаст"],
@@ -25,6 +25,8 @@ export function ShortsStudioPage() {
   const [clips, setClips] = useState<ShortsClip[]>([]);
   const [job, setJob] = useState<ShortsJob | null>(null);
   const [draftUrls, setDraftUrls] = useState<Record<string, string>>({});
+  const [subtitleStyle, setSubtitleStyle] = useState("classic");
+  const [subtitlePosition, setSubtitlePosition] = useState("bottom");
 
   useEffect(() => {
     if (!project?.id || !job?.id) return;
@@ -44,6 +46,11 @@ export function ShortsStudioPage() {
   async function loadDraft(clipId: string) {
     if (draftUrls[clipId]) return;
     try { const result = await getShortsDraftDownloadUrl(clipId); setDraftUrls((current) => ({ ...current, [clipId]: result.url })); } catch { /* draft may not be ready */ }
+  }
+
+  async function saveSubtitleSettings() {
+    if (!project?.id) return;
+    try { await updateShortsSubtitleSettings(project.id, { style: subtitleStyle, position: subtitlePosition }); setJobMessage("Настройки субтитров сохранены. Для нового preview запустите повторный анализ."); } catch (error) { setJobMessage(error instanceof Error ? error.message : "Не удалось сохранить настройки"); }
   }
 
   async function submit() {
@@ -110,6 +117,7 @@ export function ShortsStudioPage() {
         </button>
         {jobMessage && <p className="text-sm text-white/65">{jobMessage}</p>}
       </div>
+      {project && <section className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] p-6"><h2 className="text-lg font-semibold">Стиль субтитров</h2><div className="mt-4 grid gap-4 sm:grid-cols-3"><label className="text-sm text-white/70">Стиль<select value={subtitleStyle} onChange={(e) => setSubtitleStyle(e.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white"><option value="classic">Classic</option><option value="bold">Bold</option><option value="minimal">Minimal</option></select></label><label className="text-sm text-white/70">Позиция<select value={subtitlePosition} onChange={(e) => setSubtitlePosition(e.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white"><option value="top">Сверху</option><option value="center">По центру</option><option value="bottom">Снизу</option></select></label><button type="button" onClick={saveSubtitleSettings} className="self-end rounded-xl border border-white/15 px-4 py-2 text-sm hover:bg-white/10">Сохранить стиль</button></div></section>}
       {(project || job) && <section className="mt-8 rounded-2xl border border-white/10 bg-white/[0.03] p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div><h2 className="text-xl font-semibold">Результаты анализа</h2><p className="mt-1 text-sm text-white/55">{job?.current_step ?? project?.status ?? "Ожидание"}</p></div>

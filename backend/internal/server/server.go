@@ -570,6 +570,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Post("/shorts/projects", shortsHandler.CreateProject)
 			r.Get("/shorts/projects/{id}", shortsHandler.GetProject)
 			r.Get("/shorts/projects/{id}/audio", shortsHandler.DownloadAudio)
+			r.Patch("/shorts/projects/{id}/subtitle-settings", shortsHandler.UpdateSubtitleSettings)
 			r.Get("/shorts/clips/{id}/draft", shortsHandler.DownloadDraft)
 			r.Get("/shorts/projects/{id}/audio", shortsHandler.DownloadAudio)
 			r.Get("/shorts/jobs/{id}", shortsHandler.GetJob)

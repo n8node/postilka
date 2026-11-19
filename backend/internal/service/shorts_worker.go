@@ -131,7 +131,7 @@ func (w *ShortsWorker) process(ctx context.Context, job repository.ClaimedShorts
 	if err := w.repo.UpdateJobProgress(ctx, job.ID, w.owner, "render_drafts", 90); err != nil {
 		return err
 	}
-	if err := w.renderDrafts(ctx, job, project, sourcePath, shortsCandidates, transcript.Segments); err != nil {
+	if err := w.renderDrafts(ctx, job, project, sourcePath, shortsCandidates, transcript.Segments, ShortsSubtitleConfigFromSettings(project.Settings)); err != nil {
 		return err
 	}
 	if err := w.repo.UpdateProjectStatus(ctx, job.WorkspaceID, job.ProjectID, model.ShortsProjectAnalyzing, "transcript_ready"); err != nil {
@@ -140,7 +140,7 @@ func (w *ShortsWorker) process(ctx context.Context, job repository.ClaimedShorts
 	return w.repo.SucceedJob(ctx, job.ID, w.owner)
 }
 
-func (w *ShortsWorker) renderDrafts(ctx context.Context, job repository.ClaimedShortsJob, project *model.ShortsProject, sourcePath string, candidates []ShortsCandidate, transcript []ShortsTranscriptSegment) error {
+func (w *ShortsWorker) renderDrafts(ctx context.Context, job repository.ClaimedShortsJob, project *model.ShortsProject, sourcePath string, candidates []ShortsCandidate, transcript []ShortsTranscriptSegment, subtitleConfig ShortsSubtitleConfig) error {
 	clips, err := w.repo.ListCandidateClips(ctx, job.WorkspaceID, project.ID)
 	if err != nil {
 		return err
@@ -149,7 +149,7 @@ func (w *ShortsWorker) renderDrafts(ctx context.Context, job repository.ClaimedS
 		return fmt.Errorf("candidate clip count mismatch")
 	}
 	for index, candidate := range candidates {
-		path, err := RenderShortsDraft(ctx, sourcePath, candidate.StartSeconds, candidate.EndSeconds, transcript)
+		path, err := RenderShortsDraft(ctx, sourcePath, candidate.StartSeconds, candidate.EndSeconds, transcript, subtitleConfig)
 		if err != nil {
 			return err
 		}

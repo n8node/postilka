@@ -92,6 +92,24 @@ func (h *ShortsHandler) DownloadDraft(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"url": url, "expires_in": expiresIn})
 }
 
+func (h *ShortsHandler) UpdateSubtitleSettings(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
+		return
+	}
+	var config service.ShortsSubtitleConfig
+	if err := json.NewDecoder(r.Body).Decode(&config); err != nil {
+		writeError(w, http.StatusBadRequest, "Некорректные настройки субтитров")
+		return
+	}
+	if err := h.shorts.UpdateSubtitleSettings(r.Context(), userID, r, chi.URLParam(r, "id"), config); err != nil {
+		h.mapError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
 func (h *ShortsHandler) mapError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, service.ErrShortsSourceRequired):

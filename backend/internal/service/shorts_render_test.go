@@ -16,7 +16,7 @@ func TestShortsVerticalFilter(t *testing.T) {
 }
 
 func TestBuildShortsASSShiftsAndEscapesText(t *testing.T) {
-	ass := BuildShortsASS([]ShortsTranscriptSegment{{StartSeconds: 10, EndSeconds: 12, Text: "Привет {мир}"}}, 10, 20)
+	ass := BuildShortsASS([]ShortsTranscriptSegment{{StartSeconds: 10, EndSeconds: 12, Text: "Привет {мир}"}}, 10, 20, ShortsSubtitleConfig{Style: "classic", Position: "bottom"})
 	if !strings.Contains(ass, "0:00:00.00,0:00:02.00") {
 		t.Fatalf("unexpected timing: %s", ass)
 	}

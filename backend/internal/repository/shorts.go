@@ -70,6 +70,11 @@ func (r *ShortsRepository) SetTranscript(ctx context.Context, workspaceID, proje
 	return err
 }
 
+func (r *ShortsRepository) SetSubtitleSettings(ctx context.Context, workspaceID, projectID, style, position string) error {
+	_, err := r.pool.Exec(ctx, `UPDATE shorts_projects SET settings = jsonb_set(jsonb_set(settings, '{subtitle_style}', to_jsonb($1::text), true), '{subtitle_position}', to_jsonb($2::text), true), updated_at = now() WHERE id = $3 AND workspace_id = $4`, style, position, projectID, workspaceID)
+	return err
+}
+
 func (r *ShortsRepository) ListClips(ctx context.Context, workspaceID, projectID string) ([]model.ShortsClip, error) {
 	rows, err := r.pool.Query(ctx, `SELECT c.id, c.project_id, c.start_seconds, c.end_seconds, c.transcript_text, c.score, c.score_details, c.crop_config, c.subtitle_config, c.overlay_config, c.status, c.draft_file_id, c.final_file_id, c.created_at, c.updated_at FROM shorts_clips c JOIN shorts_projects p ON p.id = c.project_id WHERE c.project_id = $1 AND p.workspace_id = $2 ORDER BY c.score DESC, c.start_seconds`, projectID, workspaceID)
 	if err != nil {

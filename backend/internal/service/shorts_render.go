@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -9,6 +10,33 @@ import (
 	"strings"
 	"time"
 )
+
+type ShortsSubtitleConfig struct {
+	Style    string `json:"style"`
+	Position string `json:"position"`
+}
+
+func NormalizeShortsSubtitleConfig(config ShortsSubtitleConfig) ShortsSubtitleConfig {
+	if config.Style != "classic" && config.Style != "bold" && config.Style != "minimal" {
+		config.Style = "classic"
+	}
+	if config.Position != "top" && config.Position != "center" && config.Position != "bottom" {
+		config.Position = "bottom"
+	}
+	return config
+}
+
+func ShortsSubtitleConfigFromSettings(settings json.RawMessage) ShortsSubtitleConfig {
+	config := ShortsSubtitleConfig{Style: "classic", Position: "bottom"}
+	var envelope struct {
+		SubtitleStyle    string `json:"subtitle_style"`
+		SubtitlePosition string `json:"subtitle_position"`
+	}
+	if json.Unmarshal(settings, &envelope) == nil {
+		config.Style, config.Position = envelope.SubtitleStyle, envelope.SubtitlePosition
+	}
+	return NormalizeShortsSubtitleConfig(config)
+}
 
 func ShortsVerticalFilter(width, height int) string {
 	// Scale to cover a 1080x1920 canvas, then center-crop. The expressions are
@@ -18,9 +46,23 @@ func ShortsVerticalFilter(width, height int) string {
 	return "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920:(iw-1080)/2:(ih-1920)/2,format=yuv420p"
 }
 
-func BuildShortsASS(segments []ShortsTranscriptSegment, clipStart, clipEnd float64) string {
+func BuildShortsASS(segments []ShortsTranscriptSegment, clipStart, clipEnd float64, config ShortsSubtitleConfig) string {
+	config = NormalizeShortsSubtitleConfig(config)
+	fontSize, bold, outline := 58, "-1", 3
+	if config.Style == "minimal" {
+		fontSize, bold, outline = 48, "0", 2
+	}
+	if config.Style == "bold" {
+		fontSize, outline = 64, 4
+	}
+	alignment, marginV := 2, 180
+	if config.Position == "top" {
+		alignment, marginV = 8, 180
+	} else if config.Position == "center" {
+		alignment, marginV = 5, 0
+	}
 	var b strings.Builder
-	b.WriteString("[Script Info]\nScriptType: v4.00+\nPlayResX: 1080\nPlayResY: 1920\n\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: Default,Arial,58,&H00FFFFFF,&H00FFFFFF,&H00101010,&H90101010,-1,0,0,0,100,100,0,0,1,3,1,2,70,70,180,1\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n")
+	b.WriteString(fmt.Sprintf("[Script Info]\nScriptType: v4.00+\nPlayResX: 1080\nPlayResY: 1920\n\n[V4+ Styles]\nFormat: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\nStyle: Default,Arial,%d,&H00FFFFFF,&H00FFFFFF,&H00101010,&H90101010,%s,0,0,0,100,100,0,0,1,%d,1,%d,70,70,%d,1\n\n[Events]\nFormat: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n", fontSize, bold, outline, alignment, marginV))
 	for _, segment := range segments {
 		start := maxFloat(clipStart, segment.StartSeconds)
 		end := minFloat(clipEnd, segment.EndSeconds)
@@ -63,13 +105,13 @@ func minFloat(a, b float64) float64 {
 	return b
 }
 
-func RenderShortsDraft(ctx context.Context, inputPath string, startSeconds, endSeconds float64, transcript []ShortsTranscriptSegment) (string, error) {
+func RenderShortsDraft(ctx context.Context, inputPath string, startSeconds, endSeconds float64, transcript []ShortsTranscriptSegment, config ShortsSubtitleConfig) (string, error) {
 	if strings.TrimSpace(inputPath) == "" || endSeconds <= startSeconds {
 		return "", fmt.Errorf("invalid shorts render input")
 	}
 	outputPath := filepath.Join(os.TempDir(), fmt.Sprintf("postilka-shorts-draft-%d.mp4", time.Now().UnixNano()))
 	assPath := filepath.Join(os.TempDir(), fmt.Sprintf("postilka-shorts-subtitles-%d.ass", time.Now().UnixNano()))
-	if err := os.WriteFile(assPath, []byte(BuildShortsASS(transcript, startSeconds, endSeconds)), 0600); err != nil {
+	if err := os.WriteFile(assPath, []byte(BuildShortsASS(transcript, startSeconds, endSeconds, config)), 0600); err != nil {
 		return "", err
 	}
 	defer os.Remove(assPath)

@@ -9,7 +9,7 @@ export type ShortsProject = {
   source_expires_at?: string;
   audio_file_id?: string;
   audio_expires_at?: string;
-  settings?: { transcript?: unknown; current_step?: string };
+  settings?: { transcript?: unknown; current_step?: string; subtitle_style?: string; subtitle_position?: string };
 };
 
 export type ShortsClip = {
@@ -73,4 +73,8 @@ export function getShortsProject(id: string) {
 
 export function getShortsDraftDownloadUrl(clipId: string) {
   return request<{ url: string; expires_in: number }>(`/shorts/clips/${clipId}/draft`);
+}
+
+export function updateShortsSubtitleSettings(projectId: string, input: { style: string; position: string }) {
+  return request<{ ok: boolean }>(`/shorts/projects/${projectId}/subtitle-settings`, { method: "PATCH", body: JSON.stringify(input) });
 }
