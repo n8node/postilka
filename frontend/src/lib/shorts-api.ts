@@ -49,3 +49,7 @@ export function createShortsProject(input: {
 export function getShortsJob(id: string) {
   return request<{ job: ShortsJob }>(`/shorts/jobs/${id}`);
 }
+
+export function getShortsAudioDownloadUrl(projectId: string) {
+  return request<{ url: string; expires_in: number }>(`/shorts/projects/${projectId}/audio`);
+}

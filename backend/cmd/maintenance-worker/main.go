@@ -56,6 +56,7 @@ func main() {
 	postRepo := repository.NewPostRepository(db.Pool)
 	fileStorageRepo := repository.NewWorkspaceFileRepository(db.Pool)
 	folderStorageRepo := repository.NewWorkspaceFolderRepository(db.Pool)
+	shortsRepo := repository.NewShortsRepository(db.Pool)
 	opsStateRepo := repository.NewOpsStateRepository(db.Pool)
 	backupRepo := repository.NewBackupRepository(db.Pool)
 
@@ -106,6 +107,8 @@ func main() {
 	storageProvidersRepo := repository.NewStorageProvidersRepository(db.Pool)
 	storageSettingsSvc := service.NewStorageSettingsService(storageSettingsRepo, storageProvidersRepo, cfg)
 	objectStorage := service.NewObjectStorage(storageSettingsSvc)
+	fileStorageSvc := service.NewFileStorageService(fileStorageRepo, folderStorageRepo, workspaceRepo, planRepo, wsSvc, objectStorage, nil, nil)
+	shortsRetentionSvc := service.NewShortsRetentionService(shortsRepo, fileStorageSvc, logger)
 	backupSvc := service.NewBackupService(backupRepo, objectStorage, cfg, logger)
 
 	// Сервисы для оповещений
@@ -196,6 +199,11 @@ func main() {
 					logger.Warn("purge trash tick failed", "error", err)
 				} else if n > 0 {
 					logger.Info("purged expired trash files", "count", n)
+				}
+				if n, err := shortsRetentionSvc.PurgeExpired(ctx, time.Now().UTC()); err != nil {
+					logger.Warn("purge expired shorts source files failed", "error", err)
+				} else if n > 0 {
+					logger.Info("purged expired shorts source files", "count", n)
 				}
 
 				// Обработка RSS фидов

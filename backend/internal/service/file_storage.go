@@ -734,6 +734,26 @@ func (s *FileStorageService) PermanentDeleteFile(ctx context.Context, userID str
 	return nil
 }
 
+// PermanentDeleteWorkspaceFile is reserved for trusted maintenance workers
+// after the owning workspace has already been resolved by a domain service.
+// It keeps object deletion, database deletion and storage quota accounting in
+// the same path as the user-facing permanent delete operation.
+func (s *FileStorageService) PermanentDeleteWorkspaceFile(ctx context.Context, workspaceID, fileID string) error {
+	f, err := s.files.DeletePermanent(ctx, workspaceID, fileID)
+	if errors.Is(err, repository.ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if s.storage != nil && f.S3Key != "" {
+		if err := s.storage.DeleteObject(ctx, f.S3Key); err != nil {
+			return err
+		}
+	}
+	return s.releaseStorage(ctx, workspaceID, f.Size)
+}
+
 func (s *FileStorageService) PermanentDeleteFolder(ctx context.Context, userID string, r *http.Request, folderID string) error {
 	ws, err := s.resolveWorkspace(ctx, userID, r, model.RoleEditor)
 	if err != nil {

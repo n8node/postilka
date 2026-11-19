@@ -103,3 +103,44 @@ func (r *ShortsRepository) SetAudio(ctx context.Context, workspaceID, projectID,
 	_, err := r.pool.Exec(ctx, `UPDATE shorts_projects SET audio_file_id = $1, audio_expires_at = $2, updated_at = now() WHERE id = $3 AND workspace_id = $4`, fileID, expiresAt, projectID, workspaceID)
 	return err
 }
+
+type ShortsExpiredProject struct {
+	ID           string
+	WorkspaceID  string
+	SourceFileID *string
+	AudioFileID  *string
+}
+
+func (r *ShortsRepository) ListExpiredProjects(ctx context.Context, before time.Time) ([]ShortsExpiredProject, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT id, workspace_id, source_file_id, audio_file_id
+		FROM shorts_projects
+		WHERE (source_expires_at IS NOT NULL AND source_expires_at <= $1)
+		   OR (audio_expires_at IS NOT NULL AND audio_expires_at <= $1)
+		ORDER BY updated_at
+		LIMIT 200
+	`, before)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := make([]ShortsExpiredProject, 0)
+	for rows.Next() {
+		var item ShortsExpiredProject
+		if err := rows.Scan(&item.ID, &item.WorkspaceID, &item.SourceFileID, &item.AudioFileID); err != nil {
+			return nil, err
+		}
+		out = append(out, item)
+	}
+	return out, rows.Err()
+}
+
+func (r *ShortsRepository) ClearExpiredSource(ctx context.Context, projectID string) error {
+	_, err := r.pool.Exec(ctx, `UPDATE shorts_projects SET source_file_id = NULL, source_expires_at = NULL, updated_at = now() WHERE id = $1`, projectID)
+	return err
+}
+
+func (r *ShortsRepository) ClearExpiredAudio(ctx context.Context, projectID string) error {
+	_, err := r.pool.Exec(ctx, `UPDATE shorts_projects SET audio_file_id = NULL, audio_expires_at = NULL, updated_at = now() WHERE id = $1`, projectID)
+	return err
+}

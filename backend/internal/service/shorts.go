@@ -18,13 +18,14 @@ var (
 )
 
 type ShortsService struct {
-	repo  *repository.ShortsRepository
-	files *repository.WorkspaceFileRepository
-	wsSvc *WorkspaceService
+	repo        *repository.ShortsRepository
+	files       *repository.WorkspaceFileRepository
+	fileStorage *FileStorageService
+	wsSvc       *WorkspaceService
 }
 
-func NewShortsService(repo *repository.ShortsRepository, files *repository.WorkspaceFileRepository, wsSvc *WorkspaceService) *ShortsService {
-	return &ShortsService{repo: repo, files: files, wsSvc: wsSvc}
+func NewShortsService(repo *repository.ShortsRepository, files *repository.WorkspaceFileRepository, fileStorage *FileStorageService, wsSvc *WorkspaceService) *ShortsService {
+	return &ShortsService{repo: repo, files: files, fileStorage: fileStorage, wsSvc: wsSvc}
 }
 
 type CreateShortsProjectInput struct {
@@ -138,4 +139,42 @@ func (s *ShortsService) GetJob(ctx context.Context, userID string, r *http.Reque
 		return nil, err
 	}
 	return s.repo.GetJob(ctx, ws.ID, jobID)
+}
+
+func (s *ShortsService) AudioDownloadURL(ctx context.Context, userID string, r *http.Request, projectID string) (string, int, error) {
+	ws, _, err := s.wsSvc.ResolveActive(ctx, userID, r)
+	if err != nil {
+		return "", 0, err
+	}
+	if ws == nil {
+		return "", 0, ErrWorkspaceNotFound
+	}
+	if _, err := s.wsSvc.RequireMembership(ctx, userID, ws.ID, model.RoleViewer); err != nil {
+		return "", 0, err
+	}
+	project, err := s.repo.GetProject(ctx, ws.ID, projectID)
+	if errors.Is(err, repository.ErrNotFound) {
+		return "", 0, ErrShortsProjectNotFound
+	}
+	if err != nil {
+		return "", 0, err
+	}
+	if project.AudioFileID == nil || project.AudioExpiresAt == nil || !project.AudioExpiresAt.After(time.Now().UTC()) {
+		return "", 0, repository.ErrNotFound
+	}
+	if s.fileStorage == nil || s.files == nil {
+		return "", 0, ErrStorageNotConfigured
+	}
+	file, err := s.files.GetByID(ctx, ws.ID, *project.AudioFileID, false)
+	if errors.Is(err, repository.ErrNotFound) {
+		return "", 0, repository.ErrNotFound
+	}
+	if err != nil {
+		return "", 0, err
+	}
+	url, expiresIn, err := s.fileStorage.DownloadURL(ctx, userID, r, file.ID, false)
+	if err != nil {
+		return "", 0, err
+	}
+	return url, expiresIn, nil
 }

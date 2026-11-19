@@ -139,9 +139,6 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	localMedia := service.NewLocalMediaStore()
 	authScreenSvc := service.NewAuthScreenService(authScreenRepo, objectStorage, localMedia)
 	authScreenHandler := handler.NewAuthScreenHandler(authScreenSvc)
-	shortsRepo := repository.NewShortsRepository(db.Pool)
-	shortsSvc := service.NewShortsService(shortsRepo, fileStorageRepo, wsSvc)
-	shortsHandler := handler.NewShortsHandler(shortsSvc)
 	postRepo := repository.NewPostRepository(db.Pool)
 	linkCodeRepo := repository.NewLinkCodeRepository(db.Pool)
 	linkShortener := service.NewLinkShortenerService(linkCodeRepo, cfg.LinkBaseURL)
@@ -273,6 +270,9 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 		fileStorageRepo, folderStorageRepo, wsRepo, planRepo, wsSvc, objectStorage, uploadSessions, uploadFileSettingsSvc,
 	)
 	fileStorageHandler := handler.NewFileStorageHandler(fileStorageSvc)
+	shortsRepo := repository.NewShortsRepository(db.Pool)
+	shortsSvc := service.NewShortsService(shortsRepo, fileStorageRepo, fileStorageSvc, wsSvc)
+	shortsHandler := handler.NewShortsHandler(shortsSvc)
 	helpArticleRepo := repository.NewHelpArticleRepository(db.Pool)
 	helpArticleSvc := service.NewHelpArticleService(helpArticleRepo, objectStorage)
 	helpArticleHandler := handler.NewHelpArticleHandler(helpArticleSvc)
@@ -569,6 +569,8 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Use(authMW.Required)
 			r.Post("/shorts/projects", shortsHandler.CreateProject)
 			r.Get("/shorts/projects/{id}", shortsHandler.GetProject)
+			r.Get("/shorts/projects/{id}/audio", shortsHandler.DownloadAudio)
+			r.Get("/shorts/projects/{id}/audio", shortsHandler.DownloadAudio)
 			r.Get("/shorts/jobs/{id}", shortsHandler.GetJob)
 		})
 

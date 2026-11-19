@@ -7,6 +7,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/postilka/postilka/internal/middleware"
+	"github.com/postilka/postilka/internal/repository"
 	"github.com/postilka/postilka/internal/service"
 )
 
@@ -63,6 +64,20 @@ func (h *ShortsHandler) GetJob(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"job": job})
 }
 
+func (h *ShortsHandler) DownloadAudio(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
+		return
+	}
+	url, expiresIn, err := h.shorts.AudioDownloadURL(r.Context(), userID, r, chi.URLParam(r, "id"))
+	if err != nil {
+		h.mapError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"url": url, "expires_in": expiresIn})
+}
+
 func (h *ShortsHandler) mapError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, service.ErrShortsSourceRequired):
@@ -71,6 +86,8 @@ func (h *ShortsHandler) mapError(w http.ResponseWriter, err error) {
 		writeErrorWithCode(w, http.StatusBadRequest, "shorts_invalid_range", "Укажите корректный диапазон обработки видео")
 	case errors.Is(err, service.ErrShortsProjectNotFound):
 		writeErrorWithCode(w, http.StatusNotFound, "shorts_project_not_found", "Проект Shorts не найден")
+	case errors.Is(err, repository.ErrNotFound):
+		writeErrorWithCode(w, http.StatusNotFound, "shorts_audio_not_found", "Аудиодорожка уже удалена или ещё не готова")
 	case errors.Is(err, service.ErrWorkspaceNotFound), errors.Is(err, service.ErrNotWorkspaceMember):
 		writeError(w, http.StatusForbidden, "Пространство не найдено или недоступно")
 	case errors.Is(err, service.ErrForbidden):
