@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { FileVideo, FolderOpen, Loader2 } from "lucide-react";
+import { WorkspaceMediaPickerModal } from "@/components/generation/WorkspaceMediaPickerModal";
+import type { WorkspaceFile } from "@/lib/files-api";
 import { createShortsProject, getShortsDraftDownloadUrl, getShortsJob, getShortsProject, rerenderShortsProject, updateShortsSubtitleSettings, type ShortsClip, type ShortsJob, type ShortsProject } from "@/lib/shorts-api";
 
 const contentTypes = [
@@ -15,6 +18,8 @@ const contentTypes = [
 
 export function ShortsStudioPage() {
   const [sourceFileId, setSourceFileId] = useState("");
+  const [sourceFile, setSourceFile] = useState<WorkspaceFile | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [duration, setDuration] = useState(60);
   const [rangeStart, setRangeStart] = useState(0);
   const [rangeEnd, setRangeEnd] = useState(60);
@@ -55,7 +60,7 @@ export function ShortsStudioPage() {
 
   async function submit() {
     if (!sourceFileId.trim()) {
-      setJobMessage("Укажите ID загруженного видео из медиатеки. Загрузка через S3 будет подключена следующим шагом.");
+      setJobMessage("Выберите исходное видео из файлов.");
       return;
     }
     setBusy(true);
@@ -77,19 +82,19 @@ export function ShortsStudioPage() {
   }
 
   return (
-    <main className="mx-auto max-w-5xl px-6 py-10 text-white">
+    <main className="space-y-6">
       <div className="mb-8">
-        <p className="mb-2 text-sm uppercase tracking-[0.2em] text-white/45">Postilka Studio</p>
-        <h1 className="text-3xl font-semibold">Shorts Studio</h1>
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted">Инструменты · видео</p>
+        <h1 className="mt-2 text-2xl font-semibold text-text">Shorts Studio</h1>
         <p className="mt-2 max-w-2xl text-white/60">
           Подготовка длинного видео к анализу и автоматической нарезке. Исходные материалы хранятся временно и не отправляются в KIE.ai.
         </p>
       </div>
 
-      <section className="grid gap-6 rounded-2xl border border-white/10 bg-white/[0.03] p-6 md:grid-cols-2">
+        <section className="grid gap-5 rounded-xl border border-border bg-surface p-5 shadow-sm lg:grid-cols-2">
         <label className="block text-sm text-white/70">
           ID видео в медиатеке
-          <input value={sourceFileId} onChange={(e) => setSourceFileId(e.target.value)} placeholder="UUID файла" className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none focus:border-violet-400/60" />
+          <button type="button" onClick={() => setPickerOpen(true)} className="mt-2 flex w-full items-center gap-3 rounded-lg border border-border bg-bg px-4 py-3 text-left hover:border-accent"><FileVideo className="h-5 w-5 text-accent" /><span className="min-w-0 flex-1 truncate text-sm text-text">{sourceFile?.name ?? "Выбрать видео из файлов"}</span><FolderOpen className="h-4 w-4 text-muted" /></button>
         </label>
         <label className="block text-sm text-white/70">
           Тип видео
@@ -112,13 +117,14 @@ export function ShortsStudioPage() {
       </section>
 
       <div className="mt-6 flex items-center gap-4">
-        <button type="button" onClick={submit} disabled={busy} className="rounded-xl bg-violet-500 px-5 py-3 font-medium transition hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-50">
-          {busy ? "Создание проекта…" : "Запустить анализ"}
+        <button type="button" onClick={submit} disabled={busy} className="rounded-md bg-accent px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50">
+          {busy ? <><Loader2 className="mr-2 inline h-4 w-4 animate-spin" />Создание проекта…</> : "Запустить анализ"}
         </button>
         {jobMessage && <p className="text-sm text-white/65">{jobMessage}</p>}
       </div>
+      <WorkspaceMediaPickerModal open={pickerOpen} mediaKind="video" onClose={() => setPickerOpen(false)} onSelect={(file) => { setSourceFile(file); setSourceFileId(file.id); const nextDuration = Math.max(1, Math.round(file.media_metadata?.duration_seconds ?? 60)); setDuration(nextDuration); setRangeEnd(nextDuration); setPickerOpen(false); }} />
       {project && <section className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] p-6"><h2 className="text-lg font-semibold">Стиль субтитров</h2><div className="mt-4 grid gap-4 sm:grid-cols-3"><label className="text-sm text-white/70">Стиль<select value={subtitleStyle} onChange={(e) => setSubtitleStyle(e.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white"><option value="classic">Classic</option><option value="bold">Bold</option><option value="minimal">Minimal</option></select></label><label className="text-sm text-white/70">Позиция<select value={subtitlePosition} onChange={(e) => setSubtitlePosition(e.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-white"><option value="top">Сверху</option><option value="center">По центру</option><option value="bottom">Снизу</option></select></label><button type="button" onClick={saveSubtitleSettings} className="self-end rounded-xl border border-white/15 px-4 py-2 text-sm hover:bg-white/10">Сохранить стиль</button></div></section>}
-      {(project || job) && <section className="mt-8 rounded-2xl border border-white/10 bg-white/[0.03] p-6">
+      {(project || job) && <section className="mt-8 rounded-xl border border-border bg-surface p-6 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div><h2 className="text-xl font-semibold">Результаты анализа</h2><p className="mt-1 text-sm text-white/55">{job?.current_step ?? project?.status ?? "Ожидание"}</p></div>
           {job && <span className="rounded-full bg-violet-400/15 px-3 py-1 text-sm text-violet-200">{job.progress}% · {job.status}</span>}
