@@ -198,14 +198,14 @@ func (s *KieConfigService) TestConnection(ctx context.Context, in model.KieTestR
 		}, nil
 	}
 
-	out := make([]model.KieModelView, 0, len(result.Models))
-	for _, m := range result.Models {
-		out = append(out, model.KieModelView{
-			ID:       m.ID,
-			Name:     m.Name,
-			Category: m.Category,
-		})
-	}
+	// KIE's credit endpoint authenticates the key, but its generic model
+	// catalog is not an allow-list for that key. Transcription is configured
+	// against one supported model, so never expose the image/video catalog here.
+	out := []model.KieModelView{{
+		ID:       "nvidia/nemotron-3-5-transcribe",
+		Name:     "Nemotron 3.5 Transcribe",
+		Category: "transcription",
+	}}
 
 	return model.KieTestResult{
 		OK:               true,

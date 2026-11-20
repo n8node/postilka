@@ -2,7 +2,7 @@
 
 import { PlugZap, Save } from "lucide-react";
 import { useEffect, useState } from "react";
-import { ApiError, fetchAdminKieSettings, testAdminKieConnection, updateAdminKieSettings, type KieAdminSettings, type KieModel } from "@/lib/api";
+import { ApiError, fetchAdminKieSettings, testAdminKieConnection, updateAdminKieSettings, type KieAdminSettings } from "@/lib/api";
 
 const DEFAULTS: Pick<KieAdminSettings, "transcription_enabled" | "transcription_model" | "transcription_credits_per_second" | "transcription_api_base_url" | "transcription_api_key_set"> = {
   transcription_enabled: false,
@@ -12,6 +12,8 @@ const DEFAULTS: Pick<KieAdminSettings, "transcription_enabled" | "transcription_
   transcription_api_key_set: false,
 };
 
+const TRANSCRIPTION_MODEL = "nvidia/nemotron-3-5-transcribe";
+
 export function AdminTranscriptionPage({ embedded = false }: { embedded?: boolean }) {
   const [settings, setSettings] = useState(DEFAULTS);
   const [loading, setLoading] = useState(true);
@@ -20,7 +22,7 @@ export function AdminTranscriptionPage({ embedded = false }: { embedded?: boolea
   const [error, setError] = useState<string | null>(null);
   const [apiKey, setApiKey] = useState("");
   const [testing, setTesting] = useState(false);
-  const [models, setModels] = useState<KieModel[]>([]);
+  const [connectionChecked, setConnectionChecked] = useState(false);
 
   useEffect(() => {
     void fetchAdminKieSettings()
@@ -61,10 +63,9 @@ export function AdminTranscriptionPage({ embedded = false }: { embedded?: boolea
     try {
       const result = await testAdminKieConnection({ api_base_url: settings.transcription_api_base_url, ...(apiKey ? { api_key: apiKey } : {}) });
       if (!result.ok) throw new Error(result.message || "Соединение не установлено");
-      setModels(result.models || []);
-      if (result.models?.some((model) => model.id === settings.transcription_model)) setMessage("Соединение проверено");
-      else if (result.models?.[0]) { setSettings((prev) => ({ ...prev, transcription_model: result.models![0].id })); setMessage("Соединение проверено, модель выбрана автоматически"); }
-      else setMessage("Соединение проверено");
+      setConnectionChecked(true);
+      setSettings((prev) => ({ ...prev, transcription_model: TRANSCRIPTION_MODEL }));
+      setMessage("Соединение проверено, доступна модель Nemotron 3.5 Transcribe");
     } catch (err) { setError(err instanceof ApiError || err instanceof Error ? err.message : "Не удалось проверить соединение"); }
     finally { setTesting(false); }
   }
@@ -91,10 +92,10 @@ export function AdminTranscriptionPage({ embedded = false }: { embedded?: boolea
         </label>
         <label className="block text-sm font-medium text-slate-700">
           Модель распознавания
-          <select value={settings.transcription_model} onChange={(e) => setSettings((prev) => ({ ...prev, transcription_model: e.target.value }))} className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
-            {models.length === 0 && <option value={settings.transcription_model}>{settings.transcription_model} (проверьте соединение для обновления)</option>}
-            {models.map((model) => <option key={model.id} value={model.id}>{model.name || model.id} ({model.id})</option>)}
+          <select value={TRANSCRIPTION_MODEL} disabled className="mt-1 w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm">
+            <option value={TRANSCRIPTION_MODEL}>Nemotron 3.5 Transcribe ({TRANSCRIPTION_MODEL})</option>
           </select>
+          <span className="mt-1 block text-xs font-normal text-slate-500">Для транскрибации используется только эта разрешённая модель{connectionChecked ? "; соединение проверено" : ""}.</span>
         </label>
         <label className="block text-sm font-medium text-slate-700">
           Стоимость, кредитов за секунду
