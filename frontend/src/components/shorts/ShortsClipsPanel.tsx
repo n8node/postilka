@@ -1,0 +1,26 @@
+"use client";
+
+import { ArrowDown, ArrowUp, Check, Loader2, Save } from "lucide-react";
+import type { ShortsClip } from "@/lib/shorts-api";
+
+export type ShortsClipDraft = { start: string; end: string; text: string; selected: boolean };
+
+type Props = {
+  clips: ShortsClip[];
+  draftUrls: Record<string, string>;
+  drafts: Record<string, ShortsClipDraft>;
+  saving: Record<string, boolean>;
+  onDraftChange: (id: string, draft: ShortsClipDraft) => void;
+  onSave: (clip: ShortsClip) => void;
+  onMove: (index: number, direction: -1 | 1) => void;
+  onContinue: () => void;
+};
+
+const time = (value: number) => `${Math.floor(value / 60)}:${String(Math.floor(value % 60)).padStart(2, "0")}`;
+
+export function ShortsClipsPanel({ clips, draftUrls, drafts, saving, onDraftChange, onSave, onMove, onContinue }: Props) {
+  return <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+    <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-violet-600">Шаг 4 из 6</p><h2 className="mt-2 text-xl font-bold text-slate-900">Фрагменты</h2><p className="mt-1 text-sm text-slate-500">Выберите лучшие моменты, поправьте таймкоды и текст субтитров.</p></div>{clips.length > 0 && <button type="button" onClick={onContinue} className="rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-violet-700">Перейти в редактор</button>}</div>
+    {clips.length === 0 ? <div className="mt-6 rounded-2xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">Фрагменты появятся после завершения анализа видео.</div> : <div className="mt-6 grid gap-5 md:grid-cols-2 xl:grid-cols-3">{clips.map((clip, index) => { const draft = drafts[clip.id] ?? { start: String(clip.start_seconds), end: String(clip.end_seconds), text: clip.transcript_text, selected: clip.status === "selected" || clip.status === "draft" }; return <article key={clip.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="relative aspect-[9/16] bg-slate-950">{draftUrls[clip.id] ? <video src={draftUrls[clip.id]} controls playsInline className="h-full w-full object-contain" /> : <div className="flex h-full items-center justify-center text-sm text-violet-200"><Loader2 className="mr-2 h-5 w-5 animate-spin" />Загрузка превью…</div>}<span className="absolute left-3 top-3 rounded-lg bg-slate-950/75 px-2 py-1 text-xs font-semibold text-white">{time(Number(draft.start))} — {time(Number(draft.end))}</span></div><div className="space-y-3 p-4"><div className="flex items-center justify-between"><div><p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Фрагмент {index + 1}</p><p className="mt-1 text-xs text-slate-500">Score {clip.score.toFixed(2)}</p></div><div className="flex gap-1"><button type="button" disabled={index === 0} onClick={() => onMove(index, -1)} className="rounded-lg border border-slate-200 p-1.5 text-slate-600 disabled:opacity-30"><ArrowUp className="h-4 w-4" /></button><button type="button" disabled={index === clips.length - 1} onClick={() => onMove(index, 1)} className="rounded-lg border border-slate-200 p-1.5 text-slate-600 disabled:opacity-30"><ArrowDown className="h-4 w-4" /></button></div></div><div className="grid grid-cols-2 gap-2"><label className="text-xs text-slate-500">Начало<input type="number" min="0" step="0.1" value={draft.start} onChange={(e) => onDraftChange(clip.id, { ...draft, start: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-sm text-slate-900" /></label><label className="text-xs text-slate-500">Конец<input type="number" min="0" step="0.1" value={draft.end} onChange={(e) => onDraftChange(clip.id, { ...draft, end: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-sm text-slate-900" /></label></div><label className="block text-xs text-slate-500">Текст субтитров<textarea value={draft.text} onChange={(e) => onDraftChange(clip.id, { ...draft, text: e.target.value })} rows={4} className="mt-1 w-full resize-y rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-sm text-slate-900" /></label><label className="flex items-center gap-2 text-sm font-medium text-slate-700"><input type="checkbox" checked={draft.selected} onChange={(e) => onDraftChange(clip.id, { ...draft, selected: e.target.checked })} className="h-4 w-4 rounded border-slate-300 text-violet-600" />Выбрать для экспорта</label><button type="button" onClick={() => onSave(clip)} disabled={saving[clip.id]} className="w-full rounded-xl bg-slate-900 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50">{saving[clip.id] ? "Сохранение…" : <><Save className="mr-1 inline h-4 w-4" />Сохранить фрагмент</>}</button>{draft.selected && <p className="text-xs font-medium text-emerald-600"><Check className="mr-1 inline h-3.5 w-3.5" />Будет добавлен в экспорт</p>}</div></article>; })}</div>}
+  </section>;
+}

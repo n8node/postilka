@@ -6,6 +6,7 @@ import { WorkspaceMediaPickerModal } from "@/components/generation/WorkspaceMedi
 import { ShortsWizardNav, type ShortsWizardStep } from "@/components/shorts/ShortsWizardNav";
 import { ShortsProjectsPanel } from "@/components/shorts/ShortsProjectsPanel";
 import { ShortsCreationPanel } from "@/components/shorts/ShortsCreationPanel";
+import { ShortsClipsPanel, type ShortsClipDraft } from "@/components/shorts/ShortsClipsPanel";
 import { uploadFile, type WorkspaceFile } from "@/lib/files-api";
 import { analyzeShortsProject, createShortsProject, deleteShortsProject, exportShortsProject, getShortsAudioDownloadUrl, getShortsDraftDownloadUrl, getShortsFinalDownloadUrl, getShortsJob, getShortsProject, getShortsTranscriptResultUrl, listShortsProjects, rerenderShortsProject, updateShortsClip, updateShortsClipOrder, updateShortsSubtitleSettings, type ShortsClip, type ShortsJob, type ShortsProject, type ShortsProjectListItem } from "@/lib/shorts-api";
 
@@ -168,7 +169,7 @@ export function ShortsStudioPage() {
     const anchor = document.createElement("a"); anchor.href = getShortsTranscriptResultUrl(project.id); anchor.download = "shorts-transcript-result.json"; anchor.target = "_blank"; anchor.rel = "noreferrer"; document.body.appendChild(anchor); anchor.click(); anchor.remove();
   }
 
-  function clipDraft(clip: ShortsClip) {
+  function clipDraft(clip: ShortsClip): ShortsClipDraft {
     return clipDrafts[clip.id] ?? { start: String(clip.start_seconds), end: String(clip.end_seconds), text: clip.transcript_text, selected: clip.status === "selected" || clip.status === "draft" };
   }
 
@@ -310,6 +311,8 @@ export function ShortsStudioPage() {
       </div>
       <WorkspaceMediaPickerModal open={pickerOpen} mediaKind="video" onClose={() => setPickerOpen(false)} onSelect={(file) => { setSourceFile(file); setSourceFileId(file.id); const nextDuration = Math.max(1, Math.round(file.media_metadata?.duration_seconds ?? 60)); setDuration(nextDuration); setRangeEnd(nextDuration); setPickerOpen(false); }} />
       {project && <section className="mt-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"><h2 className="text-lg font-bold text-slate-900">Субтитры и safe zone</h2><div className="mt-4 grid gap-4 sm:grid-cols-3 lg:grid-cols-6"><label className="text-sm font-medium text-slate-700">Стиль<select value={subtitleStyle} onChange={(e) => setSubtitleStyle(e.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"><option value="classic">Classic</option><option value="bold">Bold</option><option value="minimal">Minimal</option></select></label><label className="text-sm font-medium text-slate-700">Позиция<select value={subtitlePosition} onChange={(e) => setSubtitlePosition(e.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"><option value="top">Сверху</option><option value="center">По центру</option><option value="bottom">Снизу</option></select></label><label className="text-sm font-medium text-slate-700">Размер<input type="number" min="24" max="120" value={subtitleFontSize} onChange={(e) => setSubtitleFontSize(Number(e.target.value))} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900" /></label><label className="text-sm font-medium text-slate-700">Цвет<input type="color" value={subtitleTextColor} onChange={(e) => setSubtitleTextColor(e.target.value)} className="mt-2 h-10 w-full rounded-lg border border-slate-200 bg-white" /></label><label className="text-sm font-medium text-slate-700">Фон<input type="color" value={subtitleBackground} onChange={(e) => setSubtitleBackground(e.target.value)} className="mt-2 h-10 w-full rounded-lg border border-slate-200 bg-white" /></label><label className="text-sm font-medium text-slate-700">Safe zone<input type="number" min="0" max="300" value={safeZone} onChange={(e) => setSafeZone(Number(e.target.value))} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900" /></label></div><label className="mt-4 block text-sm font-medium text-slate-700">Watermark<input value={watermark} onChange={(e) => setWatermark(e.target.value)} placeholder="@brand" className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900" /></label><button type="button" onClick={saveSubtitleSettings} className="mt-4 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800">Сохранить настройки</button></section>}
+      {project && <ShortsClipsPanel clips={clips} draftUrls={draftUrls} drafts={clipDrafts} saving={clipSaving} onDraftChange={(id, draft) => setClipDrafts((items) => ({ ...items, [id]: draft }))} onSave={(clip) => void saveClip(clip)} onMove={(index, direction) => void moveClip(index, direction)} onContinue={() => { setActiveStep("editor"); window.history.replaceState(null, "", `/app/shorts?project=${encodeURIComponent(project.id)}&step=editor`); }} />}
+      <div className="hidden">
       <section className="mt-8 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
         <div className="flex items-center justify-between gap-3"><div><h2 className="text-lg font-bold text-slate-900">История проектов</h2><p className="mt-1 text-sm text-slate-500">Проекты сохраняются после обновления страницы.</p></div>{historyLoading && <Loader2 className="h-4 w-4 animate-spin text-slate-400" />}</div>
         {!historyLoading && history.length === 0 ? <p className="mt-5 text-sm text-slate-500">Пока нет созданных проектов.</p> : <div className="mt-5 space-y-3">
@@ -337,6 +340,7 @@ export function ShortsStudioPage() {
           })}
         </div>}
       </section>}
+      </div>
     </main>
   );
 }
