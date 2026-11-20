@@ -45,6 +45,7 @@ func (w *ShortsWorker) ProcessDue(ctx context.Context, limit int) (int, error) {
 	var lastErr error
 	for _, job := range jobs {
 		if err := w.process(ctx, job); err != nil {
+			err = fmt.Errorf("shorts job %s (%s): %w", job.ID, job.JobType, err)
 			lastErr = err
 			_ = w.repo.FailJob(ctx, job.ID, w.owner, err.Error(), time.Now().UTC().Add(time.Minute))
 		}
@@ -66,6 +67,9 @@ func (w *ShortsWorker) process(ctx context.Context, job repository.ClaimedShorts
 	if err != nil {
 		return err
 	}
+	if err := w.repo.UpdateJobProgress(ctx, job.ID, w.owner, "loading_project", 3); err != nil {
+		return fmt.Errorf("stage loading_project: %w", err)
+	}
 	if project.AudioFileID != nil && project.AudioExpiresAt != nil && project.AudioExpiresAt.After(time.Now().UTC()) {
 		return w.repo.SucceedJob(ctx, job.ID, w.owner)
 	}
@@ -80,67 +84,70 @@ func (w *ShortsWorker) process(ctx context.Context, job repository.ClaimedShorts
 		return ErrShortsSourceRequired
 	}
 	if err := w.repo.UpdateJobProgress(ctx, job.ID, w.owner, "download_source", 10); err != nil {
-		return err
+		return fmt.Errorf("stage download_source: %w", err)
 	}
 
 	sourcePath, err := w.downloadObject(ctx, file.S3Key, filepath.Ext(file.Name))
 	if err != nil {
-		return err
+		return fmt.Errorf("stage download_source: %w", err)
 	}
 	defer os.Remove(sourcePath)
 	duration, err := probeShortsDuration(ctx, sourcePath)
 	if err != nil {
-		return err
+		return fmt.Errorf("stage probe_duration: %w", err)
 	}
 	if err := w.repo.UpdateJobProgress(ctx, job.ID, w.owner, "extract_audio", 35); err != nil {
-		return err
+		return fmt.Errorf("stage extract_audio: %w", err)
 	}
 	audioPath, err := ExtractShortsAudio(ctx, sourcePath)
 	if err != nil {
-		return err
+		return fmt.Errorf("stage extract_audio: %w", err)
 	}
 	defer os.Remove(audioPath)
 	if err := w.repo.UpdateJobProgress(ctx, job.ID, w.owner, "transcribe", 55); err != nil {
-		return err
+		return fmt.Errorf("stage transcribe: %w", err)
 	}
 	transcript, err := w.transcriber.Transcribe(ctx, audioPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("stage transcribe: %w", err)
 	}
 	if w.aiBilling != nil && w.kieConfig != nil {
+		if err := w.repo.UpdateJobProgress(ctx, job.ID, w.owner, "billing_transcription", 65); err != nil {
+			return fmt.Errorf("stage billing_transcription: %w", err)
+		}
 		kieSettings, settingsErr := w.kieConfig.GetSettings(ctx)
 		if settingsErr != nil {
-			return settingsErr
+			return fmt.Errorf("stage billing_transcription: %w", settingsErr)
 		}
 		if kieSettings.TranscriptionEnabled {
 			if _, debitErr := w.aiBilling.DebitTranscriptionAfterSuccessWithPrice(ctx, job.WorkspaceID, project.CreatedByUserID, job.ID, kieSettings.TranscriptionCreditsPerSecond, duration, kieSettings.TranscriptionKopecksPerCredit); debitErr != nil {
-				return debitErr
+				return fmt.Errorf("stage billing_transcription: %w", debitErr)
 			}
 		}
 	}
 	audioInfo, err := os.Stat(audioPath)
 	if err != nil {
-		return err
+		return fmt.Errorf("stage save_audio: %w", err)
 	}
 	key := fmt.Sprintf("workspaces/%s/shorts/%s/audio.mp3", job.WorkspaceID, project.ID)
 	if err := w.storage.PutObjectFromFile(ctx, key, "audio/mpeg", audioPath); err != nil {
-		return err
+		return fmt.Errorf("stage save_audio: %w", err)
 	}
 	meta, _ := json.Marshal(map[string]any{"source": "shorts_audio", "project_id": project.ID, "duration_seconds": duration, "transcript": transcript})
 	uid := project.CreatedByUserID
 	audioFile, err := w.fileStore.RegisterWorkspaceFile(ctx, &model.WorkspaceFile{WorkspaceID: job.WorkspaceID, UploadedByUserID: &uid, Name: "shorts-audio.mp3", MimeType: "audio/mpeg", Size: audioInfo.Size(), S3Key: key, MediaMetadata: meta})
 	if err != nil {
 		_ = w.storage.DeleteObject(ctx, key)
-		return err
+		return fmt.Errorf("stage register_audio: %w", err)
 	}
 	if err := w.repo.SetAudio(ctx, job.WorkspaceID, project.ID, audioFile.ID, time.Now().UTC().Add(48*time.Hour)); err != nil {
-		return err
+		return fmt.Errorf("stage register_audio: %w", err)
 	}
 	if err := w.repo.SetTranscript(ctx, job.WorkspaceID, project.ID, transcript); err != nil {
-		return err
+		return fmt.Errorf("stage save_transcript: %w", err)
 	}
 	if err := w.repo.UpdateJobProgress(ctx, job.ID, w.owner, "segment_candidates", 80); err != nil {
-		return err
+		return fmt.Errorf("stage segment_candidates: %w", err)
 	}
 	shortsCandidates := BuildShortsCandidates(transcript.Segments, 0, duration, 12)
 	clipRows := make([]model.ShortsClip, 0, len(shortsCandidates))
@@ -149,13 +156,13 @@ func (w *ShortsWorker) process(ctx context.Context, job repository.ClaimedShorts
 		clipRows = append(clipRows, model.ShortsClip{StartSeconds: candidate.StartSeconds, EndSeconds: candidate.EndSeconds, TranscriptText: candidate.Text, Score: candidate.Score, ScoreDetails: details})
 	}
 	if err := w.repo.ReplaceCandidates(ctx, job.WorkspaceID, project.ID, clipRows); err != nil {
-		return err
+		return fmt.Errorf("stage segment_candidates: %w", err)
 	}
 	if err := w.repo.UpdateJobProgress(ctx, job.ID, w.owner, "render_drafts", 90); err != nil {
-		return err
+		return fmt.Errorf("stage render_drafts: %w", err)
 	}
 	if err := w.renderDrafts(ctx, job, project, sourcePath, shortsCandidates, transcript.Segments, ShortsSubtitleConfigFromSettings(project.Settings)); err != nil {
-		return err
+		return fmt.Errorf("stage render_drafts: %w", err)
 	}
 	if err := w.repo.UpdateProjectStatus(ctx, job.WorkspaceID, job.ProjectID, model.ShortsProjectAnalyzing, "transcript_ready"); err != nil {
 		return err

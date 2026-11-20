@@ -510,7 +510,7 @@ func (r *ShortsRepository) ClaimDueJobs(ctx context.Context, owner string, limit
 		)
 		UPDATE shorts_jobs j
 		SET status = 'running', lease_owner = $2, lease_until = now() + $3::interval,
-			attempts = j.attempts + 1, current_step = 'claimed', updated_at = now()
+			attempts = j.attempts + 1, current_step = 'starting', progress = 1, last_error = NULL, updated_at = now()
 		FROM due, shorts_projects p
 		WHERE j.id = due.id AND p.id = j.project_id
 		RETURNING j.id, j.project_id, p.workspace_id, j.job_type
@@ -541,7 +541,7 @@ func (r *ShortsRepository) SucceedJob(ctx context.Context, jobID, owner string) 
 }
 
 func (r *ShortsRepository) FailJob(ctx context.Context, jobID, owner, message string, retryAt time.Time) error {
-	_, err := r.pool.Exec(ctx, `UPDATE shorts_jobs SET status = CASE WHEN attempts < 3 THEN 'queued' ELSE 'failed' END, available_at = $1, current_step = 'failed', last_error = $2, lease_owner = NULL, lease_until = NULL, updated_at = now() WHERE id = $3 AND lease_owner = $4`, retryAt, message, jobID, owner)
+	_, err := r.pool.Exec(ctx, `UPDATE shorts_jobs SET status = CASE WHEN attempts < 3 THEN 'queued' ELSE 'failed' END, available_at = $1, progress = CASE WHEN attempts < 3 THEN 0 ELSE progress END, current_step = CASE WHEN attempts < 3 THEN 'retry_scheduled' ELSE 'failed' END, last_error = $2, lease_owner = NULL, lease_until = NULL, updated_at = now() WHERE id = $3 AND lease_owner = $4`, retryAt, message, jobID, owner)
 	return err
 }
 
