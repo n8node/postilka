@@ -20,6 +20,7 @@ type ShortsCreationPanelProps = {
   onContentTypeChange: (value: string) => void;
   onSubmit: () => void;
   busy: boolean;
+  previewUrl?: string;
 }
 
 function formatBytes(size: number) {
@@ -29,7 +30,7 @@ function formatBytes(size: number) {
 }
 
 export function ShortsCreationPanel(props: ShortsCreationPanelProps) {
-  const { sourceFile, uploading, uploadProgress, duration, rangeStart, rangeEnd, contentType, contentTypes, onUpload, onOpenPicker, onDurationChange, onRangeStartChange, onRangeEndChange, onContentTypeChange, onSubmit, busy } = props;
+  const { sourceFile, uploading, uploadProgress, duration, rangeStart, rangeEnd, contentType, contentTypes, onUpload, onOpenPicker, onDurationChange, onRangeStartChange, onRangeEndChange, onContentTypeChange, onSubmit, busy, previewUrl } = props;
   return <section className="grid gap-6 lg:grid-cols-2">
     <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
       <p className="text-xs font-semibold uppercase tracking-[0.16em] text-indigo-600">Шаг 1 из 2</p>
