@@ -31,8 +31,9 @@ ARG ALPINE_MIRROR
 ARG WHISPER_CPP_VERSION=v1.7.6
 RUN sed -i "s|https://dl-cdn.alpinelinux.org/alpine|${ALPINE_MIRROR}|g" /etc/apk/repositories \
     && apk add --no-cache build-base cmake samurai wget tar
-RUN wget -q -O /tmp/whisper.tar.gz \
-      "https://github.com/ggml-org/whisper.cpp/archive/refs/tags/${WHISPER_CPP_VERSION}.tar.gz" \
+RUN wget --https-only --timeout=30 --tries=5 --waitretry=5 --retry-on-http-error=408,429,500,502,503,504 \
+      -O /tmp/whisper.tar.gz \
+      "https://codeload.github.com/ggml-org/whisper.cpp/tar.gz/refs/tags/${WHISPER_CPP_VERSION}" \
     && mkdir -p /tmp/whisper-src \
     && tar -xzf /tmp/whisper.tar.gz -C /tmp/whisper-src --strip-components=1 \
     && cmake -S /tmp/whisper-src -B /tmp/whisper-build -G Ninja -DCMAKE_BUILD_TYPE=Release -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_EXAMPLES=ON \
