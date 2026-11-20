@@ -63,7 +63,7 @@ func (r *ShortsRepository) ListForWorkspace(ctx context.Context, workspaceID str
 			f.size, f.s3_key, f.media_metadata, f.deleted_at, f.trash_batch_id, f.created_at, f.updated_at
 		FROM shorts_projects p
 		LEFT JOIN LATERAL (
-			SELECT * FROM shorts_jobs WHERE project_id = p.id ORDER BY created_at DESC LIMIT 1
+			SELECT id, job_type, status, current_step, progress, attempts, available_at, last_error, created_at, updated_at FROM shorts_jobs WHERE project_id = p.id ORDER BY created_at DESC LIMIT 1
 		) j ON true
 		LEFT JOIN workspace_files f ON f.id = p.source_file_id
 		WHERE p.workspace_id = $1
@@ -81,7 +81,8 @@ func (r *ShortsRepository) ListForWorkspace(ctx context.Context, workspaceID str
 		var contentType, status string
 		var settings []byte
 		var clips int
-		var jobID, jobType, jobStatus, step, lastError *string
+		var jobID, jobType, jobStatus, step *string
+		var lastError *string
 		var progress, attempts *int
 		var available, jobCreated, jobUpdated *time.Time
 		var fileID, fileWorkspaceID, fileFolderID, fileUploadedBy, fileName, fileMime, fileS3Key, fileTrashBatch *string
@@ -185,7 +186,7 @@ func (r *ShortsRepository) ListForAdmin(ctx context.Context, f ListShortsAdminFi
 		return nil, 0, nil, err
 	}
 	args = append(args, f.Limit, f.Offset)
-	rows, err := r.pool.Query(ctx, `SELECT `+shortsProjectColumns+`, (SELECT COUNT(*) FROM shorts_clips c WHERE c.project_id = p.id), j.id, j.job_type, j.status, j.current_step, j.progress, j.attempts, j.available_at, j.last_error, j.created_at, j.updated_at FROM shorts_projects p LEFT JOIN LATERAL (SELECT * FROM shorts_jobs WHERE project_id = p.id ORDER BY created_at DESC LIMIT 1) j ON true`+where+` ORDER BY p.created_at DESC LIMIT $`+strconv.Itoa(len(args)-1)+` OFFSET $`+strconv.Itoa(len(args)), args...)
+	rows, err := r.pool.Query(ctx, `SELECT `+shortsProjectColumns+`, (SELECT COUNT(*) FROM shorts_clips c WHERE c.project_id = p.id), j.id, j.job_type, j.status, j.current_step, j.progress, j.attempts, j.available_at, j.last_error, j.created_at, j.updated_at FROM shorts_projects p LEFT JOIN LATERAL (SELECT id, job_type, status, current_step, progress, attempts, available_at, last_error, created_at, updated_at FROM shorts_jobs WHERE project_id = p.id ORDER BY created_at DESC LIMIT 1) j ON true`+where+` ORDER BY p.created_at DESC LIMIT $`+strconv.Itoa(len(args)-1)+` OFFSET $`+strconv.Itoa(len(args)), args...)
 	if err != nil {
 		return nil, 0, nil, err
 	}
@@ -196,7 +197,8 @@ func (r *ShortsRepository) ListForAdmin(ctx context.Context, f ListShortsAdminFi
 		var contentType, status string
 		var settings []byte
 		var clips int
-		var jobID, jobType, jobStatus, step, lastError *string
+		var jobID, jobType, jobStatus, step *string
+		var lastError *string
 		var progress, attempts *int
 		var available, jobCreated, jobUpdated *time.Time
 		if err := rows.Scan(&p.ID, &p.WorkspaceID, &p.CreatedByUserID, &p.SourceFileID, &contentType, &p.Language, &status, &p.SourceDurationSeconds, &p.ProcessingMinutesReserved, &p.ProcessingMinutesConsumed, &p.SourceExpiresAt, &p.AudioFileID, &p.AudioExpiresAt, &settings, &p.CreatedAt, &p.UpdatedAt, &clips, &jobID, &jobType, &jobStatus, &step, &progress, &attempts, &available, &lastError, &jobCreated, &jobUpdated); err != nil {
@@ -207,7 +209,10 @@ func (r *ShortsRepository) ListForAdmin(ctx context.Context, f ListShortsAdminFi
 		p.Settings = json.RawMessage(settings)
 		item := model.AdminShortsProject{Project: &p, Clips: clips}
 		if jobID != nil {
-			item.Job = &model.ShortsJob{ID: *jobID, ProjectID: p.ID, JobType: *jobType, Status: model.ShortsJobStatus(*jobStatus), CurrentStep: *step, Progress: *progress, Attempts: *attempts, AvailableAt: *available, LastError: *lastError, CreatedAt: *jobCreated, UpdatedAt: *jobUpdated}
+			item.Job = &model.ShortsJob{ID: *jobID, ProjectID: p.ID, JobType: *jobType, Status: model.ShortsJobStatus(*jobStatus), CurrentStep: *step, Progress: *progress, Attempts: *attempts, AvailableAt: *available, CreatedAt: *jobCreated, UpdatedAt: *jobUpdated}
+			if lastError != nil {
+				item.Job.LastError = *lastError
+			}
 		}
 		items = append(items, item)
 	}
