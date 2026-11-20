@@ -5,6 +5,7 @@ import { ArrowDown, ArrowUp, CheckCircle2, Clock3, FileVideo, FolderOpen, Loader
 import { WorkspaceMediaPickerModal } from "@/components/generation/WorkspaceMediaPickerModal";
 import { ShortsWizardNav, type ShortsWizardStep } from "@/components/shorts/ShortsWizardNav";
 import { ShortsProjectsPanel } from "@/components/shorts/ShortsProjectsPanel";
+import { ShortsCreationPanel } from "@/components/shorts/ShortsCreationPanel";
 import { uploadFile, type WorkspaceFile } from "@/lib/files-api";
 import { analyzeShortsProject, createShortsProject, deleteShortsProject, exportShortsProject, getShortsAudioDownloadUrl, getShortsDraftDownloadUrl, getShortsFinalDownloadUrl, getShortsJob, getShortsProject, getShortsTranscriptResultUrl, listShortsProjects, rerenderShortsProject, updateShortsClip, updateShortsClipOrder, updateShortsSubtitleSettings, type ShortsClip, type ShortsJob, type ShortsProject, type ShortsProjectListItem } from "@/lib/shorts-api";
 
@@ -267,6 +268,9 @@ export function ShortsStudioPage() {
 
       <ShortsProjectsPanel items={history} loading={historyLoading} activeProjectId={project?.id} onOpen={(id) => void openProject(id)} onRetry={(id) => void analyzeProject(id)} onDelete={(id) => void removeProject(id)} />
 
+        <ShortsCreationPanel sourceFile={sourceFile} uploading={uploading} uploadProgress={uploadProgress} duration={duration} rangeStart={rangeStart} rangeEnd={rangeEnd} contentType={contentType} contentTypes={contentTypes} onUpload={(file) => void handleUpload(file)} onOpenPicker={() => setPickerOpen(true)} onDurationChange={(value) => { setDuration(value); setRangeEnd(Math.min(value, rangeEnd)); }} onRangeStartChange={setRangeStart} onRangeEndChange={setRangeEnd} onContentTypeChange={setContentType} onSubmit={() => void submit()} busy={busy} />
+        {/* Legacy inline creation controls remain below until the next wizard step removes them. */}
+        <div className="hidden">
         <section className="grid gap-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6 lg:grid-cols-2">
         <label className="block text-sm font-medium text-slate-700">
           ID видео в медиатеке
@@ -294,6 +298,7 @@ export function ShortsStudioPage() {
           <p className="mt-2 text-xs text-slate-500">Можно обработать только часть видео, если минут тарифа недостаточно.</p>
         </div>
       </section>
+      </div>
 
       <div className="mt-6 flex flex-wrap items-center gap-4">
         <button type="button" onClick={submit} disabled={busy} className="rounded-xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50">
