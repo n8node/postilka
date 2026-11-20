@@ -38,6 +38,7 @@ export type ShortsJob = {
   status: string;
   current_step: string;
   progress: number;
+  last_error?: string;
 };
 
 const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "/app/api/v1";

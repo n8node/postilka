@@ -83,7 +83,7 @@ export function ShortsStudioPage() {
       setWatermark(result.project.settings?.watermark ?? "");
       setSafeZone(result.project.settings?.safe_zone ?? 70);
       setJob(history.find((item) => item.project.id === id)?.job ?? null);
-      window.history.replaceState(null, "", `/shorts?project=${encodeURIComponent(id)}`);
+      window.history.replaceState(null, "", `/app/shorts?project=${encodeURIComponent(id)}`);
     } catch (error) {
       setJobMessage(error instanceof Error ? error.message : "Не удалось открыть проект");
     }
@@ -96,7 +96,7 @@ export function ShortsStudioPage() {
       setHistory((items) => items.filter((item) => item.project.id !== id));
       if (project?.id === id) {
         setProject(null); setClips([]); setJob(null); setDraftUrls({});
-        window.history.replaceState(null, "", "/shorts");
+        window.history.replaceState(null, "", "/app/shorts");
       }
     } catch (error) {
       setJobMessage(error instanceof Error ? error.message : "Не удалось удалить проект");
@@ -117,7 +117,8 @@ export function ShortsStudioPage() {
 
   useEffect(() => {
     if (!project?.id || !job?.id) return;
-    if (job.status === "succeeded" || job.status === "failed") {
+    if (job.status === "succeeded" || job.status === "failed" || job.status === "cancelled") {
+      if (job.status === "failed") setJobMessage(job.last_error || "Не удалось обработать видео. Откройте проект позже или запустите анализ повторно.");
       void getShortsProject(project.id).then((result) => { setProject(result.project); setClips(result.clips); }).catch(() => undefined);
       return;
     }
@@ -125,6 +126,7 @@ export function ShortsStudioPage() {
       try {
         const [nextProject, nextJob] = await Promise.all([getShortsProject(project.id), getShortsJob(job.id)]);
         setProject(nextProject.project); setClips(nextProject.clips); setJob(nextJob.job);
+        if (nextJob.job.status === "failed") setJobMessage(nextJob.job.last_error || "Не удалось обработать видео. Проверьте настройки transcriber.");
       } catch { /* transient polling failure */ }
     }, 3000);
     return () => window.clearInterval(timer);
@@ -201,7 +203,7 @@ export function ShortsStudioPage() {
       });
       setProject(result.project); setJob(result.job); setClips([]); setJobMessage("Проект создан. Анализ поставлен в очередь.");
       setHistory((items) => [{ project: result.project, job: result.job, clips: 0, source_file: sourceFile ?? undefined }, ...items.filter((item) => item.project.id !== result.project.id)]);
-      window.history.replaceState(null, "", `/shorts?project=${encodeURIComponent(result.project.id)}`);
+      window.history.replaceState(null, "", `/app/shorts?project=${encodeURIComponent(result.project.id)}`);
     } catch (error) {
       setJobMessage(error instanceof Error ? error.message : "Не удалось создать проект");
     } finally {
@@ -265,6 +267,7 @@ export function ShortsStudioPage() {
         </button>
         {jobMessage && <p className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-medium text-indigo-900">{jobMessage}</p>}
         {job && (job.status === "queued" || job.status === "running") && <div className="w-full rounded-2xl border border-indigo-200 bg-white p-4 shadow-sm"><div className="flex flex-wrap items-center justify-between gap-2"><div><p className="text-sm font-bold text-slate-900">Анализ видео выполняется</p><p className="mt-1 text-xs font-medium text-slate-600">{stepLabel(job.current_step)} · обработано примерно {formatSeconds(rangeStart + (rangeEnd - rangeStart) * Math.min(100, Math.max(0, job.progress)) / 100)} из {formatSeconds(rangeEnd)}</p></div><span className="text-lg font-bold text-indigo-700">{job.progress}%</span></div><div className="mt-3 h-3 overflow-hidden rounded-full bg-indigo-100"><div className="h-full rounded-full bg-gradient-to-r from-indigo-600 via-violet-600 to-fuchsia-500 transition-all duration-700" style={{ width: `${Math.min(100, Math.max(2, job.progress))}%` }} /></div><div className="mt-2 flex justify-between text-[11px] font-medium text-slate-500"><span>{formatSeconds(rangeStart)}</span><span>Текущая позиция: {formatSeconds(rangeStart + (rangeEnd - rangeStart) * Math.min(100, Math.max(0, job.progress)) / 100)}</span><span>{formatSeconds(rangeEnd)}</span></div></div>}
+        {job?.status === "failed" && <div className="w-full rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900"><p className="font-bold">Не удалось обработать видео</p><p className="mt-1">{job.last_error || jobMessage || "Worker завершил задачу с ошибкой. Проверьте настройки transcriber."}</p></div>}
       </div>
       <WorkspaceMediaPickerModal open={pickerOpen} mediaKind="video" onClose={() => setPickerOpen(false)} onSelect={(file) => { setSourceFile(file); setSourceFileId(file.id); const nextDuration = Math.max(1, Math.round(file.media_metadata?.duration_seconds ?? 60)); setDuration(nextDuration); setRangeEnd(nextDuration); setPickerOpen(false); }} />
       {project && <section className="mt-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6"><h2 className="text-lg font-bold text-slate-900">Субтитры и safe zone</h2><div className="mt-4 grid gap-4 sm:grid-cols-3 lg:grid-cols-6"><label className="text-sm font-medium text-slate-700">Стиль<select value={subtitleStyle} onChange={(e) => setSubtitleStyle(e.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"><option value="classic">Classic</option><option value="bold">Bold</option><option value="minimal">Minimal</option></select></label><label className="text-sm font-medium text-slate-700">Позиция<select value={subtitlePosition} onChange={(e) => setSubtitlePosition(e.target.value)} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900"><option value="top">Сверху</option><option value="center">По центру</option><option value="bottom">Снизу</option></select></label><label className="text-sm font-medium text-slate-700">Размер<input type="number" min="24" max="120" value={subtitleFontSize} onChange={(e) => setSubtitleFontSize(Number(e.target.value))} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900" /></label><label className="text-sm font-medium text-slate-700">Цвет<input type="color" value={subtitleTextColor} onChange={(e) => setSubtitleTextColor(e.target.value)} className="mt-2 h-10 w-full rounded-lg border border-slate-200 bg-white" /></label><label className="text-sm font-medium text-slate-700">Фон<input type="color" value={subtitleBackground} onChange={(e) => setSubtitleBackground(e.target.value)} className="mt-2 h-10 w-full rounded-lg border border-slate-200 bg-white" /></label><label className="text-sm font-medium text-slate-700">Safe zone<input type="number" min="0" max="300" value={safeZone} onChange={(e) => setSafeZone(Number(e.target.value))} className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900" /></label></div><label className="mt-4 block text-sm font-medium text-slate-700">Watermark<input value={watermark} onChange={(e) => setWatermark(e.target.value)} placeholder="@brand" className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-slate-900" /></label><button type="button" onClick={saveSubtitleSettings} className="mt-4 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800">Сохранить настройки</button></section>}
