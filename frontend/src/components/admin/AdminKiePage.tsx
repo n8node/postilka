@@ -30,6 +30,7 @@ const DEFAULT_SETTINGS: KieAdminSettings = {
   transcription_enabled: false,
   transcription_model: "nvidia/nemotron-3-5-transcribe",
   transcription_credits_per_second: 0.005,
+  transcription_kopecks_per_credit: 5000,
 };
 
 function sortModels(models: KieModel[]) {

@@ -72,11 +72,19 @@ func TranscriptionCreditCost(creditsPerSecond, durationSeconds float64) int {
 }
 
 func (s *AIBillingService) PrefailTranscription(ctx context.Context, workspaceID, userID string, rate, durationSeconds float64) error {
-	return s.PrefailCheck(ctx, workspaceID, userID, TranscriptionCreditCost(rate, durationSeconds))
+	return s.PrefailTranscriptionWithPrice(ctx, workspaceID, userID, rate, durationSeconds, 5000)
+}
+
+func (s *AIBillingService) PrefailTranscriptionWithPrice(ctx context.Context, workspaceID, userID string, rate, durationSeconds float64, kopecks int) error {
+	return s.PrefailCheckWithKopecks(ctx, workspaceID, userID, TranscriptionCreditCost(rate, durationSeconds), kopecks)
 }
 
 func (s *AIBillingService) DebitTranscriptionAfterSuccess(ctx context.Context, workspaceID, userID, referenceID string, rate, durationSeconds float64) (AIDebitOutcome, error) {
-	return s.DebitAfterSuccess(ctx, workspaceID, userID, referenceID, TranscriptionCreditCost(rate, durationSeconds))
+	return s.DebitTranscriptionAfterSuccessWithPrice(ctx, workspaceID, userID, referenceID, rate, durationSeconds, 5000)
+}
+
+func (s *AIBillingService) DebitTranscriptionAfterSuccessWithPrice(ctx context.Context, workspaceID, userID, referenceID string, rate, durationSeconds float64, kopecks int) (AIDebitOutcome, error) {
+	return s.DebitAfterSuccessWithKopecks(ctx, workspaceID, userID, referenceID, TranscriptionCreditCost(rate, durationSeconds), kopecks)
 }
 
 func (s *AIBillingService) PrefailCheckWithKopecks(ctx context.Context, workspaceID, userID string, creditCost, kopecksPerCredit int) error {

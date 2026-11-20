@@ -113,7 +113,7 @@ func (w *ShortsWorker) process(ctx context.Context, job repository.ClaimedShorts
 			return settingsErr
 		}
 		if kieSettings.TranscriptionEnabled {
-			if _, debitErr := w.aiBilling.DebitTranscriptionAfterSuccess(ctx, job.WorkspaceID, project.CreatedByUserID, job.ID, kieSettings.TranscriptionCreditsPerSecond, duration); debitErr != nil {
+			if _, debitErr := w.aiBilling.DebitTranscriptionAfterSuccessWithPrice(ctx, job.WorkspaceID, project.CreatedByUserID, job.ID, kieSettings.TranscriptionCreditsPerSecond, duration, kieSettings.TranscriptionKopecksPerCredit); debitErr != nil {
 				return debitErr
 			}
 		}

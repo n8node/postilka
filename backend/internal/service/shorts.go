@@ -89,7 +89,7 @@ func (s *ShortsService) CreateProject(ctx context.Context, userID string, r *htt
 			return nil, nil, settingsErr
 		}
 		if kieSettings.TranscriptionEnabled {
-			if err := s.aiBilling.PrefailTranscription(ctx, ws.ID, userID, kieSettings.TranscriptionCreditsPerSecond, selected.DurationSeconds()); err != nil {
+			if err := s.aiBilling.PrefailTranscriptionWithPrice(ctx, ws.ID, userID, kieSettings.TranscriptionCreditsPerSecond, selected.DurationSeconds(), kieSettings.TranscriptionKopecksPerCredit); err != nil {
 				return nil, nil, err
 			}
 		}

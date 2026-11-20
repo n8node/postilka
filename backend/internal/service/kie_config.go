@@ -127,6 +127,12 @@ func (s *KieConfigService) Update(ctx context.Context, in model.KieUpdateRequest
 		}
 		current.TranscriptionCreditsPerSecond = *in.TranscriptionCreditsPerSecond
 	}
+	if in.TranscriptionKopecksPerCredit != nil {
+		if *in.TranscriptionKopecksPerCredit <= 0 || *in.TranscriptionKopecksPerCredit > 10_000_000 {
+			return model.KieSettingsDTO{}, errors.New("invalid transcription credit price")
+		}
+		current.TranscriptionKopecksPerCredit = *in.TranscriptionKopecksPerCredit
+	}
 	if in.TranscriptionEnabled != nil {
 		current.TranscriptionEnabled = *in.TranscriptionEnabled
 	}
@@ -322,6 +328,7 @@ func toKieSettingsDTO(s model.KieSettings) model.KieSettingsDTO {
 		TranscriptionEnabled:          s.TranscriptionEnabled,
 		TranscriptionModel:            defaultString(s.TranscriptionModel, "nvidia/nemotron-3-5-transcribe"),
 		TranscriptionCreditsPerSecond: positiveFloatOrDefault(s.TranscriptionCreditsPerSecond, 0.005),
+		TranscriptionKopecksPerCredit: positiveIntOrDefault(s.TranscriptionKopecksPerCredit, 5000),
 		TranscriptionAPIBaseURL:       s.APIBaseURL,
 		TranscriptionAPIKeySet:        strings.TrimSpace(s.APIKey) != "",
 	}
@@ -332,6 +339,13 @@ func toKieSettingsDTO(s model.KieSettings) model.KieSettingsDTO {
 }
 
 func positiveRateDefault(value, fallback int) int {
+	if value > 0 {
+		return value
+	}
+	return fallback
+}
+
+func positiveIntOrDefault(value, fallback int) int {
 	if value > 0 {
 		return value
 	}

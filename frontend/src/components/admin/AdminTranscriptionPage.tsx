@@ -4,10 +4,11 @@ import { PlugZap, Save } from "lucide-react";
 import { useEffect, useState } from "react";
 import { ApiError, fetchAdminKieSettings, testAdminKieConnection, updateAdminKieSettings, type KieAdminSettings } from "@/lib/api";
 
-const DEFAULTS: Pick<KieAdminSettings, "transcription_enabled" | "transcription_model" | "transcription_credits_per_second" | "transcription_api_base_url" | "transcription_api_key_set"> = {
+const DEFAULTS: Pick<KieAdminSettings, "transcription_enabled" | "transcription_model" | "transcription_credits_per_second" | "transcription_kopecks_per_credit" | "transcription_api_base_url" | "transcription_api_key_set"> = {
   transcription_enabled: false,
   transcription_model: "nvidia/nemotron-3-5-transcribe",
   transcription_credits_per_second: 0.005,
+  transcription_kopecks_per_credit: 5000,
   transcription_api_base_url: "https://api.kie.ai",
   transcription_api_key_set: false,
 };
@@ -30,6 +31,7 @@ export function AdminTranscriptionPage({ embedded = false }: { embedded?: boolea
         transcription_enabled: loaded.transcription_enabled,
         transcription_model: loaded.transcription_model || DEFAULTS.transcription_model,
         transcription_credits_per_second: loaded.transcription_credits_per_second || DEFAULTS.transcription_credits_per_second,
+        transcription_kopecks_per_credit: loaded.transcription_kopecks_per_credit || DEFAULTS.transcription_kopecks_per_credit,
         transcription_api_base_url: loaded.transcription_api_base_url || DEFAULTS.transcription_api_base_url,
         transcription_api_key_set: Boolean(loaded.transcription_api_key_set),
       }))
@@ -47,6 +49,7 @@ export function AdminTranscriptionPage({ embedded = false }: { embedded?: boolea
         transcription_enabled: saved.transcription_enabled,
         transcription_model: saved.transcription_model,
         transcription_credits_per_second: saved.transcription_credits_per_second,
+        transcription_kopecks_per_credit: saved.transcription_kopecks_per_credit || DEFAULTS.transcription_kopecks_per_credit,
         transcription_api_base_url: saved.transcription_api_base_url,
         transcription_api_key_set: saved.transcription_api_key_set,
       });
@@ -101,6 +104,11 @@ export function AdminTranscriptionPage({ embedded = false }: { embedded?: boolea
           Стоимость, кредитов за секунду
           <input type="number" min={0.000001} step={0.000001} value={settings.transcription_credits_per_second} onChange={(e) => setSettings((prev) => ({ ...prev, transcription_credits_per_second: Math.max(0, Number(e.target.value) || 0) }))} className="mt-1 w-full max-w-xs rounded-md border border-slate-300 px-3 py-2 text-sm" />
           <span className="mt-1 block text-xs font-normal text-slate-500">Стоимость рассчитывается по длительности аудио.</span>
+        </label>
+        <label className="block text-sm font-medium text-slate-700">
+          Цена одного кредита транскрибации, ₽
+          <input type="number" min={0.01} step={0.01} value={settings.transcription_kopecks_per_credit / 100} onChange={(e) => setSettings((prev) => ({ ...prev, transcription_kopecks_per_credit: Math.max(1, Math.round((Number(e.target.value) || 0) * 100)) }))} className="mt-1 w-full max-w-xs rounded-md border border-slate-300 px-3 py-2 text-sm" />
+          <span className="mt-1 block text-xs font-normal text-slate-500">Используется только для списания транскрибации с рублёвого баланса.</span>
         </label>
         <button type="button" onClick={() => void save()} disabled={saving} className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
           <Save className="h-4 w-4" /> {saving ? "Сохранение…" : "Сохранить настройки"}
