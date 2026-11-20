@@ -19,6 +19,7 @@ import { AdminTelegramPage } from "@/components/admin/AdminTelegramPage";
 import { AdminAntiFraudTelegramPage } from "@/components/admin/AdminAntiFraudTelegramPage";
 import { AdminMetrikaPage } from "@/components/admin/AdminMetrikaPage";
 import { AdminYandexGptPage } from "@/components/admin/AdminYandexGptPage";
+import { AdminTranscriptionPage } from "@/components/admin/AdminTranscriptionPage";
 import { AdminMediaProvidersPage } from "@/components/admin/AdminMediaProvidersPage";
 import { AdminOneFastPage } from "@/components/admin/AdminOneFastPage";
 import { AdminOneFastVideoPage } from "@/components/admin/AdminOneFastVideoPage";
@@ -40,6 +41,7 @@ type SettingsKey =
   | "payment"
   | "email-smtp"
   | "ai-yandex-gpt"
+  | "ai-transcription"
   | "ai-agents" // Hidden until agents return
   | "ai-kie"
   | "ai-kie-video"
@@ -94,6 +96,11 @@ const SETTINGS_MENU: { key: SettingsKey; label: string; description: string }[] 
     key: "ai-yandex-gpt",
     label: "AI — Yandex GPT",
     description: "Текст, модели и цены",
+  },
+  {
+    key: "ai-transcription",
+    label: "AI — транскрибация",
+    description: "Речь, субтитры и стоимость обработки",
   },
   // Hidden until agents return:
   // {
@@ -314,6 +321,9 @@ function SettingsSectionContent({
   }
   if (selected === "ai-yandex-gpt") {
     return <AdminYandexGptPage embedded />;
+  }
+  if (selected === "ai-transcription") {
+    return <AdminTranscriptionPage embedded />;
   }
   // Hidden until agents return:
   // if (selected === "ai-agents") {

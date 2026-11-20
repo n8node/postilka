@@ -1,0 +1,82 @@
+"use client";
+
+import { Save } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ApiError, fetchAdminKieSettings, updateAdminKieSettings, type KieAdminSettings } from "@/lib/api";
+
+const DEFAULTS: Pick<KieAdminSettings, "transcription_enabled" | "transcription_model" | "transcription_credits_per_second"> = {
+  transcription_enabled: false,
+  transcription_model: "nvidia/nemotron-3-5-transcribe",
+  transcription_credits_per_second: 0.005,
+};
+
+export function AdminTranscriptionPage({ embedded = false }: { embedded?: boolean }) {
+  const [settings, setSettings] = useState(DEFAULTS);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void fetchAdminKieSettings()
+      .then(({ settings: loaded }) => setSettings({
+        transcription_enabled: loaded.transcription_enabled,
+        transcription_model: loaded.transcription_model || DEFAULTS.transcription_model,
+        transcription_credits_per_second: loaded.transcription_credits_per_second || DEFAULTS.transcription_credits_per_second,
+      }))
+      .catch((err) => setError(err instanceof ApiError ? err.message : "Не удалось загрузить настройки"))
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function save() {
+    setSaving(true);
+    setMessage(null);
+    setError(null);
+    try {
+      const { settings: saved } = await updateAdminKieSettings(settings);
+      setSettings({
+        transcription_enabled: saved.transcription_enabled,
+        transcription_model: saved.transcription_model,
+        transcription_credits_per_second: saved.transcription_credits_per_second,
+      });
+      setMessage("Настройки транскрибации сохранены");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Не удалось сохранить настройки");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) return <p className="text-sm text-slate-500">Загрузка…</p>;
+
+  return (
+    <div className={embedded ? "space-y-6" : "mx-auto max-w-3xl space-y-6"}>
+      <div>
+        <h1 className={embedded ? "text-lg font-semibold text-slate-900" : "text-2xl font-semibold text-slate-900"}>Транскрибация</h1>
+        <p className="mt-1 text-sm text-slate-500">Распознавание речи и автоматические субтитры для проектов Shorts.</p>
+      </div>
+      {error && <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div>}
+      {message && <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">{message}</div>}
+      <section className="space-y-5 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+        <label className="flex items-center gap-3 text-sm font-medium text-slate-700">
+          <input type="checkbox" checked={settings.transcription_enabled} onChange={(e) => setSettings((prev) => ({ ...prev, transcription_enabled: e.target.checked }))} className="h-4 w-4 rounded border-slate-300 text-blue-600" />
+          Использовать автоматическую транскрибацию
+        </label>
+        <label className="block text-sm font-medium text-slate-700">
+          Модель распознавания
+          <select value={settings.transcription_model} onChange={(e) => setSettings((prev) => ({ ...prev, transcription_model: e.target.value }))} className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+            <option value="nvidia/nemotron-3-5-transcribe">Nemotron 3.5 Transcribe</option>
+          </select>
+        </label>
+        <label className="block text-sm font-medium text-slate-700">
+          Стоимость, кредитов за секунду
+          <input type="number" min={0.000001} step={0.000001} value={settings.transcription_credits_per_second} onChange={(e) => setSettings((prev) => ({ ...prev, transcription_credits_per_second: Math.max(0, Number(e.target.value) || 0) }))} className="mt-1 w-full max-w-xs rounded-md border border-slate-300 px-3 py-2 text-sm" />
+          <span className="mt-1 block text-xs font-normal text-slate-500">Стоимость рассчитывается по длительности аудио.</span>
+        </label>
+        <button type="button" onClick={() => void save()} disabled={saving} className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+          <Save className="h-4 w-4" /> {saving ? "Сохранение…" : "Сохранить настройки"}
+        </button>
+      </section>
+    </div>
+  );
+}
