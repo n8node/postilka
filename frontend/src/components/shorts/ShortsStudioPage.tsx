@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ArrowDown, ArrowUp, CheckCircle2, Clock3, FileVideo, FolderOpen, Loader2, Play, RefreshCw, Trash2, Upload, Video, WandSparkles } from "lucide-react";
 import { WorkspaceMediaPickerModal } from "@/components/generation/WorkspaceMediaPickerModal";
+import { ShortsWizardNav, type ShortsWizardStep } from "@/components/shorts/ShortsWizardNav";
 import { uploadFile, type WorkspaceFile } from "@/lib/files-api";
 import { analyzeShortsProject, createShortsProject, deleteShortsProject, exportShortsProject, getShortsAudioDownloadUrl, getShortsDraftDownloadUrl, getShortsFinalDownloadUrl, getShortsJob, getShortsProject, getShortsTranscriptResultUrl, listShortsProjects, rerenderShortsProject, updateShortsClip, updateShortsClipOrder, updateShortsSubtitleSettings, type ShortsClip, type ShortsJob, type ShortsProject, type ShortsProjectListItem } from "@/lib/shorts-api";
 
@@ -17,6 +18,7 @@ const contentTypes = [
 ] as const;
 
 export function ShortsStudioPage() {
+  const [activeStep, setActiveStep] = useState<ShortsWizardStep>("projects");
   const [sourceFileId, setSourceFileId] = useState("");
   const [sourceFile, setSourceFile] = useState<WorkspaceFile | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -67,6 +69,8 @@ export function ShortsStudioPage() {
 
   useEffect(() => {
     const id = new URLSearchParams(window.location.search).get("project");
+    const requestedStep = new URLSearchParams(window.location.search).get("step") as ShortsWizardStep | null;
+    if (requestedStep && ["projects", "creation", "processing", "clips", "editor", "export"].includes(requestedStep)) setActiveStep(requestedStep);
     if (id) void openProject(id);
   }, []);
 
@@ -85,6 +89,7 @@ export function ShortsStudioPage() {
       const historyJob = history.find((item) => item.project.id === id)?.job;
       if (historyJob) setJob(historyJob);
       else if (result.project.status === "completed" || result.project.status === "failed") setJob({ id: "project-status", project_id: id, job_type: "analyze", status: result.project.status === "completed" ? "succeeded" : "failed", current_step: result.project.status === "completed" ? "completed" : "failed", progress: result.project.status === "completed" ? 100 : 0 });
+      setActiveStep(result.project.status === "completed" && result.clips.length > 0 ? "clips" : result.project.status === "analyzing" ? "processing" : "creation");
       window.history.replaceState(null, "", `/app/shorts?project=${encodeURIComponent(id)}`);
     } catch (error) {
       setJobMessage(error instanceof Error ? error.message : "Не удалось открыть проект");
@@ -226,6 +231,7 @@ export function ShortsStudioPage() {
         processing_range: { start_seconds: rangeStart, end_seconds: rangeEnd },
       });
       setProject(result.project); setJob(result.job); setClips([]); setJobMessage("Проект создан. Анализ поставлен в очередь.");
+      setActiveStep("processing");
       setHistory((items) => [{ project: result.project, job: result.job, clips: 0, source_file: sourceFile ?? undefined }, ...items.filter((item) => item.project.id !== result.project.id)]);
       window.history.replaceState(null, "", `/app/shorts?project=${encodeURIComponent(result.project.id)}`);
     } catch (error) {
@@ -249,6 +255,7 @@ export function ShortsStudioPage() {
 
   return (
     <main className="min-h-screen space-y-6 bg-slate-50 pb-12 text-slate-900">
+      <ShortsWizardNav activeStep={activeStep} onStepChange={(step) => { setActiveStep(step); const query = project?.id ? `?project=${encodeURIComponent(project.id)}&step=${step}` : `?step=${step}`; window.history.replaceState(null, "", `/app/shorts${query}`); }} canOpen={(step) => step === "projects" || step === "creation" || Boolean(project)} />
       <div className="overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-indigo-950 to-violet-800 px-6 py-8 text-white shadow-lg sm:px-8">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-200">Инструменты · видео</p>
         <h1 className="mt-2 text-3xl font-bold tracking-tight">Shorts Studio</h1>
