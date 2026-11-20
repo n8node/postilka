@@ -31,6 +31,7 @@ type KieTaskDetail struct {
 	FailMsg      string
 	ResultURL    string
 	ResultJSON   string
+	ResultText   string
 	Progress     int
 	CostTime     int
 	CreateTime   int64
@@ -170,16 +171,26 @@ func (c *KieClient) GetTask(ctx context.Context, taskID string) (KieTaskDetail, 
 		Code int    `json:"code"`
 		Msg  string `json:"msg"`
 		Data struct {
-			TaskID       string `json:"taskId"`
-			Model        string `json:"model"`
-			State        string `json:"state"`
-			FailMsg      string `json:"failMsg"`
-			ResultJSON   string `json:"resultJson"`
-			Progress     int    `json:"progress"`
-			CostTime     int    `json:"costTime"`
-			CreateTime   int64  `json:"createTime"`
-			CompleteTime int64  `json:"completeTime"`
+			TaskID          string `json:"taskId"`
+			TaskIDSnake     string `json:"task_id"`
+			Model           string `json:"model"`
+			State           string `json:"state"`
+			Status          string `json:"status"`
+			FailMsg         string `json:"failMsg"`
+			FailMsgSnake    string `json:"fail_msg"`
+			ResultJSON      string `json:"resultJson"`
+			ResultJSONSnake string `json:"result_json"`
+			URL             string `json:"url"`
+			Text            string `json:"text"`
+			Progress        int    `json:"progress"`
+			CostTime        int    `json:"costTime"`
+			CreateTime      int64  `json:"createTime"`
+			CompleteTime    int64  `json:"completeTime"`
 		} `json:"data"`
+		TaskID string `json:"task_id"`
+		Status string `json:"status"`
+		URL    string `json:"url"`
+		Text   string `json:"text"`
 	}
 	if err := json.Unmarshal(raw, &payload); err != nil {
 		return KieTaskDetail{}, err
@@ -188,18 +199,52 @@ func (c *KieClient) GetTask(ctx context.Context, taskID string) (KieTaskDetail, 
 		return KieTaskDetail{}, parseKieAPIError(res.StatusCode, payload.Code, payload.Msg, raw)
 	}
 
+	taskIDValue := payload.Data.TaskID
+	if taskIDValue == "" {
+		taskIDValue = payload.Data.TaskIDSnake
+	}
+	if taskIDValue == "" {
+		taskIDValue = payload.TaskID
+	}
+	state := payload.Data.State
+	if state == "" {
+		state = payload.Data.Status
+	}
+	if state == "" {
+		state = payload.Status
+	}
+	failMsg := payload.Data.FailMsg
+	if failMsg == "" {
+		failMsg = payload.Data.FailMsgSnake
+	}
+	resultJSON := payload.Data.ResultJSON
+	if resultJSON == "" {
+		resultJSON = payload.Data.ResultJSONSnake
+	}
+	resultURL := payload.Data.URL
+	if resultURL == "" {
+		resultURL = payload.URL
+	}
+	resultText := payload.Data.Text
+	if resultText == "" {
+		resultText = payload.Text
+	}
 	out := KieTaskDetail{
-		TaskID:       payload.Data.TaskID,
+		TaskID:       taskIDValue,
 		Model:        payload.Data.Model,
-		State:        strings.ToLower(strings.TrimSpace(payload.Data.State)),
-		FailMsg:      strings.TrimSpace(payload.Data.FailMsg),
+		State:        strings.ToLower(strings.TrimSpace(state)),
+		FailMsg:      strings.TrimSpace(failMsg),
 		Progress:     payload.Data.Progress,
 		CostTime:     payload.Data.CostTime,
 		CreateTime:   payload.Data.CreateTime,
 		CompleteTime: payload.Data.CompleteTime,
 	}
-	out.ResultURL = firstResultURL(payload.Data.ResultJSON)
-	out.ResultJSON = payload.Data.ResultJSON
+	out.ResultURL = strings.TrimSpace(resultURL)
+	if out.ResultURL == "" {
+		out.ResultURL = firstResultURL(resultJSON)
+	}
+	out.ResultJSON = resultJSON
+	out.ResultText = strings.TrimSpace(resultText)
 	return out, nil
 }
 
@@ -208,15 +253,37 @@ func firstResultURL(resultJSON string) string {
 	if resultJSON == "" {
 		return ""
 	}
-	var parsed struct {
-		ResultURLs []string `json:"resultUrls"`
-	}
-	if err := json.Unmarshal([]byte(resultJSON), &parsed); err != nil {
+	var raw any
+	if err := json.Unmarshal([]byte(resultJSON), &raw); err != nil {
 		return ""
 	}
-	for _, u := range parsed.ResultURLs {
-		if u = strings.TrimSpace(u); u != "" {
-			return u
+	return findResultURL(raw)
+}
+
+func findResultURL(value any) string {
+	switch item := value.(type) {
+	case string:
+		if strings.HasPrefix(strings.TrimSpace(item), "http") {
+			return strings.TrimSpace(item)
+		}
+	case []any:
+		for _, child := range item {
+			if url := findResultURL(child); url != "" {
+				return url
+			}
+		}
+	case map[string]any:
+		for _, key := range []string{"resultUrl", "result_url", "url", "downloadUrl", "download_url", "resultUrls", "result_urls"} {
+			if child, ok := item[key]; ok {
+				if url := findResultURL(child); url != "" {
+					return url
+				}
+			}
+		}
+		for _, child := range item {
+			if url := findResultURL(child); url != "" {
+				return url
+			}
 		}
 	}
 	return ""
@@ -238,9 +305,11 @@ func (c *KieClient) WaitForTask(ctx context.Context, taskID string) (KieTaskDeta
 		}
 
 		switch detail.State {
-		case "success":
+		case "success", "succeeded":
 			if detail.ResultURL == "" {
-				return KieTaskDetail{}, fmt.Errorf("kie task succeeded without result url")
+				if strings.TrimSpace(detail.ResultJSON) == "" && strings.TrimSpace(detail.ResultText) == "" {
+					return KieTaskDetail{}, fmt.Errorf("kie task succeeded without result url or result json")
+				}
 			}
 			return detail, nil
 		case "fail":
@@ -262,6 +331,9 @@ func (c *KieClient) WaitForTask(ctx context.Context, taskID string) (KieTaskDeta
 }
 
 func (c *KieClient) DownloadResult(ctx context.Context, detail KieTaskDetail) ([]byte, error) {
+	if detail.ResultURL != "" {
+		return c.downloadURL(ctx, detail.ResultURL)
+	}
 	if strings.TrimSpace(detail.ResultJSON) != "" {
 		var raw any
 		if err := json.Unmarshal([]byte(detail.ResultJSON), &raw); err == nil {
@@ -277,8 +349,17 @@ func (c *KieClient) DownloadResult(ctx context.Context, detail KieTaskDetail) ([
 				if _, ok := obj["transcript"]; ok {
 					return []byte(detail.ResultJSON), nil
 				}
+				if _, ok := obj["text"]; ok {
+					return []byte(detail.ResultJSON), nil
+				}
+			}
+			if url := findResultURL(raw); url != "" {
+				return c.downloadURL(ctx, url)
 			}
 		}
+	}
+	if strings.TrimSpace(detail.ResultText) != "" {
+		return json.Marshal(map[string]string{"text": detail.ResultText})
 	}
 	if detail.ResultURL == "" {
 		return nil, fmt.Errorf("kie task has no result")

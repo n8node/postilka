@@ -122,15 +122,21 @@ export function ShortsStudioPage() {
       void getShortsProject(project.id).then((result) => { setProject(result.project); setClips(result.clips); }).catch(() => undefined);
       return;
     }
-    const timer = window.setInterval(async () => {
+    let stopped = false;
+    let timer: number | undefined;
+    const poll = async () => {
+      if (stopped) return;
       try {
         const [nextProject, nextJob] = await Promise.all([getShortsProject(project.id), getShortsJob(job.id)]);
+        if (stopped) return;
         setProject(nextProject.project); setClips(nextProject.clips); setJob(nextJob.job);
         if (nextJob.job.status === "failed" || nextJob.job.status === "queued") setJobMessage(nextJob.job.last_error || (nextJob.job.status === "queued" ? `Повторная попытка: ${stepLabel(nextJob.job.current_step)}` : "Не удалось обработать видео."));
       } catch { /* transient polling failure */ }
-    }, 3000);
-    return () => window.clearInterval(timer);
-  }, [project?.id, job?.id, job?.status, job?.current_step]);
+      if (!stopped) timer = window.setTimeout(() => void poll(), 1500);
+    };
+    void poll();
+    return () => { stopped = true; if (timer) window.clearTimeout(timer); };
+  }, [project?.id, job?.id, job?.status]);
 
   async function loadDraft(clipId: string) {
     if (draftUrls[clipId]) return;
@@ -249,7 +255,7 @@ export function ShortsStudioPage() {
         </label>
         <label className="block text-sm font-medium text-slate-700">
           Длительность исходника, сек.
-          <input type="number" min={1} value={duration} onChange={(e) => { const value = Math.max(1, Number(e.target.value)); setDuration(value); setRangeEnd(Math.min(value, rangeEnd)); }} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none" />
+          <input type="number" min={1} step={0.1} value={duration} onChange={(e) => { const value = Math.max(1, Number(e.target.value)); setDuration(value); setRangeEnd(Math.min(value, rangeEnd)); }} className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-slate-900 outline-none" />
         </label>
         <div className="text-sm text-slate-700">
           <p>Диапазон обработки</p>
