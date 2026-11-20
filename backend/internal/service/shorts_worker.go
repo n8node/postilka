@@ -21,7 +21,13 @@ type ShortsWorker struct {
 	storage     *ObjectStorage
 	fileStore   *FileStorageService
 	transcriber ShortsTranscriber
+	aiBilling   *AIBillingService
+	kieConfig   *KieConfigService
 	owner       string
+}
+
+func (w *ShortsWorker) SetAIBilling(billing *AIBillingService, config *KieConfigService) {
+	w.aiBilling, w.kieConfig = billing, config
 }
 
 func NewShortsWorker(repo *repository.ShortsRepository, files *repository.WorkspaceFileRepository, storage *ObjectStorage, fileStore *FileStorageService, transcriber ShortsTranscriber, owner string) *ShortsWorker {
@@ -100,6 +106,17 @@ func (w *ShortsWorker) process(ctx context.Context, job repository.ClaimedShorts
 	transcript, err := w.transcriber.Transcribe(ctx, audioPath)
 	if err != nil {
 		return err
+	}
+	if w.aiBilling != nil && w.kieConfig != nil {
+		kieSettings, settingsErr := w.kieConfig.GetSettings(ctx)
+		if settingsErr != nil {
+			return settingsErr
+		}
+		if kieSettings.TranscriptionEnabled {
+			if _, debitErr := w.aiBilling.DebitTranscriptionAfterSuccess(ctx, job.WorkspaceID, project.CreatedByUserID, job.ID, kieSettings.TranscriptionCreditsPerSecond, duration); debitErr != nil {
+				return debitErr
+			}
+		}
 	}
 	audioInfo, err := os.Stat(audioPath)
 	if err != nil {

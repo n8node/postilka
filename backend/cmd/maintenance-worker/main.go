@@ -64,6 +64,8 @@ func main() {
 	// Сервисы для технического обслуживания
 	wsSvc := service.NewWorkspaceService(workspaceRepo, planRepo)
 	quotaSvc := service.NewQuotaService(planRepo, workspaceRepo, subscriptionRepo, usageRepo, channelRepo, workflowRepo)
+	kieBillingRepo := repository.NewKieSettingsRepository(db.Pool)
+	aiBillingSvc := service.NewAIBillingService(quotaSvc, usageRepo, walletRepo, kieBillingRepo)
 
 	// Сервисы, которые используются health-check'ами ежедневной сводки
 	kieSettingsRepo := repository.NewKieSettingsRepository(db.Pool)
@@ -112,6 +114,7 @@ func main() {
 	shortsRetentionSvc := service.NewShortsRetentionService(shortsRepo, fileStorageSvc, logger)
 	shortsTranscriber := service.KieShortsTranscriber{Config: kieConfigSvc, Storage: objectStorage}
 	shortsWorker := service.NewShortsWorker(shortsRepo, fileStorageRepo, objectStorage, fileStorageSvc, shortsTranscriber, fmt.Sprintf("maintenance-%d", os.Getpid()))
+	shortsWorker.SetAIBilling(aiBillingSvc, kieConfigSvc)
 	backupSvc := service.NewBackupService(backupRepo, objectStorage, cfg, logger)
 
 	// Сервисы для оповещений

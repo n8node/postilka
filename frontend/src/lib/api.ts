@@ -3052,6 +3052,8 @@ export type KieAdminSettings = {
   transcription_enabled: boolean;
   transcription_model: string;
   transcription_credits_per_second: number;
+  transcription_api_base_url?: string;
+  transcription_api_key_set?: boolean;
   updated_at?: string;
 };
 

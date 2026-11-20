@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 
 	"github.com/postilka/postilka/internal/model"
 	"github.com/postilka/postilka/internal/repository"
@@ -61,6 +62,21 @@ func (s *AIBillingService) PrefailCheck(ctx context.Context, workspaceID, userID
 		return err
 	}
 	return s.PrefailCheckWithKopecks(ctx, workspaceID, userID, creditCost, kopecks)
+}
+
+func TranscriptionCreditCost(creditsPerSecond, durationSeconds float64) int {
+	if creditsPerSecond <= 0 || durationSeconds <= 0 {
+		return 0
+	}
+	return int(math.Ceil(creditsPerSecond * durationSeconds))
+}
+
+func (s *AIBillingService) PrefailTranscription(ctx context.Context, workspaceID, userID string, rate, durationSeconds float64) error {
+	return s.PrefailCheck(ctx, workspaceID, userID, TranscriptionCreditCost(rate, durationSeconds))
+}
+
+func (s *AIBillingService) DebitTranscriptionAfterSuccess(ctx context.Context, workspaceID, userID, referenceID string, rate, durationSeconds float64) (AIDebitOutcome, error) {
+	return s.DebitAfterSuccess(ctx, workspaceID, userID, referenceID, TranscriptionCreditCost(rate, durationSeconds))
 }
 
 func (s *AIBillingService) PrefailCheckWithKopecks(ctx context.Context, workspaceID, userID string, creditCost, kopecksPerCredit int) error {

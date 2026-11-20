@@ -65,6 +65,13 @@ func (s *KieConfigService) Update(ctx context.Context, in model.KieUpdateRequest
 		}
 		current.APIBaseURL = url
 	}
+	if in.TranscriptionAPIBaseURL != nil {
+		url := strings.TrimSpace(*in.TranscriptionAPIBaseURL)
+		if url == "" {
+			return model.KieSettingsDTO{}, errors.New("invalid transcription api base url")
+		}
+		current.APIBaseURL = url
+	}
 
 	if in.TokenCostTextToImage != nil {
 		if *in.TokenCostTextToImage < 0 || *in.TokenCostTextToImage > 1_000_000 {
@@ -315,6 +322,8 @@ func toKieSettingsDTO(s model.KieSettings) model.KieSettingsDTO {
 		TranscriptionEnabled:          s.TranscriptionEnabled,
 		TranscriptionModel:            defaultString(s.TranscriptionModel, "nvidia/nemotron-3-5-transcribe"),
 		TranscriptionCreditsPerSecond: positiveFloatOrDefault(s.TranscriptionCreditsPerSecond, 0.005),
+		TranscriptionAPIBaseURL:       s.APIBaseURL,
+		TranscriptionAPIKeySet:        strings.TrimSpace(s.APIKey) != "",
 	}
 	if !s.UpdatedAt.IsZero() {
 		dto.UpdatedAt = s.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z")

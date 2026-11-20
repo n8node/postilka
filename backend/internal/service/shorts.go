@@ -25,7 +25,12 @@ type ShortsService struct {
 	files       *repository.WorkspaceFileRepository
 	fileStorage *FileStorageService
 	wsSvc       *WorkspaceService
+	aiBilling   *AIBillingService
+	kieConfig   *KieConfigService
 }
+
+func (s *ShortsService) SetAIBilling(billing *AIBillingService) { s.aiBilling = billing }
+func (s *ShortsService) SetKieConfig(config *KieConfigService)  { s.kieConfig = config }
 
 func NewShortsService(repo *repository.ShortsRepository, files *repository.WorkspaceFileRepository, fileStorage *FileStorageService, wsSvc *WorkspaceService) *ShortsService {
 	return &ShortsService{repo: repo, files: files, fileStorage: fileStorage, wsSvc: wsSvc}
@@ -77,6 +82,17 @@ func (s *ShortsService) CreateProject(ctx context.Context, userID string, r *htt
 	selected, err = NormalizeShortsRange(selected, input.SourceDurationSeconds)
 	if err != nil {
 		return nil, nil, err
+	}
+	if s.aiBilling != nil && s.kieConfig != nil {
+		kieSettings, settingsErr := s.kieConfig.GetSettings(ctx)
+		if settingsErr != nil {
+			return nil, nil, settingsErr
+		}
+		if kieSettings.TranscriptionEnabled {
+			if err := s.aiBilling.PrefailTranscription(ctx, ws.ID, userID, kieSettings.TranscriptionCreditsPerSecond, selected.DurationSeconds()); err != nil {
+				return nil, nil, err
+			}
+		}
 	}
 
 	contentType := input.ContentType

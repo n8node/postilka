@@ -46,6 +46,8 @@ type KieSettingsDTO struct {
 	TranscriptionEnabled          bool    `json:"transcription_enabled"`
 	TranscriptionModel            string  `json:"transcription_model"`
 	TranscriptionCreditsPerSecond float64 `json:"transcription_credits_per_second"`
+	TranscriptionAPIBaseURL       string  `json:"transcription_api_base_url"`
+	TranscriptionAPIKeySet        bool    `json:"transcription_api_key_set"`
 	UpdatedAt                     string  `json:"updated_at,omitempty"`
 }
 
@@ -86,6 +88,7 @@ type KieUpdateRequest struct {
 	TranscriptionEnabled          *bool    `json:"transcription_enabled"`
 	TranscriptionModel            *string  `json:"transcription_model"`
 	TranscriptionCreditsPerSecond *float64 `json:"transcription_credits_per_second"`
+	TranscriptionAPIBaseURL       *string  `json:"transcription_api_base_url"`
 }
 
 func (s KieSettings) TokenCostForGenerationMode(mode string) int {

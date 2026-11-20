@@ -272,6 +272,8 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 	fileStorageHandler := handler.NewFileStorageHandler(fileStorageSvc)
 	shortsRepo := repository.NewShortsRepository(db.Pool)
 	shortsSvc := service.NewShortsService(shortsRepo, fileStorageRepo, fileStorageSvc, wsSvc)
+	shortsSvc.SetAIBilling(aiBillingSvc)
+	shortsSvc.SetKieConfig(kieConfigSvc)
 	shortsHandler := handler.NewShortsHandler(shortsSvc)
 	adminShortsHandler := handler.NewAdminShortsHandler(shortsRepo)
 	helpArticleRepo := repository.NewHelpArticleRepository(db.Pool)
