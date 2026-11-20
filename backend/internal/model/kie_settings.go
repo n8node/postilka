@@ -6,41 +6,47 @@ import (
 )
 
 type KieSettings struct {
-	APIBaseURL            string
-	APIKey                string
-	ModelTextToImage      string
-	ModelImageToImage     string
-	ModelCombine          string
-	ModelFilter           string
-	ModelCarousel         string
-	TokenCostTextToImage  int
-	TokenCostImageToImage int
-	TokenCostCombine      int
-	TokenCostFilter       int
-	TokenCostCarousel     int
-	KopecksPerMediaCredit int
-	SubmitRateLimit       int
-	SubmitRateWindowSec   int
-	UpdatedAt             time.Time
+	APIBaseURL                    string
+	APIKey                        string
+	ModelTextToImage              string
+	ModelImageToImage             string
+	ModelCombine                  string
+	ModelFilter                   string
+	ModelCarousel                 string
+	TokenCostTextToImage          int
+	TokenCostImageToImage         int
+	TokenCostCombine              int
+	TokenCostFilter               int
+	TokenCostCarousel             int
+	KopecksPerMediaCredit         int
+	SubmitRateLimit               int
+	SubmitRateWindowSec           int
+	TranscriptionEnabled          bool
+	TranscriptionModel            string
+	TranscriptionCreditsPerSecond float64
+	UpdatedAt                     time.Time
 }
 
 type KieSettingsDTO struct {
-	APIBaseURL            string `json:"api_base_url"`
-	APIKeySet             bool   `json:"api_key_set"`
-	ModelTextToImage      string `json:"model_text_to_image"`
-	ModelImageToImage     string `json:"model_image_to_image"`
-	ModelCombine          string `json:"model_combine"`
-	ModelFilter           string `json:"model_filter"`
-	ModelCarousel         string `json:"model_carousel"`
-	TokenCostTextToImage  int    `json:"token_cost_text_to_image"`
-	TokenCostImageToImage int    `json:"token_cost_image_to_image"`
-	TokenCostCombine      int    `json:"token_cost_combine"`
-	TokenCostFilter       int    `json:"token_cost_filter"`
-	TokenCostCarousel     int    `json:"token_cost_carousel"`
-	KopecksPerMediaCredit int    `json:"kopecks_per_media_credit"`
-	SubmitRateLimit       int    `json:"submit_rate_limit"`
-	SubmitRateWindowSec   int    `json:"submit_rate_window_sec"`
-	UpdatedAt             string `json:"updated_at,omitempty"`
+	APIBaseURL                    string  `json:"api_base_url"`
+	APIKeySet                     bool    `json:"api_key_set"`
+	ModelTextToImage              string  `json:"model_text_to_image"`
+	ModelImageToImage             string  `json:"model_image_to_image"`
+	ModelCombine                  string  `json:"model_combine"`
+	ModelFilter                   string  `json:"model_filter"`
+	ModelCarousel                 string  `json:"model_carousel"`
+	TokenCostTextToImage          int     `json:"token_cost_text_to_image"`
+	TokenCostImageToImage         int     `json:"token_cost_image_to_image"`
+	TokenCostCombine              int     `json:"token_cost_combine"`
+	TokenCostFilter               int     `json:"token_cost_filter"`
+	TokenCostCarousel             int     `json:"token_cost_carousel"`
+	KopecksPerMediaCredit         int     `json:"kopecks_per_media_credit"`
+	SubmitRateLimit               int     `json:"submit_rate_limit"`
+	SubmitRateWindowSec           int     `json:"submit_rate_window_sec"`
+	TranscriptionEnabled          bool    `json:"transcription_enabled"`
+	TranscriptionModel            string  `json:"transcription_model"`
+	TranscriptionCreditsPerSecond float64 `json:"transcription_credits_per_second"`
+	UpdatedAt                     string  `json:"updated_at,omitempty"`
 }
 
 type KieModelView struct {
@@ -62,21 +68,24 @@ type KieTestResult struct {
 }
 
 type KieUpdateRequest struct {
-	APIBaseURL            *string `json:"api_base_url"`
-	APIKey                *string `json:"api_key"`
-	ModelTextToImage      *string `json:"model_text_to_image"`
-	ModelImageToImage     *string `json:"model_image_to_image"`
-	ModelCombine          *string `json:"model_combine"`
-	ModelFilter           *string `json:"model_filter"`
-	ModelCarousel         *string `json:"model_carousel"`
-	TokenCostTextToImage  *int    `json:"token_cost_text_to_image"`
-	TokenCostImageToImage *int    `json:"token_cost_image_to_image"`
-	TokenCostCombine      *int    `json:"token_cost_combine"`
-	TokenCostFilter       *int    `json:"token_cost_filter"`
-	TokenCostCarousel     *int    `json:"token_cost_carousel"`
-	KopecksPerMediaCredit *int    `json:"kopecks_per_media_credit"`
-	SubmitRateLimit       *int    `json:"submit_rate_limit"`
-	SubmitRateWindowSec   *int    `json:"submit_rate_window_sec"`
+	APIBaseURL                    *string  `json:"api_base_url"`
+	APIKey                        *string  `json:"api_key"`
+	ModelTextToImage              *string  `json:"model_text_to_image"`
+	ModelImageToImage             *string  `json:"model_image_to_image"`
+	ModelCombine                  *string  `json:"model_combine"`
+	ModelFilter                   *string  `json:"model_filter"`
+	ModelCarousel                 *string  `json:"model_carousel"`
+	TokenCostTextToImage          *int     `json:"token_cost_text_to_image"`
+	TokenCostImageToImage         *int     `json:"token_cost_image_to_image"`
+	TokenCostCombine              *int     `json:"token_cost_combine"`
+	TokenCostFilter               *int     `json:"token_cost_filter"`
+	TokenCostCarousel             *int     `json:"token_cost_carousel"`
+	KopecksPerMediaCredit         *int     `json:"kopecks_per_media_credit"`
+	SubmitRateLimit               *int     `json:"submit_rate_limit"`
+	SubmitRateWindowSec           *int     `json:"submit_rate_window_sec"`
+	TranscriptionEnabled          *bool    `json:"transcription_enabled"`
+	TranscriptionModel            *string  `json:"transcription_model"`
+	TranscriptionCreditsPerSecond *float64 `json:"transcription_credits_per_second"`
 }
 
 func (s KieSettings) TokenCostForGenerationMode(mode string) int {

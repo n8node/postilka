@@ -229,7 +229,7 @@ export function ShortsStudioPage() {
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-200">Инструменты · видео</p>
         <h1 className="mt-2 text-3xl font-bold tracking-tight">Shorts Studio</h1>
         <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-200">
-          Подготовка длинного видео к анализу и автоматической нарезке. Исходные материалы хранятся временно и не отправляются в KIE.ai.
+          Подготовка длинного видео к анализу и автоматической нарезке с субтитрами.
         </p><div className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-white/10 px-4 py-2.5 text-sm text-violet-100 ring-1 ring-white/15"><WandSparkles className="h-4 w-4" /> Автоматическая нарезка</div>
       </div>
 

@@ -103,7 +103,7 @@ const SETTINGS_MENU: { key: SettingsKey; label: string; description: string }[] 
   // },
   {
     key: "ai-kie",
-    label: "AI — KIE.ai",
+    label: "AI — генерация изображений",
     description: "Изображения и фильтры",
   },
   {

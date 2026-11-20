@@ -27,6 +27,9 @@ const DEFAULT_SETTINGS: KieAdminSettings = {
   kopecks_per_media_credit: 5000,
   submit_rate_limit: 18,
   submit_rate_window_sec: 10,
+  transcription_enabled: false,
+  transcription_model: "nvidia/nemotron-3-5-transcribe",
+  transcription_credits_per_second: 0.005,
 };
 
 function sortModels(models: KieModel[]) {
@@ -153,6 +156,9 @@ export function AdminKiePage({ embedded = false }: { embedded?: boolean }) {
         ),
         submit_rate_limit: form.submit_rate_limit,
         submit_rate_window_sec: form.submit_rate_window_sec,
+        transcription_enabled: form.transcription_enabled,
+        transcription_model: form.transcription_model,
+        transcription_credits_per_second: form.transcription_credits_per_second,
       };
       if (newApiKey.trim()) {
         body.api_key = newApiKey.trim();
@@ -163,7 +169,7 @@ export function AdminKiePage({ embedded = false }: { embedded?: boolean }) {
         Math.max(0, (settings.kopecks_per_media_credit ?? 5000) / 100),
       );
       setNewApiKey("");
-      setSuccess("Настройки KIE.ai сохранены");
+      setSuccess("Настройки сохранены");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Не удалось сохранить настройки");
     } finally {
@@ -224,7 +230,7 @@ export function AdminKiePage({ embedded = false }: { embedded?: boolean }) {
       )}
 
       <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
-        <h2 className="text-base font-semibold text-slate-900">KIE.ai</h2>
+        <h2 className="text-base font-semibold text-slate-900">����������� �������</h2>
         <p className="text-sm text-slate-500">Изображения через Market API (api.kie.ai)</p>
 
         <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
@@ -262,7 +268,7 @@ export function AdminKiePage({ embedded = false }: { embedded?: boolean }) {
             autoComplete="new-password"
             value={newApiKey}
             onChange={(e) => setNewApiKey(e.target.value)}
-            placeholder={form.api_key_set ? "••••••••" : "kie_..."}
+            placeholder={form.api_key_set ? "••••••••" : "������� ���� �������"}
             className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
           />
           <p className="mt-1 text-xs text-slate-500">
@@ -297,7 +303,7 @@ export function AdminKiePage({ embedded = false }: { embedded?: boolean }) {
 
       <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
         <div>
-          <h2 className="text-base font-semibold text-slate-900">Модели KIE Market</h2>
+          <h2 className="text-base font-semibold text-slate-900">Модели генерации</h2>
           <p className="mt-1 text-sm text-slate-500">
             После успешного теста выберите модели для генерации и фильтров
           </p>
@@ -358,6 +364,30 @@ export function AdminKiePage({ embedded = false }: { embedded?: boolean }) {
           <p className="mt-1 text-xs text-blue-800">
             KIE получает отдельный prompt и до шести референсов для каждого слайда.
           </p>
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm space-y-4">
+        <div>
+          <h2 className="text-base font-semibold text-slate-900">Транскрибация видео</h2>
+          <p className="mt-1 text-sm text-slate-500">Настройки распознавания речи и автоматических субтитров для Shorts.</p>
+        </div>
+        <label className="flex items-center gap-3 text-sm font-medium text-slate-700">
+          <input type="checkbox" checked={form.transcription_enabled} onChange={(e) => patch("transcription_enabled", e.target.checked)} className="h-4 w-4 rounded border-slate-300 text-blue-600" />
+          Использовать автоматическую транскрибацию
+        </label>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="text-sm font-medium text-slate-700">
+            Модель распознавания
+            <select value={form.transcription_model} onChange={(e) => patch("transcription_model", e.target.value)} className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm">
+              <option value="nvidia/nemotron-3-5-transcribe">Nemotron 3.5 Transcribe</option>
+            </select>
+          </label>
+          <label className="text-sm font-medium text-slate-700">
+            Стоимость, кредитов за секунду
+            <input type="number" min={0.000001} step={0.000001} value={form.transcription_credits_per_second} onChange={(e) => patch("transcription_credits_per_second", Math.max(0, Number(e.target.value) || 0))} className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+            <span className="mt-1 block text-xs font-normal text-slate-500">Стоимость рассчитывается по длительности аудио. Для текущей модели рекомендовано 0.005.</span>
+          </label>
         </div>
       </section>
 

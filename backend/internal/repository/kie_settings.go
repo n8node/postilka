@@ -24,13 +24,15 @@ func (r *KieSettingsRepository) Get(ctx context.Context) (model.KieSettings, err
 		SELECT api_base_url, api_key_encrypted, model_text_to_image, model_image_to_image,
 		       model_combine, model_filter, model_carousel,
 		       token_cost_text_to_image, token_cost_image_to_image, token_cost_combine,
-		       token_cost_filter, token_cost_carousel, kopecks_per_media_credit, submit_rate_limit, submit_rate_window_sec, updated_at
+		       token_cost_filter, token_cost_carousel, kopecks_per_media_credit, submit_rate_limit, submit_rate_window_sec,
+		       transcription_enabled, transcription_model, transcription_credits_per_second, updated_at
 		FROM kie_settings
 		WHERE id = 1
 	`).Scan(
 		&s.APIBaseURL, &enc, &s.ModelTextToImage, &s.ModelImageToImage, &s.ModelCombine, &s.ModelFilter, &s.ModelCarousel,
 		&s.TokenCostTextToImage, &s.TokenCostImageToImage, &s.TokenCostCombine,
-		&s.TokenCostFilter, &s.TokenCostCarousel, &s.KopecksPerMediaCredit, &s.SubmitRateLimit, &s.SubmitRateWindowSec, &s.UpdatedAt,
+		&s.TokenCostFilter, &s.TokenCostCarousel, &s.KopecksPerMediaCredit, &s.SubmitRateLimit, &s.SubmitRateWindowSec,
+		&s.TranscriptionEnabled, &s.TranscriptionModel, &s.TranscriptionCreditsPerSecond, &s.UpdatedAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -48,9 +50,10 @@ func (r *KieSettingsRepository) Upsert(ctx context.Context, s model.KieSettings,
 			id, api_base_url, api_key_encrypted, model_text_to_image, model_image_to_image,
 			model_combine, model_filter, model_carousel,
 			token_cost_text_to_image, token_cost_image_to_image, token_cost_combine,
-			token_cost_filter, token_cost_carousel, kopecks_per_media_credit, submit_rate_limit, submit_rate_window_sec, updated_at
+			token_cost_filter, token_cost_carousel, kopecks_per_media_credit, submit_rate_limit, submit_rate_window_sec,
+			transcription_enabled, transcription_model, transcription_credits_per_second, updated_at
 		) VALUES (
-			1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, now()
+			1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, now()
 		)
 		ON CONFLICT (id) DO UPDATE SET
 			api_base_url = EXCLUDED.api_base_url,
@@ -68,12 +71,30 @@ func (r *KieSettingsRepository) Upsert(ctx context.Context, s model.KieSettings,
 			kopecks_per_media_credit = EXCLUDED.kopecks_per_media_credit,
 			submit_rate_limit = EXCLUDED.submit_rate_limit,
 			submit_rate_window_sec = EXCLUDED.submit_rate_window_sec,
+			transcription_enabled = EXCLUDED.transcription_enabled,
+			transcription_model = EXCLUDED.transcription_model,
+			transcription_credits_per_second = EXCLUDED.transcription_credits_per_second,
 			updated_at = now()
 	`, s.APIBaseURL, apiKeyEncrypted, s.ModelTextToImage, s.ModelImageToImage, s.ModelCombine,
 		s.ModelFilter, s.ModelCarousel,
 		s.TokenCostTextToImage, s.TokenCostImageToImage, s.TokenCostCombine, s.TokenCostFilter, s.TokenCostCarousel,
-		positiveOrDefault(s.KopecksPerMediaCredit, 5000), positiveOrDefault(s.SubmitRateLimit, 18), positiveOrDefault(s.SubmitRateWindowSec, 10))
+		positiveOrDefault(s.KopecksPerMediaCredit, 5000), positiveOrDefault(s.SubmitRateLimit, 18), positiveOrDefault(s.SubmitRateWindowSec, 10),
+		s.TranscriptionEnabled, defaultString(s.TranscriptionModel, "nvidia/nemotron-3-5-transcribe"), positiveFloatOrDefault(s.TranscriptionCreditsPerSecond, 0.005))
 	return err
+}
+
+func defaultString(value, fallback string) string {
+	if value != "" {
+		return value
+	}
+	return fallback
+}
+
+func positiveFloatOrDefault(value, fallback float64) float64 {
+	if value > 0 {
+		return value
+	}
+	return fallback
 }
 
 func positiveOrDefault(n, def int) int {

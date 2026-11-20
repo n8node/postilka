@@ -30,6 +30,7 @@ type KieTaskDetail struct {
 	State        string
 	FailMsg      string
 	ResultURL    string
+	ResultJSON   string
 	Progress     int
 	CostTime     int
 	CreateTime   int64
@@ -198,6 +199,7 @@ func (c *KieClient) GetTask(ctx context.Context, taskID string) (KieTaskDetail, 
 		CompleteTime: payload.Data.CompleteTime,
 	}
 	out.ResultURL = firstResultURL(payload.Data.ResultJSON)
+	out.ResultJSON = payload.Data.ResultJSON
 	return out, nil
 }
 
@@ -257,6 +259,51 @@ func (c *KieClient) WaitForTask(ctx context.Context, taskID string) (KieTaskDeta
 		case <-time.After(defaultPollInterval):
 		}
 	}
+}
+
+func (c *KieClient) DownloadResult(ctx context.Context, detail KieTaskDetail) ([]byte, error) {
+	if strings.TrimSpace(detail.ResultJSON) != "" {
+		var raw any
+		if err := json.Unmarshal([]byte(detail.ResultJSON), &raw); err == nil {
+			if obj, ok := raw.(map[string]any); ok {
+				for _, key := range []string{"resultUrl", "result_url", "url", "downloadUrl", "download_url"} {
+					if value, ok := obj[key].(string); ok && strings.TrimSpace(value) != "" {
+						return c.downloadURL(ctx, value)
+					}
+				}
+				if _, ok := obj["words"]; ok {
+					return []byte(detail.ResultJSON), nil
+				}
+				if _, ok := obj["transcript"]; ok {
+					return []byte(detail.ResultJSON), nil
+				}
+			}
+		}
+	}
+	if detail.ResultURL == "" {
+		return nil, fmt.Errorf("kie task has no result")
+	}
+	return c.downloadURL(ctx, detail.ResultURL)
+}
+
+func (c *KieClient) downloadURL(ctx context.Context, resultURL string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, strings.TrimSpace(resultURL), nil)
+	if err != nil {
+		return nil, err
+	}
+	res, err := c.taskHTTPClient().Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+	raw, err := io.ReadAll(io.LimitReader(res.Body, 32<<20))
+	if err != nil {
+		return nil, err
+	}
+	if res.StatusCode >= 400 {
+		return nil, fmt.Errorf("kie result download HTTP %d", res.StatusCode)
+	}
+	return raw, nil
 }
 
 func (c *KieClient) UploadFileFromURL(ctx context.Context, sourceURL, fileName string) (string, error) {

@@ -114,6 +114,21 @@ func (s *KieConfigService) Update(ctx context.Context, in model.KieUpdateRequest
 		}
 		current.SubmitRateWindowSec = *in.SubmitRateWindowSec
 	}
+	if in.TranscriptionCreditsPerSecond != nil {
+		if *in.TranscriptionCreditsPerSecond <= 0 || *in.TranscriptionCreditsPerSecond > 100 {
+			return model.KieSettingsDTO{}, errors.New("invalid transcription price")
+		}
+		current.TranscriptionCreditsPerSecond = *in.TranscriptionCreditsPerSecond
+	}
+	if in.TranscriptionEnabled != nil {
+		current.TranscriptionEnabled = *in.TranscriptionEnabled
+	}
+	if in.TranscriptionModel != nil {
+		if strings.TrimSpace(*in.TranscriptionModel) == "" {
+			return model.KieSettingsDTO{}, errors.New("invalid transcription model")
+		}
+		current.TranscriptionModel = strings.TrimSpace(*in.TranscriptionModel)
+	}
 
 	if in.ModelTextToImage != nil {
 		current.ModelTextToImage = ai.NormalizeKieModelID(*in.ModelTextToImage)
@@ -267,6 +282,12 @@ func (s *KieConfigService) GetSettings(ctx context.Context) (model.KieSettings, 
 	if settings.SubmitRateWindowSec <= 0 {
 		settings.SubmitRateWindowSec = 10
 	}
+	if settings.TranscriptionModel == "" {
+		settings.TranscriptionModel = "nvidia/nemotron-3-5-transcribe"
+	}
+	if settings.TranscriptionCreditsPerSecond <= 0 {
+		settings.TranscriptionCreditsPerSecond = 0.005
+	}
 	s.cacheMu.Lock()
 	s.cachedSettings = settings
 	s.cachedAt = time.Now()
@@ -276,21 +297,24 @@ func (s *KieConfigService) GetSettings(ctx context.Context) (model.KieSettings, 
 
 func toKieSettingsDTO(s model.KieSettings) model.KieSettingsDTO {
 	dto := model.KieSettingsDTO{
-		APIBaseURL:            s.APIBaseURL,
-		APIKeySet:             strings.TrimSpace(s.APIKey) != "",
-		ModelTextToImage:      s.ModelTextToImage,
-		ModelImageToImage:     s.ModelImageToImage,
-		ModelCombine:          s.ModelCombine,
-		ModelFilter:           s.ModelFilter,
-		ModelCarousel:         s.ModelCarousel,
-		TokenCostTextToImage:  s.TokenCostTextToImage,
-		TokenCostImageToImage: s.TokenCostImageToImage,
-		TokenCostCombine:      s.TokenCostCombine,
-		TokenCostFilter:       s.TokenCostFilter,
-		TokenCostCarousel:     s.TokenCostCarousel,
-		KopecksPerMediaCredit: positiveKopecksPerCredit(s.KopecksPerMediaCredit),
-		SubmitRateLimit:       positiveRateDefault(s.SubmitRateLimit, 18),
-		SubmitRateWindowSec:   positiveRateDefault(s.SubmitRateWindowSec, 10),
+		APIBaseURL:                    s.APIBaseURL,
+		APIKeySet:                     strings.TrimSpace(s.APIKey) != "",
+		ModelTextToImage:              s.ModelTextToImage,
+		ModelImageToImage:             s.ModelImageToImage,
+		ModelCombine:                  s.ModelCombine,
+		ModelFilter:                   s.ModelFilter,
+		ModelCarousel:                 s.ModelCarousel,
+		TokenCostTextToImage:          s.TokenCostTextToImage,
+		TokenCostImageToImage:         s.TokenCostImageToImage,
+		TokenCostCombine:              s.TokenCostCombine,
+		TokenCostFilter:               s.TokenCostFilter,
+		TokenCostCarousel:             s.TokenCostCarousel,
+		KopecksPerMediaCredit:         positiveKopecksPerCredit(s.KopecksPerMediaCredit),
+		SubmitRateLimit:               positiveRateDefault(s.SubmitRateLimit, 18),
+		SubmitRateWindowSec:           positiveRateDefault(s.SubmitRateWindowSec, 10),
+		TranscriptionEnabled:          s.TranscriptionEnabled,
+		TranscriptionModel:            defaultString(s.TranscriptionModel, "nvidia/nemotron-3-5-transcribe"),
+		TranscriptionCreditsPerSecond: positiveFloatOrDefault(s.TranscriptionCreditsPerSecond, 0.005),
 	}
 	if !s.UpdatedAt.IsZero() {
 		dto.UpdatedAt = s.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z")
@@ -310,4 +334,18 @@ func positiveKopecksPerCredit(n int) int {
 		return n
 	}
 	return 5000
+}
+
+func defaultString(value, fallback string) string {
+	if strings.TrimSpace(value) != "" {
+		return value
+	}
+	return fallback
+}
+
+func positiveFloatOrDefault(value, fallback float64) float64 {
+	if value > 0 {
+		return value
+	}
+	return fallback
 }

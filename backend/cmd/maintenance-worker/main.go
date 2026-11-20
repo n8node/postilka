@@ -110,7 +110,7 @@ func main() {
 	objectStorage := service.NewObjectStorage(storageSettingsSvc)
 	fileStorageSvc := service.NewFileStorageService(fileStorageRepo, folderStorageRepo, workspaceRepo, planRepo, wsSvc, objectStorage, nil, nil)
 	shortsRetentionSvc := service.NewShortsRetentionService(shortsRepo, fileStorageSvc, logger)
-	shortsTranscriber := service.CommandShortsTranscriber{Command: cfg.ShortsTranscriberCommand}
+	shortsTranscriber := service.KieShortsTranscriber{Config: kieConfigSvc, Storage: objectStorage}
 	shortsWorker := service.NewShortsWorker(shortsRepo, fileStorageRepo, objectStorage, fileStorageSvc, shortsTranscriber, fmt.Sprintf("maintenance-%d", os.Getpid()))
 	backupSvc := service.NewBackupService(backupRepo, objectStorage, cfg, logger)
 

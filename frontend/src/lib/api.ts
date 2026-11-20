@@ -3049,6 +3049,9 @@ export type KieAdminSettings = {
   kopecks_per_media_credit: number;
   submit_rate_limit: number;
   submit_rate_window_sec: number;
+  transcription_enabled: boolean;
+  transcription_model: string;
+  transcription_credits_per_second: number;
   updated_at?: string;
 };
 
