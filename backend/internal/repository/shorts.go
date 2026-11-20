@@ -261,6 +261,15 @@ func (r *ShortsRepository) SetTranscript(ctx context.Context, workspaceID, proje
 	return err
 }
 
+func (r *ShortsRepository) SetTranscriptResult(ctx context.Context, workspaceID, projectID string, result any) error {
+	raw, err := json.Marshal(result)
+	if err != nil {
+		return err
+	}
+	_, err = r.pool.Exec(ctx, `UPDATE shorts_projects SET settings = jsonb_set(settings, '{transcript_result}', $1::jsonb, true), updated_at = now() WHERE id = $2 AND workspace_id = $3`, raw, projectID, workspaceID)
+	return err
+}
+
 func (r *ShortsRepository) SetSubtitleSettings(ctx context.Context, workspaceID, projectID, style, position string, fontSize int, textColor, background, watermark string, safeZone int) error {
 	_, err := r.pool.Exec(ctx, `UPDATE shorts_projects SET settings = settings || jsonb_build_object('subtitle_style',$1::text,'subtitle_position',$2::text,'subtitle_font_size',$3::int,'subtitle_text_color',$4::text,'subtitle_background',$5::text,'watermark',$6::text,'safe_zone',$7::int), updated_at = now() WHERE id = $8 AND workspace_id = $9`, style, position, fontSize, textColor, background, watermark, safeZone, projectID, workspaceID)
 	return err

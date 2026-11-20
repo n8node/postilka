@@ -272,6 +272,36 @@ func (s *ShortsService) AudioDownloadURL(ctx context.Context, userID string, r *
 	return url, expiresIn, nil
 }
 
+func (s *ShortsService) TranscriptResult(ctx context.Context, userID string, r *http.Request, projectID string) ([]byte, error) {
+	ws, _, err := s.wsSvc.ResolveActive(ctx, userID, r)
+	if err != nil {
+		return nil, err
+	}
+	if ws == nil {
+		return nil, ErrWorkspaceNotFound
+	}
+	if _, err := s.wsSvc.RequireMembership(ctx, userID, ws.ID, model.RoleViewer); err != nil {
+		return nil, err
+	}
+	project, err := s.repo.GetProject(ctx, ws.ID, projectID)
+	if errors.Is(err, repository.ErrNotFound) {
+		return nil, ErrShortsProjectNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	var settings struct {
+		TranscriptResult json.RawMessage `json:"transcript_result"`
+	}
+	if err := json.Unmarshal(project.Settings, &settings); err != nil {
+		return nil, err
+	}
+	if len(settings.TranscriptResult) == 0 {
+		return nil, repository.ErrNotFound
+	}
+	return settings.TranscriptResult, nil
+}
+
 func (s *ShortsService) DraftDownloadURL(ctx context.Context, userID string, r *http.Request, clipID string) (string, int, error) {
 	ws, _, err := s.wsSvc.ResolveActive(ctx, userID, r)
 	if err != nil {

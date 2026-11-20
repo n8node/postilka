@@ -1,6 +1,9 @@
 package service
 
-import "context"
+import (
+	"context"
+	"encoding/json"
+)
 
 type ShortsTranscriptSegment struct {
 	StartSeconds float64 `json:"start_seconds"`
@@ -9,9 +12,10 @@ type ShortsTranscriptSegment struct {
 }
 
 type ShortsTranscript struct {
-	Language string                    `json:"language"`
-	Text     string                    `json:"text"`
-	Segments []ShortsTranscriptSegment `json:"segments"`
+	Language  string                    `json:"language"`
+	Text      string                    `json:"text"`
+	Segments  []ShortsTranscriptSegment `json:"segments"`
+	RawResult json.RawMessage           `json:"raw_result,omitempty"`
 }
 
 type ShortsTranscriber interface {

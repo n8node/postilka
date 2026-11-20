@@ -11,7 +11,7 @@ export type ShortsProject = {
   audio_expires_at?: string;
   created_at: string;
   updated_at: string;
-  settings?: { transcript?: unknown; current_step?: string; subtitle_style?: string; subtitle_position?: string; subtitle_font_size?: number; subtitle_text_color?: string; subtitle_background?: string; watermark?: string; safe_zone?: number };
+  settings?: { transcript?: unknown; transcript_result?: unknown; current_step?: string; subtitle_style?: string; subtitle_position?: string; subtitle_font_size?: number; subtitle_text_color?: string; subtitle_background?: string; watermark?: string; safe_zone?: number };
 };
 
 export type ShortsProjectListItem = {
@@ -87,6 +87,10 @@ export function getShortsJob(id: string) {
 
 export function getShortsAudioDownloadUrl(projectId: string) {
   return request<{ url: string; expires_in: number }>(`/shorts/projects/${projectId}/audio`);
+}
+
+export function getShortsTranscriptResultUrl(projectId: string) {
+  return `${apiBase}/shorts/projects/${projectId}/transcript-result`;
 }
 
 export function getShortsProject(id: string) {

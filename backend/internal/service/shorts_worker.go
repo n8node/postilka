@@ -146,6 +146,11 @@ func (w *ShortsWorker) process(ctx context.Context, job repository.ClaimedShorts
 	if err := w.repo.SetTranscript(ctx, job.WorkspaceID, project.ID, transcript); err != nil {
 		return fmt.Errorf("stage save_transcript: %w", err)
 	}
+	if len(transcript.RawResult) > 0 {
+		if err := w.repo.SetTranscriptResult(ctx, job.WorkspaceID, project.ID, json.RawMessage(transcript.RawResult)); err != nil {
+			return fmt.Errorf("stage save_transcript: %w", err)
+		}
+	}
 	if err := w.repo.UpdateJobProgress(ctx, job.ID, w.owner, "segment_candidates", 80); err != nil {
 		return fmt.Errorf("stage segment_candidates: %w", err)
 	}

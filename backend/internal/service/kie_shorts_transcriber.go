@@ -57,7 +57,12 @@ func (t KieShortsTranscriber) Transcribe(ctx context.Context, audioPath string) 
 	if err != nil {
 		return ShortsTranscript{}, err
 	}
-	return parseKieTranscript(raw)
+	transcript, err := parseKieTranscript(raw)
+	if err != nil {
+		return ShortsTranscript{}, err
+	}
+	transcript.RawResult = append(json.RawMessage(nil), raw...)
+	return transcript, nil
 }
 
 func parseKieTranscript(raw []byte) (ShortsTranscript, error) {
@@ -72,9 +77,21 @@ func parseKieTranscript(raw []byte) (ShortsTranscript, error) {
 			StartTime float64 `json:"start_time"`
 			EndTime   float64 `json:"end_time"`
 		} `json:"words"`
+		Result struct {
+			Words []struct {
+				Word      string  `json:"word"`
+				Start     float64 `json:"start"`
+				End       float64 `json:"end"`
+				StartTime float64 `json:"start_time"`
+				EndTime   float64 `json:"end_time"`
+			} `json:"words"`
+		} `json:"result"`
 	}
 	if err := json.Unmarshal(raw, &payload); err != nil {
 		return ShortsTranscript{}, fmt.Errorf("parse transcription result: %w", err)
+	}
+	if len(payload.Words) == 0 {
+		payload.Words = payload.Result.Words
 	}
 	segments := make([]ShortsTranscriptSegment, 0)
 	var current strings.Builder

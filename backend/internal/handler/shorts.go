@@ -144,6 +144,22 @@ func (h *ShortsHandler) DownloadAudio(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"url": url, "expires_in": expiresIn})
 }
 
+func (h *ShortsHandler) DownloadTranscriptResult(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
+		return
+	}
+	result, err := h.shorts.TranscriptResult(r.Context(), userID, r, chi.URLParam(r, "id"))
+	if err != nil {
+		h.mapError(w, err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Header().Set("Content-Disposition", `attachment; filename="shorts-transcript-result.json"`)
+	_, _ = w.Write(result)
+}
+
 func (h *ShortsHandler) DownloadDraft(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
