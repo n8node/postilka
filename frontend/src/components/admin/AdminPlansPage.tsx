@@ -49,6 +49,7 @@ function emptyForm(): PlanInput {
     trash_retention_days: 7,
     ai_text_tokens_quota: 100000,
     ai_media_credits_quota: 20,
+    shorts_processing_minutes_quota: 60,
     free_plan_duration_days: null,
     sort_order: 10,
   };
@@ -76,6 +77,7 @@ function planToForm(p: Plan): PlanInput {
     trash_retention_days: p.trash_retention_days,
     ai_text_tokens_quota: p.ai_text_tokens_quota,
     ai_media_credits_quota: p.ai_media_credits_quota,
+    shorts_processing_minutes_quota: p.shorts_processing_minutes_quota,
     free_plan_duration_days: p.free_plan_duration_days,
     sort_order: p.sort_order,
   };
@@ -499,6 +501,18 @@ function PlanFormModal({
                   "ai_media_credits_quota",
                   parseOptionalInt(e.target.value),
                 )
+              }
+              className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="text-xs font-medium text-slate-500">
+            Shorts, минут обработки
+            <input
+              type="number"
+              min={0}
+              value={form.shorts_processing_minutes_quota ?? ""}
+              onChange={(e) =>
+                setField("shorts_processing_minutes_quota", parseOptionalInt(e.target.value))
               }
               className="mt-1 w-full rounded-md border border-slate-200 px-3 py-2 text-sm"
             />

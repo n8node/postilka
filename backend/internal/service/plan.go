@@ -38,28 +38,29 @@ func (s *PlanService) Get(ctx context.Context, id string) (*model.Plan, error) {
 }
 
 type PlanInput struct {
-	Slug                 string
-	Name                 string
-	Description          string
-	IsFree               bool
-	IsActive             bool
-	IsPopular            bool
-	PriceMonthlyCents    *int
-	PriceYearlyCents     *int
-	MaxChannels          *int
-	MaxPostsPerPeriod    *int
-	MaxSeats             *int
-	MaxWorkflows         *int
-	MaxWorkflowInvites   *int
-	PushOnReady          bool
-	AnalyticsEnabled     bool
-	StorageBytes         *int64
-	MaxFileSizeBytes     *int64
-	TrashRetentionDays   int
-	AITextTokensQuota    *int
-	AIMediaCreditsQuota  *int
-	FreePlanDurationDays *int
-	SortOrder            int
+	Slug                         string
+	Name                         string
+	Description                  string
+	IsFree                       bool
+	IsActive                     bool
+	IsPopular                    bool
+	PriceMonthlyCents            *int
+	PriceYearlyCents             *int
+	MaxChannels                  *int
+	MaxPostsPerPeriod            *int
+	MaxSeats                     *int
+	MaxWorkflows                 *int
+	MaxWorkflowInvites           *int
+	PushOnReady                  bool
+	AnalyticsEnabled             bool
+	StorageBytes                 *int64
+	MaxFileSizeBytes             *int64
+	TrashRetentionDays           int
+	AITextTokensQuota            *int
+	AIMediaCreditsQuota          *int
+	ShortsProcessingMinutesQuota *int
+	FreePlanDurationDays         *int
+	SortOrder                    int
 }
 
 func (s *PlanService) Create(ctx context.Context, in PlanInput) (*model.Plan, error) {
@@ -80,28 +81,29 @@ func (s *PlanService) Create(ctx context.Context, in PlanInput) (*model.Plan, er
 	}
 
 	p := &model.Plan{
-		Slug:                 slug,
-		Name:                 name,
-		Description:          strings.TrimSpace(in.Description),
-		IsFree:               in.IsFree,
-		IsActive:             in.IsActive,
-		IsPopular:            in.IsPopular,
-		PriceMonthlyCents:    in.PriceMonthlyCents,
-		PriceYearlyCents:     in.PriceYearlyCents,
-		MaxChannels:          in.MaxChannels,
-		MaxPostsPerPeriod:    in.MaxPostsPerPeriod,
-		MaxSeats:             in.MaxSeats,
-		MaxWorkflows:         in.MaxWorkflows,
-		MaxWorkflowInvites:   in.MaxWorkflowInvites,
-		PushOnReady:          in.PushOnReady,
-		AnalyticsEnabled:     in.AnalyticsEnabled,
-		StorageBytes:         in.StorageBytes,
-		MaxFileSizeBytes:     in.MaxFileSizeBytes,
-		TrashRetentionDays:   in.TrashRetentionDays,
-		AITextTokensQuota:    in.AITextTokensQuota,
-		AIMediaCreditsQuota:  in.AIMediaCreditsQuota,
-		FreePlanDurationDays: in.FreePlanDurationDays,
-		SortOrder:            in.SortOrder,
+		Slug:                         slug,
+		Name:                         name,
+		Description:                  strings.TrimSpace(in.Description),
+		IsFree:                       in.IsFree,
+		IsActive:                     in.IsActive,
+		IsPopular:                    in.IsPopular,
+		PriceMonthlyCents:            in.PriceMonthlyCents,
+		PriceYearlyCents:             in.PriceYearlyCents,
+		MaxChannels:                  in.MaxChannels,
+		MaxPostsPerPeriod:            in.MaxPostsPerPeriod,
+		MaxSeats:                     in.MaxSeats,
+		MaxWorkflows:                 in.MaxWorkflows,
+		MaxWorkflowInvites:           in.MaxWorkflowInvites,
+		PushOnReady:                  in.PushOnReady,
+		AnalyticsEnabled:             in.AnalyticsEnabled,
+		StorageBytes:                 in.StorageBytes,
+		MaxFileSizeBytes:             in.MaxFileSizeBytes,
+		TrashRetentionDays:           in.TrashRetentionDays,
+		AITextTokensQuota:            in.AITextTokensQuota,
+		AIMediaCreditsQuota:          in.AIMediaCreditsQuota,
+		ShortsProcessingMinutesQuota: in.ShortsProcessingMinutesQuota,
+		FreePlanDurationDays:         in.FreePlanDurationDays,
+		SortOrder:                    in.SortOrder,
 	}
 	return s.plans.Create(ctx, p)
 }
@@ -132,29 +134,30 @@ func (s *PlanService) Update(ctx context.Context, id string, in PlanInput) (*mod
 	}
 
 	p := &model.Plan{
-		ID:                   id,
-		Slug:                 slug,
-		Name:                 name,
-		Description:          strings.TrimSpace(in.Description),
-		IsFree:               in.IsFree,
-		IsActive:             in.IsActive,
-		IsPopular:            in.IsPopular,
-		PriceMonthlyCents:    in.PriceMonthlyCents,
-		PriceYearlyCents:     in.PriceYearlyCents,
-		MaxChannels:          in.MaxChannels,
-		MaxPostsPerPeriod:    in.MaxPostsPerPeriod,
-		MaxSeats:             in.MaxSeats,
-		MaxWorkflows:         in.MaxWorkflows,
-		MaxWorkflowInvites:   in.MaxWorkflowInvites,
-		PushOnReady:          in.PushOnReady,
-		AnalyticsEnabled:     in.AnalyticsEnabled,
-		StorageBytes:         in.StorageBytes,
-		MaxFileSizeBytes:     in.MaxFileSizeBytes,
-		TrashRetentionDays:   in.TrashRetentionDays,
-		AITextTokensQuota:    in.AITextTokensQuota,
-		AIMediaCreditsQuota:  in.AIMediaCreditsQuota,
-		FreePlanDurationDays: in.FreePlanDurationDays,
-		SortOrder:            in.SortOrder,
+		ID:                           id,
+		Slug:                         slug,
+		Name:                         name,
+		Description:                  strings.TrimSpace(in.Description),
+		IsFree:                       in.IsFree,
+		IsActive:                     in.IsActive,
+		IsPopular:                    in.IsPopular,
+		PriceMonthlyCents:            in.PriceMonthlyCents,
+		PriceYearlyCents:             in.PriceYearlyCents,
+		MaxChannels:                  in.MaxChannels,
+		MaxPostsPerPeriod:            in.MaxPostsPerPeriod,
+		MaxSeats:                     in.MaxSeats,
+		MaxWorkflows:                 in.MaxWorkflows,
+		MaxWorkflowInvites:           in.MaxWorkflowInvites,
+		PushOnReady:                  in.PushOnReady,
+		AnalyticsEnabled:             in.AnalyticsEnabled,
+		StorageBytes:                 in.StorageBytes,
+		MaxFileSizeBytes:             in.MaxFileSizeBytes,
+		TrashRetentionDays:           in.TrashRetentionDays,
+		AITextTokensQuota:            in.AITextTokensQuota,
+		AIMediaCreditsQuota:          in.AIMediaCreditsQuota,
+		ShortsProcessingMinutesQuota: in.ShortsProcessingMinutesQuota,
+		FreePlanDurationDays:         in.FreePlanDurationDays,
+		SortOrder:                    in.SortOrder,
 	}
 	return s.plans.Update(ctx, p)
 }

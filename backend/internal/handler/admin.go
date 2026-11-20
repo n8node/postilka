@@ -355,28 +355,29 @@ func (h *AdminHandler) GetPlan(w http.ResponseWriter, r *http.Request) {
 }
 
 type planBody struct {
-	Slug                 string `json:"slug"`
-	Name                 string `json:"name"`
-	Description          string `json:"description"`
-	IsFree               bool   `json:"is_free"`
-	IsActive             *bool  `json:"is_active"`
-	IsPopular            bool   `json:"is_popular"`
-	PriceMonthlyCents    *int   `json:"price_monthly_cents"`
-	PriceYearlyCents     *int   `json:"price_yearly_cents"`
-	MaxChannels          *int   `json:"max_channels"`
-	MaxPostsPerPeriod    *int   `json:"max_posts_per_period"`
-	MaxSeats             *int   `json:"max_seats"`
-	MaxWorkflows         *int   `json:"max_workflows"`
-	MaxWorkflowInvites   *int   `json:"max_workflow_invites"`
-	PushOnReady          *bool  `json:"push_on_ready"`
-	AnalyticsEnabled     *bool  `json:"analytics_enabled"`
-	StorageBytes         *int64 `json:"storage_bytes"`
-	MaxFileSizeBytes     *int64 `json:"max_file_size_bytes"`
-	TrashRetentionDays   int    `json:"trash_retention_days"`
-	AITextTokensQuota    *int   `json:"ai_text_tokens_quota"`
-	AIMediaCreditsQuota  *int   `json:"ai_media_credits_quota"`
-	FreePlanDurationDays *int   `json:"free_plan_duration_days"`
-	SortOrder            int    `json:"sort_order"`
+	Slug                         string `json:"slug"`
+	Name                         string `json:"name"`
+	Description                  string `json:"description"`
+	IsFree                       bool   `json:"is_free"`
+	IsActive                     *bool  `json:"is_active"`
+	IsPopular                    bool   `json:"is_popular"`
+	PriceMonthlyCents            *int   `json:"price_monthly_cents"`
+	PriceYearlyCents             *int   `json:"price_yearly_cents"`
+	MaxChannels                  *int   `json:"max_channels"`
+	MaxPostsPerPeriod            *int   `json:"max_posts_per_period"`
+	MaxSeats                     *int   `json:"max_seats"`
+	MaxWorkflows                 *int   `json:"max_workflows"`
+	MaxWorkflowInvites           *int   `json:"max_workflow_invites"`
+	PushOnReady                  *bool  `json:"push_on_ready"`
+	AnalyticsEnabled             *bool  `json:"analytics_enabled"`
+	StorageBytes                 *int64 `json:"storage_bytes"`
+	MaxFileSizeBytes             *int64 `json:"max_file_size_bytes"`
+	TrashRetentionDays           int    `json:"trash_retention_days"`
+	AITextTokensQuota            *int   `json:"ai_text_tokens_quota"`
+	AIMediaCreditsQuota          *int   `json:"ai_media_credits_quota"`
+	ShortsProcessingMinutesQuota *int   `json:"shorts_processing_minutes_quota"`
+	FreePlanDurationDays         *int   `json:"free_plan_duration_days"`
+	SortOrder                    int    `json:"sort_order"`
 }
 
 func (b planBody) toInput() service.PlanInput {
@@ -393,28 +394,29 @@ func (b planBody) toInput() service.PlanInput {
 		analyticsEnabled = *b.AnalyticsEnabled
 	}
 	return service.PlanInput{
-		Slug:                 b.Slug,
-		Name:                 b.Name,
-		Description:          b.Description,
-		IsFree:               b.IsFree,
-		IsActive:             active,
-		IsPopular:            b.IsPopular,
-		PriceMonthlyCents:    b.PriceMonthlyCents,
-		PriceYearlyCents:     b.PriceYearlyCents,
-		MaxChannels:          b.MaxChannels,
-		MaxPostsPerPeriod:    b.MaxPostsPerPeriod,
-		MaxSeats:             b.MaxSeats,
-		MaxWorkflows:         b.MaxWorkflows,
-		MaxWorkflowInvites:   b.MaxWorkflowInvites,
-		PushOnReady:          pushOnReady,
-		AnalyticsEnabled:     analyticsEnabled,
-		StorageBytes:         b.StorageBytes,
-		MaxFileSizeBytes:     b.MaxFileSizeBytes,
-		TrashRetentionDays:   b.TrashRetentionDays,
-		AITextTokensQuota:    b.AITextTokensQuota,
-		AIMediaCreditsQuota:  b.AIMediaCreditsQuota,
-		FreePlanDurationDays: b.FreePlanDurationDays,
-		SortOrder:            b.SortOrder,
+		Slug:                         b.Slug,
+		Name:                         b.Name,
+		Description:                  b.Description,
+		IsFree:                       b.IsFree,
+		IsActive:                     active,
+		IsPopular:                    b.IsPopular,
+		PriceMonthlyCents:            b.PriceMonthlyCents,
+		PriceYearlyCents:             b.PriceYearlyCents,
+		MaxChannels:                  b.MaxChannels,
+		MaxPostsPerPeriod:            b.MaxPostsPerPeriod,
+		MaxSeats:                     b.MaxSeats,
+		MaxWorkflows:                 b.MaxWorkflows,
+		MaxWorkflowInvites:           b.MaxWorkflowInvites,
+		PushOnReady:                  pushOnReady,
+		AnalyticsEnabled:             analyticsEnabled,
+		StorageBytes:                 b.StorageBytes,
+		MaxFileSizeBytes:             b.MaxFileSizeBytes,
+		TrashRetentionDays:           b.TrashRetentionDays,
+		AITextTokensQuota:            b.AITextTokensQuota,
+		AIMediaCreditsQuota:          b.AIMediaCreditsQuota,
+		ShortsProcessingMinutesQuota: b.ShortsProcessingMinutesQuota,
+		FreePlanDurationDays:         b.FreePlanDurationDays,
+		SortOrder:                    b.SortOrder,
 	}
 }
 

@@ -86,6 +86,7 @@ export type Plan = {
   trash_retention_days: number;
   ai_text_tokens_quota: number | null;
   ai_media_credits_quota: number | null;
+  shorts_processing_minutes_quota: number | null;
   free_plan_duration_days: number | null;
   sort_order: number;
   created_at: string;
@@ -113,6 +114,7 @@ export type PlanInput = {
   trash_retention_days?: number;
   ai_text_tokens_quota?: number | null;
   ai_media_credits_quota?: number | null;
+  shorts_processing_minutes_quota?: number | null;
   free_plan_duration_days?: number | null;
   sort_order?: number;
 };

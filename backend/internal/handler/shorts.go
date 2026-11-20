@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strconv"
 
@@ -254,6 +255,7 @@ func (h *ShortsHandler) mapError(w http.ResponseWriter, err error) {
 	case errors.Is(err, service.ErrForbidden):
 		writeError(w, http.StatusForbidden, "Недостаточно прав")
 	default:
+		slog.Error("shorts request failed", "error", err)
 		writeError(w, http.StatusInternalServerError, "Внутренняя ошибка")
 	}
 }

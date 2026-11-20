@@ -25,7 +25,7 @@ const planColumns = `
 	price_monthly_cents, price_yearly_cents,
 	max_channels, max_posts_per_period, max_seats, max_workflows, max_workflow_invites, push_on_ready, analytics_enabled,
 	storage_bytes, max_file_size_bytes, trash_retention_days,
-	ai_text_tokens_quota, ai_media_credits_quota, free_plan_duration_days,
+	ai_text_tokens_quota, ai_media_credits_quota, shorts_processing_minutes_quota, free_plan_duration_days,
 	sort_order, created_at, updated_at
 `
 
@@ -79,9 +79,9 @@ func (r *PlanRepository) Create(ctx context.Context, p *model.Plan) (*model.Plan
 			price_monthly_cents, price_yearly_cents,
 			max_channels, max_posts_per_period, max_seats, max_workflows, max_workflow_invites, push_on_ready, analytics_enabled,
 			storage_bytes, max_file_size_bytes, trash_retention_days,
-			ai_text_tokens_quota, ai_media_credits_quota, free_plan_duration_days, sort_order
+			ai_text_tokens_quota, ai_media_credits_quota, shorts_processing_minutes_quota, free_plan_duration_days, sort_order
 		) VALUES (
-			$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22
+			$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23
 		)
 		RETURNING ` + planColumns
 	return scanPlan(r.pool.QueryRow(ctx, q,
@@ -89,7 +89,7 @@ func (r *PlanRepository) Create(ctx context.Context, p *model.Plan) (*model.Plan
 		p.PriceMonthlyCents, p.PriceYearlyCents,
 		p.MaxChannels, p.MaxPostsPerPeriod, p.MaxSeats, p.MaxWorkflows, p.MaxWorkflowInvites, p.PushOnReady, p.AnalyticsEnabled,
 		p.StorageBytes, p.MaxFileSizeBytes, p.TrashRetentionDays,
-		p.AITextTokensQuota, p.AIMediaCreditsQuota, p.FreePlanDurationDays, p.SortOrder,
+		p.AITextTokensQuota, p.AIMediaCreditsQuota, p.ShortsProcessingMinutesQuota, p.FreePlanDurationDays, p.SortOrder,
 	))
 }
 
@@ -116,8 +116,9 @@ func (r *PlanRepository) Update(ctx context.Context, p *model.Plan) (*model.Plan
 			trash_retention_days = $19,
 			ai_text_tokens_quota = $20,
 			ai_media_credits_quota = $21,
-			free_plan_duration_days = $22,
-			sort_order = $23,
+			shorts_processing_minutes_quota = $22,
+			free_plan_duration_days = $23,
+			sort_order = $24,
 			updated_at = NOW()
 		WHERE id = $1
 		RETURNING ` + planColumns
@@ -126,7 +127,7 @@ func (r *PlanRepository) Update(ctx context.Context, p *model.Plan) (*model.Plan
 		p.PriceMonthlyCents, p.PriceYearlyCents,
 		p.MaxChannels, p.MaxPostsPerPeriod, p.MaxSeats, p.MaxWorkflows, p.MaxWorkflowInvites, p.PushOnReady, p.AnalyticsEnabled,
 		p.StorageBytes, p.MaxFileSizeBytes, p.TrashRetentionDays,
-		p.AITextTokensQuota, p.AIMediaCreditsQuota, p.FreePlanDurationDays, p.SortOrder,
+		p.AITextTokensQuota, p.AIMediaCreditsQuota, p.ShortsProcessingMinutesQuota, p.FreePlanDurationDays, p.SortOrder,
 	))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
@@ -175,7 +176,7 @@ func scanPlan(row planScanner) (*model.Plan, error) {
 		&p.PriceMonthlyCents, &p.PriceYearlyCents,
 		&p.MaxChannels, &p.MaxPostsPerPeriod, &p.MaxSeats, &p.MaxWorkflows, &p.MaxWorkflowInvites, &p.PushOnReady, &p.AnalyticsEnabled,
 		&p.StorageBytes, &p.MaxFileSizeBytes, &p.TrashRetentionDays,
-		&p.AITextTokensQuota, &p.AIMediaCreditsQuota, &p.FreePlanDurationDays,
+		&p.AITextTokensQuota, &p.AIMediaCreditsQuota, &p.ShortsProcessingMinutesQuota, &p.FreePlanDurationDays,
 		&p.SortOrder, &createdAt, &updatedAt,
 	)
 	if err != nil {
