@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, CheckCircle2, Clock3, FileVideo, FolderOpen, Loader2, Play, RefreshCw, Trash2, Upload, Video, WandSparkles } from "lucide-react";
 import { WorkspaceMediaPickerModal } from "@/components/generation/WorkspaceMediaPickerModal";
 import { ShortsWizardNav, type ShortsWizardStep } from "@/components/shorts/ShortsWizardNav";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { ShortsProjectsPanel } from "@/components/shorts/ShortsProjectsPanel";
 import { ShortsCreationPanel } from "@/components/shorts/ShortsCreationPanel";
 import { ShortsClipsPanel, type ShortsClipDraft } from "@/components/shorts/ShortsClipsPanel";
@@ -258,16 +259,9 @@ export function ShortsStudioPage() {
   }
 
   return (
-    <main className="w-full space-y-6 bg-slate-50 pb-12 text-slate-900">
+    <div className="w-full min-w-0 space-y-6 pb-12 text-slate-900">
+      <PageHeader title="Shorts Studio" description="Подготовка длинного видео к анализу и автоматической нарезке с субтитрами." />
       <ShortsWizardNav activeStep={activeStep} onStepChange={(step) => { setActiveStep(step); const query = project?.id ? `?project=${encodeURIComponent(project.id)}&step=${step}` : `?step=${step}`; window.history.replaceState(null, "", `/app/shorts${query}`); }} canOpen={(step) => step === "projects" || step === "creation" || Boolean(project)} />
-      <div className="overflow-hidden rounded-3xl bg-gradient-to-br from-slate-950 via-indigo-950 to-violet-800 px-6 py-8 text-white shadow-lg sm:px-8">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-200">Инструменты · видео</p>
-        <h1 className="mt-2 text-3xl font-bold tracking-tight">Shorts Studio</h1>
-        <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-200">
-          Подготовка длинного видео к анализу и автоматической нарезке с субтитрами.
-        </p><div className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-white/10 px-4 py-2.5 text-sm text-violet-100 ring-1 ring-white/15"><WandSparkles className="h-4 w-4" /> Автоматическая нарезка</div>
-      </div>
-
       {activeStep === "projects" && <ShortsProjectsPanel items={history} loading={historyLoading} activeProjectId={project?.id} onOpen={(id) => void openProject(id)} onRetry={(id) => void analyzeProject(id)} onDelete={(id) => void removeProject(id)} />}
       {activeStep === "creation" && <ShortsCreationPanel sourceFile={sourceFile} previewUrl={previewUrl} uploading={uploading} uploadProgress={uploadProgress} duration={duration} rangeStart={rangeStart} rangeEnd={rangeEnd} contentType={contentType} contentTypes={contentTypes} onUpload={(file) => void handleUpload(file)} onOpenPicker={() => setPickerOpen(true)} onDurationChange={(value) => { setDuration(value); setRangeEnd(Math.min(value, rangeEnd)); }} onRangeStartChange={setRangeStart} onRangeEndChange={setRangeEnd} onContentTypeChange={setContentType} onSubmit={() => void submit()} busy={busy} />}
       {activeStep === "processing" && <section className="max-w-4xl rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-10"><h2 className="text-3xl font-bold tracking-tight text-slate-900">Готовим ваш проект</h2><p className="mt-2 text-sm text-slate-500">Анализируем речь и содержание видео</p><div className="mt-5 rounded-2xl border border-slate-200 p-5"><div className="flex items-center justify-between"><span className="text-2xl font-bold text-slate-900">{job?.progress ?? 0}%</span>{job?.status !== "succeeded" && <button type="button" className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-rose-600">Отменить</button>}</div><div className="mt-4 h-2.5 overflow-hidden rounded-full bg-slate-200"><div className="h-full rounded-full bg-indigo-600 transition-all" style={{ width: `${job?.progress ?? 0}%` }} /></div><div className="mt-4 space-y-2">{["Загрузка файла", "Извлечение аудио", "Транскрибация", "Анализ содержания", "Поиск лучших фрагментов", "Подготовка проекта"].map((label, index) => { const progress = job?.progress ?? 0; const done = progress >= (index + 1) * 16.66; const current = !done && progress >= index * 16.66; return <div key={label} className={`flex items-center gap-3 rounded-xl border p-3 ${current ? "border-indigo-200 bg-indigo-50" : "border-slate-200 bg-white"}`}><span className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${done ? "bg-emerald-50 text-emerald-600" : current ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-500"}`}>{done ? "✓" : index + 1}</span><span className="flex-1 text-sm font-semibold text-slate-800">{label}</span><span className="text-xs text-slate-500">{done ? "Завершён" : current ? "Выполняется…" : "Ожидает"}</span></div>; })}</div><p className="mt-4 text-xs text-slate-500">Можно закрыть страницу — проект продолжит обрабатываться. Пришлём уведомление.</p></div>{jobMessage && <p className="mt-4 rounded-xl bg-indigo-50 p-3 text-sm text-indigo-800">{jobMessage}</p>}{job?.status === "succeeded" && <button type="button" onClick={() => setActiveStep("clips")} className="mt-5 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white">Перейти к фрагментам</button>}</section>}
@@ -337,6 +331,6 @@ export function ShortsStudioPage() {
         </div>}
       </section>}
       </div>
-    </main>
+    </div>
   );
 }
