@@ -169,10 +169,7 @@ func (w *ShortsWorker) process(ctx context.Context, job repository.ClaimedShorts
 	if err := w.renderDrafts(ctx, job, project, sourcePath, shortsCandidates, transcript.Segments, ShortsSubtitleConfigFromSettings(project.Settings)); err != nil {
 		return fmt.Errorf("stage render_drafts: %w", err)
 	}
-	if err := w.repo.UpdateProjectStatus(ctx, job.WorkspaceID, job.ProjectID, model.ShortsProjectAnalyzing, "transcript_ready"); err != nil {
-		return err
-	}
-	return w.repo.SucceedJob(ctx, job.ID, w.owner)
+	return w.repo.CompleteJob(ctx, job.ID, w.owner, job.ProjectID, job.WorkspaceID, model.ShortsProjectCompleted, "completed")
 }
 
 func (w *ShortsWorker) processExport(ctx context.Context, job repository.ClaimedShortsJob) error {
@@ -250,7 +247,7 @@ func (w *ShortsWorker) processExport(ctx context.Context, job repository.Claimed
 	if err := w.repo.SetProjectFinalFile(ctx, job.WorkspaceID, project.ID, finalFile.ID); err != nil {
 		return err
 	}
-	return w.repo.SucceedJob(ctx, job.ID, w.owner)
+	return w.repo.CompleteJob(ctx, job.ID, w.owner, job.ProjectID, job.WorkspaceID, model.ShortsProjectCompleted, "completed")
 }
 
 func (w *ShortsWorker) processRerender(ctx context.Context, job repository.ClaimedShortsJob) error {
@@ -320,7 +317,7 @@ func (w *ShortsWorker) processRerender(ctx context.Context, job repository.Claim
 			}
 		}
 	}
-	return w.repo.SucceedJob(ctx, job.ID, w.owner)
+	return w.repo.CompleteJob(ctx, job.ID, w.owner, job.ProjectID, job.WorkspaceID, model.ShortsProjectCompleted, "completed")
 }
 
 func transcriptFromSettings(settings json.RawMessage) (ShortsTranscript, error) {

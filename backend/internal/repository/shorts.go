@@ -544,6 +544,21 @@ func (r *ShortsRepository) UpdateJobProgress(ctx context.Context, jobID, owner, 
 	return err
 }
 
+func (r *ShortsRepository) CompleteJob(ctx context.Context, jobID, owner, projectID, workspaceID string, projectStatus model.ShortsProjectStatus, projectStep string) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx, `UPDATE shorts_jobs SET status = 'succeeded', progress = 100, current_step = 'completed', lease_owner = NULL, lease_until = NULL, updated_at = now() WHERE id = $1 AND lease_owner = $2`, jobID, owner); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE shorts_projects SET status = $1, settings = jsonb_set(settings, '{current_step}', to_jsonb($2::text), true), updated_at = now() WHERE id = $3 AND workspace_id = $4`, projectStatus, projectStep, projectID, workspaceID); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
 func (r *ShortsRepository) SucceedJob(ctx context.Context, jobID, owner string) error {
 	_, err := r.pool.Exec(ctx, `UPDATE shorts_jobs SET status = 'succeeded', progress = 100, current_step = 'completed', lease_owner = NULL, lease_until = NULL, updated_at = now() WHERE id = $1 AND lease_owner = $2`, jobID, owner)
 	return err
