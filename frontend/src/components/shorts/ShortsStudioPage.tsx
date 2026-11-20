@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { ArrowDown, ArrowUp, CheckCircle2, Clock3, FileVideo, FolderOpen, Loader2, Play, RefreshCw, Trash2, Upload, Video, WandSparkles } from "lucide-react";
 import { WorkspaceMediaPickerModal } from "@/components/generation/WorkspaceMediaPickerModal";
 import { ShortsWizardNav, type ShortsWizardStep } from "@/components/shorts/ShortsWizardNav";
+import { ShortsProjectsPanel } from "@/components/shorts/ShortsProjectsPanel";
 import { uploadFile, type WorkspaceFile } from "@/lib/files-api";
 import { analyzeShortsProject, createShortsProject, deleteShortsProject, exportShortsProject, getShortsAudioDownloadUrl, getShortsDraftDownloadUrl, getShortsFinalDownloadUrl, getShortsJob, getShortsProject, getShortsTranscriptResultUrl, listShortsProjects, rerenderShortsProject, updateShortsClip, updateShortsClipOrder, updateShortsSubtitleSettings, type ShortsClip, type ShortsJob, type ShortsProject, type ShortsProjectListItem } from "@/lib/shorts-api";
 
@@ -263,6 +264,8 @@ export function ShortsStudioPage() {
           Подготовка длинного видео к анализу и автоматической нарезке с субтитрами.
         </p><div className="mt-5 inline-flex items-center gap-2 rounded-2xl bg-white/10 px-4 py-2.5 text-sm text-violet-100 ring-1 ring-white/15"><WandSparkles className="h-4 w-4" /> Автоматическая нарезка</div>
       </div>
+
+      <ShortsProjectsPanel items={history} loading={historyLoading} activeProjectId={project?.id} onOpen={(id) => void openProject(id)} onRetry={(id) => void analyzeProject(id)} onDelete={(id) => void removeProject(id)} />
 
         <section className="grid gap-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6 lg:grid-cols-2">
         <label className="block text-sm font-medium text-slate-700">
