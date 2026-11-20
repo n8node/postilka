@@ -26,11 +26,24 @@ RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /import-trends ./cmd/i
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /restore-image-trends ./cmd/restore-image-trends
 RUN CGO_ENABLED=0 GOOS=linux GOBIN=/go/bin go install github.com/pressly/goose/v3/cmd/goose@v3.24.1
 
+FROM alpine:3.20 AS whisper-builder
+ARG ALPINE_MIRROR
+ARG WHISPER_CPP_VERSION=v1.7.6
+RUN sed -i "s|https://dl-cdn.alpinelinux.org/alpine|${ALPINE_MIRROR}|g" /etc/apk/repositories \
+    && apk add --no-cache build-base cmake samurai wget tar
+RUN wget -q -O /tmp/whisper.tar.gz \
+      "https://github.com/ggml-org/whisper.cpp/archive/refs/tags/${WHISPER_CPP_VERSION}.tar.gz" \
+    && mkdir -p /tmp/whisper-src \
+    && tar -xzf /tmp/whisper.tar.gz -C /tmp/whisper-src --strip-components=1 \
+    && cmake -S /tmp/whisper-src -B /tmp/whisper-build -G Ninja -DCMAKE_BUILD_TYPE=Release -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_EXAMPLES=ON \
+    && cmake --build /tmp/whisper-build --target whisper-cli -j2
+
 FROM alpine:3.20
 ARG ALPINE_MIRROR
+ARG WHISPER_MODEL_URL=https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base-q5_1.bin
 # MAX Bot API (platform-api2.max.ru) uses TLS chains signed by Russian Trusted CA (MinDigital).
 RUN sed -i "s|https://dl-cdn.alpinelinux.org/alpine|${ALPINE_MIRROR}|g" /etc/apk/repositories \
-    && apk add --no-cache ca-certificates tzdata wget ffmpeg libwebp-tools \
+    && apk add --no-cache ca-certificates tzdata wget ffmpeg libwebp-tools python3 \
         postgresql-client docker-cli \
     && wget -q -O /usr/local/share/ca-certificates/russian_trusted_root_ca.crt \
         https://gu-st.ru/content/lending/russian_trusted_root_ca_pem.crt \
@@ -49,7 +62,13 @@ COPY --from=builder /create-superadmin /app/create-superadmin
 COPY --from=builder /import-trends /app/import-trends
 COPY --from=builder /restore-image-trends /app/restore-image-trends
 COPY --from=builder /go/bin/goose /usr/local/bin/goose
+COPY --from=whisper-builder /tmp/whisper-build/bin/whisper-cli /usr/local/bin/whisper-cli
 COPY migrations ./migrations
+COPY shorts-transcriber.sh /usr/local/bin/shorts-transcriber
+RUN chmod +x /usr/local/bin/shorts-transcriber \
+    && mkdir -p /opt/whisper-model \
+    && wget -q --show-progress -O /opt/whisper-model/ggml-base-q5_1.bin "${WHISPER_MODEL_URL}" \
+    && chmod 755 /usr/local/bin/whisper-cli
 
 ENV SERVER_PORT=8080
 EXPOSE 8080
