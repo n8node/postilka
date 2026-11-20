@@ -386,7 +386,11 @@ func (r *ShortsRepository) UpdateClip(ctx context.Context, workspaceID, clipID s
 func (r *ShortsRepository) CreateJob(ctx context.Context, projectID, jobType string) (*model.ShortsJob, error) {
 	var j model.ShortsJob
 	var status string
-	err := r.pool.QueryRow(ctx, `INSERT INTO shorts_jobs (project_id, job_type) VALUES ($1, $2) RETURNING id, project_id, job_type, status, current_step, progress, attempts, available_at, last_error, created_at, updated_at`, projectID, jobType).Scan(&j.ID, &j.ProjectID, &j.JobType, &status, &j.CurrentStep, &j.Progress, &j.Attempts, &j.AvailableAt, &j.LastError, &j.CreatedAt, &j.UpdatedAt)
+	var lastError *string
+	err := r.pool.QueryRow(ctx, `INSERT INTO shorts_jobs (project_id, job_type) VALUES ($1, $2) RETURNING id, project_id, job_type, status, current_step, progress, attempts, available_at, last_error, created_at, updated_at`, projectID, jobType).Scan(&j.ID, &j.ProjectID, &j.JobType, &status, &j.CurrentStep, &j.Progress, &j.Attempts, &j.AvailableAt, &lastError, &j.CreatedAt, &j.UpdatedAt)
+	if lastError != nil {
+		j.LastError = *lastError
+	}
 	j.Status = model.ShortsJobStatus(status)
 	return &j, err
 }
@@ -416,6 +420,7 @@ func (r *ShortsRepository) CreateExportJob(ctx context.Context, workspaceID, pro
 func (r *ShortsRepository) CreateAnalyzeJob(ctx context.Context, workspaceID, projectID string) (*model.ShortsJob, error) {
 	var j model.ShortsJob
 	var status string
+	var lastError *string
 	err := r.pool.QueryRow(ctx, `
 		INSERT INTO shorts_jobs (project_id, job_type)
 		SELECT $1, 'analyze'
@@ -426,7 +431,10 @@ func (r *ShortsRepository) CreateAnalyzeJob(ctx context.Context, workspaceID, pr
 			SELECT 1 FROM shorts_jobs WHERE project_id = $1 AND status IN ('queued', 'running')
 		)
 		RETURNING id, project_id, job_type, status, current_step, progress, attempts, available_at, last_error, created_at, updated_at
-	`, projectID, workspaceID).Scan(&j.ID, &j.ProjectID, &j.JobType, &status, &j.CurrentStep, &j.Progress, &j.Attempts, &j.AvailableAt, &j.LastError, &j.CreatedAt, &j.UpdatedAt)
+	`, projectID, workspaceID).Scan(&j.ID, &j.ProjectID, &j.JobType, &status, &j.CurrentStep, &j.Progress, &j.Attempts, &j.AvailableAt, &lastError, &j.CreatedAt, &j.UpdatedAt)
+	if lastError != nil {
+		j.LastError = *lastError
+	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
