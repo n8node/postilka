@@ -20,6 +20,10 @@ const shortsProjectColumns = `id, workspace_id, created_by_user_id, source_file_
  source_duration_seconds, processing_minutes_reserved, processing_minutes_consumed, source_expires_at,
  audio_file_id, audio_expires_at, settings, created_at, updated_at`
 
+const shortsProjectColumnsAliased = `p.id, p.workspace_id, p.created_by_user_id, p.source_file_id, p.content_type, p.language, p.status,
+ p.source_duration_seconds, p.processing_minutes_reserved, p.processing_minutes_consumed, p.source_expires_at,
+ p.audio_file_id, p.audio_expires_at, p.settings, p.created_at, p.updated_at`
+
 func scanShortsProject(row pgx.Row) (*model.ShortsProject, error) {
 	var p model.ShortsProject
 	var contentType, status string
@@ -55,7 +59,7 @@ func (r *ShortsRepository) ListForWorkspace(ctx context.Context, workspaceID str
 		return nil, 0, err
 	}
 	rows, err := r.pool.Query(ctx, `
-		SELECT `+shortsProjectColumns+`,
+		SELECT `+shortsProjectColumnsAliased+`,
 			(SELECT COUNT(*) FROM shorts_clips c WHERE c.project_id = p.id),
 			j.id, j.job_type, j.status, j.current_step, j.progress, j.attempts,
 			j.available_at, j.last_error, j.created_at, j.updated_at,
@@ -186,7 +190,7 @@ func (r *ShortsRepository) ListForAdmin(ctx context.Context, f ListShortsAdminFi
 		return nil, 0, nil, err
 	}
 	args = append(args, f.Limit, f.Offset)
-	rows, err := r.pool.Query(ctx, `SELECT `+shortsProjectColumns+`, (SELECT COUNT(*) FROM shorts_clips c WHERE c.project_id = p.id), j.id, j.job_type, j.status, j.current_step, j.progress, j.attempts, j.available_at, j.last_error, j.created_at, j.updated_at FROM shorts_projects p LEFT JOIN LATERAL (SELECT sj.id, sj.job_type, sj.status, sj.current_step, sj.progress, sj.attempts, sj.available_at, sj.last_error, sj.created_at, sj.updated_at FROM shorts_jobs sj WHERE sj.project_id = p.id ORDER BY sj.created_at DESC LIMIT 1) j ON true`+where+` ORDER BY p.created_at DESC LIMIT $`+strconv.Itoa(len(args)-1)+` OFFSET $`+strconv.Itoa(len(args)), args...)
+	rows, err := r.pool.Query(ctx, `SELECT `+shortsProjectColumnsAliased+`, (SELECT COUNT(*) FROM shorts_clips c WHERE c.project_id = p.id), j.id, j.job_type, j.status, j.current_step, j.progress, j.attempts, j.available_at, j.last_error, j.created_at, j.updated_at FROM shorts_projects p LEFT JOIN LATERAL (SELECT sj.id, sj.job_type, sj.status, sj.current_step, sj.progress, sj.attempts, sj.available_at, sj.last_error, sj.created_at, sj.updated_at FROM shorts_jobs sj WHERE sj.project_id = p.id ORDER BY sj.created_at DESC LIMIT 1) j ON true`+where+` ORDER BY p.created_at DESC LIMIT $`+strconv.Itoa(len(args)-1)+` OFFSET $`+strconv.Itoa(len(args)), args...)
 	if err != nil {
 		return nil, 0, nil, err
 	}
