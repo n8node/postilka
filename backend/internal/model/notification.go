@@ -50,6 +50,7 @@ const (
 	NotifySupportTicket     NotificationType = "support_ticket"
 	NotifyWorkflowRunDone   NotificationType = "workflow_run_done"
 	NotifyWorkflowRunFailed NotificationType = "workflow_run_failed"
+	NotifyShortsDone        NotificationType = "shorts_done"
 )
 
 type NotificationPrefKey string
@@ -146,7 +147,7 @@ func NotificationPrefKeyForType(t NotificationType) NotificationPrefKey {
 		NotifyQuotaStorage90, NotifyQuotaChannels80, NotifyQuotaWorkflows80:
 		return NotifyPrefQuota
 	case NotifyAIImageDone, NotifyAIVideoDone, NotifyAIImageFailed, NotifyAIVideoFailed,
-		NotifyWorkflowRunDone, NotifyWorkflowRunFailed:
+		NotifyWorkflowRunDone, NotifyWorkflowRunFailed, NotifyShortsDone:
 		return NotifyPrefAI
 	case NotifyTrashExpiring, NotifyTrashPurged:
 		return NotifyPrefFiles

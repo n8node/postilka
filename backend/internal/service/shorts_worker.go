@@ -23,11 +23,27 @@ type ShortsWorker struct {
 	transcriber ShortsTranscriber
 	aiBilling   *AIBillingService
 	kieConfig   *KieConfigService
+	notify      *NotificationService
 	owner       string
 }
 
 func (w *ShortsWorker) SetAIBilling(billing *AIBillingService, config *KieConfigService) {
 	w.aiBilling, w.kieConfig = billing, config
+}
+
+func (w *ShortsWorker) SetNotifier(notify *NotificationService) {
+	w.notify = notify
+}
+
+func (w *ShortsWorker) notifyCompleted(ctx context.Context, job repository.ClaimedShortsJob) {
+	if w.notify == nil || strings.TrimSpace(job.CreatedByUserID) == "" {
+		return
+	}
+	clips, err := w.repo.CountCandidateClips(ctx, job.WorkspaceID, job.SourceID)
+	if err != nil {
+		return
+	}
+	w.notify.NotifyShortsDone(ctx, job.CreatedByUserID, job.WorkspaceID, job.ID, job.ProjectID, job.ProjectName, clips)
 }
 
 func NewShortsWorker(repo *repository.ShortsRepository, files *repository.WorkspaceFileRepository, storage *ObjectStorage, fileStore *FileStorageService, transcriber ShortsTranscriber, owner string) *ShortsWorker {
@@ -89,6 +105,7 @@ func (w *ShortsWorker) process(ctx context.Context, job repository.ClaimedShorts
 		if err := w.repo.CompleteJob(ctx, job.ID, w.owner, job.SourceID, job.WorkspaceID, model.ShortsProjectCompleted, "completed"); err != nil {
 			return err
 		}
+		w.notifyCompleted(ctx, job)
 		return nil
 	}
 	if project.SourceFileID == nil {
@@ -196,6 +213,7 @@ func (w *ShortsWorker) process(ctx context.Context, job repository.ClaimedShorts
 	if err := w.repo.CompleteJob(ctx, job.ID, w.owner, job.ProjectID, job.WorkspaceID, model.ShortsProjectCompleted, "completed"); err != nil {
 		return err
 	}
+	w.notifyCompleted(ctx, job)
 	return nil
 }
 
@@ -272,7 +290,10 @@ func (w *ShortsWorker) processEditExport(ctx context.Context, job repository.Cla
 	if err := w.repo.SetProjectFinalFile(ctx, job.WorkspaceID, project.ID, finalFile.ID); err != nil {
 		return err
 	}
-	return w.repo.CompleteJob(ctx, job.ID, w.owner, project.ID, job.WorkspaceID, model.ShortsProjectCompleted, "completed")
+	if err := w.repo.CompleteJob(ctx, job.ID, w.owner, project.ID, job.WorkspaceID, model.ShortsProjectCompleted, "completed"); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (w *ShortsWorker) processEditRerender(ctx context.Context, job repository.ClaimedShortsJob) error {

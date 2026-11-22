@@ -262,6 +262,31 @@ func aiDoneFilesHref(file *model.WorkspaceFile) string {
 	return "/files?" + q.Encode()
 }
 
+func (s *NotificationService) NotifyShortsDone(ctx context.Context, userID, workspaceID, jobID, projectID, projectName string, clips int) {
+	if s == nil || strings.TrimSpace(userID) == "" {
+		return
+	}
+	name := strings.TrimSpace(projectName)
+	if name == "" {
+		name = "Ваш проект"
+	}
+	workspace := ptrString(workspaceID)
+	s.CreateDeduped(ctx, NotificationInput{
+		UserID:      userID,
+		WorkspaceID: workspace,
+		Type:        model.NotifyShortsDone,
+		Category:    model.NotificationSuccess,
+		Title:       "Shorts-проект обработан",
+		Body:        fmt.Sprintf("Проект «%s» готов. Доступно фрагментов: %d. Можно перейти к работе с ними.", name, clips),
+		Payload:     map[string]any{"job_id": jobID, "project_id": projectID, "clips": clips},
+		Href:        shortsDoneHref(projectID),
+	}, "job_id", jobID, 365*24*time.Hour)
+}
+
+func shortsDoneHref(projectID string) string {
+	return "/app/shorts?project=" + url.QueryEscape(projectID) + "&step=clips"
+}
+
 func (s *NotificationService) NotifyAIFailed(ctx context.Context, job model.AIGenerationJob, message string) {
 	isVideo := model.IsVideoGenerationMode(job.Mode)
 	typ := model.NotifyAIImageFailed

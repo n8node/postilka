@@ -1182,12 +1182,14 @@ type ShortsExpiredProject struct {
 }
 
 type ClaimedShortsJob struct {
-	ID            string
-	ProjectID     string
-	SourceID      string
-	EditProjectID string
-	WorkspaceID   string
-	JobType       string
+	ID              string
+	ProjectID       string
+	SourceID        string
+	EditProjectID   string
+	WorkspaceID     string
+	CreatedByUserID string
+	ProjectName     string
+	JobType         string
 }
 
 func (r *ShortsRepository) ClaimDueJobs(ctx context.Context, owner string, limit int, lease time.Duration) ([]ClaimedShortsJob, error) {
@@ -1211,7 +1213,7 @@ func (r *ShortsRepository) ClaimDueJobs(ctx context.Context, owner string, limit
 			attempts = j.attempts + 1, current_step = 'starting', progress = 1, last_error = NULL, updated_at = now()
 		FROM due, shorts_sources s
 		WHERE j.id = due.id AND s.id = j.source_id
-		RETURNING j.id, j.source_id, COALESCE(j.edit_project_id::text,''), s.workspace_id, j.job_type
+		RETURNING j.id, j.source_id, COALESCE(j.edit_project_id::text,''), s.workspace_id, s.created_by_user_id, COALESCE(s.settings->>'project_name',''), j.job_type
 	`, limit, owner, lease.String())
 	if err != nil {
 		return nil, err
@@ -1220,7 +1222,7 @@ func (r *ShortsRepository) ClaimDueJobs(ctx context.Context, owner string, limit
 	out := make([]ClaimedShortsJob, 0)
 	for rows.Next() {
 		var item ClaimedShortsJob
-		if err := rows.Scan(&item.ID, &item.SourceID, &item.EditProjectID, &item.WorkspaceID, &item.JobType); err != nil {
+		if err := rows.Scan(&item.ID, &item.SourceID, &item.EditProjectID, &item.WorkspaceID, &item.CreatedByUserID, &item.ProjectName, &item.JobType); err != nil {
 			return nil, err
 		}
 		item.ProjectID = item.SourceID
@@ -1248,6 +1250,12 @@ func (r *ShortsRepository) CancelJob(ctx context.Context, workspaceID, jobID, me
 	_, _ = r.pool.Exec(ctx, `UPDATE shorts_sources SET status='cancelled', updated_at=now() WHERE id=$1 AND workspace_id=$2`, j.SourceID, workspaceID)
 	_, _ = r.pool.Exec(ctx, `UPDATE shorts_edit_projects SET status='cancelled', updated_at=now() WHERE source_id=$1 AND workspace_id=$2 AND status IN ('draft','analyzing','rendering')`, j.SourceID, workspaceID)
 	return &j, err
+}
+
+func (r *ShortsRepository) CountCandidateClips(ctx context.Context, workspaceID, sourceID string) (int, error) {
+	var count int
+	err := r.pool.QueryRow(ctx, `SELECT count(*) FROM shorts_clips c JOIN shorts_sources s ON s.id=c.source_id WHERE c.source_id=$1 AND s.workspace_id=$2`, sourceID, workspaceID).Scan(&count)
+	return count, err
 }
 
 func (r *ShortsRepository) CompleteJob(ctx context.Context, jobID, owner, projectID, workspaceID string, projectStatus model.ShortsProjectStatus, projectStep string) error {

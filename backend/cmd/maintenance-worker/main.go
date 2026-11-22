@@ -83,6 +83,9 @@ func main() {
 	metrikaPlatformConfigSvc := service.NewMetrikaPlatformConfigService(metrikaPlatformConfigRepo, cfg, secretCipher)
 	metrikaSvc := service.NewMetrikaConnectionService(metrikaRepo, wsSvc, metrikaPlatformConfigSvc, secretCipher, cfg, quotaSvc)
 	userRepo := repository.NewUserRepository(db.Pool)
+	settingsRepo := repository.NewSettingsRepository(db.Pool)
+	identityRepo := repository.NewUserLoginIdentityRepository(db.Pool)
+	oauthSettingsRepo := repository.NewOAuthSettingsRepository(settingsRepo)
 	telegramSettingsRepo := repository.NewTelegramSettingsRepository(db.Pool)
 	telegramSettingsSvc := service.NewTelegramSettingsService(telegramSettingsRepo)
 	telegramQueueRepo := repository.NewTelegramNotificationQueueRepository(db.Pool)
@@ -122,6 +125,16 @@ func main() {
 		notificationRepo, workspaceRepo, quotaSvc, planRepo, channelRepo, subscriptionRepo,
 		fileStorageRepo, folderStorageRepo, walletRepo, logger,
 	)
+	telegramBotClientForNotifications := service.NewTelegramBotClient(telegramProviderSettingsSvc, cfg.TelegramLocalProxy)
+	userMessenger := service.NewUserMessengerService(
+		identityRepo, oauthSettingsRepo, telegramSettingsSvc, telegramBotClientForNotifications, nil, logger,
+	)
+	emailTemplateRepo := repository.NewEmailTemplateSettingsRepository(db.Pool)
+	emailTemplateSvc := service.NewEmailTemplateSettingsService(emailTemplateRepo)
+	emailSvc := service.NewEmailService(mailSvc, emailTemplateSvc, service.NewEmailRenderer())
+	txEmailSvc := service.NewTransactionalEmailService(emailSvc, userRepo, planRepo, workspaceRepo, cfg, logger)
+	notificationSvc.BindOutbound(userRepo, txEmailSvc, userMessenger, cfg)
+	shortsWorker.SetNotifier(notificationSvc)
 
 	// Сервисы для операционных задач
 	opsDigestSvc := service.NewOpsDigestService(
