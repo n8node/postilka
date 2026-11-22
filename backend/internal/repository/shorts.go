@@ -445,10 +445,10 @@ func (r *ShortsRepository) ListForAdmin(ctx context.Context, f ListShortsAdminFi
 		SELECT ep.id,ep.source_id,ep.workspace_id,ep.created_by_user_id,s.source_file_id,s.content_type,s.language,ep.status,s.source_duration_seconds,s.processing_minutes_reserved,s.processing_minutes_consumed,s.source_expires_at,s.audio_file_id,s.audio_expires_at,ep.settings,ep.created_at,ep.updated_at,ep.name
 		FROM shorts_edit_projects ep JOIN shorts_sources s ON s.id=ep.source_id
 		UNION ALL
-		SELECT p.id,p.source_id,p.workspace_id,p.created_by_user_id,p.source_file_id,p.content_type,p.language,p.status,p.source_duration_seconds,p.processing_minutes_reserved,p.processing_minutes_consumed,p.source_expires_at,p.audio_file_id,p.audio_expires_at,p.settings,p.created_at,p.updated_at,''::text
+		SELECT p.id,p.source_id,p.workspace_id,p.created_by_user_id,p.source_file_id,p.content_type,p.language,p.status,p.source_duration_seconds,p.processing_minutes_reserved,p.processing_minutes_consumed,p.source_expires_at,p.audio_file_id,p.audio_expires_at,p.settings,p.created_at,p.updated_at,COALESCE(NULLIF(p.settings->>'project_name',''),'Проект Shorts')::text
 		FROM shorts_projects p WHERE NOT EXISTS (SELECT 1 FROM shorts_edit_projects ep WHERE ep.id=p.id OR ep.source_id=p.source_id)
 		UNION ALL
-		SELECT s.id,s.id,s.workspace_id,s.created_by_user_id,s.source_file_id,s.content_type,s.language,s.status,s.source_duration_seconds,s.processing_minutes_reserved,s.processing_minutes_consumed,s.source_expires_at,s.audio_file_id,s.audio_expires_at,s.settings,s.created_at,s.updated_at,''::text
+		SELECT s.id,s.id,s.workspace_id,s.created_by_user_id,s.source_file_id,s.content_type,s.language,s.status,s.source_duration_seconds,s.processing_minutes_reserved,s.processing_minutes_consumed,s.source_expires_at,s.audio_file_id,s.audio_expires_at,s.settings,s.created_at,s.updated_at,COALESCE(NULLIF(s.settings->>'project_name',''),'Проект Shorts')::text
 		FROM shorts_sources s WHERE NOT EXISTS (SELECT 1 FROM shorts_edit_projects ep WHERE ep.source_id=s.id) AND NOT EXISTS (SELECT 1 FROM shorts_projects p WHERE p.source_id=s.id)
 	) x
 	LEFT JOIN LATERAL (SELECT sj.id,sj.job_type,sj.status,sj.current_step,sj.progress,sj.attempts,sj.available_at,COALESCE(sj.last_error,'') AS last_error,sj.created_at,sj.updated_at FROM shorts_jobs sj WHERE sj.source_id=x.source_id AND (sj.edit_project_id=x.id OR (sj.edit_project_id IS NULL AND x.id=x.source_id)) ORDER BY sj.created_at DESC LIMIT 1) j ON true`
@@ -914,13 +914,17 @@ func (r *ShortsRepository) CreateSourceJob(ctx context.Context, workspaceID, sou
 	var lastError *string
 	err := r.pool.QueryRow(ctx, `INSERT INTO shorts_jobs (source_id,job_type) SELECT $1,$3 WHERE EXISTS (SELECT 1 FROM shorts_sources WHERE id=$1 AND workspace_id=$2) AND NOT EXISTS (SELECT 1 FROM shorts_jobs WHERE source_id=$1 AND status IN ('queued','running')) RETURNING id,source_id,job_type,status,current_step,progress,attempts,available_at,last_error,created_at,updated_at`, sourceID, workspaceID, jobType).Scan(&j.ID, &j.SourceID, &j.JobType, &status, &j.CurrentStep, &j.Progress, &j.Attempts, &j.AvailableAt, &lastError, &j.CreatedAt, &j.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return nil, ErrNotFound
+		err = r.pool.QueryRow(ctx, `SELECT id,source_id,job_type,status,current_step,progress,attempts,available_at,last_error,created_at,updated_at FROM shorts_jobs WHERE source_id=$1 AND status IN ('queued','running') ORDER BY created_at DESC LIMIT 1`, sourceID).Scan(&j.ID, &j.SourceID, &j.JobType, &status, &j.CurrentStep, &j.Progress, &j.Attempts, &j.AvailableAt, &lastError, &j.CreatedAt, &j.UpdatedAt)
+	}
+	if err != nil {
+		return nil, err
 	}
 	if lastError != nil {
 		j.LastError = *lastError
 	}
 	j.Status = model.ShortsJobStatus(status)
-	return &j, err
+	j.ProjectID = sourceID
+	return &j, nil
 }
 
 func (r *ShortsRepository) CreateAnalyzeJob(ctx context.Context, workspaceID, projectID string) (*model.ShortsJob, error) {

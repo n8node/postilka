@@ -104,6 +104,7 @@ func (s *ShortsService) CreateProject(ctx context.Context, userID string, r *htt
 		}
 		settingsMap["processing_start_seconds"] = selected.StartSeconds
 		settingsMap["processing_end_seconds"] = selected.EndSeconds
+		settingsMap["project_name"] = input.ProjectName
 		source.Settings, _ = json.Marshal(settingsMap)
 		source.SourceDurationSeconds = selected.DurationSeconds()
 		edit, editErr := s.repo.GetEditProjectForSource(ctx, ws.ID, source.ID)
@@ -162,6 +163,7 @@ func (s *ShortsService) CreateProject(ctx context.Context, userID string, r *htt
 	}
 	settingsMap["processing_start_seconds"] = selected.StartSeconds
 	settingsMap["processing_end_seconds"] = selected.EndSeconds
+	settingsMap["project_name"] = input.ProjectName
 	settings, _ = json.Marshal(settingsMap)
 	sourceExpiresAt := time.Now().UTC().Add(48 * time.Hour)
 	source, err := s.repo.CreateSource(ctx, &model.ShortsProject{
