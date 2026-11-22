@@ -1,4 +1,4 @@
-﻿-- +goose Up
+-- +goose Up
 
 -- Reusable analysis results and independent montage projects.
 CREATE TABLE shorts_sources (
