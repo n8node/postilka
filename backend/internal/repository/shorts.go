@@ -961,15 +961,9 @@ func (r *ShortsRepository) DeleteProject(ctx context.Context, workspaceID, proje
 		if _, err := tx.Exec(ctx, `DELETE FROM shorts_edit_projects WHERE id=$1 AND workspace_id=$2`, projectID, workspaceID); err != nil {
 			return err
 		}
-		var count int
-		if err := tx.QueryRow(ctx, `SELECT count(*) FROM shorts_edit_projects WHERE source_id=$1`, sourceID).Scan(&count); err != nil {
-			return err
-		}
-		if count == 0 {
-			if _, err := tx.Exec(ctx, `DELETE FROM shorts_sources WHERE id=$1 AND workspace_id=$2`, sourceID, workspaceID); err != nil {
-				return err
-			}
-		}
+		// Keep the source analysis and original long-form video even when this
+		// was the source's last edit project. The cascading foreign keys remove
+		// only this montage's clip links and export jobs.
 		return tx.Commit(ctx)
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {

@@ -115,13 +115,21 @@ export function ShortsStudioPage() {
   }
 
   async function removeProject(id: string) {
-    if (!window.confirm("Удалить этот Shorts-проект? Исходное видео останется в файлах.")) return;
+    const item = history.find((entry) => entry.project.id === id);
+    const confirmation = item?.project.is_edit_project
+      ? "Удалить монтаж и его состав фрагментов? Исходное видео, анализ и другие монтажи останутся."
+      : "Удалить проект Shorts? Длинное исходное видео останется в файлах.";
+    if (!window.confirm(confirmation)) return;
     try {
       await deleteShortsProject(id);
-      setHistory((items) => items.filter((item) => item.project.id !== id));
+      setHistory((items) => items.filter((entry) => entry.project.id !== id));
       if (project?.id === id) {
         setProject(null); setClips([]); setJob(null); setDraftUrls({});
+        setActiveStep("projects");
         window.history.replaceState(null, "", "/app/shorts");
+      }
+      if (item?.project.source_id) {
+        setSourceEditProjects((items) => items.filter((editProject) => editProject.id !== id));
       }
     } catch (error) {
       setJobMessage(error instanceof Error ? error.message : "Не удалось удалить проект");
