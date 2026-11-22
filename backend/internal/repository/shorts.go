@@ -262,7 +262,7 @@ func (r *ShortsRepository) GetEditProjectForSource(ctx context.Context, workspac
 }
 
 func (r *ShortsRepository) ListEditProjectsForSource(ctx context.Context, workspaceID, sourceID string) ([]model.ShortsProject, error) {
-	rows, err := r.pool.Query(ctx, `SELECT ep.id,ep.source_id,ep.workspace_id,ep.created_by_user_id,s.source_file_id,s.content_type,s.language,ep.status,s.source_duration_seconds,s.processing_minutes_reserved,s.processing_minutes_consumed,s.source_expires_at,s.audio_file_id,s.audio_expires_at,ep.settings,ep.created_at,ep.updated_at FROM shorts_edit_projects ep JOIN shorts_sources s ON s.id=ep.source_id WHERE ep.source_id=$1 AND ep.workspace_id=$2 ORDER BY ep.created_at`, sourceID, workspaceID)
+	rows, err := r.pool.Query(ctx, `SELECT ep.id,ep.source_id,ep.workspace_id,ep.created_by_user_id,s.source_file_id,s.content_type,s.language,ep.status,s.source_duration_seconds,s.processing_minutes_reserved,s.processing_minutes_consumed,s.source_expires_at,s.audio_file_id,s.audio_expires_at,ep.settings,ep.created_at,ep.updated_at,ep.name FROM shorts_edit_projects ep JOIN shorts_sources s ON s.id=ep.source_id WHERE ep.source_id=$1 AND ep.workspace_id=$2 ORDER BY ep.created_at`, sourceID, workspaceID)
 	if err != nil {
 		return nil, err
 	}
@@ -270,14 +270,15 @@ func (r *ShortsRepository) ListEditProjectsForSource(ctx context.Context, worksp
 	out := make([]model.ShortsProject, 0)
 	for rows.Next() {
 		var p model.ShortsProject
-		var ct, st string
+		var ct, st, editName string
 		var settings []byte
-		if err := rows.Scan(&p.ID, &p.SourceID, &p.WorkspaceID, &p.CreatedByUserID, &p.SourceFileID, &ct, &p.Language, &st, &p.SourceDurationSeconds, &p.ProcessingMinutesReserved, &p.ProcessingMinutesConsumed, &p.SourceExpiresAt, &p.AudioFileID, &p.AudioExpiresAt, &settings, &p.CreatedAt, &p.UpdatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.SourceID, &p.WorkspaceID, &p.CreatedByUserID, &p.SourceFileID, &ct, &p.Language, &st, &p.SourceDurationSeconds, &p.ProcessingMinutesReserved, &p.ProcessingMinutesConsumed, &p.SourceExpiresAt, &p.AudioFileID, &p.AudioExpiresAt, &settings, &p.CreatedAt, &p.UpdatedAt, &editName); err != nil {
 			return nil, err
 		}
 		p.ContentType = model.ShortsContentType(ct)
 		p.Status = model.ShortsProjectStatus(st)
 		p.IsEditProject = true
+		p.Name = editName
 		p.Settings = json.RawMessage(settings)
 		out = append(out, p)
 	}
@@ -456,7 +457,7 @@ func (r *ShortsRepository) ListForAdmin(ctx context.Context, f ListShortsAdminFi
 		return nil, 0, nil, err
 	}
 	args = append(args, f.Limit, f.Offset)
-	rows, err := r.pool.Query(ctx, `SELECT x.id,x.source_id,x.workspace_id,x.created_by_user_id,x.source_file_id,x.content_type,x.language,x.status,x.source_duration_seconds,x.processing_minutes_reserved,x.processing_minutes_consumed,x.source_expires_at,x.audio_file_id,x.audio_expires_at,x.settings,x.created_at,x.updated_at,(SELECT COUNT(*) FROM shorts_clips c WHERE c.source_id=x.source_id),j.id,j.job_type,j.status,j.current_step,j.progress,j.attempts,j.available_at,j.last_error,j.created_at,j.updated_at`+base+where+` ORDER BY x.created_at DESC LIMIT $`+strconv.Itoa(len(args)-1)+` OFFSET $`+strconv.Itoa(len(args)), args...)
+	rows, err := r.pool.Query(ctx, `SELECT x.id,x.source_id,x.workspace_id,x.created_by_user_id,x.source_file_id,x.content_type,x.language,x.status,x.source_duration_seconds,x.processing_minutes_reserved,x.processing_minutes_consumed,x.source_expires_at,x.audio_file_id,x.audio_expires_at,x.settings,x.created_at,x.updated_at,x.name,(SELECT COUNT(*) FROM shorts_clips c WHERE c.source_id=x.source_id),j.id,j.job_type,j.status,j.current_step,j.progress,j.attempts,j.available_at,j.last_error,j.created_at,j.updated_at`+base+where+` ORDER BY x.created_at DESC LIMIT $`+strconv.Itoa(len(args)-1)+` OFFSET $`+strconv.Itoa(len(args)), args...)
 	if err != nil {
 		return nil, 0, nil, err
 	}
@@ -591,16 +592,16 @@ func (r *ShortsRepository) AddAllSourceClipsToEditProject(ctx context.Context, w
 
 func (r *ShortsRepository) GetEditProject(ctx context.Context, workspaceID, projectID string) (*model.ShortsProject, error) {
 	var p model.ShortsProject
-	var contentType, status string
+	var contentType, status, editName string
 	var settings []byte
-	err := r.pool.QueryRow(ctx, `SELECT ep.id,ep.source_id,ep.workspace_id,ep.created_by_user_id,s.source_file_id,s.content_type,s.language,ep.status,s.source_duration_seconds,s.processing_minutes_reserved,s.processing_minutes_consumed,s.source_expires_at,s.audio_file_id,s.audio_expires_at,ep.settings,ep.created_at,ep.updated_at FROM shorts_edit_projects ep JOIN shorts_sources s ON s.id=ep.source_id WHERE ep.id=$1 AND ep.workspace_id=$2`, projectID, workspaceID).Scan(&p.ID, &p.SourceID, &p.WorkspaceID, &p.CreatedByUserID, &p.SourceFileID, &contentType, &p.Language, &status, &p.SourceDurationSeconds, &p.ProcessingMinutesReserved, &p.ProcessingMinutesConsumed, &p.SourceExpiresAt, &p.AudioFileID, &p.AudioExpiresAt, &settings, &p.CreatedAt, &p.UpdatedAt)
+	err := r.pool.QueryRow(ctx, `SELECT ep.id,ep.source_id,ep.workspace_id,ep.created_by_user_id,s.source_file_id,s.content_type,s.language,ep.status,s.source_duration_seconds,s.processing_minutes_reserved,s.processing_minutes_consumed,s.source_expires_at,s.audio_file_id,s.audio_expires_at,ep.settings,ep.created_at,ep.updated_at,ep.name FROM shorts_edit_projects ep JOIN shorts_sources s ON s.id=ep.source_id WHERE ep.id=$1 AND ep.workspace_id=$2`, projectID, workspaceID).Scan(&p.ID, &p.SourceID, &p.WorkspaceID, &p.CreatedByUserID, &p.SourceFileID, &contentType, &p.Language, &status, &p.SourceDurationSeconds, &p.ProcessingMinutesReserved, &p.ProcessingMinutesConsumed, &p.SourceExpiresAt, &p.AudioFileID, &p.AudioExpiresAt, &settings, &p.CreatedAt, &p.UpdatedAt, &editName)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
 	if err != nil {
 		return nil, err
 	}
-	p.ContentType, p.Status, p.IsEditProject, p.Settings = model.ShortsContentType(contentType), model.ShortsProjectStatus(status), true, json.RawMessage(settings)
+	p.ContentType, p.Status, p.IsEditProject, p.Name, p.Settings = model.ShortsContentType(contentType), model.ShortsProjectStatus(status), true, editName, json.RawMessage(settings)
 	return &p, nil
 }
 
