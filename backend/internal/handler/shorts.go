@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/postilka/postilka/internal/middleware"
 	"github.com/postilka/postilka/internal/model"
 	"github.com/postilka/postilka/internal/repository"
@@ -33,7 +34,8 @@ func (h *ShortsHandler) CreateProject(w http.ResponseWriter, r *http.Request) {
 	}
 	project, job, err := h.shorts.CreateProject(r.Context(), userID, r, req)
 	if err != nil {
-		h.mapError(w, err)
+		slog.Error("shorts project creation failed", "request_id", chimw.GetReqID(r.Context()), "user_id", userID, "source_file_id", req.SourceFileID, "error", err)
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": "shorts_project_creation_failed", "message": err.Error(), "request_id": chimw.GetReqID(r.Context())})
 		return
 	}
 	writeJSON(w, http.StatusAccepted, map[string]any{"project": project, "job": job})
