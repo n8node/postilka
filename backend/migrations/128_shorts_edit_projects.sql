@@ -80,16 +80,38 @@ FROM shorts_projects
 ON CONFLICT (id) DO NOTHING;
 
 -- Preserve candidate IDs, order, cuts, transcript and selection state.
-INSERT INTO shorts_edit_project_clips (edit_project_id, clip_id, position, start_seconds, end_seconds, transcript_text, included, created_at, updated_at)
-SELECT c.project_id, c.id,
-       COALESCE((c.score_details->>'order')::integer,
-         row_number() OVER (PARTITION BY c.project_id ORDER BY c.score DESC, c.start_seconds)::integer - 1),
-       c.start_seconds, c.end_seconds, c.transcript_text, c.status IN ('selected', 'draft'), c.created_at, c.updated_at
-FROM shorts_clips c
-ON CONFLICT (edit_project_id, clip_id) DO NOTHING;
+-- +goose StatementBegin
+DO $$
+DECLARE
+    project_column_exists BOOLEAN;
+BEGIN
+    SELECT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = current_schema() AND table_name = 'shorts_clips' AND column_name = 'project_id'
+    ) INTO project_column_exists;
 
+    IF project_column_exists THEN
+        INSERT INTO shorts_edit_project_clips (edit_project_id, clip_id, position, start_seconds, end_seconds, transcript_text, included, created_at, updated_at)
+        SELECT c.project_id, c.id,
+               COALESCE((c.score_details->>'order')::integer,
+                 row_number() OVER (PARTITION BY c.project_id ORDER BY c.score DESC, c.start_seconds)::integer - 1),
+               c.start_seconds, c.end_seconds, c.transcript_text, c.status IN ('selected', 'draft'), c.created_at, c.updated_at
+        FROM shorts_clips c
+        ON CONFLICT (edit_project_id, clip_id) DO NOTHING;
+    ELSE
+        INSERT INTO shorts_edit_project_clips (edit_project_id, clip_id, position, start_seconds, end_seconds, transcript_text, included, created_at, updated_at)
+        SELECT c.source_id, c.id,
+               COALESCE((c.score_details->>'order')::integer,
+                 row_number() OVER (PARTITION BY c.source_id ORDER BY c.score DESC, c.start_seconds)::integer - 1),
+               c.start_seconds, c.end_seconds, c.transcript_text, c.status IN ('selected', 'draft'), c.created_at, c.updated_at
+        FROM shorts_clips c
+        ON CONFLICT (edit_project_id, clip_id) DO NOTHING;
+    END IF;
+END $$;
+-- +goose StatementEnd
 -- Analysis clips belong to the reusable source instead of the old project record.
 ALTER TABLE shorts_clips ADD COLUMN IF NOT EXISTS source_id UUID REFERENCES shorts_sources(id) ON DELETE CASCADE;
+-- +goose StatementBegin
 DO $$
 BEGIN
     IF EXISTS (
@@ -101,7 +123,9 @@ BEGIN
         ALTER TABLE shorts_clips DROP COLUMN project_id;
     END IF;
 END $$;
+-- +goose StatementEnd
 ALTER TABLE shorts_clips ALTER COLUMN source_id SET NOT NULL;
+-- +goose StatementBegin
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -111,12 +135,14 @@ BEGIN
         ALTER TABLE shorts_clips ADD CONSTRAINT shorts_clips_source_id_fkey FOREIGN KEY (source_id) REFERENCES shorts_sources(id) ON DELETE CASCADE;
     END IF;
 END $$;
+-- +goose StatementEnd
 DROP INDEX IF EXISTS shorts_clips_project_idx;
 CREATE INDEX IF NOT EXISTS shorts_clips_source_idx ON shorts_clips(source_id, score DESC);
 
 -- Jobs: retain old export/rerender behavior as legacy jobs; new edit jobs use edit_project_id.
 ALTER TABLE shorts_jobs ADD COLUMN IF NOT EXISTS source_id UUID REFERENCES shorts_sources(id) ON DELETE CASCADE;
 ALTER TABLE shorts_jobs ADD COLUMN IF NOT EXISTS edit_project_id UUID REFERENCES shorts_edit_projects(id) ON DELETE CASCADE;
+-- +goose StatementBegin
 DO $$
 BEGIN
     IF EXISTS (
@@ -130,6 +156,7 @@ BEGIN
         ALTER TABLE shorts_jobs DROP COLUMN project_id;
     END IF;
 END $$;
+-- +goose StatementEnd
 ALTER TABLE shorts_jobs ALTER COLUMN source_id SET NOT NULL;
 ALTER TABLE shorts_jobs ALTER COLUMN edit_project_id DROP NOT NULL;
 -- Preserve existing project IDs as compatibility records for administrative endpoints.
