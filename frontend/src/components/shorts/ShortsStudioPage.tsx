@@ -10,7 +10,7 @@ import { ShortsCreationPanel } from "@/components/shorts/ShortsCreationPanel";
 import { ShortsClipsPanel, type ShortsClipDraft } from "@/components/shorts/ShortsClipsPanel";
 import { ShortsEditorPanel, type ShortsEditorSettings } from "@/components/shorts/ShortsEditorPanel";
 import { uploadFile, type WorkspaceFile } from "@/lib/files-api";
-import { analyzeShortsProject, createShortsProject, deleteShortsProject, exportShortsProject, getShortsAudioDownloadUrl, getShortsDraftDownloadUrl, getShortsFinalDownloadUrl, getShortsJob, getShortsProject, getShortsTranscriptResultUrl, listShortsProjects, listShortsSources, rerenderShortsProject, deleteShortsClip, updateShortsClip, getShortsAnalysisForFile, getShortsSource, createShortsEditProject, addShortsClipToEditProject, updateShortsClipOrder, updateShortsSubtitleSettings, type ShortsClip, type ShortsJob, type ShortsProject, type ShortsProjectListItem } from "@/lib/shorts-api";
+import { analyzeShortsProject, cancelShortsJob, createShortsProject, deleteShortsProject, exportShortsProject, getShortsAudioDownloadUrl, getShortsDraftDownloadUrl, getShortsFinalDownloadUrl, getShortsJob, getShortsProject, getShortsTranscriptResultUrl, listShortsProjects, listShortsSources, rerenderShortsProject, deleteShortsClip, updateShortsClip, getShortsAnalysisForFile, getShortsSource, createShortsEditProject, addShortsClipToEditProject, updateShortsClipOrder, updateShortsSubtitleSettings, type ShortsClip, type ShortsJob, type ShortsProject, type ShortsProjectListItem } from "@/lib/shorts-api";
 
 const contentTypes = [
   ["podcast", "Подкаст"],
@@ -26,6 +26,7 @@ export function ShortsStudioPage() {
   const [activeStep, setActiveStep] = useState<ShortsWizardStep>("projects");
   const [sourceFileId, setSourceFileId] = useState("");
   const [sourceFile, setSourceFile] = useState<WorkspaceFile | null>(null);
+  const [projectName, setProjectName] = useState("");
   const [pickerOpen, setPickerOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -71,7 +72,11 @@ export function ShortsStudioPage() {
   }
 
   function stepLabel(step?: string) {
-    return ({ queued: "В очереди", claimed: "Подготовка", downloading: "Подготовка видео", transcribing: "Распознавание речи", analyzing: "Поиск лучших фрагментов", rendering: "Создание превью", completed: "Завершено", failed: "Ошибка" } as Record<string, string>)[step ?? ""] ?? step ?? "Обработка";
+    return ({ queued: "В очереди", claimed: "Подготовка", loading_project: "Подготовка проекта", download_source: "Подготовка видео", probe_duration: "Проверка видео", extract_audio: "Извлечение аудио", transcribe: "Распознавание речи", billing_transcription: "Проверка тарифа", segment_candidates: "Поиск лучших фрагментов", render_drafts: "Создание превью", completed: "Завершено", failed: "Ошибка", cancelled: "Остановлено" } as Record<string, string>)[step ?? ""] ?? step ?? "Обработка";
+  }
+
+  function processingSteps() {
+    return ["Подготовка проекта", "Подготовка видео", "Извлечение аудио", "Распознавание речи", "Поиск лучших фрагментов", "Создание превью"];
   }
 
   useEffect(() => {
@@ -134,6 +139,17 @@ export function ShortsStudioPage() {
     } catch (error) {
       setJobMessage(error instanceof Error ? error.message : "Не удалось удалить проект");
     }
+  }
+
+  async function cancelJob() {
+    if (!job?.id || !project?.id || !window.confirm("Остановить обработку проекта? Уже сохранённые исходные файлы останутся.")) return;
+    try {
+      const result = await cancelShortsJob(job.id);
+      setJob(result.job);
+      setProject((current) => current ? { ...current, status: "cancelled" } : current);
+      setJobMessage("Обработка остановлена. Вы сможете запустить её повторно.");
+      await refreshProjects();
+    } catch (error) { setJobMessage(error instanceof Error ? error.message : "Не удалось остановить обработку"); }
   }
 
   async function analyzeProject(id: string) {
@@ -304,6 +320,10 @@ export function ShortsStudioPage() {
   }
 
   async function submit() {
+    if (!projectName.trim()) {
+      setJobMessage("Введите название проекта.");
+      return;
+    }
     if (!sourceFileId.trim()) {
       setJobMessage("Выберите исходное видео из файлов.");
       return;
@@ -311,22 +331,12 @@ export function ShortsStudioPage() {
     setBusy(true);
     setJobMessage("");
     try {
-      const existingAnalysis = await getShortsAnalysisForFile(sourceFileId.trim());
-      if (existingAnalysis.found && existingAnalysis.source) {
-        setAnalysisSource(existingAnalysis.source);
-        const created = await createShortsEditProject(existingAnalysis.source.id, `Монтаж ${history.filter((item) => item.source_id === existingAnalysis.source?.id).length + 1}`);
-        setProject(created.project);setEditProjectId(created.project.id);
-        const [editData,sourceData]=await Promise.all([getShortsProject(created.project.id),getShortsSource(existingAnalysis.source.id)]);
-        setClips(editData.clips);setSourceClips(sourceData.clips);setSourceEditProjects(sourceData.edit_projects ?? []);setJob(null);setJobMessage("Создан новый монтаж на базе готового анализа. Фрагменты подключены без повторного анализа.");setActiveStep("editor");
-        setHistory((items)=>[{project:created.project,clips:editData.clips.filter((clip)=>clip.included).length,source_id:existingAnalysis.source?.id,edit_project_id:created.project.id,source_file:sourceFile??undefined},...items]);
-        await refreshProjects();
-        window.history.replaceState(null,"",`/app/shorts?project=${encodeURIComponent(created.project.id)}&step=editor`);return;
-      }
       const result = await createShortsProject({
         source_file_id: sourceFileId.trim(),
         content_type: contentType,
         language: "ru",
         source_duration_seconds: duration,
+        project_name: projectName.trim(),
         processing_range: { start_seconds: rangeStart, end_seconds: rangeEnd },
       });
       setProject(result.project); setEditProjectId(result.project.id);setAnalysisSource(result.project);setSourceClips([]);setJob(result.job); setClips([]); setJobMessage("Создан источник. Анализ поставлен в очередь.");
@@ -355,10 +365,10 @@ export function ShortsStudioPage() {
   return (
     <div className="w-full min-w-0 space-y-6 pb-12 text-slate-900">
       <PageHeader title="Shorts Studio" description="Подготовка длинного видео к анализу и автоматической нарезке с субтитрами." />
-      <ShortsWizardNav activeStep={activeStep} onStepChange={(step) => { setActiveStep(step); const query = project?.id ? `?project=${encodeURIComponent(project.id)}&step=${step}` : `?step=${step}`; window.history.replaceState(null, "", `/app/shorts${query}`); }} canOpen={(step) => step === "projects" || step === "creation" || Boolean(project)} />
-      {activeStep === "projects" && <ShortsProjectsPanel items={history} loading={historyLoading} activeProjectId={project?.id} onOpen={(id) => void openProject(id)} onRetry={(id) => void analyzeProject(id)} onDelete={(id) => void removeProject(id)} onCreateMontage={(sourceId) => { const source=sources.find((item)=>item.id===sourceId); if (source) {setAnalysisSource(source);void getShortsSource(sourceId).then((data)=>{setAnalysisSource(data.project);setSourceClips(data.clips);setSourceEditProjects(data.edit_projects ?? []);void createMontageProject();});} }} onOpenSource={(sourceId) => {void getShortsSource(sourceId).then((data)=>{setAnalysisSource(data.project);setSourceClips(data.clips);setSourceEditProjects(data.edit_projects ?? []);setProject(data.project);setEditProjectId("");setClips(data.clips);setActiveStep("clips");window.history.replaceState(null,"",`/app/shorts?project=${encodeURIComponent(sourceId)}&step=clips`);});}} />}
-      {activeStep === "creation" && <ShortsCreationPanel sourceFile={sourceFile} previewUrl={previewUrl} uploading={uploading} uploadProgress={uploadProgress} duration={duration} rangeStart={rangeStart} rangeEnd={rangeEnd} contentType={contentType} contentTypes={contentTypes} onUpload={(file) => void handleUpload(file)} onOpenPicker={() => setPickerOpen(true)} onDurationChange={(value) => { setDuration(value); setRangeEnd(Math.min(value, rangeEnd)); }} onRangeStartChange={setRangeStart} onRangeEndChange={setRangeEnd} onContentTypeChange={setContentType} onSubmit={() => void submit()} busy={busy} />}
-      {activeStep === "processing" && <section className="max-w-4xl rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-10"><h2 className="text-3xl font-bold tracking-tight text-slate-900">Готовим ваш проект</h2><p className="mt-2 text-sm text-slate-500">Анализируем речь и содержание видео</p><div className="mt-5 rounded-2xl border border-slate-200 p-5"><div className="flex items-center justify-between"><span className="text-2xl font-bold text-slate-900">{job?.progress ?? 0}%</span>{job?.status !== "succeeded" && <button type="button" className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-rose-600">Отменить</button>}</div><div className="mt-4 h-2.5 overflow-hidden rounded-full bg-slate-200"><div className="h-full rounded-full bg-indigo-600 transition-all" style={{ width: `${job?.progress ?? 0}%` }} /></div><div className="mt-4 space-y-2">{["Загрузка файла", "Извлечение аудио", "Транскрибация", "Анализ содержания", "Поиск лучших фрагментов", "Подготовка проекта"].map((label, index) => { const progress = job?.progress ?? 0; const done = progress >= (index + 1) * 16.66; const current = !done && progress >= index * 16.66; return <div key={label} className={`flex items-center gap-3 rounded-xl border p-3 ${current ? "border-indigo-200 bg-indigo-50" : "border-slate-200 bg-white"}`}><span className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${done ? "bg-emerald-50 text-emerald-600" : current ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-500"}`}>{done ? "✓" : index + 1}</span><span className="flex-1 text-sm font-semibold text-slate-800">{label}</span><span className="text-xs text-slate-500">{done ? "Завершён" : current ? "Выполняется…" : "Ожидает"}</span></div>; })}</div><p className="mt-4 text-xs text-slate-500">Можно закрыть страницу — проект продолжит обрабатываться. Пришлём уведомление.</p></div>{jobMessage && <p className="mt-4 rounded-xl bg-indigo-50 p-3 text-sm text-indigo-800">{jobMessage}</p>}{job?.status === "succeeded" && <button type="button" onClick={() => setActiveStep("clips")} className="mt-5 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white">Перейти к фрагментам</button>}</section>}
+      <ShortsWizardNav activeStep={activeStep} onStepChange={(step) => { if (job && ["queued", "running"].includes(job.status) && step === "creation") return; setActiveStep(step); const query = project?.id ? `?project=${encodeURIComponent(project.id)}&step=${step}` : `?step=${step}`; window.history.replaceState(null, "", `/app/shorts${query}`); }} canOpen={(step) => step === "projects" || (step === "creation" && !(job && ["queued", "running"].includes(job.status))) || Boolean(project)} />
+      {activeStep === "projects" && <ShortsProjectsPanel items={history} loading={historyLoading} activeProjectId={project?.id} onCreate={() => { setProject(null); setProjectName(""); setSourceFile(null); setSourceFileId(""); setJob(null); setJobMessage(""); setActiveStep("creation"); window.history.replaceState(null, "", "/app/shorts?step=creation"); }} onOpen={(id) => void openProject(id)} onRetry={(id) => void analyzeProject(id)} onDelete={(id) => void removeProject(id)} onCreateMontage={(sourceId) => { const source=sources.find((item)=>item.id===sourceId); if (source) {setAnalysisSource(source);void getShortsSource(sourceId).then((data)=>{setAnalysisSource(data.project);setSourceClips(data.clips);setSourceEditProjects(data.edit_projects ?? []);void createMontageProject();});} }} onOpenSource={(sourceId) => {void getShortsSource(sourceId).then((data)=>{setAnalysisSource(data.project);setSourceClips(data.clips);setSourceEditProjects(data.edit_projects ?? []);setProject(data.project);setEditProjectId("");setClips(data.clips);setActiveStep("clips");window.history.replaceState(null,"",`/app/shorts?project=${encodeURIComponent(sourceId)}&step=clips`);});}} />}
+      {activeStep === "creation" && <ShortsCreationPanel projectName={projectName} onProjectNameChange={setProjectName} sourceFile={sourceFile} previewUrl={previewUrl} uploading={uploading} uploadProgress={uploadProgress} duration={duration} rangeStart={rangeStart} rangeEnd={rangeEnd} contentType={contentType} contentTypes={contentTypes} onUpload={(file) => void handleUpload(file)} onOpenPicker={() => setPickerOpen(true)} onDurationChange={(value) => { setDuration(value); setRangeEnd(Math.min(value, rangeEnd)); }} onRangeStartChange={setRangeStart} onRangeEndChange={setRangeEnd} onContentTypeChange={setContentType} onSubmit={() => void submit()} busy={busy} />}
+      {activeStep === "processing" && <section className="max-w-4xl rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-10"><h2 className="text-3xl font-bold tracking-tight text-slate-900">Готовим ваш проект</h2><p className="mt-2 text-sm text-slate-500">Анализируем речь и содержание видео</p><div className="mt-5 rounded-2xl border border-slate-200 p-5"><div className="flex items-center justify-between"><span className="text-2xl font-bold text-slate-900">{job?.progress ?? 0}%</span>{job && ["queued", "running"].includes(job.status) && <button type="button" onClick={() => void cancelJob()} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-rose-600">Остановить обработку</button>}</div><div className="mt-4 h-2.5 overflow-hidden rounded-full bg-slate-200"><div className="h-full rounded-full bg-indigo-600 transition-all" style={{ width: `${job?.progress ?? 0}%` }} /></div><div className="mt-4 space-y-2">{processingSteps().map((label, index) => { const progress = job?.progress ?? 0; const done = progress >= (index + 1) * (100 / processingSteps().length); const current = !done && progress >= index * (100 / processingSteps().length); return <div key={label} className={`flex items-center gap-3 rounded-xl border p-3 ${current ? "border-indigo-200 bg-indigo-50" : "border-slate-200 bg-white"}`}><span className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${done ? "bg-emerald-50 text-emerald-600" : current ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-500"}`}>{done ? "✓" : index + 1}</span><span className="flex-1 text-sm font-semibold text-slate-800">{label}</span><span className="text-xs text-slate-500">{done ? "Завершён" : current ? "Выполняется…" : "Ожидает"}</span></div>; })}</div><p className="mt-4 text-xs text-slate-500">Можно закрыть страницу — проект продолжит обрабатываться. Пришлём уведомление.</p></div>{jobMessage && <p className="mt-4 rounded-xl bg-indigo-50 p-3 text-sm text-indigo-800">{jobMessage}</p>}{job?.status === "succeeded" && <button type="button" onClick={() => setActiveStep("clips")} className="mt-5 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white">Перейти к фрагментам</button>}</section>}
         {/* Legacy inline creation controls remain below until the next wizard step removes them. */}
         <div className="hidden">
         <section className="grid gap-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6 lg:grid-cols-2">

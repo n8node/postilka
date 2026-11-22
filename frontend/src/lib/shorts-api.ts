@@ -68,6 +68,7 @@ export function createShortsProject(input: {
   content_type: string;
   language: string;
   source_duration_seconds: number;
+  project_name: string;
   processing_range?: { start_seconds: number; end_seconds: number };
 }) {
   return request<{ project: ShortsProject; job: ShortsJob }>("/shorts/projects", {
@@ -110,6 +111,10 @@ export function analyzeShortsProject(projectId: string) {
 
 export function getShortsJob(id: string) {
   return request<{ job: ShortsJob }>(`/shorts/jobs/${id}`);
+}
+
+export function cancelShortsJob(id: string) {
+  return request<{ job: ShortsJob }>(`/shorts/jobs/${id}/cancel`, { method: "POST" });
 }
 
 export function getShortsAudioDownloadUrl(projectId: string) {

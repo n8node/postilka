@@ -592,6 +592,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Get("/shorts/clips/{id}/draft", shortsHandler.DownloadDraft)
 			r.Get("/shorts/projects/{id}/audio", shortsHandler.DownloadAudio)
 			r.Get("/shorts/jobs/{id}", shortsHandler.GetJob)
+			r.Post("/shorts/jobs/{id}/cancel", shortsHandler.CancelJob)
 		})
 
 		r.Group(func(r chi.Router) {

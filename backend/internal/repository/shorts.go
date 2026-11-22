@@ -544,6 +544,11 @@ func (r *ShortsRepository) CreateDefaultEditProjectForSource(ctx context.Context
 	return err
 }
 
+func (r *ShortsRepository) RenameEditProject(ctx context.Context, workspaceID, projectID, name string) error {
+	_, err := r.pool.Exec(ctx, `UPDATE shorts_edit_projects SET name=$1, updated_at=now() WHERE id=$2 AND workspace_id=$3`, name, projectID, workspaceID)
+	return err
+}
+
 func (r *ShortsRepository) CreateEditProject(ctx context.Context, workspaceID, userID, sourceID, name string) (*model.ShortsProject, error) {
 	if name == "" {
 		name = "Р В Р’В Р вЂ™Р’В Р В Р Р‹Р РЋРІвЂћСћР В Р’В Р вЂ™Р’В Р В Р Р‹Р Р†Р вЂљРЎС›Р В Р’В Р вЂ™Р’В Р В Р’В Р Р†Р вЂљР’В¦Р В Р’В Р В Р вЂ№Р В Р вЂ Р В РІР‚С™Р РЋРІвЂћСћР В Р’В Р вЂ™Р’В Р В РІР‚в„ўР вЂ™Р’В°Р В Р’В Р вЂ™Р’В Р В РІР‚в„ўР вЂ™Р’В¶ Р В Р’В Р вЂ™Р’В Р В РІР‚в„ўР вЂ™Р’В±Р В Р’В Р вЂ™Р’В Р В РІР‚в„ўР вЂ™Р’ВµР В Р’В Р вЂ™Р’В Р В РІР‚в„ўР вЂ™Р’В· Р В Р’В Р вЂ™Р’В Р В Р’В Р Р†Р вЂљР’В¦Р В Р’В Р вЂ™Р’В Р В РІР‚в„ўР вЂ™Р’В°Р В Р’В Р вЂ™Р’В Р В РІР‚в„ўР вЂ™Р’В·Р В Р’В Р вЂ™Р’В Р В Р’В Р Р†Р вЂљР’В Р В Р’В Р вЂ™Р’В Р В РІР‚в„ўР вЂ™Р’В°Р В Р’В Р вЂ™Р’В Р В Р’В Р Р†Р вЂљР’В¦Р В Р’В Р вЂ™Р’В Р В Р Р‹Р Р†Р вЂљР’ВР В Р’В Р В Р вЂ№Р В Р’В Р В Р РЏ"
@@ -1117,8 +1122,24 @@ func (r *ShortsRepository) ClaimDueJobs(ctx context.Context, owner string, limit
 }
 
 func (r *ShortsRepository) UpdateJobProgress(ctx context.Context, jobID, owner, step string, progress int) error {
-	_, err := r.pool.Exec(ctx, `UPDATE shorts_jobs SET current_step = $1, progress = $2, updated_at = now() WHERE id = $3 AND lease_owner = $4`, step, progress, jobID, owner)
+	_, err := r.pool.Exec(ctx, `UPDATE shorts_jobs SET current_step = $1, progress = $2, updated_at = now() WHERE id = $3 AND lease_owner = $4 AND status = 'running'`, step, progress, jobID, owner)
 	return err
+}
+
+func (r *ShortsRepository) CancelJob(ctx context.Context, workspaceID, jobID, message string) (*model.ShortsJob, error) {
+	var j model.ShortsJob
+	var status string
+	err := r.pool.QueryRow(ctx, `UPDATE shorts_jobs j SET status='cancelled', current_step='cancelled', last_error=$1, lease_owner=NULL, lease_until=NULL, updated_at=now() FROM shorts_sources s WHERE j.id=$2 AND j.source_id=s.id AND s.workspace_id=$3 AND j.status IN ('queued','running') RETURNING j.id,j.source_id,j.job_type,j.status,j.current_step,j.progress,j.attempts,j.available_at,j.last_error,j.created_at,j.updated_at`, message, jobID, workspaceID).Scan(&j.ID, &j.SourceID, &j.JobType, &status, &j.CurrentStep, &j.Progress, &j.Attempts, &j.AvailableAt, &j.LastError, &j.CreatedAt, &j.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	j.Status = model.ShortsJobStatus(status)
+	_, _ = r.pool.Exec(ctx, `UPDATE shorts_sources SET status='cancelled', updated_at=now() WHERE id=$1 AND workspace_id=$2`, j.SourceID, workspaceID)
+	_, _ = r.pool.Exec(ctx, `UPDATE shorts_edit_projects SET status='cancelled', updated_at=now() WHERE source_id=$1 AND workspace_id=$2 AND status IN ('draft','analyzing','rendering')`, j.SourceID, workspaceID)
+	return &j, err
 }
 
 func (r *ShortsRepository) CompleteJob(ctx context.Context, jobID, owner, projectID, workspaceID string, projectStatus model.ShortsProjectStatus, projectStep string) error {

@@ -14,10 +14,11 @@ import (
 )
 
 var (
-	ErrShortsProjectNotFound  = errors.New("shorts project not found")
-	ErrShortsSourceRequired   = errors.New("shorts source video is required")
-	ErrShortsDurationRequired = errors.New("shorts source duration is required")
-	ErrInvalidShortsClip      = errors.New("invalid shorts clip")
+	ErrShortsProjectNotFound     = errors.New("shorts project not found")
+	ErrShortsSourceRequired      = errors.New("shorts source video is required")
+	ErrShortsDurationRequired    = errors.New("shorts source duration is required")
+	ErrShortsProjectNameRequired = errors.New("shorts project name is required")
+	ErrInvalidShortsClip         = errors.New("invalid shorts clip")
 )
 
 type ShortsService struct {
@@ -47,6 +48,10 @@ type CreateShortsProjectInput struct {
 }
 
 func (s *ShortsService) CreateProject(ctx context.Context, userID string, r *http.Request, input CreateShortsProjectInput) (*model.ShortsProject, *model.ShortsJob, error) {
+	if strings.TrimSpace(input.ProjectName) == "" {
+		return nil, nil, ErrShortsProjectNameRequired
+	}
+	input.ProjectName = strings.TrimSpace(input.ProjectName)
 	ws, _, err := s.wsSvc.ResolveActive(ctx, userID, r)
 	if err != nil {
 		return nil, nil, err
@@ -78,9 +83,16 @@ func (s *ShortsService) CreateProject(ctx context.Context, userID string, r *htt
 	if source, found, lookupErr := s.repo.GetAnalysisForFile(ctx, ws.ID, input.SourceFileID); lookupErr != nil {
 		return nil, nil, lookupErr
 	} else if found {
-		edit, createErr := s.repo.CreateEditProject(ctx, ws.ID, userID, source.ID, input.ProjectName)
-		if createErr != nil {
-			return nil, nil, createErr
+		edit, editErr := s.repo.GetEditProjectForSource(ctx, ws.ID, source.ID)
+		if errors.Is(editErr, repository.ErrNotFound) {
+			edit, editErr = s.repo.CreateEditProject(ctx, ws.ID, userID, source.ID, input.ProjectName)
+		}
+		if editErr != nil {
+			return nil, nil, editErr
+		}
+		if edit.Name == "" || edit.Name == "Montage 1" {
+			_ = s.repo.RenameEditProject(ctx, ws.ID, edit.ID, input.ProjectName)
+			edit.Name = input.ProjectName
 		}
 		job, _ := s.repo.GetSourceJob(ctx, ws.ID, source.ID)
 		return edit, job, nil
@@ -130,9 +142,6 @@ func (s *ShortsService) CreateProject(ctx context.Context, userID string, r *htt
 	}
 	job, err := s.repo.CreateJob(ctx, source.ID, "analyze")
 	if err != nil {
-		return nil, nil, err
-	}
-	if err := s.repo.CreateLegacyProject(ctx, source.ID); err != nil {
 		return nil, nil, err
 	}
 	edit, err := s.repo.CreateEditProject(ctx, ws.ID, userID, source.ID, input.ProjectName)
@@ -414,6 +423,24 @@ func (s *ShortsService) AnalyzeProject(ctx context.Context, userID string, r *ht
 		return nil, err
 	}
 	job, err := s.repo.CreateSourceJob(ctx, ws.ID, projectID, "analyze")
+	if errors.Is(err, repository.ErrNotFound) {
+		return nil, ErrShortsProjectNotFound
+	}
+	return job, err
+}
+
+func (s *ShortsService) CancelJob(ctx context.Context, userID string, r *http.Request, jobID string) (*model.ShortsJob, error) {
+	ws, _, err := s.wsSvc.ResolveActive(ctx, userID, r)
+	if err != nil {
+		return nil, err
+	}
+	if ws == nil {
+		return nil, ErrWorkspaceNotFound
+	}
+	if _, err := s.wsSvc.RequireMembership(ctx, userID, ws.ID, model.RoleEditor); err != nil {
+		return nil, err
+	}
+	job, err := s.repo.CancelJob(ctx, ws.ID, jobID, "Обработка остановлена пользователем")
 	if errors.Is(err, repository.ErrNotFound) {
 		return nil, ErrShortsProjectNotFound
 	}

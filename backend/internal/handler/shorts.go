@@ -223,6 +223,20 @@ func (h *ShortsHandler) AddClipToEditProject(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
+func (h *ShortsHandler) CancelJob(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
+		return
+	}
+	job, err := h.shorts.CancelJob(r.Context(), userID, r, chi.URLParam(r, "id"))
+	if err != nil {
+		h.mapError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"job": job})
+}
+
 func (h *ShortsHandler) GetJob(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
@@ -365,6 +379,8 @@ func (h *ShortsHandler) mapError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, service.ErrShortsSourceRequired):
 		writeErrorWithCode(w, http.StatusBadRequest, "shorts_source_required", "Загрузите исходное видео")
+	case errors.Is(err, service.ErrShortsProjectNameRequired):
+		writeErrorWithCode(w, http.StatusBadRequest, "shorts_project_name_required", "Введите название проекта")
 	case errors.Is(err, service.ErrShortsDurationRequired), errors.Is(err, service.ErrInvalidShortsRange), errors.Is(err, service.ErrShortsRangeOutsideVideo):
 		writeErrorWithCode(w, http.StatusBadRequest, "shorts_invalid_range", "Укажите корректный диапазон обработки видео")
 	case errors.Is(err, service.ErrInvalidShortsClip):

@@ -86,10 +86,10 @@ func (w *ShortsWorker) process(ctx context.Context, job repository.ClaimedShorts
 		return fmt.Errorf("stage loading_project: %w", err)
 	}
 	if project.AudioFileID != nil && project.AudioExpiresAt != nil && project.AudioExpiresAt.After(time.Now().UTC()) {
-		if err := w.repo.SucceedJob(ctx, job.ID, w.owner); err != nil {
+		if err := w.repo.CompleteJob(ctx, job.ID, w.owner, job.SourceID, job.WorkspaceID, model.ShortsProjectCompleted, "completed"); err != nil {
 			return err
 		}
-		return w.repo.CreateDefaultEditProjectForSource(ctx, job.WorkspaceID, job.SourceID)
+		return nil
 	}
 	if project.SourceFileID == nil {
 		return ErrShortsSourceRequired
@@ -190,7 +190,7 @@ func (w *ShortsWorker) process(ctx context.Context, job repository.ClaimedShorts
 	if err := w.repo.CompleteJob(ctx, job.ID, w.owner, job.ProjectID, job.WorkspaceID, model.ShortsProjectCompleted, "completed"); err != nil {
 		return err
 	}
-	return w.repo.CreateDefaultEditProjectForSource(ctx, job.WorkspaceID, job.SourceID)
+	return nil
 }
 
 func (w *ShortsWorker) processEditExport(ctx context.Context, job repository.ClaimedShortsJob) error {
