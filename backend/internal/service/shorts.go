@@ -114,10 +114,10 @@ func (s *ShortsService) CreateProject(ctx context.Context, userID string, r *htt
 		if editErr != nil {
 			return nil, nil, editErr
 		}
-		if edit.Name == "" || edit.Name == "Montage 1" {
-			_ = s.repo.RenameEditProject(ctx, ws.ID, edit.ID, input.ProjectName)
-			edit.Name = input.ProjectName
+		if err := s.repo.RenameEditProject(ctx, ws.ID, edit.ID, input.ProjectName); err != nil {
+			return nil, nil, err
 		}
+		edit.Name = input.ProjectName
 		job, jobErr := s.repo.CreateSourceJob(ctx, ws.ID, source.ID, "analyze")
 		if jobErr != nil {
 			return nil, nil, jobErr
@@ -175,14 +175,22 @@ func (s *ShortsService) CreateProject(ctx context.Context, userID string, r *htt
 	if err != nil {
 		return nil, nil, err
 	}
+	edit, err := s.repo.GetEditProjectForSource(ctx, ws.ID, source.ID)
+	if errors.Is(err, repository.ErrNotFound) {
+		edit, err = s.repo.CreateEditProject(ctx, ws.ID, userID, source.ID, input.ProjectName)
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := s.repo.RenameEditProject(ctx, ws.ID, edit.ID, input.ProjectName); err != nil {
+		return nil, nil, err
+	}
+	edit.Name = input.ProjectName
 	job, err := s.repo.CreateJob(ctx, source.ID, "analyze")
 	if err != nil {
 		return nil, nil, err
 	}
-	edit, err := s.repo.CreateEditProject(ctx, ws.ID, userID, source.ID, input.ProjectName)
-	if err != nil {
-		return nil, nil, err
-	}
+	job.ProjectID = source.ID
 	return edit, job, nil
 }
 
