@@ -80,7 +80,7 @@ func (s *ShortsService) CreateProject(ctx context.Context, userID string, r *htt
 	if input.SourceDurationSeconds <= 0 {
 		return nil, nil, ErrShortsDurationRequired
 	}
-	if source, found, lookupErr := s.repo.GetAnalysisForFile(ctx, ws.ID, input.SourceFileID); lookupErr != nil {
+	if source, found, lookupErr := s.repo.GetSourceForFile(ctx, ws.ID, input.SourceFileID); lookupErr != nil {
 		return nil, nil, lookupErr
 	} else if found {
 		selected := ShortsProcessingRange{StartSeconds: 0, EndSeconds: input.SourceDurationSeconds}

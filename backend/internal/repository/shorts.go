@@ -532,6 +532,21 @@ func (r *ShortsRepository) UpdateProjectStatus(ctx context.Context, workspaceID,
 	return err
 }
 
+func (r *ShortsRepository) GetSourceForFile(ctx context.Context, workspaceID, fileID string) (*model.ShortsProject, bool, error) {
+	var p model.ShortsProject
+	var contentType, status string
+	var settings []byte
+	err := r.pool.QueryRow(ctx, `SELECT s.id,s.workspace_id,s.created_by_user_id,s.source_file_id,s.content_type,s.language,s.status,s.source_duration_seconds,s.processing_minutes_reserved,s.processing_minutes_consumed,s.source_expires_at,s.audio_file_id,s.audio_expires_at,s.settings,s.created_at,s.updated_at FROM shorts_sources s WHERE s.workspace_id=$1 AND s.source_file_id=$2 ORDER BY s.created_at DESC LIMIT 1`, workspaceID, fileID).Scan(&p.ID, &p.WorkspaceID, &p.CreatedByUserID, &p.SourceFileID, &contentType, &p.Language, &status, &p.SourceDurationSeconds, &p.ProcessingMinutesReserved, &p.ProcessingMinutesConsumed, &p.SourceExpiresAt, &p.AudioFileID, &p.AudioExpiresAt, &settings, &p.CreatedAt, &p.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	p.ContentType, p.Status, p.Settings = model.ShortsContentType(contentType), model.ShortsProjectStatus(status), json.RawMessage(settings)
+	return &p, true, nil
+}
+
 func (r *ShortsRepository) GetAnalysisForFile(ctx context.Context, workspaceID, fileID string) (*model.ShortsProject, bool, error) {
 	var p model.ShortsProject
 	var contentType, status string
