@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, Check, CheckCircle2, Clock3, FileVideo, FolderOpen, Loader2, Play, RefreshCw, Trash2, Upload, Video, WandSparkles } from "lucide-react";
 import { WorkspaceMediaPickerModal } from "@/components/generation/WorkspaceMediaPickerModal";
 import { ShortsWizardNav, type ShortsWizardStep } from "@/components/shorts/ShortsWizardNav";
@@ -56,6 +56,7 @@ export function ShortsStudioPage() {
   const [historyLoading, setHistoryLoading] = useState(true);
   const [clipSaving, setClipSaving] = useState<Record<string, boolean>>({});
   const [clipDrafts, setClipDrafts] = useState<Record<string, { start: string; end: string; text: string; selected: boolean }>>({});
+  const projectRequestRef = useRef(0);
   const previewUrl = useMemo(() => sourceFile?.id.startsWith("blob:") ? sourceFile.id : "", [sourceFile]);
 
   function statusLabel(status?: string) {
@@ -100,12 +101,23 @@ export function ShortsStudioPage() {
   }, []);
 
   async function openProject(id: string) {
+    const requestId = ++projectRequestRef.current;
+    setJob(null);
+    setClips([]);
+    setSourceClips([]);
+    setSourceEditProjects([]);
+    setAnalysisSource(null);
+    setDraftUrls({});
+    setClipDrafts({});
+    setClipSaving({});
     try {
       const result = await getShortsProject(id);
+      if (requestId !== projectRequestRef.current) return;
       setProject(result.project);
       setEditProjectId(result.project.is_edit_project ? result.project.id : "");
       if (result.project.is_edit_project && result.project.source_id) {
         const source = await getShortsSource(result.project.source_id);
+        if (requestId !== projectRequestRef.current) return;
         setAnalysisSource(source.project);
         setSourceClips(source.clips);
         setSourceEditProjects(source.edit_projects ?? []);
@@ -119,10 +131,12 @@ export function ShortsStudioPage() {
       setWatermark(result.project.settings?.watermark ?? "");
       setSafeZone(result.project.settings?.safe_zone ?? 70);
       const historyJob = history.find((item) => item.project.id === id)?.job;
-      if (historyJob) setJob(historyJob);
-      else if (result.project.status === "completed" || result.project.status === "failed") setJob({ id: "project-status", project_id: id, job_type: "analyze", status: result.project.status === "completed" ? "succeeded" : "failed", current_step: result.project.status === "completed" ? "completed" : "failed", progress: result.project.status === "completed" ? 100 : 0 });
+      const projectJob = historyJob ?? (result.project.status === "completed" || result.project.status === "failed" || result.project.status === "analyzing"
+        ? { id: "project-status", project_id: id, job_type: "analyze", status: result.project.status === "completed" ? "succeeded" : result.project.status === "failed" ? "failed" : "running", current_step: result.project.status === "completed" ? "completed" : result.project.status === "failed" ? "failed" : (result.project.settings?.current_step ?? "loading_project"), progress: result.project.status === "completed" ? 100 : result.project.status === "failed" ? 0 : 0 }
+        : null);
+      setJob(projectJob);
       const requestedStep = new URLSearchParams(window.location.search).get("step") as ShortsWizardStep | null;
-      setActiveStep(requestedStep && ["projects", "creation", "processing", "clips", "editor", "export"].includes(requestedStep) ? requestedStep : historyJob && ["queued", "running"].includes(historyJob.status) ? "processing" : result.project.status === "completed" && result.clips.length > 0 ? "clips" : result.project.status === "analyzing" ? "processing" : "creation");
+      setActiveStep(requestedStep && ["projects", "creation", "processing", "clips", "editor", "export"].includes(requestedStep) ? requestedStep : projectJob && ["queued", "running"].includes(projectJob.status) ? "processing" : result.project.status === "completed" && result.clips.length > 0 ? "clips" : result.project.status === "analyzing" ? "processing" : "creation");
       window.history.replaceState(null, "", `/app/shorts?project=${encodeURIComponent(id)}`);
     } catch (error) {
       setJobMessage(error instanceof Error ? error.message : "Не удалось открыть проект");
@@ -166,7 +180,7 @@ export function ShortsStudioPage() {
   async function analyzeProject(id: string) {
     try {
       const result = await analyzeShortsProject(id);
-      setJob(result.job);
+      if (project?.id === id) setJob(result.job);
       setHistory((items) => items.map((item) => item.project.id === id ? { ...item, job: result.job, project: { ...item.project, status: "analyzing" } } : item));
       setJobMessage("Повторный анализ поставлен в очередь.");
       if (project?.id === id) setClips([]);
@@ -176,10 +190,11 @@ export function ShortsStudioPage() {
   }
 
   useEffect(() => {
-    if (!project?.id || !job?.id) return;
+    if (!project?.id || !job?.id || job.id === "project-status") return;
+    const requestId = projectRequestRef.current;
     if (job.status === "succeeded" || job.status === "failed" || job.status === "cancelled") {
       if (job.status === "failed") setJobMessage(job.last_error || "Не удалось обработать видео. Откройте проект позже или запустите анализ повторно.");
-      void getShortsProject(project.id).then(async (result) => { setProject(result.project); setClips(result.clips); if (result.project.is_edit_project && result.project.source_id) { const source=await getShortsSource(result.project.source_id);setAnalysisSource(source.project);setSourceClips(source.clips); } }).catch(() => undefined);
+      void getShortsProject(project.id).then(async (result) => { if (requestId !== projectRequestRef.current) return; setProject(result.project); setClips(result.clips); if (result.project.is_edit_project && result.project.source_id) { const source=await getShortsSource(result.project.source_id); if (requestId !== projectRequestRef.current) return; setAnalysisSource(source.project);setSourceClips(source.clips); } }).catch(() => undefined);
       return;
     }
     let stopped = false;
@@ -188,9 +203,10 @@ export function ShortsStudioPage() {
       if (stopped) return;
       try {
         const [nextProject, nextJob] = await Promise.all([getShortsProject(project.id), getShortsJob(job.id)]);
-        if (stopped) return;
+        if (stopped || requestId !== projectRequestRef.current) return;
         setProject(nextProject.project); setClips(nextProject.clips); setJob(nextJob.job);
-        if (nextProject.project.is_edit_project && nextProject.project.source_id) { const source=await getShortsSource(nextProject.project.source_id);setAnalysisSource(source.project);setSourceClips(source.clips); }
+        setHistory((items) => items.map((item) => item.project.id === project.id ? { ...item, project: nextProject.project, job: nextJob.job, clips: nextProject.clips.length } : item));
+        if (nextProject.project.is_edit_project && nextProject.project.source_id) { const source=await getShortsSource(nextProject.project.source_id); if (stopped || requestId !== projectRequestRef.current) return; setAnalysisSource(source.project);setSourceClips(source.clips); }
         if (nextJob.job.status === "failed" || nextJob.job.status === "queued") setJobMessage(nextJob.job.last_error || (nextJob.job.status === "queued" ? `Повторная попытка: ${stepLabel(nextJob.job.current_step)}` : "Не удалось обработать видео."));
       } catch { /* transient polling failure */ }
       if (!stopped) timer = window.setTimeout(() => void poll(), 1500);
@@ -377,7 +393,7 @@ export function ShortsStudioPage() {
     <div className="w-full min-w-0 space-y-6 pb-12 text-slate-900">
       <PageHeader title="Shorts Studio" description="Подготовка длинного видео к анализу и автоматической нарезке с субтитрами." />
       <ShortsWizardNav activeStep={activeStep} onStepChange={(step) => { if (job && ["queued", "running"].includes(job.status) && step === "creation") return; setActiveStep(step); const query = project?.id ? `?project=${encodeURIComponent(project.id)}&step=${step}` : `?step=${step}`; window.history.replaceState(null, "", `/app/shorts${query}`); }} canOpen={(step) => step === "projects" || (step === "creation" && !(job && ["queued", "running"].includes(job.status))) || Boolean(project)} />
-      {activeStep === "projects" && <ShortsProjectsPanel items={history} loading={historyLoading} activeProjectId={project?.id} onCreate={() => { setProject(null); setProjectName(""); setSourceFile(null); setSourceFileId(""); setJob(null); setJobMessage(""); setActiveStep("creation"); window.history.replaceState(null, "", "/app/shorts?step=creation"); }} onOpen={(id) => { window.history.replaceState(null, "", `/app/shorts?project=${encodeURIComponent(id)}&step=editor`); void openProject(id); }} onRetry={(id) => void analyzeProject(id)} onDelete={(id) => void removeProject(id)} onCreateMontage={(sourceId) => { const source=sources.find((item)=>item.id===sourceId); if (source) {setAnalysisSource(source);void getShortsSource(sourceId).then((data)=>{setAnalysisSource(data.project);setSourceClips(data.clips);setSourceEditProjects(data.edit_projects ?? []);void createMontageProject();});} }} onOpenSource={(sourceId) => {void getShortsSource(sourceId).then((data)=>{setAnalysisSource(data.project);setSourceClips(data.clips);setSourceEditProjects(data.edit_projects ?? []);setProject(data.project);setEditProjectId("");setClips(data.clips);setActiveStep("clips");window.history.replaceState(null,"",`/app/shorts?project=${encodeURIComponent(sourceId)}&step=clips`);});}} />}
+      {activeStep === "projects" && <ShortsProjectsPanel items={history} loading={historyLoading} activeProjectId={project?.id} onCreate={() => { projectRequestRef.current++; setProject(null); setProjectName(""); setSourceFile(null); setSourceFileId(""); setJob(null); setClips([]); setSourceClips([]); setAnalysisSource(null); setSourceEditProjects([]); setEditProjectId(""); setDraftUrls({}); setClipDrafts({}); setClipSaving({}); setJobMessage(""); setActiveStep("creation"); window.history.replaceState(null, "", "/app/shorts?step=creation"); }} onOpen={(id) => { window.history.replaceState(null, "", `/app/shorts?project=${encodeURIComponent(id)}&step=editor`); void openProject(id); }} onRetry={(id) => void analyzeProject(id)} onDelete={(id) => void removeProject(id)} onCreateMontage={(sourceId) => { const requestId = ++projectRequestRef.current; const source=sources.find((item)=>item.id===sourceId); if (source) {setAnalysisSource(source);void getShortsSource(sourceId).then((data)=>{if (requestId !== projectRequestRef.current) return; setAnalysisSource(data.project);setSourceClips(data.clips);setSourceEditProjects(data.edit_projects ?? []);void createMontageProject();});} }} onOpenSource={(sourceId) => { const requestId = ++projectRequestRef.current; void getShortsSource(sourceId).then((data)=>{if (requestId !== projectRequestRef.current) return;setAnalysisSource(data.project);setSourceClips(data.clips);setSourceEditProjects(data.edit_projects ?? []);setProject(data.project);setEditProjectId("");setClips(data.clips);setDraftUrls({});setClipDrafts({});setActiveStep("clips");window.history.replaceState(null,"",`/app/shorts?project=${encodeURIComponent(sourceId)}&step=clips`);});}} />}
       {activeStep === "creation" && <ShortsCreationPanel projectName={projectName} onProjectNameChange={setProjectName} sourceFile={sourceFile} previewUrl={previewUrl} uploading={uploading} uploadProgress={uploadProgress} duration={duration} rangeStart={rangeStart} rangeEnd={rangeEnd} contentType={contentType} contentTypes={contentTypes} onUpload={(file) => void handleUpload(file)} onOpenPicker={() => setPickerOpen(true)} onDurationChange={(value) => { setDuration(value); setRangeEnd(Math.min(value, rangeEnd)); }} onRangeStartChange={setRangeStart} onRangeEndChange={setRangeEnd} onContentTypeChange={setContentType} onSubmit={() => void submit()} busy={busy} />}
       {activeStep === "processing" && (job?.status === "succeeded" || (project?.status === "completed" && clips.length > 0)) && <section className="max-w-4xl rounded-3xl border border-emerald-200 bg-white p-6 shadow-sm sm:p-10"><div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600"><Check className="h-9 w-9" /></div><h2 className="mt-5 text-3xl font-bold tracking-tight text-slate-900">Проект обработан</h2><p className="mt-2 text-sm text-slate-600">Обработка завершена успешно. У проекта уже есть готовые фрагменты.</p><button type="button" onClick={() => setActiveStep("clips")} className="mt-6 rounded-xl bg-indigo-600 px-5 py-3 text-sm font-semibold text-white">Перейти к фрагментам</button></section>}
       {activeStep === "processing" && !(job?.status === "succeeded" || (project?.status === "completed" && clips.length > 0)) && <section className="max-w-4xl rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-10"><h2 className="text-3xl font-bold tracking-tight text-slate-900">Готовим ваш проект</h2><p className="mt-2 text-sm text-slate-500">Анализируем речь и содержание видео</p><div className="mt-5 rounded-2xl border border-slate-200 p-5"><div className="flex items-center justify-between"><span className="text-2xl font-bold text-slate-900">{job?.progress ?? 0}%</span>{job && ["queued", "running"].includes(job.status) && <button type="button" onClick={() => void cancelJob()} className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-rose-600">Остановить обработку</button>}</div><div className="mt-4 h-2.5 overflow-hidden rounded-full bg-slate-200"><div className="h-full rounded-full bg-indigo-600 transition-all" style={{ width: `${job?.progress ?? 0}%` }} /></div><div className="mt-4 space-y-2">{processingSteps.map((step, index) => { const progress = job?.progress ?? 0; const currentIndex = Math.max(0, processingSteps.findIndex((item) => item.key === job?.current_step)); const done = job?.status === "succeeded" || index < currentIndex || (index === currentIndex && progress >= 100); const current = job?.status === "running" && index === currentIndex; return <div key={step.key} className={`flex items-center gap-3 rounded-xl border p-3 ${current ? "border-indigo-200 bg-indigo-50" : "border-slate-200 bg-white"}`}><span className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${done ? "bg-emerald-50 text-emerald-600" : current ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-500"}`}>{done ? "✓" : index + 1}</span><span className="flex-1 text-sm font-semibold text-slate-800">{step.label}</span><span className="text-xs text-slate-500">{done ? "Завершён" : current ? `Выполняется · ${progress}%` : "Ожидает"}</span></div>; })}</div><p className="mt-4 text-xs text-slate-500">Можно закрыть страницу — проект продолжит обрабатываться. Пришлём уведомление.</p></div>{jobMessage && <p className="mt-4 rounded-xl bg-indigo-50 p-3 text-sm text-indigo-800">{jobMessage}</p>}{job?.status === "succeeded" && <button type="button" onClick={() => setActiveStep("clips")} className="mt-5 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white">Перейти к фрагментам</button>}</section>}
