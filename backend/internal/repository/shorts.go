@@ -437,15 +437,26 @@ func (r *ShortsRepository) ListForAdmin(ctx context.Context, f ListShortsAdminFi
 	where := ""
 	args := []any{}
 	if f.Status != "" {
-		where = " WHERE p.status = $1"
+		where = " WHERE x.status = $1"
 		args = append(args, f.Status)
 	}
+	base := ` FROM (
+		SELECT ep.id,ep.source_id,ep.workspace_id,ep.created_by_user_id,s.source_file_id,s.content_type,s.language,ep.status,s.source_duration_seconds,s.processing_minutes_reserved,s.processing_minutes_consumed,s.source_expires_at,s.audio_file_id,s.audio_expires_at,ep.settings,ep.created_at,ep.updated_at,ep.name
+		FROM shorts_edit_projects ep JOIN shorts_sources s ON s.id=ep.source_id
+		UNION ALL
+		SELECT p.id,p.source_id,p.workspace_id,p.created_by_user_id,p.source_file_id,p.content_type,p.language,p.status,p.source_duration_seconds,p.processing_minutes_reserved,p.processing_minutes_consumed,p.source_expires_at,p.audio_file_id,p.audio_expires_at,p.settings,p.created_at,p.updated_at,''::text
+		FROM shorts_projects p WHERE NOT EXISTS (SELECT 1 FROM shorts_edit_projects ep WHERE ep.id=p.id OR ep.source_id=p.source_id)
+		UNION ALL
+		SELECT s.id,s.id,s.workspace_id,s.created_by_user_id,s.source_file_id,s.content_type,s.language,s.status,s.source_duration_seconds,s.processing_minutes_reserved,s.processing_minutes_consumed,s.source_expires_at,s.audio_file_id,s.audio_expires_at,s.settings,s.created_at,s.updated_at,''::text
+		FROM shorts_sources s WHERE NOT EXISTS (SELECT 1 FROM shorts_edit_projects ep WHERE ep.source_id=s.id) AND NOT EXISTS (SELECT 1 FROM shorts_projects p WHERE p.source_id=s.id)
+	) x
+	LEFT JOIN LATERAL (SELECT sj.id,sj.job_type,sj.status,sj.current_step,sj.progress,sj.attempts,sj.available_at,COALESCE(sj.last_error,'') AS last_error,sj.created_at,sj.updated_at FROM shorts_jobs sj WHERE sj.source_id=x.source_id AND (sj.edit_project_id=x.id OR (sj.edit_project_id IS NULL AND x.id=x.source_id)) ORDER BY sj.created_at DESC LIMIT 1) j ON true`
 	var total int
-	if err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM shorts_projects p`+where, args...).Scan(&total); err != nil {
+	if err := r.pool.QueryRow(ctx, `SELECT COUNT(*)`+base+where, args...).Scan(&total); err != nil {
 		return nil, 0, nil, err
 	}
 	args = append(args, f.Limit, f.Offset)
-	rows, err := r.pool.Query(ctx, `SELECT `+shortsProjectColumnsAliased+`, (SELECT COUNT(*) FROM shorts_clips c WHERE c.source_id = p.source_id), j.id, j.job_type, j.status, j.current_step, j.progress, j.attempts, j.available_at, COALESCE(j.last_error, ''), j.created_at, j.updated_at FROM shorts_projects p LEFT JOIN LATERAL (SELECT sj.id, sj.job_type, sj.status, sj.current_step, sj.progress, sj.attempts, sj.available_at, COALESCE(sj.last_error, '') AS last_error, sj.created_at, sj.updated_at FROM shorts_jobs sj WHERE sj.source_id = p.source_id AND sj.edit_project_id IS NULL ORDER BY sj.created_at DESC LIMIT 1) j ON true`+where+` ORDER BY p.created_at DESC LIMIT $`+strconv.Itoa(len(args)-1)+` OFFSET $`+strconv.Itoa(len(args)), args...)
+	rows, err := r.pool.Query(ctx, `SELECT x.id,x.source_id,x.workspace_id,x.created_by_user_id,x.source_file_id,x.content_type,x.language,x.status,x.source_duration_seconds,x.processing_minutes_reserved,x.processing_minutes_consumed,x.source_expires_at,x.audio_file_id,x.audio_expires_at,x.settings,x.created_at,x.updated_at,(SELECT COUNT(*) FROM shorts_clips c WHERE c.source_id=x.source_id),j.id,j.job_type,j.status,j.current_step,j.progress,j.attempts,j.available_at,j.last_error,j.created_at,j.updated_at`+base+where+` ORDER BY x.created_at DESC LIMIT $`+strconv.Itoa(len(args)-1)+` OFFSET $`+strconv.Itoa(len(args)), args...)
 	if err != nil {
 		return nil, 0, nil, err
 	}
@@ -460,12 +471,14 @@ func (r *ShortsRepository) ListForAdmin(ctx context.Context, f ListShortsAdminFi
 		var lastError *string
 		var progress, attempts *int
 		var available, jobCreated, jobUpdated *time.Time
-		if err := rows.Scan(&p.ID, &p.WorkspaceID, &p.CreatedByUserID, &p.SourceFileID, &contentType, &p.Language, &status, &p.SourceDurationSeconds, &p.ProcessingMinutesReserved, &p.ProcessingMinutesConsumed, &p.SourceExpiresAt, &p.AudioFileID, &p.AudioExpiresAt, &settings, &p.CreatedAt, &p.UpdatedAt, &clips, &jobID, &jobType, &jobStatus, &step, &progress, &attempts, &available, &lastError, &jobCreated, &jobUpdated); err != nil {
+		var name string
+		if err := rows.Scan(&p.ID, &p.SourceID, &p.WorkspaceID, &p.CreatedByUserID, &p.SourceFileID, &contentType, &p.Language, &status, &p.SourceDurationSeconds, &p.ProcessingMinutesReserved, &p.ProcessingMinutesConsumed, &p.SourceExpiresAt, &p.AudioFileID, &p.AudioExpiresAt, &settings, &p.CreatedAt, &p.UpdatedAt, &name, &clips, &jobID, &jobType, &jobStatus, &step, &progress, &attempts, &available, &lastError, &jobCreated, &jobUpdated); err != nil {
 			return nil, 0, nil, err
 		}
 		p.ContentType = model.ShortsContentType(contentType)
 		p.Status = model.ShortsProjectStatus(status)
 		p.Settings = json.RawMessage(settings)
+		p.Name = name
 		item := model.AdminShortsProject{Project: &p, Clips: clips}
 		if jobID != nil {
 			item.Job = &model.ShortsJob{ID: *jobID, ProjectID: p.ID, JobType: *jobType, Status: model.ShortsJobStatus(*jobStatus), CurrentStep: *step, Progress: *progress, Attempts: *attempts, AvailableAt: *available, CreatedAt: *jobCreated, UpdatedAt: *jobUpdated}
@@ -955,31 +968,101 @@ func (r *ShortsRepository) EnsureEditProjectClips(ctx context.Context, workspace
 }
 
 func (r *ShortsRepository) DeleteProject(ctx context.Context, workspaceID, projectID string) error {
+	return r.deleteProject(ctx, &workspaceID, projectID)
+}
+
+// DeleteProjectAsAdmin removes the complete Shorts graph for any workspace.
+// Workspace files are deliberately preserved because the source video belongs
+// to the user's media library, not to the Shorts analysis record.
+func (r *ShortsRepository) DeleteProjectAsAdmin(ctx context.Context, projectID string) error {
+	return r.deleteProject(ctx, nil, projectID)
+}
+
+func (r *ShortsRepository) deleteProject(ctx context.Context, workspaceID *string, projectID string) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback(ctx)
+
 	var sourceID string
-	err = tx.QueryRow(ctx, `SELECT source_id FROM shorts_edit_projects WHERE id=$1 AND workspace_id=$2 FOR UPDATE`, projectID, workspaceID).Scan(&sourceID)
-	if err == nil {
-		if _, err := tx.Exec(ctx, `DELETE FROM shorts_edit_projects WHERE id=$1 AND workspace_id=$2`, projectID, workspaceID); err != nil {
-			return err
+	var found bool
+	if workspaceID != nil {
+		err = tx.QueryRow(ctx, `SELECT source_id FROM shorts_edit_projects WHERE id=$1 AND workspace_id=$2`, projectID, *workspaceID).Scan(&sourceID)
+		if err == nil {
+			found = true
 		}
-		// Keep the source analysis and original long-form video even when this
-		// was the source's last edit project. The cascading foreign keys remove
-		// only this montage's clip links and export jobs.
-		return tx.Commit(ctx)
+		if errors.Is(err, pgx.ErrNoRows) {
+			err = tx.QueryRow(ctx, `SELECT id FROM shorts_sources WHERE id=$1 AND workspace_id=$2`, projectID, *workspaceID).Scan(&sourceID)
+			if err == nil {
+				found = true
+			}
+		}
+		if errors.Is(err, pgx.ErrNoRows) {
+			err = tx.QueryRow(ctx, `SELECT COALESCE(source_id,id) FROM shorts_projects WHERE id=$1 AND workspace_id=$2`, projectID, *workspaceID).Scan(&sourceID)
+			if err == nil {
+				found = true
+			}
+		}
+	} else {
+		err = tx.QueryRow(ctx, `SELECT source_id FROM shorts_edit_projects WHERE id=$1`, projectID).Scan(&sourceID)
+		if err == nil {
+			found = true
+		}
+		if errors.Is(err, pgx.ErrNoRows) {
+			err = tx.QueryRow(ctx, `SELECT id FROM shorts_sources WHERE id=$1`, projectID).Scan(&sourceID)
+			if err == nil {
+				found = true
+			}
+		}
+		if errors.Is(err, pgx.ErrNoRows) {
+			err = tx.QueryRow(ctx, `SELECT COALESCE(source_id,id) FROM shorts_projects WHERE id=$1`, projectID).Scan(&sourceID)
+			if err == nil {
+				found = true
+			}
+		}
 	}
-	if !errors.Is(err, pgx.ErrNoRows) {
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return err
 	}
-	tag, err := tx.Exec(ctx, `DELETE FROM shorts_projects WHERE id=$1 AND workspace_id=$2`, projectID, workspaceID)
+	if !found {
+		return ErrNotFound
+	}
+
+	// A direct edit deletion keeps the reusable source and other montages.
+	var isEdit bool
+	if workspaceID != nil {
+		err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM shorts_edit_projects WHERE id=$1 AND workspace_id=$2)`, projectID, *workspaceID).Scan(&isEdit)
+	} else {
+		err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM shorts_edit_projects WHERE id=$1)`, projectID).Scan(&isEdit)
+	}
 	if err != nil {
 		return err
 	}
-	if tag.RowsAffected() == 0 {
-		return ErrNotFound
+	if isEdit {
+		if workspaceID != nil {
+			_, err = tx.Exec(ctx, `DELETE FROM shorts_edit_projects WHERE id=$1 AND workspace_id=$2`, projectID, *workspaceID)
+		} else {
+			_, err = tx.Exec(ctx, `DELETE FROM shorts_edit_projects WHERE id=$1`, projectID)
+		}
+		if err != nil {
+			return err
+		}
+		return tx.Commit(ctx)
+	}
+
+	if workspaceID != nil {
+		_, err = tx.Exec(ctx, `DELETE FROM shorts_sources WHERE id=$1 AND workspace_id=$2`, sourceID, *workspaceID)
+	} else {
+		_, err = tx.Exec(ctx, `DELETE FROM shorts_sources WHERE id=$1`, sourceID)
+	}
+	if err != nil {
+		return err
+	}
+	if workspaceID != nil {
+		_, _ = tx.Exec(ctx, `DELETE FROM shorts_projects WHERE source_id=$1 AND workspace_id=$2`, sourceID, *workspaceID)
+	} else {
+		_, _ = tx.Exec(ctx, `DELETE FROM shorts_projects WHERE source_id=$1`, sourceID)
 	}
 	return tx.Commit(ctx)
 }

@@ -1,10 +1,12 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/postilka/postilka/internal/repository"
 )
 
@@ -12,6 +14,18 @@ type AdminShortsHandler struct{ repo *repository.ShortsRepository }
 
 func NewAdminShortsHandler(repo *repository.ShortsRepository) *AdminShortsHandler {
 	return &AdminShortsHandler{repo: repo}
+}
+
+func (h *AdminShortsHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	if err := h.repo.DeleteProjectAsAdmin(r.Context(), chi.URLParam(r, "id")); err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "Проект Shorts не найден")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "Не удалось удалить проект Shorts")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 func (h *AdminShortsHandler) List(w http.ResponseWriter, r *http.Request) {

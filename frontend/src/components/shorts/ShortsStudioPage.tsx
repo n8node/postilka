@@ -136,6 +136,7 @@ export function ShortsStudioPage() {
       if (item?.project.source_id) {
         setSourceEditProjects((items) => items.filter((editProject) => editProject.id !== id));
       }
+      setAnalysisSource(null); setSourceClips([]); setSourceEditProjects([]); setEditProjectId("");
     } catch (error) {
       setJobMessage(error instanceof Error ? error.message : "Не удалось удалить проект");
     }

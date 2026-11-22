@@ -888,6 +888,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 				r.Post("/analytics/reset", adminHandler.ResetAnalytics)
 				r.Get("/generations/active", adminHandler.ListActiveGenerations)
 				r.Get("/shorts", adminShortsHandler.List)
+				r.Delete("/shorts/{id}", adminShortsHandler.Delete)
 				r.Post("/generations/{jobID}/reset", adminHandler.ResetGeneration)
 				r.Delete("/generations/{jobID}", adminHandler.DeleteGeneration)
 
