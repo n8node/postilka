@@ -631,8 +631,22 @@
 }
 
 .videoSubtitle.presetKaraoke {
-  color: #f5d547 !important;
   font-weight: 700;
+}
+
+.videoSubtitle > span {
+  display: inline-block;
+  margin-right: 0.24em;
+  transition: color 0.08s ease, text-shadow 0.08s ease;
+}
+
+.videoSubtitle .spokenCaptionWord {
+  color: #f5d547;
+}
+
+.videoSubtitle .currentCaptionWord {
+  color: #f5d547;
+  text-shadow: 0 0 8px rgba(245, 213, 71, 0.65), 0 2px 4px var(--caption-background);
 }
 
 .centerPlay {

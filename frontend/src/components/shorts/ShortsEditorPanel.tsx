@@ -37,7 +37,7 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
-import type { ShortsClip } from "@/lib/shorts-api";
+import type { ShortsClip, ShortsTimedWord } from "@/lib/shorts-api";
 import styles from "./ShortsEditorPanel.module.css";
 
 export type ShortsEditorSettings = {
@@ -58,6 +58,7 @@ type Props = {
   onReorder: (fromIndex: number, toIndex: number) => void;
   onOpenClips: () => void;
   onDeleteClip: (clipId: string) => void;
+  timedWords?: ShortsTimedWord[];
 };
 
 type Ratio = "9:16" | "1:1" | "16:9";
@@ -104,7 +105,7 @@ function SceneThumbnail({ src, className }: { src?: string; className: string })
   return <video className={className} src={src} muted playsInline preload="metadata" aria-hidden="true" tabIndex={-1} />;
 }
 
-export function ShortsEditorPanel({ clips, draftUrls, initialSettings, onSaveSettings, onReorder, onOpenClips, onDeleteClip }: Props) {
+export function ShortsEditorPanel({ clips, draftUrls, initialSettings, onSaveSettings, onReorder, onOpenClips, onDeleteClip, timedWords = [] }: Props) {
   const [leftTab, setLeftTab] = useState<LeftTab>("scenes");
   const [rightTab, setRightTab] = useState<RightTab>("visual");
   const [selectedClipId, setSelectedClipId] = useState(clips[0]?.id ?? "");
@@ -148,6 +149,11 @@ export function ShortsEditorPanel({ clips, draftUrls, initialSettings, onSaveSet
   const selectedUrl = selectedClip ? draftUrls[selectedClip.id] : undefined;
   const selectedDuration = videoDuration ?? selectedSegment?.duration ?? 0;
   const timelineTime = (selectedSegment?.start ?? 0) + Math.min(currentTime, selectedSegment?.duration ?? 0);
+  const activeTimedWords = useMemo(() => timedWords.filter((word) => word.end > (selectedClip?.start_seconds ?? 0) && word.start < (selectedClip?.end_seconds ?? 0)), [timedWords, selectedClip]);
+  const activeWordIndex = useMemo(() => {
+    const absoluteTime = (selectedClip?.start_seconds ?? 0) + currentTime;
+    return activeTimedWords.findIndex((word) => absoluteTime >= word.start && absoluteTime < word.end);
+  }, [activeTimedWords, currentTime, selectedClip]);
   const filteredSegments = useMemo(() => segments.filter((segment) => segment.clip.transcript_text.toLowerCase().includes(query.trim().toLowerCase())), [segments, query]);
   const rulerLabels = useMemo(() => Array.from({ length: 7 }, (_, index) => formatTime((totalDuration * index) / 6)), [totalDuration]);
 
@@ -373,7 +379,9 @@ export function ShortsEditorPanel({ clips, draftUrls, initialSettings, onSaveSet
               <div className={styles.videoShade} />
               {safeZoneVisible && <div className={styles.safeZone}><span>Безопасная зона</span></div>}
               {settings.watermark && <div className={styles.videoTitle}>{settings.watermark}</div>}
-              {showCaptions && selectedClip.transcript_text && <div className={`${styles.videoSubtitle} ${captionPresetClass} ${captionPositionClass}`} style={{ fontSize: `${Math.max(10, Math.round(settings.fontSize / 3.2))}px`, color: settings.textColor, "--caption-background": settings.background } as CSSProperties}>{selectedClip.transcript_text}</div>}
+              {showCaptions && selectedClip.transcript_text && <div className={`${styles.videoSubtitle} ${captionPresetClass} ${captionPositionClass}`} style={{ fontSize: `${Math.max(10, Math.round(settings.fontSize / 3.2))}px`, color: settings.textColor, "--caption-background": settings.background } as CSSProperties}>
+                {captionPreset === "karaoke" && activeTimedWords.length > 0 ? activeTimedWords.map((word, index) => <span key={`${word.start}-${index}`} className={index === activeWordIndex ? styles.currentCaptionWord : index < activeWordIndex ? styles.spokenCaptionWord : ""}>{word.word}</span>) : selectedClip.transcript_text}
+              </div>}
               <button type="button" className={styles.centerPlay} aria-label={playing ? "Поставить на паузу" : "Воспроизвести"} disabled={!selectedUrl || videoError} onClick={() => void togglePlayback()}>{playing ? <Pause size={23} fill="currentColor" /> : <Play size={23} fill="currentColor" />}</button>
             </div>
           </div>

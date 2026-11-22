@@ -14,7 +14,7 @@ export type ShortsProject = {
   audio_expires_at?: string;
   created_at: string;
   updated_at: string;
-  settings?: { transcript?: unknown; transcript_result?: unknown; current_step?: string; subtitle_style?: string; subtitle_position?: string; subtitle_font_size?: number; subtitle_text_color?: string; subtitle_background?: string; watermark?: string; safe_zone?: number };
+  settings?: { transcript?: unknown; transcript_result?: unknown; processing_start_seconds?: number; processing_end_seconds?: number; current_step?: string; subtitle_style?: string; subtitle_position?: string; subtitle_font_size?: number; subtitle_text_color?: string; subtitle_background?: string; watermark?: string; safe_zone?: number };
 };
 
 export type ShortsProjectListItem = {
@@ -36,6 +36,12 @@ export type ShortsClip = {
   score: number;
   status: string;
   draft_file_id?: string;
+};
+
+export type ShortsTimedWord = {
+  word: string;
+  start: number;
+  end: number;
 };
 
 export type ShortsJob = {
@@ -123,6 +129,12 @@ export function getShortsAudioDownloadUrl(projectId: string) {
 
 export function getShortsTranscriptResultUrl(projectId: string) {
   return `${apiBase}/shorts/projects/${projectId}/transcript-result`;
+}
+
+export async function getShortsTranscriptResult(projectId: string): Promise<unknown> {
+  const response = await fetch(getShortsTranscriptResultUrl(projectId), { credentials: "include" });
+  if (!response.ok) throw new Error(`Не удалось загрузить таймкоды субтитров (${response.status})`);
+  return response.json();
 }
 
 export function getShortsProject(id: string) {

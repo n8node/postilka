@@ -10,7 +10,7 @@ import { ShortsCreationPanel } from "@/components/shorts/ShortsCreationPanel";
 import { ShortsClipsPanel, type ShortsClipDraft } from "@/components/shorts/ShortsClipsPanel";
 import { ShortsEditorPanel, type ShortsEditorSettings } from "@/components/shorts/ShortsEditorPanel";
 import { uploadFile, type WorkspaceFile } from "@/lib/files-api";
-import { analyzeShortsProject, cancelShortsJob, createShortsProject, deleteShortsProject, exportShortsProject, getShortsAudioDownloadUrl, getShortsDraftDownloadUrl, getShortsFinalDownloadUrl, getShortsJob, getShortsProject, getShortsTranscriptResultUrl, listShortsProjects, listShortsSources, rerenderShortsProject, deleteShortsClip, updateShortsClip, getShortsAnalysisForFile, getShortsSource, createShortsEditProject, addShortsClipToEditProject, updateShortsClipOrder, updateShortsSubtitleSettings, type ShortsClip, type ShortsJob, type ShortsProject, type ShortsProjectListItem } from "@/lib/shorts-api";
+import { analyzeShortsProject, cancelShortsJob, createShortsProject, deleteShortsProject, exportShortsProject, getShortsAudioDownloadUrl, getShortsDraftDownloadUrl, getShortsFinalDownloadUrl, getShortsJob, getShortsProject, getShortsTranscriptResult, getShortsTranscriptResultUrl, listShortsProjects, listShortsSources, rerenderShortsProject, deleteShortsClip, updateShortsClip, getShortsAnalysisForFile, getShortsSource, createShortsEditProject, addShortsClipToEditProject, updateShortsClipOrder, updateShortsSubtitleSettings, type ShortsClip, type ShortsJob, type ShortsProject, type ShortsProjectListItem, type ShortsTimedWord } from "@/lib/shorts-api";
 
 const contentTypes = [
   ["podcast", "Подкаст"],
@@ -52,12 +52,27 @@ export function ShortsStudioPage() {
   const [subtitleBackground, setSubtitleBackground] = useState("#101010");
   const [watermark, setWatermark] = useState("");
   const [safeZone, setSafeZone] = useState(70);
+  const [timedWords, setTimedWords] = useState<ShortsTimedWord[]>([]);
   const [history, setHistory] = useState<ShortsProjectListItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [clipSaving, setClipSaving] = useState<Record<string, boolean>>({});
   const [clipDrafts, setClipDrafts] = useState<Record<string, { start: string; end: string; text: string; selected: boolean }>>({});
   const projectRequestRef = useRef(0);
   const previewUrl = useMemo(() => sourceFile?.id.startsWith("blob:") ? sourceFile.id : "", [sourceFile]);
+
+  function readTimedWords(result: unknown, offset: number): ShortsTimedWord[] {
+    if (!result || typeof result !== "object") return [];
+    const payload = result as { words?: unknown; result?: { words?: unknown } };
+    const words = Array.isArray(payload.words) ? payload.words : Array.isArray(payload.result?.words) ? payload.result.words : [];
+    return words.flatMap((item) => {
+      if (!item || typeof item !== "object") return [];
+      const value = item as { word?: unknown; start?: unknown; end?: unknown; start_time?: unknown; end_time?: unknown };
+      const start = Number(value.start ?? value.start_time);
+      const end = Number(value.end ?? value.end_time);
+      const word = typeof value.word === "string" ? value.word.trim() : "";
+      return word && Number.isFinite(start) && Number.isFinite(end) && end > start ? [{ word, start: start + offset, end: end + offset }] : [];
+    });
+  }
 
   function statusLabel(status?: string) {
     return ({ analyzing: "Анализируется", rendering: "Рендерится", completed: "Готово", failed: "Ошибка", draft: "Черновик" } as Record<string, string>)[status ?? ""] ?? status ?? "Ожидает запуска";
@@ -99,6 +114,23 @@ export function ShortsStudioPage() {
     if (requestedStep && ["projects", "creation", "processing", "clips", "editor", "export"].includes(requestedStep)) setActiveStep(requestedStep);
     if (id) void openProject(id);
   }, []);
+
+  useEffect(() => {
+    if (!analysisSource?.id) {
+      setTimedWords([]);
+      return;
+    }
+    let cancelled = false;
+    void getShortsTranscriptResult(analysisSource.id).then((result) => {
+      if (cancelled) return;
+      const settings = analysisSource.settings;
+      const offset = typeof settings?.processing_start_seconds === "number" ? settings.processing_start_seconds : 0;
+      setTimedWords(readTimedWords(result, offset));
+    }).catch(() => {
+      if (!cancelled) setTimedWords([]);
+    });
+    return () => { cancelled = true; };
+  }, [analysisSource?.id, analysisSource?.settings]);
 
   async function openProject(id: string) {
     const requestId = ++projectRequestRef.current;
@@ -435,6 +467,7 @@ export function ShortsStudioPage() {
         clips={clips}
         draftUrls={draftUrls}
         initialSettings={{ style: subtitleStyle, position: subtitlePosition, fontSize: subtitleFontSize, textColor: subtitleTextColor, background: subtitleBackground, watermark, safeZone }}
+        timedWords={timedWords}
         onSaveSettings={saveSubtitleSettings}
         onReorder={(fromIndex, toIndex) => void reorderClips(fromIndex, toIndex)}
         onOpenClips={() => { if (editProjectId) void getShortsSource(project.source_id || project.id).then((source)=>{setSourceClips(source.clips);setSourceEditProjects(source.edit_projects ?? []);setActiveStep("clips");}); else setActiveStep("clips"); window.history.replaceState(null, "", `/app/shorts?project=${encodeURIComponent(project.id)}&step=clips`); }}
