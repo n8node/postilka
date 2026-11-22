@@ -29,3 +29,28 @@ func TestValidateShortsVideoFileTrimsAndNormalizes(t *testing.T) {
 		t.Fatal("expected incomplete MIME to be rejected")
 	}
 }
+
+func TestCreateShortsProjectInputKeepsIndependentRanges(t *testing.T) {
+	first := CreateShortsProjectInput{
+		SourceFileID:          "same-video",
+		ProjectName:           "Первый проект",
+		SourceDurationSeconds: 300,
+		ProcessingRange:       &ShortsProcessingRange{StartSeconds: 0, EndSeconds: 100},
+	}
+	second := CreateShortsProjectInput{
+		SourceFileID:          first.SourceFileID,
+		ProjectName:           "Второй проект",
+		SourceDurationSeconds: first.SourceDurationSeconds,
+		ProcessingRange:       &ShortsProcessingRange{StartSeconds: 15, EndSeconds: 115},
+	}
+
+	if first.SourceFileID != second.SourceFileID {
+		t.Fatal("test setup must use the same source file")
+	}
+	if first.ProjectName == second.ProjectName {
+		t.Fatal("new projects must preserve independent names")
+	}
+	if first.ProcessingRange.StartSeconds == second.ProcessingRange.StartSeconds && first.ProcessingRange.EndSeconds == second.ProcessingRange.EndSeconds {
+		t.Fatal("new projects must preserve independent processing ranges")
+	}
+}

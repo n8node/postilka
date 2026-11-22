@@ -80,51 +80,6 @@ func (s *ShortsService) CreateProject(ctx context.Context, userID string, r *htt
 	if input.SourceDurationSeconds <= 0 {
 		return nil, nil, ErrShortsDurationRequired
 	}
-	if source, found, lookupErr := s.repo.GetSourceForFile(ctx, ws.ID, input.SourceFileID); lookupErr != nil {
-		return nil, nil, lookupErr
-	} else if found {
-		selected := ShortsProcessingRange{StartSeconds: 0, EndSeconds: input.SourceDurationSeconds}
-		if input.ProcessingRange != nil {
-			selected = *input.ProcessingRange
-		}
-		selected, err = NormalizeShortsRange(selected, input.SourceDurationSeconds)
-		if err != nil {
-			return nil, nil, err
-		}
-		if err := s.repo.UpdateSourceProcessingRange(ctx, ws.ID, source.ID, selected.StartSeconds, selected.EndSeconds); err != nil {
-			return nil, nil, err
-		}
-		settings := source.Settings
-		if settings == nil {
-			settings = json.RawMessage(`{}`)
-		}
-		var settingsMap map[string]any
-		if err := json.Unmarshal(settings, &settingsMap); err != nil {
-			settingsMap = map[string]any{}
-		}
-		settingsMap["processing_start_seconds"] = selected.StartSeconds
-		settingsMap["processing_end_seconds"] = selected.EndSeconds
-		settingsMap["project_name"] = input.ProjectName
-		source.Settings, _ = json.Marshal(settingsMap)
-		source.SourceDurationSeconds = selected.DurationSeconds()
-		edit, editErr := s.repo.GetEditProjectForSource(ctx, ws.ID, source.ID)
-		if errors.Is(editErr, repository.ErrNotFound) {
-			edit, editErr = s.repo.CreateEditProject(ctx, ws.ID, userID, source.ID, input.ProjectName)
-		}
-		if editErr != nil {
-			return nil, nil, editErr
-		}
-		if err := s.repo.RenameEditProject(ctx, ws.ID, edit.ID, input.ProjectName); err != nil {
-			return nil, nil, err
-		}
-		edit.Name = input.ProjectName
-		job, jobErr := s.repo.CreateSourceJob(ctx, ws.ID, source.ID, "analyze")
-		if jobErr != nil {
-			return nil, nil, jobErr
-		}
-		return edit, job, nil
-	}
-
 	selected := ShortsProcessingRange{StartSeconds: 0, EndSeconds: input.SourceDurationSeconds}
 	if input.ProcessingRange != nil {
 		selected = *input.ProcessingRange
@@ -175,17 +130,10 @@ func (s *ShortsService) CreateProject(ctx context.Context, userID string, r *htt
 	if err != nil {
 		return nil, nil, err
 	}
-	edit, err := s.repo.GetEditProjectForSource(ctx, ws.ID, source.ID)
-	if errors.Is(err, repository.ErrNotFound) {
-		edit, err = s.repo.CreateEditProject(ctx, ws.ID, userID, source.ID, input.ProjectName)
-	}
+	edit, err := s.repo.CreateEditProject(ctx, ws.ID, userID, source.ID, input.ProjectName)
 	if err != nil {
 		return nil, nil, err
 	}
-	if err := s.repo.RenameEditProject(ctx, ws.ID, edit.ID, input.ProjectName); err != nil {
-		return nil, nil, err
-	}
-	edit.Name = input.ProjectName
 	job, err := s.repo.CreateJob(ctx, source.ID, "analyze")
 	if err != nil {
 		return nil, nil, err
