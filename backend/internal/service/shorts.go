@@ -146,6 +146,24 @@ func (s *ShortsService) GetProject(ctx context.Context, userID string, r *http.R
 	return project, clips, err
 }
 
+func (s *ShortsService) DeleteClip(ctx context.Context, userID string, r *http.Request, clipID string) error {
+	ws, _, err := s.wsSvc.ResolveActive(ctx, userID, r)
+	if err != nil {
+		return err
+	}
+	if ws == nil {
+		return ErrWorkspaceNotFound
+	}
+	if _, err := s.wsSvc.RequireMembership(ctx, userID, ws.ID, model.RoleEditor); err != nil {
+		return err
+	}
+	if err := s.repo.DeleteClip(ctx, ws.ID, clipID); errors.Is(err, repository.ErrNotFound) {
+		return ErrShortsProjectNotFound
+	} else {
+		return err
+	}
+}
+
 func (s *ShortsService) UpdateClip(ctx context.Context, userID string, r *http.Request, clipID string, input model.ShortsClipUpdate) (*model.ShortsClip, error) {
 	ws, _, err := s.wsSvc.ResolveActive(ctx, userID, r)
 	if err != nil {

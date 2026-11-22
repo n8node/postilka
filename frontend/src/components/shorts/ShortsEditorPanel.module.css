@@ -299,6 +299,29 @@
   color: var(--editor-accent);
 }
 
+.sceneDelete {
+  flex-shrink: 0;
+  color: #9ca3af !important;
+  opacity: 0;
+  transition: color 0.18s ease, opacity 0.18s ease;
+}
+
+.sceneCard:hover .sceneDelete,
+.sceneDelete:focus-visible {
+  opacity: 1;
+}
+
+.sceneDelete:hover {
+  color: #c33e54 !important;
+  background: #fff0f2 !important;
+}
+
+@media (hover: none) {
+  .sceneDelete {
+    opacity: 1;
+  }
+}
+
 .aiNote {
   display: flex;
   flex-shrink: 0;

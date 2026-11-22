@@ -57,6 +57,7 @@ type Props = {
   onSaveSettings: (settings: ShortsEditorSettings) => Promise<void>;
   onReorder: (fromIndex: number, toIndex: number) => void;
   onOpenClips: () => void;
+  onDeleteClip: (clipId: string) => void;
 };
 
 type Ratio = "9:16" | "1:1" | "16:9";
@@ -103,7 +104,7 @@ function SceneThumbnail({ src, className }: { src?: string; className: string })
   return <video className={className} src={src} muted playsInline preload="metadata" aria-hidden="true" tabIndex={-1} />;
 }
 
-export function ShortsEditorPanel({ clips, draftUrls, initialSettings, onSaveSettings, onReorder, onOpenClips }: Props) {
+export function ShortsEditorPanel({ clips, draftUrls, initialSettings, onSaveSettings, onReorder, onOpenClips, onDeleteClip }: Props) {
   const [leftTab, setLeftTab] = useState<LeftTab>("scenes");
   const [rightTab, setRightTab] = useState<RightTab>("visual");
   const [selectedClipId, setSelectedClipId] = useState(clips[0]?.id ?? "");
@@ -321,6 +322,18 @@ export function ShortsEditorPanel({ clips, draftUrls, initialSettings, onSaveSet
                 />
                 <SceneThumbnail src={draftUrls[segment.clip.id]} className={styles.sceneThumb} />
                 <button type="button" className={styles.sceneInfo} onClick={() => selectScene(segment.clip.id)}><strong>Сцена {segment.index + 1}</strong><span>{formatTime(segment.clip.start_seconds)}–{formatTime(segment.clip.end_seconds)}</span></button>
+                <button
+                  type="button"
+                  className={`${styles.iconButton} ${styles.small} ${styles.sceneDelete}`}
+                  aria-label={`Удалить сцену ${segment.index + 1}`}
+                  title={clips.length <= 1 ? "В проекте должна остаться хотя бы одна сцена" : "Удалить сцену"}
+                  disabled={clips.length <= 1}
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onDeleteClip(segment.clip.id);
+                  }}
+                ><Trash2 size={14} /></button>
                 {selectedClip.id === segment.clip.id && <Check className={styles.sceneCheck} size={14} />}
               </article>)}
             </div>
@@ -418,7 +431,7 @@ export function ShortsEditorPanel({ clips, draftUrls, initialSettings, onSaveSet
       <section className={`${styles.panel} ${styles.timelinePanel}`}>
         <div className={styles.timelineToolbar}>
           <div className={styles.timelineTitle}><strong>Таймлайн</strong><span>{formatTime(totalDuration)} · {clips.length} {clips.length === 1 ? "сцена" : "сцены"}</span></div>
-          <div className={styles.editTools}><button type="button" className={`${styles.toolButton} ${styles.active}`}><MousePointer2 size={15} /> Выбор</button><button type="button" className={styles.toolButton} disabled title="Разделение сцен будет доступно в следующих версиях"><Scissors size={15} /> Разделить <kbd>S</kbd></button><button type="button" className={styles.toolIcon} aria-label="Дублировать сцену" disabled title="Дублирование сцен будет доступно в следующих версиях"><Copy size={15} /></button><button type="button" className={`${styles.toolIcon} ${styles.danger}`} aria-label="Удалить выбранную сцену" disabled title="Удаление сцен будет доступно в следующих версиях"><Trash2 size={15} /></button><div className={styles.toolSeparator} /><button type="button" className={`${styles.toolIcon} ${snap ? styles.active : ""}`} aria-label="Привязка к сегментам" aria-pressed={snap} onClick={() => setSnap((value) => !value)}><Magnet size={16} /></button></div>
+          <div className={styles.editTools}><button type="button" className={`${styles.toolButton} ${styles.active}`}><MousePointer2 size={15} /> Выбор</button><button type="button" className={styles.toolButton} disabled title="Разделение сцен будет доступно в следующих версиях"><Scissors size={15} /> Разделить <kbd>S</kbd></button><button type="button" className={styles.toolIcon} aria-label="Дублировать сцену" disabled title="Дублирование сцен будет доступно в следующих версиях"><Copy size={15} /></button><button type="button" className={`${styles.toolIcon} ${styles.danger}`} aria-label="Удалить выбранную сцену" disabled={clips.length <= 1} title={clips.length <= 1 ? "В проекте должна остаться хотя бы одна сцена" : "Удалить выбранную сцену"} onClick={() => onDeleteClip(selectedClip.id)}><Trash2 size={15} /></button><div className={styles.toolSeparator} /><button type="button" className={`${styles.toolIcon} ${snap ? styles.active : ""}`} aria-label="Привязка к сегментам" aria-pressed={snap} onClick={() => setSnap((value) => !value)}><Magnet size={16} /></button></div>
           <div className={styles.zoomControl}><ZoomOut size={14} /><input className={styles.range} aria-label="Масштаб таймлайна" type="range" min="30" max="100" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} style={rangeStyle(((zoom - 30) / 70) * 100)} /><ZoomIn size={15} /><span>{zoom}%</span></div>
         </div>
         <div className={styles.timelineBody}>

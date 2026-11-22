@@ -10,7 +10,7 @@ import { ShortsCreationPanel } from "@/components/shorts/ShortsCreationPanel";
 import { ShortsClipsPanel, type ShortsClipDraft } from "@/components/shorts/ShortsClipsPanel";
 import { ShortsEditorPanel, type ShortsEditorSettings } from "@/components/shorts/ShortsEditorPanel";
 import { uploadFile, type WorkspaceFile } from "@/lib/files-api";
-import { analyzeShortsProject, createShortsProject, deleteShortsProject, exportShortsProject, getShortsAudioDownloadUrl, getShortsDraftDownloadUrl, getShortsFinalDownloadUrl, getShortsJob, getShortsProject, getShortsTranscriptResultUrl, listShortsProjects, rerenderShortsProject, updateShortsClip, updateShortsClipOrder, updateShortsSubtitleSettings, type ShortsClip, type ShortsJob, type ShortsProject, type ShortsProjectListItem } from "@/lib/shorts-api";
+import { analyzeShortsProject, createShortsProject, deleteShortsProject, exportShortsProject, getShortsAudioDownloadUrl, getShortsDraftDownloadUrl, getShortsFinalDownloadUrl, getShortsJob, getShortsProject, getShortsTranscriptResultUrl, listShortsProjects, rerenderShortsProject, deleteShortsClip, updateShortsClip, updateShortsClipOrder, updateShortsSubtitleSettings, type ShortsClip, type ShortsJob, type ShortsProject, type ShortsProjectListItem } from "@/lib/shorts-api";
 
 const contentTypes = [
   ["podcast", "Подкаст"],
@@ -193,6 +193,38 @@ export function ShortsStudioPage() {
     }
   }
 
+  async function removeClip(clipId: string) {
+    if (!project || clips.length <= 1) return;
+    if (!window.confirm("Удалить этот фрагмент из ролика? Это действие нельзя отменить.")) return;
+
+    const previousClips = clips;
+    const nextClips = previousClips.filter((clip) => clip.id !== clipId);
+    setClips(nextClips);
+    setDraftUrls((items) => {
+      const next = { ...items };
+      delete next[clipId];
+      return next;
+    });
+    setClipDrafts((items) => {
+      const next = { ...items };
+      delete next[clipId];
+      return next;
+    });
+
+    try {
+      await deleteShortsClip(clipId);
+      try {
+        await updateShortsClipOrder(project.id, nextClips.map((clip) => clip.id));
+      } catch {
+        // The clip is deleted; order can be normalized on the next reorder.
+      }
+      setJobMessage("Фрагмент удалён.");
+    } catch (error) {
+      setClips(previousClips);
+      setJobMessage(error instanceof Error ? error.message : "Не удалось удалить фрагмент");
+    }
+  }
+
   async function saveSubtitleSettings(nextSettings?: ShortsEditorSettings) {
     if (!project?.id) return;
     const settings = nextSettings ?? { style: subtitleStyle, position: subtitlePosition, fontSize: subtitleFontSize, textColor: subtitleTextColor, background: subtitleBackground, watermark, safeZone };
@@ -322,6 +354,7 @@ export function ShortsStudioPage() {
         onSaveSettings={saveSubtitleSettings}
         onReorder={(fromIndex, toIndex) => void reorderClips(fromIndex, toIndex)}
         onOpenClips={() => { setActiveStep("clips"); window.history.replaceState(null, "", `/app/shorts?project=${encodeURIComponent(project.id)}&step=clips`); }}
+        onDeleteClip={(clipId) => void removeClip(clipId)}
       />}
       {activeStep === "export" && project && <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"><h2 className="text-2xl font-bold text-slate-900">Экспорт</h2><p className="mt-2 text-sm text-slate-500">Настройки экспорта будут доступны на следующем этапе.</p></section>}
       {activeStep === "clips" && project && <ShortsClipsPanel clips={clips} draftUrls={draftUrls} drafts={clipDrafts} saving={clipSaving} onDraftChange={(id, draft) => setClipDrafts((items) => ({ ...items, [id]: draft }))} onSave={(clip) => void saveClip(clip)} onMove={(index, direction) => void moveClip(index, direction)} onContinue={() => { setActiveStep("editor"); window.history.replaceState(null, "", `/app/shorts?project=${encodeURIComponent(project.id)}&step=editor`); }} />}

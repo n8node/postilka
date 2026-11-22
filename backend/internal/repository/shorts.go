@@ -377,6 +377,21 @@ func (r *ShortsRepository) GetProjectByClip(ctx context.Context, workspaceID, cl
 	return scanShortsProject(r.pool.QueryRow(ctx, `SELECT `+shortsProjectColumns+` FROM shorts_projects p JOIN shorts_clips c ON c.project_id = p.id WHERE c.id = $1 AND p.workspace_id = $2`, clipID, workspaceID))
 }
 
+func (r *ShortsRepository) DeleteClip(ctx context.Context, workspaceID, clipID string) error {
+	tag, err := r.pool.Exec(ctx, `
+		DELETE FROM shorts_clips c
+		USING shorts_projects p
+		WHERE c.id = $1 AND c.project_id = p.id AND p.workspace_id = $2
+	`, clipID, workspaceID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (r *ShortsRepository) UpdateClip(ctx context.Context, workspaceID, clipID string, input model.ShortsClipUpdate) (*model.ShortsClip, error) {
 	var c model.ShortsClip
 	var status string

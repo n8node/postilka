@@ -116,6 +116,19 @@ func (h *ShortsHandler) UpdateClip(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"clip": clip})
 }
 
+func (h *ShortsHandler) DeleteClip(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
+		return
+	}
+	if err := h.shorts.DeleteClip(r.Context(), userID, r, chi.URLParam(r, "id")); err != nil {
+		h.mapError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
 func (h *ShortsHandler) GetJob(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {

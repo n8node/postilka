@@ -101,6 +101,10 @@ export function getShortsDraftDownloadUrl(clipId: string) {
   return request<{ url: string; expires_in: number }>(`/shorts/clips/${clipId}/draft`);
 }
 
+export function deleteShortsClip(clipId: string) {
+  return request<{ ok: boolean }>(`/shorts/clips/${clipId}`, { method: "DELETE" });
+}
+
 export function updateShortsClip(clipId: string, input: { start_seconds: number; end_seconds: number; transcript_text: string; status: string }) {
   return request<{ clip: ShortsClip }>(`/shorts/clips/${clipId}`, { method: "PATCH", body: JSON.stringify(input) });
 }
