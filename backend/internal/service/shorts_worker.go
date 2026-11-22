@@ -110,14 +110,16 @@ func (w *ShortsWorker) process(ctx context.Context, job repository.ClaimedShorts
 		return fmt.Errorf("stage download_source: %w", err)
 	}
 	defer os.Remove(sourcePath)
-	duration, err := probeShortsDuration(ctx, sourcePath)
+	videoDuration, err := probeShortsDuration(ctx, sourcePath)
 	if err != nil {
 		return fmt.Errorf("stage probe_duration: %w", err)
 	}
+	processingStart, processingEnd := shortsProcessingRangeFromSettings(project.Settings, videoDuration)
+	processingDuration := processingEnd - processingStart
 	if err := w.repo.UpdateJobProgress(ctx, job.ID, w.owner, "extract_audio", 35); err != nil {
 		return fmt.Errorf("stage extract_audio: %w", err)
 	}
-	audioPath, err := ExtractShortsAudio(ctx, sourcePath)
+	audioPath, err := ExtractShortsAudioRange(ctx, sourcePath, processingStart, processingDuration)
 	if err != nil {
 		return fmt.Errorf("stage extract_audio: %w", err)
 	}
@@ -138,7 +140,7 @@ func (w *ShortsWorker) process(ctx context.Context, job repository.ClaimedShorts
 			return fmt.Errorf("stage billing_transcription: %w", settingsErr)
 		}
 		if kieSettings.TranscriptionEnabled {
-			if _, debitErr := w.aiBilling.DebitTranscriptionAfterSuccessWithPrice(ctx, job.WorkspaceID, project.CreatedByUserID, job.ID, kieSettings.TranscriptionCreditsPerSecond, duration, kieSettings.TranscriptionKopecksPerCredit); debitErr != nil {
+			if _, debitErr := w.aiBilling.DebitTranscriptionAfterSuccessWithPrice(ctx, job.WorkspaceID, project.CreatedByUserID, job.ID, kieSettings.TranscriptionCreditsPerSecond, processingDuration, kieSettings.TranscriptionKopecksPerCredit); debitErr != nil {
 				return fmt.Errorf("stage billing_transcription: %w", debitErr)
 			}
 		}
@@ -151,7 +153,7 @@ func (w *ShortsWorker) process(ctx context.Context, job repository.ClaimedShorts
 	if err := w.storage.PutObjectFromFile(ctx, key, "audio/mpeg", audioPath); err != nil {
 		return fmt.Errorf("stage save_audio: %w", err)
 	}
-	meta, _ := json.Marshal(map[string]any{"source": "shorts_audio", "project_id": project.ID, "duration_seconds": duration, "transcript": transcript})
+	meta, _ := json.Marshal(map[string]any{"source": "shorts_audio", "project_id": project.ID, "duration_seconds": processingDuration, "processing_start_seconds": processingStart, "processing_end_seconds": processingEnd, "transcript": transcript})
 	uid := project.CreatedByUserID
 	audioFile, err := w.fileStore.RegisterWorkspaceFile(ctx, &model.WorkspaceFile{WorkspaceID: job.WorkspaceID, UploadedByUserID: &uid, Name: "shorts-audio.mp3", MimeType: "audio/mpeg", Size: audioInfo.Size(), S3Key: key, MediaMetadata: meta})
 	if err != nil {
@@ -172,7 +174,11 @@ func (w *ShortsWorker) process(ctx context.Context, job repository.ClaimedShorts
 	if err := w.repo.UpdateJobProgress(ctx, job.ID, w.owner, "segment_candidates", 80); err != nil {
 		return fmt.Errorf("stage segment_candidates: %w", err)
 	}
-	shortsCandidates := BuildShortsCandidates(transcript.Segments, 0, duration, 12)
+	shortsCandidates := BuildShortsCandidates(transcript.Segments, 0, processingDuration, 12)
+	for i := range shortsCandidates {
+		shortsCandidates[i].StartSeconds += processingStart
+		shortsCandidates[i].EndSeconds += processingStart
+	}
 	clipRows := make([]model.ShortsClip, 0, len(shortsCandidates))
 	for _, candidate := range shortsCandidates {
 		details, _ := json.Marshal(map[string]any{"source": "transcript_heuristic", "score": candidate.Score})
@@ -511,6 +517,20 @@ func (w *ShortsWorker) downloadObject(ctx context.Context, key, ext string) (str
 		return "", fmt.Errorf("source video exceeds 2 GiB limit")
 	}
 	return path, nil
+}
+
+func shortsProcessingRangeFromSettings(settings json.RawMessage, videoDuration float64) (float64, float64) {
+	start, end := 0.0, videoDuration
+	var values struct {
+		Start float64 `json:"processing_start_seconds"`
+		End   float64 `json:"processing_end_seconds"`
+	}
+	if json.Unmarshal(settings, &values) == nil {
+		if values.Start >= 0 && values.End > values.Start && values.End <= videoDuration+0.001 {
+			start, end = values.Start, values.End
+		}
+	}
+	return start, end
 }
 
 func probeShortsDuration(ctx context.Context, path string) (float64, error) {

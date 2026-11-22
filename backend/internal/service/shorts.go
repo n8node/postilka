@@ -83,6 +83,29 @@ func (s *ShortsService) CreateProject(ctx context.Context, userID string, r *htt
 	if source, found, lookupErr := s.repo.GetAnalysisForFile(ctx, ws.ID, input.SourceFileID); lookupErr != nil {
 		return nil, nil, lookupErr
 	} else if found {
+		selected := ShortsProcessingRange{StartSeconds: 0, EndSeconds: input.SourceDurationSeconds}
+		if input.ProcessingRange != nil {
+			selected = *input.ProcessingRange
+		}
+		selected, err = NormalizeShortsRange(selected, input.SourceDurationSeconds)
+		if err != nil {
+			return nil, nil, err
+		}
+		if err := s.repo.UpdateSourceProcessingRange(ctx, ws.ID, source.ID, selected.StartSeconds, selected.EndSeconds); err != nil {
+			return nil, nil, err
+		}
+		settings := source.Settings
+		if settings == nil {
+			settings = json.RawMessage(`{}`)
+		}
+		var settingsMap map[string]any
+		if err := json.Unmarshal(settings, &settingsMap); err != nil {
+			settingsMap = map[string]any{}
+		}
+		settingsMap["processing_start_seconds"] = selected.StartSeconds
+		settingsMap["processing_end_seconds"] = selected.EndSeconds
+		source.Settings, _ = json.Marshal(settingsMap)
+		source.SourceDurationSeconds = selected.DurationSeconds()
 		edit, editErr := s.repo.GetEditProjectForSource(ctx, ws.ID, source.ID)
 		if errors.Is(editErr, repository.ErrNotFound) {
 			edit, editErr = s.repo.CreateEditProject(ctx, ws.ID, userID, source.ID, input.ProjectName)
@@ -94,7 +117,10 @@ func (s *ShortsService) CreateProject(ctx context.Context, userID string, r *htt
 			_ = s.repo.RenameEditProject(ctx, ws.ID, edit.ID, input.ProjectName)
 			edit.Name = input.ProjectName
 		}
-		job, _ := s.repo.GetSourceJob(ctx, ws.ID, source.ID)
+		job, jobErr := s.repo.CreateSourceJob(ctx, ws.ID, source.ID, "analyze")
+		if jobErr != nil {
+			return nil, nil, jobErr
+		}
 		return edit, job, nil
 	}
 
@@ -130,6 +156,13 @@ func (s *ShortsService) CreateProject(ctx context.Context, userID string, r *htt
 	if settings == nil {
 		settings = json.RawMessage(`{}`)
 	}
+	var settingsMap map[string]any
+	if err := json.Unmarshal(settings, &settingsMap); err != nil {
+		settingsMap = map[string]any{}
+	}
+	settingsMap["processing_start_seconds"] = selected.StartSeconds
+	settingsMap["processing_end_seconds"] = selected.EndSeconds
+	settings, _ = json.Marshal(settingsMap)
 	sourceExpiresAt := time.Now().UTC().Add(48 * time.Hour)
 	source, err := s.repo.CreateSource(ctx, &model.ShortsProject{
 		WorkspaceID: ws.ID, CreatedByUserID: userID, SourceFileID: &input.SourceFileID,
@@ -211,6 +244,13 @@ func (s *ShortsService) CreateSourceProject(ctx context.Context, userID string, 
 	if settings == nil {
 		settings = json.RawMessage(`{}`)
 	}
+	var sourceSettings map[string]any
+	if err := json.Unmarshal(settings, &sourceSettings); err != nil {
+		sourceSettings = map[string]any{}
+	}
+	sourceSettings["processing_start_seconds"] = selected.StartSeconds
+	sourceSettings["processing_end_seconds"] = selected.EndSeconds
+	settings, _ = json.Marshal(sourceSettings)
 	expires := time.Now().UTC().Add(48 * time.Hour)
 	source, err := s.repo.CreateSource(ctx, &model.ShortsProject{WorkspaceID: ws.ID, CreatedByUserID: userID, SourceFileID: &input.SourceFileID, ContentType: contentType, Language: language, Status: model.ShortsProjectAnalyzing, SourceDurationSeconds: selected.DurationSeconds(), ProcessingMinutesReserved: selected.DurationSeconds() / 60, SourceExpiresAt: &expires, Settings: settings})
 	if err != nil {
