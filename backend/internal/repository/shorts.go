@@ -315,14 +315,14 @@ func (r *ShortsRepository) ListLegacyForWorkspace(ctx context.Context, workspace
 	}
 	rows, err := r.pool.Query(ctx, `
 		SELECT `+shortsProjectColumnsAliased+`,
-			(SELECT COUNT(*) FROM shorts_clips c WHERE c.project_id = p.id),
+			(SELECT COUNT(*) FROM shorts_clips c WHERE c.source_id = p.source_id),
 			j.id, j.job_type, j.status, j.current_step, j.progress, j.attempts,
-			j.available_at, j.last_error, j.created_at, j.updated_at,
+			j.available_at, COALESCE(j.last_error, ''), j.created_at, j.updated_at,
 			f.id, f.workspace_id, f.folder_id, f.uploaded_by_user_id, f.name, f.mime_type,
 			f.size, f.s3_key, f.media_metadata, f.deleted_at, f.trash_batch_id, f.created_at, f.updated_at
 		FROM shorts_projects p
 		LEFT JOIN LATERAL (
-			SELECT sj.id, sj.job_type, sj.status, sj.current_step, sj.progress, sj.attempts, sj.available_at, sj.last_error, sj.created_at, sj.updated_at FROM shorts_jobs sj WHERE sj.project_id = p.id ORDER BY sj.created_at DESC LIMIT 1
+			SELECT sj.id, sj.job_type, sj.status, sj.current_step, sj.progress, sj.attempts, sj.available_at, COALESCE(sj.last_error, ''), sj.created_at, sj.updated_at FROM shorts_jobs sj WHERE sj.source_id = p.source_id AND sj.edit_project_id IS NULL ORDER BY sj.created_at DESC LIMIT 1
 		) j ON true
 		LEFT JOIN workspace_files f ON f.id = p.source_file_id
 		WHERE p.workspace_id = $1
@@ -445,7 +445,7 @@ func (r *ShortsRepository) ListForAdmin(ctx context.Context, f ListShortsAdminFi
 		return nil, 0, nil, err
 	}
 	args = append(args, f.Limit, f.Offset)
-	rows, err := r.pool.Query(ctx, `SELECT `+shortsProjectColumnsAliased+`, (SELECT COUNT(*) FROM shorts_clips c WHERE c.project_id = p.id), j.id, j.job_type, j.status, j.current_step, j.progress, j.attempts, j.available_at, j.last_error, j.created_at, j.updated_at FROM shorts_projects p LEFT JOIN LATERAL (SELECT sj.id, sj.job_type, sj.status, sj.current_step, sj.progress, sj.attempts, sj.available_at, sj.last_error, sj.created_at, sj.updated_at FROM shorts_jobs sj WHERE sj.project_id = p.id ORDER BY sj.created_at DESC LIMIT 1) j ON true`+where+` ORDER BY p.created_at DESC LIMIT $`+strconv.Itoa(len(args)-1)+` OFFSET $`+strconv.Itoa(len(args)), args...)
+	rows, err := r.pool.Query(ctx, `SELECT `+shortsProjectColumnsAliased+`, (SELECT COUNT(*) FROM shorts_clips c WHERE c.source_id = p.source_id), j.id, j.job_type, j.status, j.current_step, j.progress, j.attempts, j.available_at, COALESCE(j.last_error, ''), j.created_at, j.updated_at FROM shorts_projects p LEFT JOIN LATERAL (SELECT sj.id, sj.job_type, sj.status, sj.current_step, sj.progress, sj.attempts, sj.available_at, COALESCE(sj.last_error, ''), sj.created_at, sj.updated_at FROM shorts_jobs sj WHERE sj.source_id = p.source_id AND sj.edit_project_id IS NULL ORDER BY sj.created_at DESC LIMIT 1) j ON true`+where+` ORDER BY p.created_at DESC LIMIT $`+strconv.Itoa(len(args)-1)+` OFFSET $`+strconv.Itoa(len(args)), args...)
 	if err != nil {
 		return nil, 0, nil, err
 	}
