@@ -503,7 +503,7 @@ func (r *ShortsRepository) ListForAdmin(ctx context.Context, f ListShortsAdminFi
 }
 
 func (r *ShortsRepository) UpdateSourceProcessingRange(ctx context.Context, workspaceID, sourceID string, startSeconds, endSeconds float64) error {
-	_, err := r.pool.Exec(ctx, `UPDATE shorts_sources SET settings = settings || jsonb_build_object('processing_start_seconds',$1::float8,'processing_end_seconds',$2::float8), source_duration_seconds=$3, processing_minutes_reserved=$3/60, status='analyzing', updated_at=now() WHERE id=$4 AND workspace_id=$5`, startSeconds, endSeconds, endSeconds-startSeconds, sourceID, workspaceID)
+	_, err := r.pool.Exec(ctx, `UPDATE shorts_sources SET settings = settings || jsonb_build_object('processing_start_seconds',$1::float8,'processing_end_seconds',$2::float8), source_duration_seconds=$3::numeric, processing_minutes_reserved=$3::numeric/60, status='analyzing', updated_at=now() WHERE id=$4::uuid AND workspace_id=$5::uuid`, startSeconds, endSeconds, endSeconds-startSeconds, sourceID, workspaceID)
 	return err
 }
 
