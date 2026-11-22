@@ -83,7 +83,7 @@ func (r *ShortsRepository) ListForWorkspace(ctx context.Context, workspaceID str
 }
 
 func (r *ShortsRepository) ListSourceAnalysisJobs(ctx context.Context, workspaceID string) (map[string]*model.ShortsJob, error) {
-	rows, err := r.pool.Query(ctx, `SELECT DISTINCT ON(j.source_id) j.id,j.source_id,j.job_type,j.status,j.current_step,j.progress,j.attempts,j.available_at,j.last_error,j.created_at,j.updated_at FROM shorts_jobs j JOIN shorts_sources s ON s.id=j.source_id WHERE s.workspace_id=$1 AND j.job_type='analyze' ORDER BY j.source_id,j.created_at DESC`, workspaceID)
+	rows, err := r.pool.Query(ctx, `SELECT DISTINCT ON(j.source_id) j.id,j.source_id,j.job_type,j.status,j.current_step,j.progress,j.attempts,j.available_at,COALESCE(j.last_error,''),j.created_at,j.updated_at FROM shorts_jobs j JOIN shorts_sources s ON s.id=j.source_id WHERE s.workspace_id=$1 AND j.job_type='analyze' ORDER BY j.source_id,j.created_at DESC`, workspaceID)
 	if err != nil {
 		return nil, err
 	}
@@ -92,10 +92,14 @@ func (r *ShortsRepository) ListSourceAnalysisJobs(ctx context.Context, workspace
 	for rows.Next() {
 		var j model.ShortsJob
 		var st string
-		if err := rows.Scan(&j.ID, &j.SourceID, &j.JobType, &st, &j.CurrentStep, &j.Progress, &j.Attempts, &j.AvailableAt, &j.LastError, &j.CreatedAt, &j.UpdatedAt); err != nil {
+		var lastError *string
+		if err := rows.Scan(&j.ID, &j.SourceID, &j.JobType, &st, &j.CurrentStep, &j.Progress, &j.Attempts, &j.AvailableAt, &lastError, &j.CreatedAt, &j.UpdatedAt); err != nil {
 			return nil, err
 		}
 		j.ProjectID = j.SourceID
+		if lastError != nil {
+			j.LastError = *lastError
+		}
 		j.Status = model.ShortsJobStatus(st)
 		out[j.SourceID] = &j
 	}
@@ -617,7 +621,7 @@ func (r *ShortsRepository) SetSubtitleSettings(ctx context.Context, workspaceID,
 }
 
 func (r *ShortsRepository) ListEditProjectJobs(ctx context.Context, workspaceID string) (map[string]*model.ShortsJob, error) {
-	rows, err := r.pool.Query(ctx, `SELECT DISTINCT ON(j.edit_project_id) j.id,j.source_id,j.edit_project_id,j.job_type,j.status,j.current_step,j.progress,j.attempts,j.available_at,j.last_error,j.created_at,j.updated_at FROM shorts_jobs j JOIN shorts_edit_projects ep ON ep.id=j.edit_project_id WHERE ep.workspace_id=$1 ORDER BY j.edit_project_id,j.created_at DESC`, workspaceID)
+	rows, err := r.pool.Query(ctx, `SELECT DISTINCT ON(j.edit_project_id) j.id,j.source_id,j.edit_project_id,j.job_type,j.status,j.current_step,j.progress,j.attempts,j.available_at,COALESCE(j.last_error,''),j.created_at,j.updated_at FROM shorts_jobs j JOIN shorts_edit_projects ep ON ep.id=j.edit_project_id WHERE ep.workspace_id=$1 ORDER BY j.edit_project_id,j.created_at DESC`, workspaceID)
 	if err != nil {
 		return nil, err
 	}
@@ -626,8 +630,12 @@ func (r *ShortsRepository) ListEditProjectJobs(ctx context.Context, workspaceID 
 	for rows.Next() {
 		var j model.ShortsJob
 		var status string
-		if err := rows.Scan(&j.ID, &j.SourceID, &j.EditProjectID, &j.JobType, &status, &j.CurrentStep, &j.Progress, &j.Attempts, &j.AvailableAt, &j.LastError, &j.CreatedAt, &j.UpdatedAt); err != nil {
+		var lastError *string
+		if err := rows.Scan(&j.ID, &j.SourceID, &j.EditProjectID, &j.JobType, &status, &j.CurrentStep, &j.Progress, &j.Attempts, &j.AvailableAt, &lastError, &j.CreatedAt, &j.UpdatedAt); err != nil {
 			return nil, err
+		}
+		if lastError != nil {
+			j.LastError = *lastError
 		}
 		j.Status = model.ShortsJobStatus(status)
 		j.ProjectID = j.EditProjectID
@@ -981,7 +989,7 @@ func (r *ShortsRepository) GetSourceJob(ctx context.Context, workspaceID, source
 	var j model.ShortsJob
 	var status string
 	var lastError *string
-	err := r.pool.QueryRow(ctx, `SELECT id,j.source_id,COALESCE(j.edit_project_id::text,''),j.job_type,j.status,j.current_step,j.progress,j.attempts,j.available_at,j.last_error,j.created_at,j.updated_at FROM shorts_jobs j JOIN shorts_sources s ON s.id=j.source_id WHERE j.source_id=$1 AND s.workspace_id=$2 AND j.job_type='analyze' ORDER BY j.created_at DESC LIMIT 1`, sourceID, workspaceID).Scan(&j.ID, &j.SourceID, &j.EditProjectID, &j.JobType, &status, &j.CurrentStep, &j.Progress, &j.Attempts, &j.AvailableAt, &lastError, &j.CreatedAt, &j.UpdatedAt)
+	err := r.pool.QueryRow(ctx, `SELECT id,j.source_id,COALESCE(j.edit_project_id::text,''),j.job_type,j.status,j.current_step,j.progress,j.attempts,j.available_at,COALESCE(j.last_error,''),j.created_at,j.updated_at FROM shorts_jobs j JOIN shorts_sources s ON s.id=j.source_id WHERE j.source_id=$1 AND s.workspace_id=$2 AND j.job_type='analyze' ORDER BY j.created_at DESC LIMIT 1`, sourceID, workspaceID).Scan(&j.ID, &j.SourceID, &j.EditProjectID, &j.JobType, &status, &j.CurrentStep, &j.Progress, &j.Attempts, &j.AvailableAt, &lastError, &j.CreatedAt, &j.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -999,12 +1007,19 @@ func (r *ShortsRepository) GetSourceJob(ctx context.Context, workspaceID, source
 func (r *ShortsRepository) GetJob(ctx context.Context, workspaceID, jobID string) (*model.ShortsJob, error) {
 	var j model.ShortsJob
 	var status string
-	err := r.pool.QueryRow(ctx, `SELECT j.id,j.source_id,COALESCE(j.edit_project_id::text,''),j.job_type,j.status,j.current_step,j.progress,j.attempts,j.available_at,j.last_error,j.created_at,j.updated_at FROM shorts_jobs j JOIN shorts_sources s ON s.id=j.source_id WHERE j.id=$1 AND s.workspace_id=$2`, jobID, workspaceID).Scan(&j.ID, &j.SourceID, &j.EditProjectID, &j.JobType, &status, &j.CurrentStep, &j.Progress, &j.Attempts, &j.AvailableAt, &j.LastError, &j.CreatedAt, &j.UpdatedAt)
+	var lastError *string
+	err := r.pool.QueryRow(ctx, `SELECT j.id,j.source_id,COALESCE(j.edit_project_id::text,''),j.job_type,j.status,j.current_step,j.progress,j.attempts,j.available_at,COALESCE(j.last_error,''),j.created_at,j.updated_at FROM shorts_jobs j JOIN shorts_sources s ON s.id=j.source_id WHERE j.id=$1 AND s.workspace_id=$2`, jobID, workspaceID).Scan(&j.ID, &j.SourceID, &j.EditProjectID, &j.JobType, &status, &j.CurrentStep, &j.Progress, &j.Attempts, &j.AvailableAt, &lastError, &j.CreatedAt, &j.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
+	if err != nil {
+		return nil, err
+	}
+	if lastError != nil {
+		j.LastError = *lastError
+	}
 	j.Status = model.ShortsJobStatus(status)
-	return &j, err
+	return &j, nil
 }
 
 func (r *ShortsRepository) SetAudio(ctx context.Context, workspaceID, projectID, fileID string, expiresAt time.Time) error {
