@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { ShortsProjectsPanel } from "@/components/shorts/ShortsProjectsPanel";
 import { ShortsCreationPanel } from "@/components/shorts/ShortsCreationPanel";
 import { ShortsClipsPanel, type ShortsClipDraft } from "@/components/shorts/ShortsClipsPanel";
+import { ShortsEditorPanel, type ShortsEditorSettings } from "@/components/shorts/ShortsEditorPanel";
 import { uploadFile, type WorkspaceFile } from "@/lib/files-api";
 import { analyzeShortsProject, createShortsProject, deleteShortsProject, exportShortsProject, getShortsAudioDownloadUrl, getShortsDraftDownloadUrl, getShortsFinalDownloadUrl, getShortsJob, getShortsProject, getShortsTranscriptResultUrl, listShortsProjects, rerenderShortsProject, updateShortsClip, updateShortsClipOrder, updateShortsSubtitleSettings, type ShortsClip, type ShortsJob, type ShortsProject, type ShortsProjectListItem } from "@/lib/shorts-api";
 
@@ -192,9 +193,24 @@ export function ShortsStudioPage() {
     }
   }
 
-  async function saveSubtitleSettings() {
+  async function saveSubtitleSettings(nextSettings?: ShortsEditorSettings) {
     if (!project?.id) return;
-    try { await updateShortsSubtitleSettings(project.id, { style: subtitleStyle, position: subtitlePosition, font_size: subtitleFontSize, text_color: subtitleTextColor, background: subtitleBackground, watermark, safe_zone: safeZone }); const result = await rerenderShortsProject(project.id); setJob(result.job); setDraftUrls({}); setJobMessage("Настройки сохранены. Draft-предпросмотры перерендериваются."); } catch (error) { setJobMessage(error instanceof Error ? error.message : "Не удалось перерендерить preview"); }
+    const settings = nextSettings ?? { style: subtitleStyle, position: subtitlePosition, fontSize: subtitleFontSize, textColor: subtitleTextColor, background: subtitleBackground, watermark, safeZone };
+    if (nextSettings) {
+      setSubtitleStyle(nextSettings.style); setSubtitlePosition(nextSettings.position); setSubtitleFontSize(nextSettings.fontSize);
+      setSubtitleTextColor(nextSettings.textColor); setSubtitleBackground(nextSettings.background); setWatermark(nextSettings.watermark); setSafeZone(nextSettings.safeZone);
+    }
+    try { await updateShortsSubtitleSettings(project.id, { style: settings.style, position: settings.position, font_size: settings.fontSize, text_color: settings.textColor, background: settings.background, watermark: settings.watermark, safe_zone: settings.safeZone }); const result = await rerenderShortsProject(project.id); setJob(result.job); setDraftUrls({}); setJobMessage("Настройки сохранены. Draft-предпросмотры перерендериваются."); } catch (error) { setJobMessage(error instanceof Error ? error.message : "Не удалось перерендерить preview"); }
+  }
+
+  async function reorderClips(fromIndex: number, toIndex: number) {
+    if (!project || fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= clips.length || toIndex >= clips.length) return;
+    const next = [...clips];
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, moved);
+    setClips(next);
+    try { await updateShortsClipOrder(project.id, next.map((clip) => clip.id)); setJobMessage("Порядок клипов сохранён."); }
+    catch (error) { setClips(clips); setJobMessage(error instanceof Error ? error.message : "Не удалось сохранить порядок клипов"); }
   }
 
   async function moveClip(index: number, direction: -1 | 1) {
@@ -298,7 +314,15 @@ export function ShortsStudioPage() {
 
       {jobMessage && activeStep !== "processing" && <p className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-medium text-indigo-900">{jobMessage}</p>}
       <WorkspaceMediaPickerModal open={pickerOpen} mediaKind="video" onClose={() => setPickerOpen(false)} onSelect={(file) => { setSourceFile(file); setSourceFileId(file.id); const nextDuration = Math.max(1, Math.round(file.media_metadata?.duration_seconds ?? 60)); setDuration(nextDuration); setRangeEnd(nextDuration); setPickerOpen(false); }} />
-      {activeStep === "editor" && project && <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"><h2 className="text-2xl font-bold text-slate-900">Редактор</h2><p className="mt-2 text-sm text-slate-500">Настройки редактора будут доступны на следующем этапе.</p></section>}
+      {activeStep === "editor" && project && <ShortsEditorPanel
+        key={project.id}
+        clips={clips}
+        draftUrls={draftUrls}
+        initialSettings={{ style: subtitleStyle, position: subtitlePosition, fontSize: subtitleFontSize, textColor: subtitleTextColor, background: subtitleBackground, watermark, safeZone }}
+        onSaveSettings={saveSubtitleSettings}
+        onReorder={(fromIndex, toIndex) => void reorderClips(fromIndex, toIndex)}
+        onOpenClips={() => { setActiveStep("clips"); window.history.replaceState(null, "", `/app/shorts?project=${encodeURIComponent(project.id)}&step=clips`); }}
+      />}
       {activeStep === "export" && project && <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"><h2 className="text-2xl font-bold text-slate-900">Экспорт</h2><p className="mt-2 text-sm text-slate-500">Настройки экспорта будут доступны на следующем этапе.</p></section>}
       {activeStep === "clips" && project && <ShortsClipsPanel clips={clips} draftUrls={draftUrls} drafts={clipDrafts} saving={clipSaving} onDraftChange={(id, draft) => setClipDrafts((items) => ({ ...items, [id]: draft }))} onSave={(clip) => void saveClip(clip)} onMove={(index, direction) => void moveClip(index, direction)} onContinue={() => { setActiveStep("editor"); window.history.replaceState(null, "", `/app/shorts?project=${encodeURIComponent(project.id)}&step=editor`); }} />}
     </div>
