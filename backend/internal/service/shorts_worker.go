@@ -54,24 +54,42 @@ func (w *ShortsWorker) ProcessDue(ctx context.Context, limit int) (int, error) {
 }
 
 func (w *ShortsWorker) process(ctx context.Context, job repository.ClaimedShortsJob) error {
+	legacy := strings.HasPrefix(job.JobType, "legacy_")
+	if legacy {
+		job.JobType = strings.TrimPrefix(job.JobType, "legacy_")
+	}
 	if job.JobType == "rerender" {
-		return w.processRerender(ctx, job)
+		if legacy {
+			return w.processLegacyRerender(ctx, job)
+		}
+		return w.processEditRerender(ctx, job)
 	}
 	if job.JobType == "export" {
-		return w.processExport(ctx, job)
+		if legacy {
+			return w.processLegacyExport(ctx, job)
+		}
+		return w.processEditExport(ctx, job)
 	}
 	if job.JobType != "analyze" {
 		return fmt.Errorf("unsupported shorts job type %q", job.JobType)
 	}
-	project, err := w.repo.GetProject(ctx, job.WorkspaceID, job.ProjectID)
+	project, err := w.repo.GetSource(ctx, job.WorkspaceID, job.SourceID)
 	if err != nil {
 		return err
 	}
+	legacyProject, err := w.repo.GetProject(ctx, job.WorkspaceID, job.SourceID)
+	if err != nil {
+		return err
+	}
+	job.ProjectID = job.SourceID
 	if err := w.repo.UpdateJobProgress(ctx, job.ID, w.owner, "loading_project", 3); err != nil {
 		return fmt.Errorf("stage loading_project: %w", err)
 	}
 	if project.AudioFileID != nil && project.AudioExpiresAt != nil && project.AudioExpiresAt.After(time.Now().UTC()) {
-		return w.repo.SucceedJob(ctx, job.ID, w.owner)
+		if err := w.repo.SucceedJob(ctx, job.ID, w.owner); err != nil {
+			return err
+		}
+		return w.repo.CreateDefaultEditProjectForSource(ctx, job.WorkspaceID, job.SourceID)
 	}
 	if project.SourceFileID == nil {
 		return ErrShortsSourceRequired
@@ -143,11 +161,11 @@ func (w *ShortsWorker) process(ctx context.Context, job repository.ClaimedShorts
 	if err := w.repo.SetAudio(ctx, job.WorkspaceID, project.ID, audioFile.ID, time.Now().UTC().Add(48*time.Hour)); err != nil {
 		return fmt.Errorf("stage register_audio: %w", err)
 	}
-	if err := w.repo.SetTranscript(ctx, job.WorkspaceID, project.ID, transcript); err != nil {
+	if err := w.repo.SetTranscript(ctx, job.WorkspaceID, legacyProject.ID, transcript); err != nil {
 		return fmt.Errorf("stage save_transcript: %w", err)
 	}
 	if len(transcript.RawResult) > 0 {
-		if err := w.repo.SetTranscriptResult(ctx, job.WorkspaceID, project.ID, json.RawMessage(transcript.RawResult)); err != nil {
+		if err := w.repo.SetTranscriptResult(ctx, job.WorkspaceID, legacyProject.ID, json.RawMessage(transcript.RawResult)); err != nil {
 			return fmt.Errorf("stage save_transcript: %w", err)
 		}
 	}
@@ -169,10 +187,93 @@ func (w *ShortsWorker) process(ctx context.Context, job repository.ClaimedShorts
 	if err := w.renderDrafts(ctx, job, project, sourcePath, shortsCandidates, transcript.Segments, ShortsSubtitleConfigFromSettings(project.Settings)); err != nil {
 		return fmt.Errorf("stage render_drafts: %w", err)
 	}
-	return w.repo.CompleteJob(ctx, job.ID, w.owner, job.ProjectID, job.WorkspaceID, model.ShortsProjectCompleted, "completed")
+	if err := w.repo.CompleteJob(ctx, job.ID, w.owner, job.ProjectID, job.WorkspaceID, model.ShortsProjectCompleted, "completed"); err != nil {
+		return err
+	}
+	return w.repo.CreateDefaultEditProjectForSource(ctx, job.WorkspaceID, job.SourceID)
 }
 
-func (w *ShortsWorker) processExport(ctx context.Context, job repository.ClaimedShortsJob) error {
+func (w *ShortsWorker) processEditExport(ctx context.Context, job repository.ClaimedShortsJob) error {
+	if job.EditProjectID == "" {
+		return fmt.Errorf("edit project is required for export")
+	}
+	project, err := w.repo.GetEditProject(ctx, job.WorkspaceID, job.EditProjectID)
+	if err != nil {
+		return err
+	}
+	if project.SourceFileID == nil {
+		return ErrShortsSourceRequired
+	}
+	file, err := w.files.GetByID(ctx, job.WorkspaceID, *project.SourceFileID, false)
+	if err != nil {
+		return err
+	}
+	clips, err := w.repo.ListEditProjectClips(ctx, job.WorkspaceID, project.ID)
+	if err != nil {
+		return err
+	}
+	selected := make([]model.ShortsClip, 0, len(clips))
+	for _, clip := range clips {
+		if clip.Included {
+			selected = append(selected, clip)
+		}
+	}
+	if len(selected) == 0 {
+		return fmt.Errorf("no clips in edit project")
+	}
+	source, err := w.repo.GetSource(ctx, job.WorkspaceID, project.SourceID)
+	if err != nil {
+		return err
+	}
+	transcript, err := transcriptFromSettings(source.Settings)
+	if err != nil {
+		return err
+	}
+	config := ShortsSubtitleConfigFromSettings(project.Settings)
+	path, err := w.downloadObject(ctx, file.S3Key, filepath.Ext(file.Name))
+	if err != nil {
+		return err
+	}
+	defer os.Remove(path)
+	parts := make([]string, 0, len(selected))
+	for _, clip := range selected {
+		rendered, err := RenderShortsDraft(ctx, path, clip.StartSeconds, clip.EndSeconds, transcript.Segments, config)
+		if err != nil {
+			return err
+		}
+		parts = append(parts, rendered)
+		defer os.Remove(rendered)
+	}
+	merged, err := MergeShortsClips(ctx, parts)
+	if err != nil {
+		return err
+	}
+	defer os.Remove(merged)
+	info, err := os.Stat(merged)
+	if err != nil {
+		return err
+	}
+	key := fmt.Sprintf("workspaces/%s/shorts/%s/final-%d.mp4", job.WorkspaceID, project.ID, time.Now().UnixNano())
+	if err := w.storage.PutObjectFromFile(ctx, key, "video/mp4", merged); err != nil {
+		return err
+	}
+	uid := project.CreatedByUserID
+	finalFile, err := w.fileStore.RegisterWorkspaceFile(ctx, &model.WorkspaceFile{WorkspaceID: job.WorkspaceID, UploadedByUserID: &uid, Name: "shorts-final.mp4", MimeType: "video/mp4", Size: info.Size(), S3Key: key})
+	if err != nil {
+		_ = w.storage.DeleteObject(ctx, key)
+		return err
+	}
+	if err := w.repo.SetProjectFinalFile(ctx, job.WorkspaceID, project.ID, finalFile.ID); err != nil {
+		return err
+	}
+	return w.repo.CompleteJob(ctx, job.ID, w.owner, project.ID, job.WorkspaceID, model.ShortsProjectCompleted, "completed")
+}
+
+func (w *ShortsWorker) processEditRerender(ctx context.Context, job repository.ClaimedShortsJob) error {
+	return w.repo.CompleteJob(ctx, job.ID, w.owner, job.EditProjectID, job.WorkspaceID, model.ShortsProjectCompleted, "completed")
+}
+
+func (w *ShortsWorker) processLegacyExport(ctx context.Context, job repository.ClaimedShortsJob) error {
 	project, err := w.repo.GetProject(ctx, job.WorkspaceID, job.ProjectID)
 	if err != nil {
 		return err
@@ -205,7 +306,11 @@ func (w *ShortsWorker) processExport(ctx context.Context, job repository.Claimed
 		return err
 	}
 	defer os.Remove(sourcePath)
-	transcript, err := transcriptFromSettings(project.Settings)
+	source, err := w.repo.GetSource(ctx, job.WorkspaceID, project.SourceID)
+	if err != nil {
+		return err
+	}
+	transcript, err := transcriptFromSettings(source.Settings)
 	if err != nil {
 		return err
 	}
@@ -250,7 +355,7 @@ func (w *ShortsWorker) processExport(ctx context.Context, job repository.Claimed
 	return w.repo.CompleteJob(ctx, job.ID, w.owner, job.ProjectID, job.WorkspaceID, model.ShortsProjectCompleted, "completed")
 }
 
-func (w *ShortsWorker) processRerender(ctx context.Context, job repository.ClaimedShortsJob) error {
+func (w *ShortsWorker) processLegacyRerender(ctx context.Context, job repository.ClaimedShortsJob) error {
 	project, err := w.repo.GetProject(ctx, job.WorkspaceID, job.ProjectID)
 	if err != nil {
 		return err

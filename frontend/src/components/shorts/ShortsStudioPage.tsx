@@ -10,7 +10,7 @@ import { ShortsCreationPanel } from "@/components/shorts/ShortsCreationPanel";
 import { ShortsClipsPanel, type ShortsClipDraft } from "@/components/shorts/ShortsClipsPanel";
 import { ShortsEditorPanel, type ShortsEditorSettings } from "@/components/shorts/ShortsEditorPanel";
 import { uploadFile, type WorkspaceFile } from "@/lib/files-api";
-import { analyzeShortsProject, createShortsProject, deleteShortsProject, exportShortsProject, getShortsAudioDownloadUrl, getShortsDraftDownloadUrl, getShortsFinalDownloadUrl, getShortsJob, getShortsProject, getShortsTranscriptResultUrl, listShortsProjects, rerenderShortsProject, deleteShortsClip, updateShortsClip, updateShortsClipOrder, updateShortsSubtitleSettings, type ShortsClip, type ShortsJob, type ShortsProject, type ShortsProjectListItem } from "@/lib/shorts-api";
+import { analyzeShortsProject, createShortsProject, deleteShortsProject, exportShortsProject, getShortsAudioDownloadUrl, getShortsDraftDownloadUrl, getShortsFinalDownloadUrl, getShortsJob, getShortsProject, getShortsTranscriptResultUrl, listShortsProjects, listShortsSources, rerenderShortsProject, deleteShortsClip, updateShortsClip, getShortsAnalysisForFile, getShortsSource, createShortsEditProject, addShortsClipToEditProject, updateShortsClipOrder, updateShortsSubtitleSettings, type ShortsClip, type ShortsJob, type ShortsProject, type ShortsProjectListItem } from "@/lib/shorts-api";
 
 const contentTypes = [
   ["podcast", "Подкаст"],
@@ -37,6 +37,11 @@ export function ShortsStudioPage() {
   const [busy, setBusy] = useState(false);
   const [project, setProject] = useState<ShortsProject | null>(null);
   const [clips, setClips] = useState<ShortsClip[]>([]);
+  const [sourceClips, setSourceClips] = useState<ShortsClip[]>([]);
+  const [analysisSource, setAnalysisSource] = useState<ShortsProject | null>(null);
+  const [sourceEditProjects, setSourceEditProjects] = useState<ShortsProject[]>([]);
+  const [sources, setSources] = useState<ShortsProject[]>([]);
+  const [editProjectId, setEditProjectId] = useState("");
   const [job, setJob] = useState<ShortsJob | null>(null);
   const [draftUrls, setDraftUrls] = useState<Record<string, string>>({});
   const [subtitleStyle, setSubtitleStyle] = useState("classic");
@@ -70,7 +75,7 @@ export function ShortsStudioPage() {
   }
 
   useEffect(() => {
-    void listShortsProjects().then((result) => setHistory(result.projects)).catch((error) => setJobMessage(error instanceof Error ? error.message : "Не удалось загрузить историю проектов")).finally(() => setHistoryLoading(false));
+    void listShortsSources().then((result) => { setHistory(result.projects); setSources(result.sources); }).catch((error) => setJobMessage(error instanceof Error ? error.message : "Не удалось загрузить историю проектов")).finally(() => setHistoryLoading(false));
   }, []);
 
   useEffect(() => {
@@ -84,6 +89,13 @@ export function ShortsStudioPage() {
     try {
       const result = await getShortsProject(id);
       setProject(result.project);
+      setEditProjectId(result.project.is_edit_project ? result.project.id : "");
+      if (result.project.is_edit_project && result.project.source_id) {
+        const source = await getShortsSource(result.project.source_id);
+        setAnalysisSource(source.project);
+        setSourceClips(source.clips);
+        setSourceEditProjects(source.edit_projects ?? []);
+      } else { setAnalysisSource(result.project); setSourceClips(result.clips); }
       setClips(result.clips);
       setSubtitleStyle(result.project.settings?.subtitle_style ?? "classic");
       setSubtitlePosition(result.project.settings?.subtitle_position ?? "bottom");
@@ -132,7 +144,7 @@ export function ShortsStudioPage() {
     if (!project?.id || !job?.id) return;
     if (job.status === "succeeded" || job.status === "failed" || job.status === "cancelled") {
       if (job.status === "failed") setJobMessage(job.last_error || "Не удалось обработать видео. Откройте проект позже или запустите анализ повторно.");
-      void getShortsProject(project.id).then((result) => { setProject(result.project); setClips(result.clips); }).catch(() => undefined);
+      void getShortsProject(project.id).then(async (result) => { setProject(result.project); setClips(result.clips); if (result.project.is_edit_project && result.project.source_id) { const source=await getShortsSource(result.project.source_id);setAnalysisSource(source.project);setSourceClips(source.clips); } }).catch(() => undefined);
       return;
     }
     let stopped = false;
@@ -143,6 +155,7 @@ export function ShortsStudioPage() {
         const [nextProject, nextJob] = await Promise.all([getShortsProject(project.id), getShortsJob(job.id)]);
         if (stopped) return;
         setProject(nextProject.project); setClips(nextProject.clips); setJob(nextJob.job);
+        if (nextProject.project.is_edit_project && nextProject.project.source_id) { const source=await getShortsSource(nextProject.project.source_id);setAnalysisSource(source.project);setSourceClips(source.clips); }
         if (nextJob.job.status === "failed" || nextJob.job.status === "queued") setJobMessage(nextJob.job.last_error || (nextJob.job.status === "queued" ? `Повторная попытка: ${stepLabel(nextJob.job.current_step)}` : "Не удалось обработать видео."));
       } catch { /* transient polling failure */ }
       if (!stopped) timer = window.setTimeout(() => void poll(), 1500);
@@ -153,7 +166,7 @@ export function ShortsStudioPage() {
 
   async function loadDraft(clipId: string) {
     if (draftUrls[clipId]) return;
-    try { const result = await getShortsDraftDownloadUrl(clipId); setDraftUrls((current) => ({ ...current, [clipId]: result.url })); } catch { /* draft may not be ready */ }
+    try { const result = await getShortsDraftDownloadUrl(clipId, editProjectId || undefined); setDraftUrls((current) => ({ ...current, [clipId]: result.url })); } catch { /* draft may not be ready */ }
   }
 
   useEffect(() => {
@@ -173,8 +186,22 @@ export function ShortsStudioPage() {
   }
 
   function clipDraft(clip: ShortsClip): ShortsClipDraft {
-    return clipDrafts[clip.id] ?? { start: String(clip.start_seconds), end: String(clip.end_seconds), text: clip.transcript_text, selected: clip.status === "selected" || clip.status === "draft" };
+    return clipDrafts[clip.id] ?? { start: String(clip.start_seconds), end: String(clip.end_seconds), text: clip.transcript_text, selected: editProjectId ? Boolean(clip.included) : clip.status === "selected" || clip.status === "draft" };
   }
+
+  async function createMontageProject() {
+    if (!analysisSource) { setJobMessage("Сначала завершите анализ исходного видео."); return; }
+    try { const created = await createShortsEditProject(analysisSource.id, `Монтаж ${sourceEditProjects.length + 1}`); setProject(created.project); setEditProjectId(created.project.id); const loaded=await getShortsProject(created.project.id); setClips(loaded.clips); const source=await getShortsSource(analysisSource.id);setSourceClips(source.clips);setSourceEditProjects(source.edit_projects ?? []);setActiveStep("editor"); await refreshProjects(); window.history.replaceState(null,"",`/app/shorts?project=${encodeURIComponent(created.project.id)}&step=editor`); }
+    catch(error){setJobMessage(error instanceof Error?error.message:"Не удалось создать монтаж")}
+  }
+
+  async function addClipToCurrentEdit(clip: ShortsClip) {
+    if (!editProjectId) { await createMontageProject(); return; }
+    try { await addShortsClipToEditProject(editProjectId,clip.id); const loaded=await getShortsProject(editProjectId);setClips(loaded.clips);setDraftUrls((urls)=>{const next={...urls};delete next[clip.id];return next});setJobMessage("Фрагмент добавлен в монтаж."); }
+    catch(error){setJobMessage(error instanceof Error?error.message:"Не удалось добавить фрагмент")}
+  }
+
+  async function refreshProjects() { try { const result=await listShortsSources();setHistory(result.projects);setSources(result.sources); } catch { /* history refresh is best effort */ } }
 
   async function saveClip(clip: ShortsClip) {
     const draft = clipDraft(clip);
@@ -182,7 +209,7 @@ export function ShortsStudioPage() {
     const end = Number(draft.end);
     setClipSaving((value) => ({ ...value, [clip.id]: true }));
     try {
-      const result = await updateShortsClip(clip.id, { start_seconds: start, end_seconds: end, transcript_text: draft.text, status: draft.selected ? "selected" : "candidate" });
+      const result = await updateShortsClip(clip.id, { start_seconds: start, end_seconds: end, transcript_text: draft.text, status: draft.selected ? "selected" : "candidate" }, editProjectId || undefined);
       setClips((items) => items.map((item) => item.id === clip.id ? result.clip : item));
       setClipDrafts((items) => ({ ...items, [clip.id]: { ...draft, start: String(result.clip.start_seconds), end: String(result.clip.end_seconds), text: result.clip.transcript_text } }));
       setJobMessage("Настройки клипа сохранены.");
@@ -194,7 +221,7 @@ export function ShortsStudioPage() {
   }
 
   async function removeClip(clipId: string) {
-    if (!project || clips.length <= 1) return;
+    if (!project || !editProjectId || clips.length <= 1) return;
     if (!window.confirm("Удалить этот фрагмент из ролика? Это действие нельзя отменить.")) return;
 
     const previousClips = clips;
@@ -212,7 +239,7 @@ export function ShortsStudioPage() {
     });
 
     try {
-      await deleteShortsClip(clipId);
+      await deleteShortsClip(clipId, editProjectId);
       try {
         await updateShortsClipOrder(project.id, nextClips.map((clip) => clip.id));
       } catch {
@@ -276,6 +303,17 @@ export function ShortsStudioPage() {
     setBusy(true);
     setJobMessage("");
     try {
+      const existingAnalysis = await getShortsAnalysisForFile(sourceFileId.trim());
+      if (existingAnalysis.found && existingAnalysis.source) {
+        setAnalysisSource(existingAnalysis.source);
+        const created = await createShortsEditProject(existingAnalysis.source.id, `Монтаж ${history.filter((item) => item.source_id === existingAnalysis.source?.id).length + 1}`);
+        setProject(created.project);setEditProjectId(created.project.id);
+        const [editData,sourceData]=await Promise.all([getShortsProject(created.project.id),getShortsSource(existingAnalysis.source.id)]);
+        setClips(editData.clips);setSourceClips(sourceData.clips);setSourceEditProjects(sourceData.edit_projects ?? []);setJob(null);setJobMessage("Создан новый монтаж на базе готового анализа. Фрагменты подключены без повторного анализа.");setActiveStep("editor");
+        setHistory((items)=>[{project:created.project,clips:editData.clips.filter((clip)=>clip.included).length,source_id:existingAnalysis.source?.id,edit_project_id:created.project.id,source_file:sourceFile??undefined},...items]);
+        await refreshProjects();
+        window.history.replaceState(null,"",`/app/shorts?project=${encodeURIComponent(created.project.id)}&step=editor`);return;
+      }
       const result = await createShortsProject({
         source_file_id: sourceFileId.trim(),
         content_type: contentType,
@@ -283,7 +321,7 @@ export function ShortsStudioPage() {
         source_duration_seconds: duration,
         processing_range: { start_seconds: rangeStart, end_seconds: rangeEnd },
       });
-      setProject(result.project); setJob(result.job); setClips([]); setJobMessage("Проект создан. Анализ поставлен в очередь.");
+      setProject(result.project); setEditProjectId(result.project.id);setAnalysisSource(result.project);setSourceClips([]);setJob(result.job); setClips([]); setJobMessage("Создан источник. Анализ поставлен в очередь.");
       setActiveStep("processing");
       setHistory((items) => [{ project: result.project, job: result.job, clips: 0, source_file: sourceFile ?? undefined }, ...items.filter((item) => item.project.id !== result.project.id)]);
       window.history.replaceState(null, "", `/app/shorts?project=${encodeURIComponent(result.project.id)}`);
@@ -310,7 +348,7 @@ export function ShortsStudioPage() {
     <div className="w-full min-w-0 space-y-6 pb-12 text-slate-900">
       <PageHeader title="Shorts Studio" description="Подготовка длинного видео к анализу и автоматической нарезке с субтитрами." />
       <ShortsWizardNav activeStep={activeStep} onStepChange={(step) => { setActiveStep(step); const query = project?.id ? `?project=${encodeURIComponent(project.id)}&step=${step}` : `?step=${step}`; window.history.replaceState(null, "", `/app/shorts${query}`); }} canOpen={(step) => step === "projects" || step === "creation" || Boolean(project)} />
-      {activeStep === "projects" && <ShortsProjectsPanel items={history} loading={historyLoading} activeProjectId={project?.id} onOpen={(id) => void openProject(id)} onRetry={(id) => void analyzeProject(id)} onDelete={(id) => void removeProject(id)} />}
+      {activeStep === "projects" && <ShortsProjectsPanel items={history} loading={historyLoading} activeProjectId={project?.id} onOpen={(id) => void openProject(id)} onRetry={(id) => void analyzeProject(id)} onDelete={(id) => void removeProject(id)} onCreateMontage={(sourceId) => { const source=sources.find((item)=>item.id===sourceId); if (source) {setAnalysisSource(source);void getShortsSource(sourceId).then((data)=>{setAnalysisSource(data.project);setSourceClips(data.clips);setSourceEditProjects(data.edit_projects ?? []);void createMontageProject();});} }} onOpenSource={(sourceId) => {void getShortsSource(sourceId).then((data)=>{setAnalysisSource(data.project);setSourceClips(data.clips);setSourceEditProjects(data.edit_projects ?? []);setProject(data.project);setEditProjectId("");setClips(data.clips);setActiveStep("clips");window.history.replaceState(null,"",`/app/shorts?project=${encodeURIComponent(sourceId)}&step=clips`);});}} />}
       {activeStep === "creation" && <ShortsCreationPanel sourceFile={sourceFile} previewUrl={previewUrl} uploading={uploading} uploadProgress={uploadProgress} duration={duration} rangeStart={rangeStart} rangeEnd={rangeEnd} contentType={contentType} contentTypes={contentTypes} onUpload={(file) => void handleUpload(file)} onOpenPicker={() => setPickerOpen(true)} onDurationChange={(value) => { setDuration(value); setRangeEnd(Math.min(value, rangeEnd)); }} onRangeStartChange={setRangeStart} onRangeEndChange={setRangeEnd} onContentTypeChange={setContentType} onSubmit={() => void submit()} busy={busy} />}
       {activeStep === "processing" && <section className="max-w-4xl rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-10"><h2 className="text-3xl font-bold tracking-tight text-slate-900">Готовим ваш проект</h2><p className="mt-2 text-sm text-slate-500">Анализируем речь и содержание видео</p><div className="mt-5 rounded-2xl border border-slate-200 p-5"><div className="flex items-center justify-between"><span className="text-2xl font-bold text-slate-900">{job?.progress ?? 0}%</span>{job?.status !== "succeeded" && <button type="button" className="rounded-xl border border-slate-200 px-4 py-2.5 text-sm font-semibold text-rose-600">Отменить</button>}</div><div className="mt-4 h-2.5 overflow-hidden rounded-full bg-slate-200"><div className="h-full rounded-full bg-indigo-600 transition-all" style={{ width: `${job?.progress ?? 0}%` }} /></div><div className="mt-4 space-y-2">{["Загрузка файла", "Извлечение аудио", "Транскрибация", "Анализ содержания", "Поиск лучших фрагментов", "Подготовка проекта"].map((label, index) => { const progress = job?.progress ?? 0; const done = progress >= (index + 1) * 16.66; const current = !done && progress >= index * 16.66; return <div key={label} className={`flex items-center gap-3 rounded-xl border p-3 ${current ? "border-indigo-200 bg-indigo-50" : "border-slate-200 bg-white"}`}><span className={`flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ${done ? "bg-emerald-50 text-emerald-600" : current ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-500"}`}>{done ? "✓" : index + 1}</span><span className="flex-1 text-sm font-semibold text-slate-800">{label}</span><span className="text-xs text-slate-500">{done ? "Завершён" : current ? "Выполняется…" : "Ожидает"}</span></div>; })}</div><p className="mt-4 text-xs text-slate-500">Можно закрыть страницу — проект продолжит обрабатываться. Пришлём уведомление.</p></div>{jobMessage && <p className="mt-4 rounded-xl bg-indigo-50 p-3 text-sm text-indigo-800">{jobMessage}</p>}{job?.status === "succeeded" && <button type="button" onClick={() => setActiveStep("clips")} className="mt-5 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white">Перейти к фрагментам</button>}</section>}
         {/* Legacy inline creation controls remain below until the next wizard step removes them. */}
@@ -353,11 +391,11 @@ export function ShortsStudioPage() {
         initialSettings={{ style: subtitleStyle, position: subtitlePosition, fontSize: subtitleFontSize, textColor: subtitleTextColor, background: subtitleBackground, watermark, safeZone }}
         onSaveSettings={saveSubtitleSettings}
         onReorder={(fromIndex, toIndex) => void reorderClips(fromIndex, toIndex)}
-        onOpenClips={() => { setActiveStep("clips"); window.history.replaceState(null, "", `/app/shorts?project=${encodeURIComponent(project.id)}&step=clips`); }}
+        onOpenClips={() => { if (editProjectId) void getShortsSource(project.source_id || project.id).then((source)=>{setSourceClips(source.clips);setSourceEditProjects(source.edit_projects ?? []);setActiveStep("clips");}); else setActiveStep("clips"); window.history.replaceState(null, "", `/app/shorts?project=${encodeURIComponent(project.id)}&step=clips`); }}
         onDeleteClip={(clipId) => void removeClip(clipId)}
       />}
       {activeStep === "export" && project && <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"><h2 className="text-2xl font-bold text-slate-900">Экспорт</h2><p className="mt-2 text-sm text-slate-500">Настройки экспорта будут доступны на следующем этапе.</p></section>}
-      {activeStep === "clips" && project && <ShortsClipsPanel clips={clips} draftUrls={draftUrls} drafts={clipDrafts} saving={clipSaving} onDraftChange={(id, draft) => setClipDrafts((items) => ({ ...items, [id]: draft }))} onSave={(clip) => void saveClip(clip)} onMove={(index, direction) => void moveClip(index, direction)} onContinue={() => { setActiveStep("editor"); window.history.replaceState(null, "", `/app/shorts?project=${encodeURIComponent(project.id)}&step=editor`); }} />}
+      {activeStep === "clips" && project && <ShortsClipsPanel clips={sourceClips.length ? sourceClips : clips} draftUrls={draftUrls} drafts={clipDrafts} saving={clipSaving} editClipIds={new Set(clips.map((clip)=>clip.id))} onAddToEditor={(clip)=>void addClipToCurrentEdit(clip)} onDraftChange={(id, draft) => setClipDrafts((items) => ({ ...items, [id]: draft }))} onSave={(clip) => void saveClip(clip)} onMove={(index, direction) => void moveClip(index, direction)} onContinue={() => { if (!editProjectId) { void createMontageProject(); return; } setActiveStep("editor"); window.history.replaceState(null, "", `/app/shorts?project=${encodeURIComponent(project.id)}&step=editor`); }} />}
     </div>
   );
 }

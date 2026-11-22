@@ -42,6 +42,9 @@ const (
 
 type ShortsProject struct {
 	ID                        string              `json:"id"`
+	SourceID                  string              `json:"source_id,omitempty"`
+	IsEditProject             bool                `json:"is_edit_project,omitempty"`
+	Name                      string              `json:"name,omitempty"`
 	WorkspaceID               string              `json:"workspace_id"`
 	CreatedByUserID           string              `json:"created_by_user_id"`
 	SourceFileID              *string             `json:"source_file_id,omitempty"`
@@ -61,7 +64,9 @@ type ShortsProject struct {
 
 type ShortsClip struct {
 	ID             string          `json:"id"`
-	ProjectID      string          `json:"project_id"`
+	ProjectID      string          `json:"project_id,omitempty"`
+	SourceID       string          `json:"source_id,omitempty"`
+	Included       bool            `json:"included"`
 	StartSeconds   float64         `json:"start_seconds"`
 	EndSeconds     float64         `json:"end_seconds"`
 	TranscriptText string          `json:"transcript_text"`
@@ -85,17 +90,19 @@ type ShortsClipUpdate struct {
 }
 
 type ShortsJob struct {
-	ID          string          `json:"id"`
-	ProjectID   string          `json:"project_id"`
-	JobType     string          `json:"job_type"`
-	Status      ShortsJobStatus `json:"status"`
-	CurrentStep string          `json:"current_step"`
-	Progress    int             `json:"progress"`
-	Attempts    int             `json:"attempts"`
-	AvailableAt time.Time       `json:"available_at"`
-	LastError   string          `json:"last_error,omitempty"`
-	CreatedAt   time.Time       `json:"created_at"`
-	UpdatedAt   time.Time       `json:"updated_at"`
+	ID            string          `json:"id"`
+	ProjectID     string          `json:"project_id,omitempty"`
+	SourceID      string          `json:"source_id,omitempty"`
+	EditProjectID string          `json:"edit_project_id,omitempty"`
+	JobType       string          `json:"job_type"`
+	Status        ShortsJobStatus `json:"status"`
+	CurrentStep   string          `json:"current_step"`
+	Progress      int             `json:"progress"`
+	Attempts      int             `json:"attempts"`
+	AvailableAt   time.Time       `json:"available_at"`
+	LastError     string          `json:"last_error,omitempty"`
+	CreatedAt     time.Time       `json:"created_at"`
+	UpdatedAt     time.Time       `json:"updated_at"`
 }
 
 type AdminShortsProject struct {
@@ -105,10 +112,12 @@ type AdminShortsProject struct {
 }
 
 type ShortsProjectListItem struct {
-	Project    *ShortsProject `json:"project"`
-	Job        *ShortsJob     `json:"job,omitempty"`
-	Clips      int            `json:"clips"`
-	SourceFile *WorkspaceFile `json:"source_file,omitempty"`
+	Project       *ShortsProject `json:"project"`
+	EditProjectID string         `json:"edit_project_id,omitempty"`
+	SourceID      string         `json:"source_id,omitempty"`
+	Job           *ShortsJob     `json:"job,omitempty"`
+	Clips         int            `json:"clips"`
+	SourceFile    *WorkspaceFile `json:"source_file,omitempty"`
 }
 
 type AdminShortsStats struct {

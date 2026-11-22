@@ -108,7 +108,7 @@ func (h *ShortsHandler) UpdateClip(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "Некорректные данные клипа")
 		return
 	}
-	clip, err := h.shorts.UpdateClip(r.Context(), userID, r, chi.URLParam(r, "id"), input)
+	clip, err := h.shorts.UpdateClip(r.Context(), userID, r, r.URL.Query().Get("edit_project_id"), chi.URLParam(r, "id"), input)
 	if err != nil {
 		h.mapError(w, err)
 		return
@@ -122,7 +122,101 @@ func (h *ShortsHandler) DeleteClip(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
 		return
 	}
-	if err := h.shorts.DeleteClip(r.Context(), userID, r, chi.URLParam(r, "id")); err != nil {
+	if err := h.shorts.DeleteClip(r.Context(), userID, r, r.URL.Query().Get("edit_project_id"), chi.URLParam(r, "id")); err != nil {
+		h.mapError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (h *ShortsHandler) CreateEditProject(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
+		return
+	}
+	var input struct {
+		SourceID string `json:"source_id"`
+		Name     string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeError(w, http.StatusBadRequest, "Некорректные данные монтажного проекта")
+		return
+	}
+	project, err := h.shorts.CreateEditProject(r.Context(), userID, r, input.SourceID, input.Name)
+	if err != nil {
+		h.mapError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"project": project})
+}
+
+func (h *ShortsHandler) GetAnalysisForFile(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
+		return
+	}
+	source, found, err := h.shorts.GetAnalysisForFile(r.Context(), userID, r, r.URL.Query().Get("file_id"))
+	if err != nil {
+		h.mapError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"source": source, "found": found})
+}
+
+func (h *ShortsHandler) ListSources(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
+		return
+	}
+	sources, err := h.shorts.ListSources(r.Context(), userID, r)
+	if err != nil {
+		h.mapError(w, err)
+		return
+	}
+	projects, _, err := h.shorts.ListProjects(r.Context(), userID, r, 100, 0)
+	if err != nil {
+		h.mapError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"sources": sources, "projects": projects})
+}
+
+func (h *ShortsHandler) GetSource(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
+		return
+	}
+	source, clips, err := h.shorts.GetSource(r.Context(), userID, r, chi.URLParam(r, "id"))
+	if err != nil {
+		h.mapError(w, err)
+		return
+	}
+	editProjects, err := h.shorts.ListEditProjectsForSource(r.Context(), userID, r, source.ID)
+	if err != nil {
+		h.mapError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"project": source, "clips": clips, "edit_projects": editProjects})
+}
+
+func (h *ShortsHandler) AddClipToEditProject(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
+		return
+	}
+	var input struct {
+		ClipID string `json:"clip_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		writeError(w, http.StatusBadRequest, "Некорректные данные фрагмента")
+		return
+	}
+	if err := h.shorts.AddClipToEditProject(r.Context(), userID, r, chi.URLParam(r, "id"), input.ClipID); err != nil {
 		h.mapError(w, err)
 		return
 	}
@@ -179,7 +273,7 @@ func (h *ShortsHandler) DownloadDraft(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
 		return
 	}
-	url, expiresIn, err := h.shorts.DraftDownloadURL(r.Context(), userID, r, chi.URLParam(r, "id"))
+	url, expiresIn, err := h.shorts.DraftDownloadURLForEdit(r.Context(), userID, r, r.URL.Query().Get("edit_project_id"), chi.URLParam(r, "id"))
 	if err != nil {
 		h.mapError(w, err)
 		return

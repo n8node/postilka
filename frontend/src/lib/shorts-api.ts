@@ -1,5 +1,8 @@
 export type ShortsProject = {
   id: string;
+  source_id?: string;
+  is_edit_project?: boolean;
+  name?: string;
   source_file_id?: string;
   content_type: string;
   language: string;
@@ -16,6 +19,8 @@ export type ShortsProject = {
 
 export type ShortsProjectListItem = {
   project: ShortsProject;
+  edit_project_id?: string;
+  source_id?: string;
   job?: ShortsJob;
   clips: number;
   source_file?: { id: string; name: string; mime_type: string; media_metadata?: { duration_seconds?: number; width?: number; height?: number } | null };
@@ -23,6 +28,8 @@ export type ShortsProjectListItem = {
 
 export type ShortsClip = {
   id: string;
+  source_id?: string;
+  included?: boolean;
   start_seconds: number;
   end_seconds: number;
   transcript_text: string;
@@ -73,6 +80,26 @@ export function listShortsProjects(limit = 20, offset = 0) {
   return request<{ projects: ShortsProjectListItem[]; total: number }>(`/shorts/projects?limit=${limit}&offset=${offset}`);
 }
 
+export function getShortsAnalysisForFile(fileId: string) {
+  return request<{ source?: ShortsProject; found: boolean }>(`/shorts/analysis?file_id=${encodeURIComponent(fileId)}`);
+}
+
+export function getShortsSource(sourceId: string) {
+  return request<{ project: ShortsProject; clips: ShortsClip[]; edit_projects: ShortsProject[] }>(`/shorts/sources/${sourceId}`);
+}
+
+export function listShortsSources() {
+  return request<{ sources: ShortsProject[]; projects: ShortsProjectListItem[] }>("/shorts/sources");
+}
+
+export function createShortsEditProject(sourceId: string, name?: string) {
+  return request<{ project: ShortsProject }>("/shorts/edit-projects", { method: "POST", body: JSON.stringify({ source_id: sourceId, name }) });
+}
+
+export function addShortsClipToEditProject(projectId: string, clipId: string) {
+  return request<{ ok: boolean }>(`/shorts/edit-projects/${projectId}/clips`, { method: "POST", body: JSON.stringify({ clip_id: clipId }) });
+}
+
 export function deleteShortsProject(projectId: string) {
   return request<{ ok: boolean }>(`/shorts/projects/${projectId}`, { method: "DELETE" });
 }
@@ -97,16 +124,18 @@ export function getShortsProject(id: string) {
   return request<{ project: ShortsProject; clips: ShortsClip[] }>(`/shorts/projects/${id}`);
 }
 
-export function getShortsDraftDownloadUrl(clipId: string) {
-  return request<{ url: string; expires_in: number }>(`/shorts/clips/${clipId}/draft`);
+export function getShortsDraftDownloadUrl(clipId: string, editProjectId?: string) {
+  const query = editProjectId ? `?edit_project_id=${encodeURIComponent(editProjectId)}` : "";
+  return request<{ url: string; expires_in: number }>(`/shorts/clips/${clipId}/draft${query}`);
 }
 
-export function deleteShortsClip(clipId: string) {
-  return request<{ ok: boolean }>(`/shorts/clips/${clipId}`, { method: "DELETE" });
+export function deleteShortsClip(clipId: string, editProjectId: string) {
+  return request<{ ok: boolean }>(`/shorts/clips/${clipId}?edit_project_id=${encodeURIComponent(editProjectId)}`, { method: "DELETE" });
 }
 
-export function updateShortsClip(clipId: string, input: { start_seconds: number; end_seconds: number; transcript_text: string; status: string }) {
-  return request<{ clip: ShortsClip }>(`/shorts/clips/${clipId}`, { method: "PATCH", body: JSON.stringify(input) });
+export function updateShortsClip(clipId: string, input: { start_seconds: number; end_seconds: number; transcript_text: string; status: string }, editProjectId?: string) {
+  const query = editProjectId ? `?edit_project_id=${encodeURIComponent(editProjectId)}` : "";
+  return request<{ clip: ShortsClip }>(`/shorts/clips/${clipId}${query}`, { method: "PATCH", body: JSON.stringify(input) });
 }
 
 export function updateShortsSubtitleSettings(projectId: string, input: { style: string; position: string; font_size: number; text_color: string; background: string; watermark: string; safe_zone: number }) {

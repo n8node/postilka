@@ -43,6 +43,7 @@ type CreateShortsProjectInput struct {
 	SourceDurationSeconds float64                 `json:"source_duration_seconds"`
 	ProcessingRange       *ShortsProcessingRange  `json:"processing_range,omitempty"`
 	Settings              json.RawMessage         `json:"settings,omitempty"`
+	ProjectName           string                  `json:"project_name,omitempty"`
 }
 
 func (s *ShortsService) CreateProject(ctx context.Context, userID string, r *http.Request, input CreateShortsProjectInput) (*model.ShortsProject, *model.ShortsJob, error) {
@@ -73,6 +74,16 @@ func (s *ShortsService) CreateProject(ctx context.Context, userID string, r *htt
 	}
 	if input.SourceDurationSeconds <= 0 {
 		return nil, nil, ErrShortsDurationRequired
+	}
+	if source, found, lookupErr := s.repo.GetAnalysisForFile(ctx, ws.ID, input.SourceFileID); lookupErr != nil {
+		return nil, nil, lookupErr
+	} else if found {
+		edit, createErr := s.repo.CreateEditProject(ctx, ws.ID, userID, source.ID, input.ProjectName)
+		if createErr != nil {
+			return nil, nil, createErr
+		}
+		job, _ := s.repo.GetSourceJob(ctx, ws.ID, source.ID)
+		return edit, job, nil
 	}
 
 	selected := ShortsProcessingRange{StartSeconds: 0, EndSeconds: input.SourceDurationSeconds}
@@ -108,7 +119,7 @@ func (s *ShortsService) CreateProject(ctx context.Context, userID string, r *htt
 		settings = json.RawMessage(`{}`)
 	}
 	sourceExpiresAt := time.Now().UTC().Add(48 * time.Hour)
-	project, err := s.repo.CreateProject(ctx, &model.ShortsProject{
+	source, err := s.repo.CreateSource(ctx, &model.ShortsProject{
 		WorkspaceID: ws.ID, CreatedByUserID: userID, SourceFileID: &input.SourceFileID,
 		ContentType: contentType, Language: language, Status: model.ShortsProjectAnalyzing,
 		SourceDurationSeconds: selected.DurationSeconds(), ProcessingMinutesReserved: selected.DurationSeconds() / 60,
@@ -117,11 +128,93 @@ func (s *ShortsService) CreateProject(ctx context.Context, userID string, r *htt
 	if err != nil {
 		return nil, nil, err
 	}
-	job, err := s.repo.CreateJob(ctx, project.ID, "analyze")
+	job, err := s.repo.CreateJob(ctx, source.ID, "analyze")
 	if err != nil {
 		return nil, nil, err
 	}
-	return project, job, nil
+	if err := s.repo.CreateLegacyProject(ctx, source.ID); err != nil {
+		return nil, nil, err
+	}
+	edit, err := s.repo.CreateEditProject(ctx, ws.ID, userID, source.ID, input.ProjectName)
+	if err != nil {
+		return nil, nil, err
+	}
+	return edit, job, nil
+}
+
+func (s *ShortsService) CreateSourceProject(ctx context.Context, userID string, r *http.Request, input CreateShortsProjectInput) (*model.ShortsProject, *model.ShortsJob, error) {
+	ws, _, err := s.wsSvc.ResolveActive(ctx, userID, r)
+	if err != nil {
+		return nil, nil, err
+	}
+	if ws == nil {
+		return nil, nil, ErrWorkspaceNotFound
+	}
+	if _, err := s.wsSvc.RequireMembership(ctx, userID, ws.ID, model.RoleEditor); err != nil {
+		return nil, nil, err
+	}
+	if input.SourceFileID == "" {
+		return nil, nil, ErrShortsSourceRequired
+	}
+	if s.files != nil {
+		file, fileErr := s.files.GetByID(ctx, ws.ID, input.SourceFileID, false)
+		if errors.Is(fileErr, repository.ErrNotFound) {
+			return nil, nil, ErrShortsSourceRequired
+		}
+		if fileErr != nil {
+			return nil, nil, fileErr
+		}
+		if !strings.HasPrefix(file.MimeType, "video/") {
+			return nil, nil, ErrShortsSourceRequired
+		}
+	}
+	if input.SourceDurationSeconds <= 0 {
+		return nil, nil, ErrShortsDurationRequired
+	}
+	selected := ShortsProcessingRange{StartSeconds: 0, EndSeconds: input.SourceDurationSeconds}
+	if input.ProcessingRange != nil {
+		selected = *input.ProcessingRange
+	}
+	selected, err = NormalizeShortsRange(selected, input.SourceDurationSeconds)
+	if err != nil {
+		return nil, nil, err
+	}
+	if s.aiBilling != nil && s.kieConfig != nil {
+		config, configErr := s.kieConfig.GetSettings(ctx)
+		if configErr != nil {
+			return nil, nil, configErr
+		}
+		if config.TranscriptionEnabled {
+			if err := s.aiBilling.PrefailTranscriptionWithPrice(ctx, ws.ID, userID, config.TranscriptionCreditsPerSecond, selected.DurationSeconds(), config.TranscriptionKopecksPerCredit); err != nil {
+				return nil, nil, err
+			}
+		}
+	}
+	contentType := input.ContentType
+	if contentType == "" {
+		contentType = model.ShortsContentOther
+	}
+	language := input.Language
+	if language == "" {
+		language = "ru"
+	}
+	settings := input.Settings
+	if settings == nil {
+		settings = json.RawMessage(`{}`)
+	}
+	expires := time.Now().UTC().Add(48 * time.Hour)
+	source, err := s.repo.CreateSource(ctx, &model.ShortsProject{WorkspaceID: ws.ID, CreatedByUserID: userID, SourceFileID: &input.SourceFileID, ContentType: contentType, Language: language, Status: model.ShortsProjectAnalyzing, SourceDurationSeconds: selected.DurationSeconds(), ProcessingMinutesReserved: selected.DurationSeconds() / 60, SourceExpiresAt: &expires, Settings: settings})
+	if err != nil {
+		return nil, nil, err
+	}
+	job, err := s.repo.CreateJob(ctx, source.ID, "analyze")
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := s.repo.CreateLegacyProject(ctx, source.ID); err != nil {
+		return nil, nil, err
+	}
+	return source, job, nil
 }
 
 func (s *ShortsService) GetProject(ctx context.Context, userID string, r *http.Request, projectID string) (*model.ShortsProject, []model.ShortsClip, error) {
@@ -135,18 +228,48 @@ func (s *ShortsService) GetProject(ctx context.Context, userID string, r *http.R
 	if _, err := s.wsSvc.RequireMembership(ctx, userID, ws.ID, model.RoleViewer); err != nil {
 		return nil, nil, err
 	}
-	project, err := s.repo.GetProject(ctx, ws.ID, projectID)
+	project, err := s.repo.GetEditProject(ctx, ws.ID, projectID)
+	if errors.Is(err, repository.ErrNotFound) {
+		project, err = s.repo.GetProject(ctx, ws.ID, projectID)
+	}
+	if errors.Is(err, repository.ErrNotFound) {
+		project, err = s.repo.GetSource(ctx, ws.ID, projectID)
+	}
 	if errors.Is(err, repository.ErrNotFound) {
 		return nil, nil, ErrShortsProjectNotFound
 	}
 	if err != nil {
 		return nil, nil, err
 	}
+	if project.IsEditProject {
+		if err := s.repo.EnsureEditProjectClips(ctx, ws.ID, projectID); err != nil {
+			return nil, nil, err
+		}
+	}
 	clips, err := s.repo.ListClips(ctx, ws.ID, projectID)
 	return project, clips, err
 }
 
-func (s *ShortsService) DeleteClip(ctx context.Context, userID string, r *http.Request, clipID string) error {
+func (s *ShortsService) GetSource(ctx context.Context, userID string, r *http.Request, sourceID string) (*model.ShortsProject, []model.ShortsClip, error) {
+	ws, _, err := s.wsSvc.ResolveActive(ctx, userID, r)
+	if err != nil {
+		return nil, nil, err
+	}
+	if ws == nil {
+		return nil, nil, ErrWorkspaceNotFound
+	}
+	if _, err := s.wsSvc.RequireMembership(ctx, userID, ws.ID, model.RoleViewer); err != nil {
+		return nil, nil, err
+	}
+	source, err := s.repo.GetSource(ctx, ws.ID, sourceID)
+	if err != nil {
+		return nil, nil, err
+	}
+	clips, err := s.repo.ListClips(ctx, ws.ID, sourceID)
+	return source, clips, err
+}
+
+func (s *ShortsService) DeleteClip(ctx context.Context, userID string, r *http.Request, editProjectID, clipID string) error {
 	ws, _, err := s.wsSvc.ResolveActive(ctx, userID, r)
 	if err != nil {
 		return err
@@ -157,14 +280,14 @@ func (s *ShortsService) DeleteClip(ctx context.Context, userID string, r *http.R
 	if _, err := s.wsSvc.RequireMembership(ctx, userID, ws.ID, model.RoleEditor); err != nil {
 		return err
 	}
-	if err := s.repo.DeleteClip(ctx, ws.ID, clipID); errors.Is(err, repository.ErrNotFound) {
+	if err := s.repo.DeleteClip(ctx, ws.ID, editProjectID, clipID); errors.Is(err, repository.ErrNotFound) {
 		return ErrShortsProjectNotFound
 	} else {
 		return err
 	}
 }
 
-func (s *ShortsService) UpdateClip(ctx context.Context, userID string, r *http.Request, clipID string, input model.ShortsClipUpdate) (*model.ShortsClip, error) {
+func (s *ShortsService) UpdateClip(ctx context.Context, userID string, r *http.Request, editProjectID, clipID string, input model.ShortsClipUpdate) (*model.ShortsClip, error) {
 	ws, _, err := s.wsSvc.ResolveActive(ctx, userID, r)
 	if err != nil {
 		return nil, err
@@ -175,7 +298,7 @@ func (s *ShortsService) UpdateClip(ctx context.Context, userID string, r *http.R
 	if _, err := s.wsSvc.RequireMembership(ctx, userID, ws.ID, model.RoleEditor); err != nil {
 		return nil, err
 	}
-	project, err := s.repo.GetProjectByClip(ctx, ws.ID, clipID)
+	project, err := s.repo.GetEditProject(ctx, ws.ID, editProjectID)
 	if errors.Is(err, repository.ErrNotFound) {
 		return nil, ErrShortsProjectNotFound
 	}
@@ -189,7 +312,49 @@ func (s *ShortsService) UpdateClip(ctx context.Context, userID string, r *http.R
 		return nil, ErrInvalidShortsClip
 	}
 	input.TranscriptText = strings.TrimSpace(input.TranscriptText)
-	return s.repo.UpdateClip(ctx, ws.ID, clipID, input)
+	return s.repo.UpdateClip(ctx, ws.ID, editProjectID, clipID, input)
+}
+
+func (s *ShortsService) ListEditProjectsForSource(ctx context.Context, userID string, r *http.Request, sourceID string) ([]model.ShortsProject, error) {
+	ws, _, err := s.wsSvc.ResolveActive(ctx, userID, r)
+	if err != nil {
+		return nil, err
+	}
+	if ws == nil {
+		return nil, ErrWorkspaceNotFound
+	}
+	if _, err := s.wsSvc.RequireMembership(ctx, userID, ws.ID, model.RoleViewer); err != nil {
+		return nil, err
+	}
+	return s.repo.ListEditProjectsForSource(ctx, ws.ID, sourceID)
+}
+
+func (s *ShortsService) ListSources(ctx context.Context, userID string, r *http.Request) ([]model.ShortsProject, error) {
+	ws, _, err := s.wsSvc.ResolveActive(ctx, userID, r)
+	if err != nil {
+		return nil, err
+	}
+	if ws == nil {
+		return nil, ErrWorkspaceNotFound
+	}
+	if _, err := s.wsSvc.RequireMembership(ctx, userID, ws.ID, model.RoleViewer); err != nil {
+		return nil, err
+	}
+	return s.repo.ListSourcesForWorkspace(ctx, ws.ID)
+}
+
+func (s *ShortsService) GetAnalysisForFile(ctx context.Context, userID string, r *http.Request, fileID string) (*model.ShortsProject, bool, error) {
+	ws, _, err := s.wsSvc.ResolveActive(ctx, userID, r)
+	if err != nil {
+		return nil, false, err
+	}
+	if ws == nil {
+		return nil, false, ErrWorkspaceNotFound
+	}
+	if _, err := s.wsSvc.RequireMembership(ctx, userID, ws.ID, model.RoleViewer); err != nil {
+		return nil, false, err
+	}
+	return s.repo.GetAnalysisForFile(ctx, ws.ID, fileID)
 }
 
 func (s *ShortsService) ListProjects(ctx context.Context, userID string, r *http.Request, limit, offset int) ([]model.ShortsProjectListItem, int, error) {
@@ -203,7 +368,7 @@ func (s *ShortsService) ListProjects(ctx context.Context, userID string, r *http
 	if _, err := s.wsSvc.RequireMembership(ctx, userID, ws.ID, model.RoleViewer); err != nil {
 		return nil, 0, err
 	}
-	return s.repo.ListForWorkspace(ctx, ws.ID, limit, offset)
+	return s.repo.ListShortsWorkspaceAll(ctx, ws.ID, limit, offset)
 }
 
 func (s *ShortsService) DeleteProject(ctx context.Context, userID string, r *http.Request, projectID string) error {
@@ -220,6 +385,23 @@ func (s *ShortsService) DeleteProject(ctx context.Context, userID string, r *htt
 	return s.repo.DeleteProject(ctx, ws.ID, projectID)
 }
 
+func (s *ShortsService) CreateEditProject(ctx context.Context, userID string, r *http.Request, sourceID, name string) (*model.ShortsProject, error) {
+	ws, _, err := s.wsSvc.ResolveActive(ctx, userID, r)
+	if err != nil {
+		return nil, err
+	}
+	if ws == nil {
+		return nil, ErrWorkspaceNotFound
+	}
+	if _, err := s.wsSvc.RequireMembership(ctx, userID, ws.ID, model.RoleEditor); err != nil {
+		return nil, err
+	}
+	if _, err := s.repo.GetSource(ctx, ws.ID, sourceID); err != nil {
+		return nil, err
+	}
+	return s.repo.CreateEditProject(ctx, ws.ID, userID, sourceID, name)
+}
+
 func (s *ShortsService) AnalyzeProject(ctx context.Context, userID string, r *http.Request, projectID string) (*model.ShortsJob, error) {
 	ws, _, err := s.wsSvc.ResolveActive(ctx, userID, r)
 	if err != nil {
@@ -231,7 +413,7 @@ func (s *ShortsService) AnalyzeProject(ctx context.Context, userID string, r *ht
 	if _, err := s.wsSvc.RequireMembership(ctx, userID, ws.ID, model.RoleEditor); err != nil {
 		return nil, err
 	}
-	job, err := s.repo.CreateAnalyzeJob(ctx, ws.ID, projectID)
+	job, err := s.repo.CreateSourceJob(ctx, ws.ID, projectID, "analyze")
 	if errors.Is(err, repository.ErrNotFound) {
 		return nil, ErrShortsProjectNotFound
 	}
@@ -321,6 +503,24 @@ func (s *ShortsService) TranscriptResult(ctx context.Context, userID string, r *
 }
 
 func (s *ShortsService) DraftDownloadURL(ctx context.Context, userID string, r *http.Request, clipID string) (string, int, error) {
+	return s.DraftDownloadURLForEdit(ctx, userID, r, "", clipID)
+}
+
+func (s *ShortsService) GetEditClip(ctx context.Context, userID string, r *http.Request, editProjectID, clipID string) (*model.ShortsClip, error) {
+	ws, _, err := s.wsSvc.ResolveActive(ctx, userID, r)
+	if err != nil {
+		return nil, err
+	}
+	if ws == nil {
+		return nil, ErrWorkspaceNotFound
+	}
+	if _, err := s.wsSvc.RequireMembership(ctx, userID, ws.ID, model.RoleViewer); err != nil {
+		return nil, err
+	}
+	return s.repo.GetEditClip(ctx, ws.ID, editProjectID, clipID)
+}
+
+func (s *ShortsService) DraftDownloadURLForEdit(ctx context.Context, userID string, r *http.Request, editProjectID, clipID string) (string, int, error) {
 	ws, _, err := s.wsSvc.ResolveActive(ctx, userID, r)
 	if err != nil {
 		return "", 0, err
@@ -331,7 +531,12 @@ func (s *ShortsService) DraftDownloadURL(ctx context.Context, userID string, r *
 	if _, err := s.wsSvc.RequireMembership(ctx, userID, ws.ID, model.RoleViewer); err != nil {
 		return "", 0, err
 	}
-	clip, err := s.repo.GetClip(ctx, ws.ID, clipID)
+	var clip *model.ShortsClip
+	if editProjectID != "" {
+		clip, err = s.repo.GetEditClip(ctx, ws.ID, editProjectID, clipID)
+	} else {
+		clip, err = s.repo.GetClip(ctx, ws.ID, clipID)
+	}
 	if errors.Is(err, repository.ErrNotFound) {
 		return "", 0, repository.ErrNotFound
 	}
@@ -349,6 +554,23 @@ func (s *ShortsService) DraftDownloadURL(ctx context.Context, userID string, r *
 		return "", 0, err
 	}
 	return s.fileStorage.DownloadURL(ctx, userID, r, file.ID, true)
+}
+
+func (s *ShortsService) AddClipToEditProject(ctx context.Context, userID string, r *http.Request, editProjectID, clipID string) error {
+	ws, _, err := s.wsSvc.ResolveActive(ctx, userID, r)
+	if err != nil {
+		return err
+	}
+	if ws == nil {
+		return ErrWorkspaceNotFound
+	}
+	if _, err := s.wsSvc.RequireMembership(ctx, userID, ws.ID, model.RoleEditor); err != nil {
+		return err
+	}
+	if _, err := s.repo.GetEditProject(ctx, ws.ID, editProjectID); err != nil {
+		return err
+	}
+	return s.repo.AddClipToEditProject(ctx, ws.ID, editProjectID, clipID)
 }
 
 func (s *ShortsService) UpdateSubtitleSettings(ctx context.Context, userID string, r *http.Request, projectID string, config ShortsSubtitleConfig) error {
@@ -377,8 +599,14 @@ func (s *ShortsService) SetClipOrder(ctx context.Context, userID string, r *http
 	if _, err := s.wsSvc.RequireMembership(ctx, userID, ws.ID, model.RoleEditor); err != nil {
 		return err
 	}
-	if len(clipIDs) == 0 || len(clipIDs) > 100 {
+	if len(clipIDs) > 100 {
 		return fmt.Errorf("invalid clip order")
+	}
+	if len(clipIDs) == 0 {
+		return s.repo.SetClipOrder(ctx, ws.ID, projectID, clipIDs)
+	}
+	if _, err := s.repo.GetEditProject(ctx, ws.ID, projectID); err != nil {
+		return err
 	}
 	return s.repo.SetClipOrder(ctx, ws.ID, projectID, clipIDs)
 }
@@ -392,6 +620,9 @@ func (s *ShortsService) RerenderProject(ctx context.Context, userID string, r *h
 		return nil, ErrWorkspaceNotFound
 	}
 	if _, err := s.wsSvc.RequireMembership(ctx, userID, ws.ID, model.RoleEditor); err != nil {
+		return nil, err
+	}
+	if _, err := s.repo.GetEditProject(ctx, ws.ID, projectID); err != nil {
 		return nil, err
 	}
 	return s.repo.CreateRerenderJob(ctx, ws.ID, projectID)
@@ -408,6 +639,9 @@ func (s *ShortsService) ExportProject(ctx context.Context, userID string, r *htt
 	if _, err := s.wsSvc.RequireMembership(ctx, userID, ws.ID, model.RoleEditor); err != nil {
 		return nil, err
 	}
+	if _, err := s.repo.GetEditProject(ctx, ws.ID, projectID); err != nil {
+		return nil, err
+	}
 	return s.repo.CreateExportJob(ctx, ws.ID, projectID)
 }
 
@@ -422,17 +656,11 @@ func (s *ShortsService) FinalDownloadURL(ctx context.Context, userID string, r *
 	if _, err := s.wsSvc.RequireMembership(ctx, userID, ws.ID, model.RoleViewer); err != nil {
 		return "", 0, err
 	}
-	project, err := s.repo.GetProject(ctx, ws.ID, projectID)
+	finalFileID, err := s.repo.GetFinalFileID(ctx, ws.ID, projectID)
 	if err != nil {
 		return "", 0, err
 	}
-	var settings struct {
-		FinalFileID string `json:"final_file_id"`
-	}
-	if err := json.Unmarshal(project.Settings, &settings); err != nil || settings.FinalFileID == "" {
-		return "", 0, repository.ErrNotFound
-	}
-	file, err := s.files.GetByID(ctx, ws.ID, settings.FinalFileID, false)
+	file, err := s.files.GetByID(ctx, ws.ID, finalFileID, false)
 	if err != nil {
 		return "", 0, err
 	}
