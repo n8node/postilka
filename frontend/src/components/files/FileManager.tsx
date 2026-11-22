@@ -99,6 +99,19 @@ function formatFileMeta(file: WorkspaceFile) {
   return parts.join(" · ");
 }
 
+function shortsFileRowClass(file: WorkspaceFile, section: FilesSection, folderId: string | null) {
+  const isSharedListing = section === "recent" || (section === "my-files" && folderId === null);
+  if (!isSharedListing) return "";
+  const name = file.name.trim().toLowerCase();
+  if (file.mime_type.startsWith("video/") && name.startsWith("shorts-draft-") && name.endsWith(".mp4")) {
+    return "bg-sky-50/70 hover:bg-sky-100/70 border-l-4 border-l-sky-300";
+  }
+  if (file.mime_type.startsWith("audio/") && name === "shorts-audio.mp3") {
+    return "bg-orange-50/70 hover:bg-orange-100/70 border-l-4 border-l-orange-200";
+  }
+  return "";
+}
+
 export function FileManager({
   initialFolderId = null,
   initialFileId = null,
@@ -740,6 +753,7 @@ export function FileManager({
                       key={f.id}
                       className={cn(
                         "group flex items-center gap-3 px-3 py-2.5 hover:bg-zinc-50",
+                        shortsFileRowClass(f, section, folderId),
                         appearIds.has(f.id) && "file-burst-appear",
                         previewFileId === f.id && section === "my-files" && "bg-accent/5",
                       )}
