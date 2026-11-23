@@ -632,6 +632,9 @@
 
 .videoSubtitle.presetKaraoke {
   font-weight: 700;
+}
+
+.videoSubtitle.syncedSubtitle {
   display: block;
   -webkit-line-clamp: unset;
 }
