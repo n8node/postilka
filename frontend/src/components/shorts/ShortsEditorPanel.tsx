@@ -149,11 +149,29 @@ export function ShortsEditorPanel({ clips, draftUrls, initialSettings, onSaveSet
   const selectedUrl = selectedClip ? draftUrls[selectedClip.id] : undefined;
   const selectedDuration = videoDuration ?? selectedSegment?.duration ?? 0;
   const timelineTime = (selectedSegment?.start ?? 0) + Math.min(currentTime, selectedSegment?.duration ?? 0);
-  const activeTimedWords = useMemo(() => timedWords.filter((word) => word.end > (selectedClip?.start_seconds ?? 0) && word.start < (selectedClip?.end_seconds ?? 0)), [timedWords, selectedClip]);
+  const captionBlocks = useMemo(() => {
+    const clipStart = selectedClip?.start_seconds ?? 0;
+    const clipEnd = selectedClip?.end_seconds ?? 0;
+    const words = timedWords.filter((word) => word.end > clipStart && word.start < clipEnd);
+    const blocks: ShortsTimedWord[][] = [];
+    for (const word of words) {
+      const block = blocks.at(-1);
+      if (!block || word.end - block[0].start > 8) blocks.push([word]);
+      else block.push(word);
+    }
+    return blocks;
+  }, [timedWords, selectedClip]);
+  const activeCaptionBlock = useMemo(() => {
+    const absoluteTime = (selectedClip?.start_seconds ?? 0) + currentTime;
+    if (!captionBlocks.length) return [];
+    const containing = captionBlocks.find((block) => absoluteTime >= block[0].start && absoluteTime < block.at(-1)!.end);
+    if (containing) return containing;
+    return captionBlocks.find((block) => absoluteTime < block[0].start) ?? captionBlocks.at(-1)!;
+  }, [captionBlocks, currentTime, selectedClip]);
   const activeWordIndex = useMemo(() => {
     const absoluteTime = (selectedClip?.start_seconds ?? 0) + currentTime;
-    return activeTimedWords.findIndex((word) => absoluteTime >= word.start && absoluteTime < word.end);
-  }, [activeTimedWords, currentTime, selectedClip]);
+    return activeCaptionBlock.findIndex((word) => absoluteTime >= word.start && absoluteTime < word.end);
+  }, [activeCaptionBlock, currentTime, selectedClip]);
   const filteredSegments = useMemo(() => segments.filter((segment) => segment.clip.transcript_text.toLowerCase().includes(query.trim().toLowerCase())), [segments, query]);
   const rulerLabels = useMemo(() => Array.from({ length: 7 }, (_, index) => formatTime((totalDuration * index) / 6)), [totalDuration]);
 
@@ -380,7 +398,7 @@ export function ShortsEditorPanel({ clips, draftUrls, initialSettings, onSaveSet
               {safeZoneVisible && <div className={styles.safeZone}><span>Безопасная зона</span></div>}
               {settings.watermark && <div className={styles.videoTitle}>{settings.watermark}</div>}
               {showCaptions && selectedClip.transcript_text && <div className={`${styles.videoSubtitle} ${captionPresetClass} ${captionPositionClass}`} style={{ fontSize: `${Math.max(10, Math.round(settings.fontSize / 3.2))}px`, color: settings.textColor, "--caption-background": settings.background } as CSSProperties}>
-                {captionPreset === "karaoke" && activeTimedWords.length > 0 ? activeTimedWords.map((word, index) => <span key={`${word.start}-${index}`} className={index === activeWordIndex ? styles.currentCaptionWord : index < activeWordIndex ? styles.spokenCaptionWord : ""}>{word.word}</span>) : selectedClip.transcript_text}
+                {captionPreset === "karaoke" && activeCaptionBlock.length > 0 ? activeCaptionBlock.map((word, index) => <span key={`${word.start}-${index}`} className={index === activeWordIndex ? styles.currentCaptionWord : index < activeWordIndex ? styles.spokenCaptionWord : ""}>{word.word}</span>) : selectedClip.transcript_text}
               </div>}
               <button type="button" className={styles.centerPlay} aria-label={playing ? "Поставить на паузу" : "Воспроизвести"} disabled={!selectedUrl || videoError} onClick={() => void togglePlayback()}>{playing ? <Pause size={23} fill="currentColor" /> : <Play size={23} fill="currentColor" />}</button>
             </div>
