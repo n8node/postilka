@@ -73,6 +73,11 @@ export function getFile(fileId: string) {
   return apiFetch<WorkspaceFile>(`/files/${encodeURIComponent(fileId)}`);
 }
 
+export function getFileDownloadUrl(fileId: string, inline = false) {
+  const query = inline ? "?inline=1" : "";
+  return apiFetch<{ url: string; expires_in: number }>(`/files/${encodeURIComponent(fileId)}/download${query}`);
+}
+
 export function listFiles(section: FilesSection, folderId?: string | null) {
   const params = new URLSearchParams({ section });
   if (folderId) params.set("folder_id", folderId);
