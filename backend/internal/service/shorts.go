@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -25,6 +26,7 @@ type ShortsService struct {
 	repo        *repository.ShortsRepository
 	files       *repository.WorkspaceFileRepository
 	fileStorage *FileStorageService
+	objectStore *ObjectStorage
 	wsSvc       *WorkspaceService
 	aiBilling   *AIBillingService
 	kieConfig   *KieConfigService
@@ -33,8 +35,8 @@ type ShortsService struct {
 func (s *ShortsService) SetAIBilling(billing *AIBillingService) { s.aiBilling = billing }
 func (s *ShortsService) SetKieConfig(config *KieConfigService)  { s.kieConfig = config }
 
-func NewShortsService(repo *repository.ShortsRepository, files *repository.WorkspaceFileRepository, fileStorage *FileStorageService, wsSvc *WorkspaceService) *ShortsService {
-	return &ShortsService{repo: repo, files: files, fileStorage: fileStorage, wsSvc: wsSvc}
+func NewShortsService(repo *repository.ShortsRepository, files *repository.WorkspaceFileRepository, fileStorage *FileStorageService, objectStore *ObjectStorage, wsSvc *WorkspaceService) *ShortsService {
+	return &ShortsService{repo: repo, files: files, fileStorage: fileStorage, objectStore: objectStore, wsSvc: wsSvc}
 }
 
 type CreateShortsProjectInput struct {
@@ -579,6 +581,40 @@ func (s *ShortsService) DraftDownloadURLForEdit(ctx context.Context, userID stri
 		return "", 0, err
 	}
 	return s.fileStorage.DownloadURL(ctx, userID, r, file.ID, true)
+}
+
+func (s *ShortsService) DownloadDraftForEdit(ctx context.Context, userID string, r *http.Request, editProjectID, clipID string) (io.ReadCloser, string, string, error) {
+	ws, _, err := s.wsSvc.ResolveActive(ctx, userID, r)
+	if err != nil {
+		return nil, "", "", err
+	}
+	if ws == nil {
+		return nil, "", "", ErrWorkspaceNotFound
+	}
+	if _, err := s.wsSvc.RequireMembership(ctx, userID, ws.ID, model.RoleViewer); err != nil {
+		return nil, "", "", err
+	}
+	var clip *model.ShortsClip
+	if editProjectID != "" {
+		clip, err = s.repo.GetEditClip(ctx, ws.ID, editProjectID, clipID)
+	} else {
+		clip, err = s.repo.GetClip(ctx, ws.ID, clipID)
+	}
+	if err != nil {
+		return nil, "", "", err
+	}
+	if clip.DraftFileID == nil || s.files == nil || s.objectStore == nil {
+		return nil, "", "", repository.ErrNotFound
+	}
+	file, err := s.files.GetByID(ctx, ws.ID, *clip.DraftFileID, false)
+	if err != nil {
+		return nil, "", "", err
+	}
+	body, contentType, err := s.objectStore.GetObject(ctx, file.S3Key)
+	if err != nil {
+		return nil, "", "", err
+	}
+	return body, file.Name, contentType, nil
 }
 
 func (s *ShortsService) AddClipToEditProject(ctx context.Context, userID string, r *http.Request, editProjectID, clipID string) error {

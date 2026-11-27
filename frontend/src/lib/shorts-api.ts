@@ -146,6 +146,11 @@ export function getShortsDraftDownloadUrl(clipId: string, editProjectId?: string
   return request<{ url: string; expires_in: number }>(`/shorts/clips/${clipId}/draft${query}`);
 }
 
+export function getShortsDraftDownloadUrlPath(clipId: string, editProjectId?: string) {
+  const query = editProjectId ? `?edit_project_id=${encodeURIComponent(editProjectId)}` : "";
+  return `${apiBase}/shorts/clips/${encodeURIComponent(clipId)}/download${query}`;
+}
+
 export function deleteShortsClip(clipId: string, editProjectId: string) {
   return request<{ ok: boolean }>(`/shorts/clips/${clipId}?edit_project_id=${encodeURIComponent(editProjectId)}`, { method: "DELETE" });
 }

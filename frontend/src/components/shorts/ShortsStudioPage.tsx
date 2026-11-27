@@ -10,7 +10,7 @@ import { ShortsCreationPanel } from "@/components/shorts/ShortsCreationPanel";
 import { ShortsClipsPanel, type ShortsClipDraft } from "@/components/shorts/ShortsClipsPanel";
 import { ShortsEditorPanel, type ShortsEditorSettings } from "@/components/shorts/ShortsEditorPanel";
 import { uploadFile, type WorkspaceFile } from "@/lib/files-api";
-import { analyzeShortsProject, cancelShortsJob, createShortsProject, deleteShortsProject, exportShortsProject, getShortsAudioDownloadUrl, getShortsDraftDownloadUrl, getShortsFinalDownloadUrl, getShortsJob, getShortsProject, getShortsTranscriptResult, getShortsTranscriptResultUrl, listShortsProjects, listShortsSources, rerenderShortsProject, deleteShortsClip, updateShortsClip, getShortsAnalysisForFile, getShortsSource, createShortsEditProject, addShortsClipToEditProject, updateShortsClipOrder, updateShortsSubtitleSettings, type ShortsClip, type ShortsJob, type ShortsProject, type ShortsProjectListItem, type ShortsTimedWord } from "@/lib/shorts-api";
+import { analyzeShortsProject, cancelShortsJob, createShortsProject, deleteShortsProject, exportShortsProject, getShortsAudioDownloadUrl, getShortsDraftDownloadUrl, getShortsDraftDownloadUrlPath, getShortsFinalDownloadUrl, getShortsJob, getShortsProject, getShortsTranscriptResult, getShortsTranscriptResultUrl, listShortsProjects, listShortsSources, rerenderShortsProject, deleteShortsClip, updateShortsClip, getShortsAnalysisForFile, getShortsSource, createShortsEditProject, addShortsClipToEditProject, updateShortsClipOrder, updateShortsSubtitleSettings, type ShortsClip, type ShortsJob, type ShortsProject, type ShortsProjectListItem, type ShortsTimedWord } from "@/lib/shorts-api";
 
 const contentTypes = [
   ["podcast", "Подкаст"],
@@ -314,6 +314,27 @@ export function ShortsStudioPage() {
     }
   }
 
+  async function downloadClip(clip: ShortsClip) {
+    setClipSaving((value) => ({ ...value, [clip.id]: true }));
+    try {
+      const response = await fetch(getShortsDraftDownloadUrlPath(clip.id, editProjectId || undefined), { credentials: "include" });
+      if (!response.ok) throw new Error(`Не удалось скачать фрагмент (${response.status})`);
+      const blob = await response.blob();
+      const anchor = document.createElement("a");
+      anchor.href = URL.createObjectURL(blob);
+      anchor.download = `shorts-fragment-${clip.id}.mp4`;
+      anchor.rel = "noreferrer";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(anchor.href);
+    } catch (error) {
+      setJobMessage(error instanceof Error ? error.message : "Не удалось скачать фрагмент");
+    } finally {
+      setClipSaving((value) => ({ ...value, [clip.id]: false }));
+    }
+  }
+
   async function removeClip(clipId: string) {
     if (!project || !editProjectId || clips.length <= 1) return;
     if (!window.confirm("Удалить этот фрагмент из ролика? Это действие нельзя отменить.")) return;
@@ -485,7 +506,7 @@ export function ShortsStudioPage() {
         onDeleteClip={(clipId) => void removeClip(clipId)}
       />}
       {activeStep === "export" && project && <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm"><h2 className="text-2xl font-bold text-slate-900">Экспорт</h2><p className="mt-2 text-sm text-slate-500">Настройки экспорта будут доступны на следующем этапе.</p></section>}
-      {activeStep === "clips" && project && <ShortsClipsPanel clips={sourceClips.length ? sourceClips : clips} draftUrls={draftUrls} drafts={clipDrafts} saving={clipSaving} editClipIds={new Set(clips.map((clip)=>clip.id))} onAddToEditor={(clip)=>void addClipToCurrentEdit(clip)} onDraftChange={(id, draft) => setClipDrafts((items) => ({ ...items, [id]: draft }))} onSave={(clip) => void saveClip(clip)} onMove={(index, direction) => void moveClip(index, direction)} onContinue={() => { if (!editProjectId) { void createMontageProject(); return; } setActiveStep("editor"); window.history.replaceState(null, "", `/app/shorts?project=${encodeURIComponent(project.id)}&step=editor`); }} />}
+      {activeStep === "clips" && project && <ShortsClipsPanel clips={sourceClips.length ? sourceClips : clips} draftUrls={draftUrls} drafts={clipDrafts} saving={clipSaving} editClipIds={new Set(clips.map((clip)=>clip.id))} onAddToEditor={(clip)=>void addClipToCurrentEdit(clip)} onDraftChange={(id, draft) => setClipDrafts((items) => ({ ...items, [id]: draft }))} onSave={(clip) => void downloadClip(clip)} onMove={(index, direction) => void moveClip(index, direction)} onContinue={() => { if (!editProjectId) { void createMontageProject(); return; } setActiveStep("editor"); window.history.replaceState(null, "", `/app/shorts?project=${encodeURIComponent(project.id)}&step=editor`); }} />}
     </div>
   );
 }

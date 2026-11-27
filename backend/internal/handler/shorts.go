@@ -3,9 +3,12 @@ package handler
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
@@ -295,6 +298,25 @@ func (h *ShortsHandler) DownloadDraft(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"url": url, "expires_in": expiresIn})
+}
+
+func (h *ShortsHandler) DownloadDraftFile(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
+		return
+	}
+	body, filename, contentType, err := h.shorts.DownloadDraftForEdit(r.Context(), userID, r, r.URL.Query().Get("edit_project_id"), chi.URLParam(r, "id"))
+	if err != nil {
+		h.mapError(w, err)
+		return
+	}
+	defer body.Close()
+	w.Header().Set("Content-Type", contentType)
+	safeFilename := strings.NewReplacer(`"`, "", "\r", "", "\n", "").Replace(filename)
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, safeFilename))
+	w.Header().Set("Cache-Control", "private, no-store")
+	_, _ = io.Copy(w, body)
 }
 
 func (h *ShortsHandler) UpdateSubtitleSettings(w http.ResponseWriter, r *http.Request) {
