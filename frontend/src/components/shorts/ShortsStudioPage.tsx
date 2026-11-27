@@ -135,6 +135,7 @@ export function ShortsStudioPage() {
   async function openProject(id: string) {
     const requestId = ++projectRequestRef.current;
     setJob(null);
+    setJobMessage("");
     setClips([]);
     setSourceClips([]);
     setSourceEditProjects([]);
@@ -163,7 +164,13 @@ export function ShortsStudioPage() {
       setWatermark(result.project.settings?.watermark ?? "");
       setSafeZone(result.project.settings?.safe_zone ?? 70);
       const historyJob = history.find((item) => item.project.id === id)?.job;
-      const projectJob = historyJob ?? (result.project.status === "completed" || result.project.status === "failed" || result.project.status === "analyzing"
+      // A montage can have completed rerender jobs in its history. They are not
+      // the montage's current processing state and must not surface an old
+      // render error when the editor is opened.
+      const currentJob = result.project.is_edit_project && historyJob && !["queued", "running"].includes(historyJob.status)
+        ? undefined
+        : historyJob;
+      const projectJob = currentJob ?? (result.project.status === "completed" || result.project.status === "failed" || result.project.status === "analyzing"
         ? { id: "project-status", project_id: id, job_type: "analyze", status: result.project.status === "completed" ? "succeeded" : result.project.status === "failed" ? "failed" : "running", current_step: result.project.status === "completed" ? "completed" : result.project.status === "failed" ? "failed" : (result.project.settings?.current_step ?? "loading_project"), progress: result.project.status === "completed" ? 100 : result.project.status === "failed" ? 0 : 0 }
         : null);
       setJob(projectJob);
