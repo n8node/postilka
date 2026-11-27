@@ -911,7 +911,7 @@ func (r *ShortsRepository) CreateRerenderJob(ctx context.Context, workspaceID, p
 func (r *ShortsRepository) createEditJob(ctx context.Context, workspaceID, projectID, jobType string) (*model.ShortsJob, error) {
 	var j model.ShortsJob
 	var status string
-	err := r.pool.QueryRow(ctx, `INSERT INTO shorts_jobs (source_id, edit_project_id, job_type) SELECT ep.source_id,ep.id,$3 FROM shorts_edit_projects ep WHERE ep.id=$1 AND ep.workspace_id=$2 AND NOT EXISTS (SELECT 1 FROM shorts_jobs WHERE edit_project_id=ep.id AND status IN ('queued','running')) RETURNING id,source_id,edit_project_id,job_type,status,current_step,progress,attempts,available_at,last_error,created_at,updated_at`, projectID, workspaceID, jobType).Scan(&j.ID, &j.SourceID, &j.EditProjectID, &j.JobType, &status, &j.CurrentStep, &j.Progress, &j.Attempts, &j.AvailableAt, &j.LastError, &j.CreatedAt, &j.UpdatedAt)
+	err := r.pool.QueryRow(ctx, `INSERT INTO shorts_jobs (source_id, edit_project_id, job_type) SELECT ep.source_id,ep.id,$3::text FROM shorts_edit_projects ep WHERE ep.id=$1::uuid AND ep.workspace_id=$2::uuid AND NOT EXISTS (SELECT 1 FROM shorts_jobs WHERE edit_project_id=ep.id AND status IN ('queued','running')) RETURNING id,source_id,edit_project_id,job_type,status,current_step,progress,attempts,available_at,last_error,created_at,updated_at`, projectID, workspaceID, jobType).Scan(&j.ID, &j.SourceID, &j.EditProjectID, &j.JobType, &status, &j.CurrentStep, &j.Progress, &j.Attempts, &j.AvailableAt, &j.LastError, &j.CreatedAt, &j.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
