@@ -36,3 +36,7 @@ Thumbs.db
 Картинки/
 Видео/
 _imports/
+
+# Local design prototypes and exported archives
+Kimi_Agent_*/
+Kimi_Agent_*.zip
