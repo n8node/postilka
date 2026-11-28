@@ -1144,6 +1144,16 @@
   line-height: 1.45;
 }
 
+.cropSavingHint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 10px;
+  color: var(--editor-muted);
+  font-size: 9px;
+}
+
 .switchLabel {
   position: relative;
   display: inline-flex;

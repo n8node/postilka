@@ -104,7 +104,7 @@ const inspectorWidthByViewport = { compact: 250, standard: 286, wide: 304 } as c
 
 function cropConfigForClip(clip: ShortsClip, ratio: Ratio): ShortsCropConfig {
   const config = clip.crop_config;
-  if (!config || !config.keyframes?.length) return { ...defaultCropConfig, aspect_ratio: ratio, keyframes: [{ ...defaultCropConfig.keyframes[0] }] };
+  if (!config) return { ...defaultCropConfig, aspect_ratio: ratio, keyframes: [{ ...defaultCropConfig.keyframes[0] }] };
   return { ...config, aspect_ratio: ratio, keyframes: config.keyframes.map((keyframe) => ({ ...keyframe })) };
 }
 
@@ -176,7 +176,8 @@ export function ShortsEditorPanel({ clips, draftUrls, sourceUrl, initialSettings
   const selectedSegment = segments.find((segment) => segment.clip.id === selectedClipId) ?? segments[0];
   const selectedClip = selectedSegment?.clip;
   const selectedUrl = selectedClip ? draftUrls[selectedClip.id] : undefined;
-  const selectedDuration = videoDuration ?? selectedSegment?.duration ?? 0;
+  const previewUrl = sourceUrl || selectedUrl;
+  const selectedDuration = selectedSegment?.duration ?? videoDuration ?? 0;
   const timelineTime = (selectedSegment?.start ?? 0) + Math.min(currentTime, selectedSegment?.duration ?? 0);
   const captionBlocks = useMemo(() => {
     const clipStart = selectedClip?.start_seconds ?? 0;
@@ -275,7 +276,7 @@ export function ShortsEditorPanel({ clips, draftUrls, sourceUrl, initialSettings
     pendingSeekRef.current = time;
     setCurrentTime(time);
     if (clipId === selectedClipId && videoRef.current) {
-      videoRef.current.currentTime = showOriginal ? (selectedClip?.start_seconds ?? 0) + time : time;
+      videoRef.current.currentTime = (selectedClip?.start_seconds ?? 0) + time;
       return;
     }
     setSelectedClipId(clipId);
@@ -303,29 +304,35 @@ export function ShortsEditorPanel({ clips, draftUrls, sourceUrl, initialSettings
     setCropDirty(true);
   }
 
+  async function persistCrop(nextConfig: ShortsCropConfig) {
+    if (!selectedClip || !onSaveCrop) return;
+    setCropSaving(true);
+    try {
+      await onSaveCrop(selectedClip.id, nextConfig);
+      setCropDirty(false);
+    } finally {
+      setCropSaving(false);
+    }
+  }
+
   function addCropKeyframe() {
     const current = currentCropKeyframe();
-    setCropConfig((config) => ({ ...config, keyframes: [...config.keyframes.filter((point) => Math.abs(point.time - currentTime) > 0.02), { ...current, time: currentTime }].sort((a, b) => a.time - b.time) }));
-    setCropDirty(true);
+    const nextConfig = { ...cropConfig, mode: "manual" as const, aspect_ratio: ratio, keyframes: [...cropConfig.keyframes.filter((point) => Math.abs(point.time - currentTime) > 0.02), { ...current, time: currentTime }].sort((a, b) => a.time - b.time) };
+    setCropConfig(nextConfig);
+    void persistCrop(nextConfig);
   }
 
   function selectCropKeyframe(keyframe: ShortsCropKeyframe) {
     setCurrentTime(Math.max(0, Math.min(selectedSegment?.duration ?? 0, keyframe.time)));
     if (videoRef.current) {
-      videoRef.current.currentTime = showOriginal
-        ? (selectedClip?.start_seconds ?? 0) + keyframe.time
-        : keyframe.time;
+      videoRef.current.currentTime = (selectedClip?.start_seconds ?? 0) + keyframe.time;
     }
   }
 
   function removeCropKeyframe(time: number) {
-    setCropConfig((config) => ({
-      ...config,
-      keyframes: config.keyframes.length <= 1
-        ? [{ time: 0, center_x: 0.5, center_y: 0.5, scale: 1 }]
-        : config.keyframes.filter((keyframe) => Math.abs(keyframe.time - time) > 0.02),
-    }));
-    setCropDirty(true);
+    const nextConfig = { ...cropConfig, keyframes: cropConfig.keyframes.filter((keyframe) => Math.abs(keyframe.time - time) > 0.02) };
+    setCropConfig(nextConfig);
+    void persistCrop(nextConfig);
   }
 
   function handleCropPointerDown(event: React.PointerEvent<HTMLDivElement>) {
@@ -346,15 +353,9 @@ export function ShortsEditorPanel({ clips, draftUrls, sourceUrl, initialSettings
     cropDragRef.current = null;
   }
 
-  async function saveCrop() {
-    if (!selectedClip || !onSaveCrop) return;
-    setCropSaving(true);
-    try { await onSaveCrop(selectedClip.id, cropConfig); setCropDirty(false); } finally { setCropSaving(false); }
-  }
-
   async function togglePlayback() {
     const video = videoRef.current;
-    if (!video || !(showOriginal ? sourceUrl : selectedUrl)) return;
+    if (!video || !previewUrl) return;
     if (video.paused) {
       try {
         await video.play();
@@ -380,7 +381,7 @@ export function ShortsEditorPanel({ clips, draftUrls, sourceUrl, initialSettings
     video.volume = volume / 100;
     video.muted = muted;
     if (pendingSeekRef.current !== null) {
-      const requested = showOriginal ? (selectedClip?.start_seconds ?? 0) + pendingSeekRef.current : pendingSeekRef.current;
+      const requested = (selectedClip?.start_seconds ?? 0) + pendingSeekRef.current;
       video.currentTime = Math.min(requested, Number.isFinite(video.duration) ? video.duration : requested);
       pendingSeekRef.current = null;
     }
@@ -603,7 +604,7 @@ export function ShortsEditorPanel({ clips, draftUrls, sourceUrl, initialSettings
                 key={selectedClip.id}
                 ref={videoRef}
                 className={styles.videoPoster}
-                src={showOriginal ? sourceUrl : selectedUrl}
+                src={previewUrl}
                 playsInline
                 preload="metadata"
                 style={showOriginal ? undefined : {
@@ -614,7 +615,7 @@ export function ShortsEditorPanel({ clips, draftUrls, sourceUrl, initialSettings
                 onPlay={() => setPlaying(true)}
                 onPause={() => setPlaying(false)}
                 onEnded={() => setPlaying(false)}
-                onTimeUpdate={(event) => setCurrentTime(Math.max(0, event.currentTarget.currentTime - (showOriginal ? (selectedClip.start_seconds ?? 0) : 0)))}
+                onTimeUpdate={(event) => setCurrentTime(Math.max(0, event.currentTarget.currentTime - (selectedClip.start_seconds ?? 0)))}
                 onLoadedMetadata={handleVideoMetadata}
                 onCanPlay={handleVideoMetadata}
                 onError={() => setVideoError(true)}
@@ -626,11 +627,11 @@ export function ShortsEditorPanel({ clips, draftUrls, sourceUrl, initialSettings
               {!showOriginal && showCaptions && selectedClip.transcript_text && <div className={`${styles.videoSubtitle} ${captionPresetClass} ${captionPositionClass} ${activeCaptionBlock.length > 0 ? styles.syncedSubtitle : ""}`} style={{ fontSize: `${Math.max(10, Math.round(settings.fontSize / 3.2))}px`, color: settings.textColor, "--caption-background": settings.background } as CSSProperties}>
                 {activeCaptionBlock.length > 0 ? activeCaptionBlock.map((word, index) => <span key={`${word.start}-${index}`} className={index === activeWordIndex ? styles.currentCaptionWord : index < activeWordIndex ? styles.spokenCaptionWord : ""}>{word.word}</span>) : selectedClip.transcript_text}
               </div>}
-              <button type="button" className={styles.centerPlay} aria-label={playing ? "Поставить на паузу" : "Воспроизвести"} disabled={!(showOriginal ? sourceUrl : selectedUrl) || videoError} onClick={() => void togglePlayback()}>{playing ? <Pause size={23} fill="currentColor" /> : <Play size={23} fill="currentColor" />}</button>
+              <button type="button" className={styles.centerPlay} aria-label={playing ? "Поставить на паузу" : "Воспроизвести"} disabled={!previewUrl || videoError} onClick={() => void togglePlayback()}>{playing ? <Pause size={23} fill="currentColor" /> : <Play size={23} fill="currentColor" />}</button>
             </div>
           </div>
           <div className={styles.playerControls}>
-            <button type="button" className={styles.playButton} aria-label={playing ? "Пауза" : "Воспроизвести"} disabled={!selectedUrl || videoError} onClick={() => void togglePlayback()}>{playing ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" />}</button>
+            <button type="button" className={styles.playButton} aria-label={playing ? "Пауза" : "Воспроизвести"} disabled={!previewUrl || videoError} onClick={() => void togglePlayback()}>{playing ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" />}</button>
             <span className={styles.timecode}><strong>{formatTime(currentTime)}</strong><i>/</i>{formatTime(selectedDuration)}</span>
             <input className={`${styles.range} ${styles.playerRange}`} aria-label="Позиция воспроизведения" type="range" min="0" max={Math.max(0.1, selectedDuration)} step="0.01" value={Math.min(currentTime, Math.max(0.1, selectedDuration))} disabled={!selectedUrl || videoError} onChange={(event) => seekVideo(Number(event.target.value))} style={rangeStyle((currentTime / Math.max(0.1, selectedDuration)) * 100)} />
             <button type="button" className={`${styles.iconButton} ${styles.small}`} aria-label={muted ? "Включить звук" : "Выключить звук"} onClick={() => setMuted((value) => !value)}>{muted ? <VolumeX size={17} /> : <Volume2 size={17} />}</button>
@@ -683,7 +684,7 @@ export function ShortsEditorPanel({ clips, draftUrls, sourceUrl, initialSettings
                 </div>)}
                 <p className={styles.cropKeyframesHint}>Переместите рамку в нужный момент и добавьте точку. Между точками положение плавно меняется.</p>
               </div>
-              {onSaveCrop && <button type="button" className={`${styles.button} ${cropDirty ? styles.buttonPrimary : styles.buttonSecondary} ${styles.fullWidth}`} onClick={() => void saveCrop()} disabled={cropSaving || !cropDirty}>{cropSaving ? "Сохранение кадра…" : cropDirty ? "Сохранить кадрирование" : "Кадрирование сохранено"}</button>}
+              {cropSaving && <div className={styles.cropSavingHint}><Loader2 size={12} className={styles.spinning} /> Сохраняем точки…</div>}
             </section>
 
             <section className={styles.settingSection}>
