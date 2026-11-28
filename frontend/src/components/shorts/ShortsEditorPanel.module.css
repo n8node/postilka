@@ -584,6 +584,27 @@
   line-height: 1.45;
 }
 
+.cropModes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  margin: 8px 0;
+}
+
+.cropModes button {
+  min-height: 28px;
+  border: 1px solid var(--editor-border) !important;
+  border-radius: 6px;
+  color: var(--editor-muted) !important;
+  font-size: 9px;
+}
+
+.cropModes button.active {
+  border-color: var(--editor-accent) !important;
+  color: var(--editor-accent) !important;
+  background: var(--editor-accent-soft) !important;
+}
+
 .previewPlaceholder {
   position: absolute;
   inset: 0;

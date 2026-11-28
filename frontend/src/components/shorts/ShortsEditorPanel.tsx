@@ -507,6 +507,10 @@ export function ShortsEditorPanel({ clips, draftUrls, sourceUrl, initialSettings
               <input className={styles.range} type="range" aria-label="Масштаб видео" min="80" max="140" value={scale} onChange={(event) => setScale(Number(event.target.value))} style={rangeStyle(((scale - 80) / 60) * 100)} />
               <button type="button" className={styles.textAction} onClick={() => setScale(100)}><WandSparkles size={14} /> Заполнить кадр автоматически</button>
               <div className={styles.cropHint}>{showOriginal ? "Перетаскивайте рамку на исходном 16:9 видео" : "Включите «Оригинал 16:9», чтобы настроить область кадрирования"}</div>
+              <div className={styles.cropModes} role="group" aria-label="Режим кадрирования">
+                <button type="button" className={cropConfig.mode === "manual" ? styles.active : ""} onClick={() => { setCropConfig((config) => ({ ...config, mode: "manual" })); setCropDirty(true); }}>Вручную</button>
+                <button type="button" className={cropConfig.mode === "auto" ? styles.active : ""} onClick={() => { setCropConfig((config) => ({ ...config, mode: "auto", keyframes: [{ ...currentCropKeyframe(), time: 0, center_x: 0.5, center_y: 0.5 }] })); setCropDirty(true); }}>Авто (центр)</button>
+              </div>
               <button type="button" className={styles.textAction} onClick={addCropKeyframe}><Plus size={14} /> Добавить точку кадрирования на {formatTime(currentTime)}</button>
               {onSaveCrop && <button type="button" className={`${styles.button} ${cropDirty ? styles.buttonPrimary : styles.buttonSecondary} ${styles.fullWidth}`} onClick={() => void saveCrop()} disabled={cropSaving || !cropDirty}>{cropSaving ? "Сохранение кадра…" : cropDirty ? "Сохранить кадрирование" : "Кадрирование сохранено"}</button>}
             </section>

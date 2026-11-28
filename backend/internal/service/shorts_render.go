@@ -117,9 +117,9 @@ func ShortsCropFilter(config model.ShortsCropConfig) string {
 		keyframe.Scale = 1
 	}
 	if keyframe.Scale != 1 {
-		return fmt.Sprintf("scale=%d:%d:force_original_aspect_ratio=increase,crop=1080:1920:(iw-1080)*%.6f:(ih-1920)*%.6f,format=yuv420p", int(1080*keyframe.Scale), int(1920*keyframe.Scale), keyframe.CenterX, keyframe.CenterY)
+		return fmt.Sprintf("scale='if(gt(iw/ih,0.5625),-2,1080)':'if(gt(iw/ih,0.5625),1920,-2)',scale=iw*%.6f:ih*%.6f,crop=1080:1920:(iw-1080)*%.6f:(ih-1920)*%.6f,format=yuv420p", keyframe.Scale, keyframe.Scale, keyframe.CenterX, keyframe.CenterY)
 	}
-	return fmt.Sprintf("scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920:(iw-1080)*%.6f:(ih-1920)*%.6f,format=yuv420p", keyframe.CenterX, keyframe.CenterY)
+	return fmt.Sprintf("scale='if(gt(iw/ih,0.5625),-2,1080)':'if(gt(iw/ih,0.5625),1920,-2)',crop=1080:1920:(iw-1080)*%.6f:(ih-1920)*%.6f,format=yuv420p", keyframe.CenterX, keyframe.CenterY)
 }
 
 func BuildShortsASS(segments []ShortsTranscriptSegment, clipStart, clipEnd float64, config ShortsSubtitleConfig) string {
