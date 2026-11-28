@@ -10,6 +10,7 @@ import { ShortsCreationPanel } from "@/components/shorts/ShortsCreationPanel";
 import { ShortsClipsPanel, type ShortsClipDraft } from "@/components/shorts/ShortsClipsPanel";
 import { ShortsEditorPanel, type ShortsEditorSettings } from "@/components/shorts/ShortsEditorPanel";
 import { uploadFile, type WorkspaceFile } from "@/lib/files-api";
+import { getCachedFileMediaUrl } from "@/lib/file-media-cache";
 import { analyzeShortsProject, cancelShortsJob, createShortsProject, deleteShortsProject, exportShortsProject, getShortsAudioDownloadUrl, getShortsDraftDownloadUrl, getShortsDraftDownloadUrlPath, getShortsFinalDownloadUrl, getShortsJob, getShortsProject, getShortsTranscriptResult, getShortsTranscriptResultUrl, listShortsProjects, listShortsSources, rerenderShortsProject, deleteShortsClip, updateShortsClip, getShortsAnalysisForFile, getShortsSource, createShortsEditProject, addShortsClipToEditProject, updateShortsClipOrder, updateShortsSubtitleSettings, type ShortsClip, type ShortsJob, type ShortsProject, type ShortsProjectListItem, type ShortsTimedWord } from "@/lib/shorts-api";
 
 const contentTypes = [
@@ -58,7 +59,26 @@ export function ShortsStudioPage() {
   const [clipSaving, setClipSaving] = useState<Record<string, boolean>>({});
   const [clipDrafts, setClipDrafts] = useState<Record<string, { start: string; end: string; text: string; selected: boolean }>>({});
   const projectRequestRef = useRef(0);
-  const previewUrl = useMemo(() => sourceFile?.id.startsWith("blob:") ? sourceFile.id : "", [sourceFile]);
+  const [previewUrl, setPreviewUrl] = useState("");
+
+  useEffect(() => {
+    const fileId = sourceFile?.id;
+    if (!fileId) {
+      setPreviewUrl("");
+      return;
+    }
+    let cancelled = false;
+    void getCachedFileMediaUrl(fileId, "preview")
+      .then((url) => {
+        if (!cancelled) setPreviewUrl(url);
+      })
+      .catch(() => {
+        if (!cancelled) setPreviewUrl("");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [sourceFile?.id]);
 
   function readTimedWords(result: unknown, offset: number): ShortsTimedWord[] {
     if (!result || typeof result !== "object") return [];
