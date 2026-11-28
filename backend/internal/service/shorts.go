@@ -646,7 +646,7 @@ func (s *ShortsService) UpdateSubtitleSettings(ctx context.Context, userID strin
 		return err
 	}
 	config = NormalizeShortsSubtitleConfig(config)
-	return s.repo.SetSubtitleSettings(ctx, ws.ID, projectID, config.Style, config.Position, config.FontSize, config.TextColor, config.Background, config.Watermark, config.SafeZone)
+	return s.repo.SetSubtitleSettings(ctx, ws.ID, projectID, config.Style, config.Position, config.FontSize, config.TextColor, config.Background, config.Watermark, config.SafeZone, config.WordsPerBlock)
 }
 
 func (s *ShortsService) UpdateClipCrop(ctx context.Context, userID string, r *http.Request, projectID, clipID string, config model.ShortsCropConfig) error {

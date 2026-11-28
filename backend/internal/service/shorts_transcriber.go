@@ -6,9 +6,16 @@ import (
 )
 
 type ShortsTranscriptSegment struct {
+	StartSeconds float64                `json:"start_seconds"`
+	EndSeconds   float64                `json:"end_seconds"`
+	Text         string                 `json:"text"`
+	Words        []ShortsTranscriptWord `json:"words,omitempty"`
+}
+
+type ShortsTranscriptWord struct {
+	Word         string  `json:"word"`
 	StartSeconds float64 `json:"start_seconds"`
 	EndSeconds   float64 `json:"end_seconds"`
-	Text         string  `json:"text"`
 }
 
 type ShortsTranscript struct {

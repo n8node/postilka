@@ -48,6 +48,7 @@ export type ShortsEditorSettings = {
   background: string;
   watermark: string;
   safeZone: number;
+  wordsPerBlock: number;
 };
 
 type Props = {
@@ -91,6 +92,7 @@ const defaultSettings: ShortsEditorSettings = {
   background: "#101010",
   watermark: "",
   safeZone: 70,
+  wordsPerBlock: 6,
 };
 
 const defaultCropConfig: ShortsCropConfig = {
@@ -187,11 +189,11 @@ export function ShortsEditorPanel({ clips, draftUrls, sourceUrl, initialSettings
     const blocks: ShortsTimedWord[][] = [];
     for (const word of words) {
       const block = blocks.at(-1);
-      if (!block || word.end - block[0].start > 8) blocks.push([word]);
+      if (!block || block.length >= settings.wordsPerBlock || word.end - block[0].start > 8) blocks.push([word]);
       else block.push(word);
     }
     return blocks;
-  }, [timedWords, selectedClip]);
+  }, [timedWords, selectedClip, settings.wordsPerBlock]);
   const activeCaptionBlock = useMemo(() => {
     const absoluteTime = (selectedClip?.start_seconds ?? 0) + currentTime;
     if (!captionBlocks.length) return [];
@@ -725,6 +727,9 @@ export function ShortsEditorPanel({ clips, draftUrls, sourceUrl, initialSettings
               <div className={styles.presetGrid}>{captionPresets.map((preset) => <button type="button" key={preset.id} className={`${styles.captionPreset} ${styles[`sample${preset.id[0].toUpperCase()}${preset.id.slice(1)}`]} ${captionPreset === preset.id ? styles.active : ""}`} onClick={() => selectPreset(preset.id)}><span>Звоните <b>смело</b></span><small>{preset.label}</small></button>)}</div>
               <label className={styles.rangeLabel}><span>Размер текста</span><output>{settings.fontSize}</output></label>
               <input className={styles.range} type="range" aria-label="Размер текста субтитров" min="36" max="76" value={settings.fontSize} onChange={(event) => updateSettings({ fontSize: Number(event.target.value) })} style={rangeStyle(((settings.fontSize - 36) / 40) * 100)} />
+              <label className={styles.rangeLabel}><span>Слов в блоке</span><output>{settings.wordsPerBlock}</output></label>
+              <input className={styles.range} type="range" aria-label="Количество слов в блоке субтитров" min="1" max="12" step="1" value={settings.wordsPerBlock} onChange={(event) => updateSettings({ wordsPerBlock: Number(event.target.value) })} style={rangeStyle(((settings.wordsPerBlock - 1) / 11) * 100)} />
+              <div className={styles.cropHint}>Меньше слов — компактнее блоки. Таймкоды каждого слова сохраняются.</div>
             </section>
 
             <section className={`${styles.settingSection} ${styles.compactSection}`}>

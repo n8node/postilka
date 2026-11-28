@@ -14,7 +14,7 @@ export type ShortsProject = {
   audio_expires_at?: string;
   created_at: string;
   updated_at: string;
-  settings?: { transcript?: unknown; transcript_result?: unknown; processing_start_seconds?: number; processing_end_seconds?: number; current_step?: string; subtitle_style?: string; subtitle_position?: string; subtitle_font_size?: number; subtitle_text_color?: string; subtitle_background?: string; watermark?: string; safe_zone?: number };
+  settings?: { transcript?: unknown; transcript_result?: unknown; processing_start_seconds?: number; processing_end_seconds?: number; current_step?: string; subtitle_style?: string; subtitle_position?: string; subtitle_font_size?: number; subtitle_text_color?: string; subtitle_background?: string; watermark?: string; safe_zone?: number; subtitle_words_per_block?: number };
 };
 
 export type ShortsProjectListItem = {
@@ -174,7 +174,7 @@ export function updateShortsClip(clipId: string, input: { start_seconds: number;
   return request<{ clip: ShortsClip }>(`/shorts/clips/${clipId}${query}`, { method: "PATCH", body: JSON.stringify(input) });
 }
 
-export function updateShortsSubtitleSettings(projectId: string, input: { style: string; position: string; font_size: number; text_color: string; background: string; watermark: string; safe_zone: number }) {
+export function updateShortsSubtitleSettings(projectId: string, input: { style: string; position: string; font_size: number; text_color: string; background: string; watermark: string; safe_zone: number; words_per_block: number }) {
   return request<{ ok: boolean }>(`/shorts/projects/${projectId}/subtitle-settings`, { method: "PATCH", body: JSON.stringify(input) });
 }
 

@@ -95,11 +95,13 @@ func parseKieTranscript(raw []byte) (ShortsTranscript, error) {
 	}
 	segments := make([]ShortsTranscriptSegment, 0)
 	var current strings.Builder
+	var currentWords []ShortsTranscriptWord
 	var start, end float64
 	flush := func() {
 		if current.Len() > 0 && end > start {
-			segments = append(segments, ShortsTranscriptSegment{StartSeconds: start, EndSeconds: end, Text: strings.TrimSpace(current.String())})
+			segments = append(segments, ShortsTranscriptSegment{StartSeconds: start, EndSeconds: end, Text: strings.TrimSpace(current.String()), Words: append([]ShortsTranscriptWord(nil), currentWords...)})
 			current.Reset()
+			currentWords = nil
 		}
 	}
 	for _, word := range payload.Words {
@@ -117,6 +119,7 @@ func parseKieTranscript(raw []byte) (ShortsTranscript, error) {
 			current.WriteByte(' ')
 		}
 		current.WriteString(strings.TrimSpace(word.Word))
+		currentWords = append(currentWords, ShortsTranscriptWord{Word: strings.TrimSpace(word.Word), StartSeconds: wordStart, EndSeconds: wordEnd})
 		end = wordEnd
 		if wordEnd-start >= 8 {
 			flush()

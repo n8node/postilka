@@ -53,6 +53,7 @@ export function ShortsStudioPage() {
   const [subtitleBackground, setSubtitleBackground] = useState("#101010");
   const [watermark, setWatermark] = useState("");
   const [safeZone, setSafeZone] = useState(70);
+  const [wordsPerBlock, setWordsPerBlock] = useState(6);
   const [timedWords, setTimedWords] = useState<ShortsTimedWord[]>([]);
   const [history, setHistory] = useState<ShortsProjectListItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
@@ -187,6 +188,7 @@ export function ShortsStudioPage() {
       setSubtitleBackground(result.project.settings?.subtitle_background ?? "#101010");
       setWatermark(result.project.settings?.watermark ?? "");
       setSafeZone(result.project.settings?.safe_zone ?? 70);
+      setWordsPerBlock(result.project.settings?.subtitle_words_per_block ?? 6);
       const historyJob = history.find((item) => item.project.id === id)?.job;
       // A montage can have completed rerender jobs in its history. They are not
       // the montage's current processing state and must not surface an old
@@ -389,12 +391,12 @@ export function ShortsStudioPage() {
 
   async function saveSubtitleSettings(nextSettings?: ShortsEditorSettings) {
     if (!project?.id) return;
-    const settings = nextSettings ?? { style: subtitleStyle, position: subtitlePosition, fontSize: subtitleFontSize, textColor: subtitleTextColor, background: subtitleBackground, watermark, safeZone };
+    const settings = nextSettings ?? { style: subtitleStyle, position: subtitlePosition, fontSize: subtitleFontSize, textColor: subtitleTextColor, background: subtitleBackground, watermark, safeZone, wordsPerBlock };
     if (nextSettings) {
       setSubtitleStyle(nextSettings.style); setSubtitlePosition(nextSettings.position); setSubtitleFontSize(nextSettings.fontSize);
-      setSubtitleTextColor(nextSettings.textColor); setSubtitleBackground(nextSettings.background); setWatermark(nextSettings.watermark); setSafeZone(nextSettings.safeZone);
+      setSubtitleTextColor(nextSettings.textColor); setSubtitleBackground(nextSettings.background); setWatermark(nextSettings.watermark); setSafeZone(nextSettings.safeZone); setWordsPerBlock(nextSettings.wordsPerBlock);
     }
-    try { await updateShortsSubtitleSettings(project.id, { style: settings.style, position: settings.position, font_size: settings.fontSize, text_color: settings.textColor, background: settings.background, watermark: settings.watermark, safe_zone: settings.safeZone }); const result = await rerenderShortsProject(project.id); setJob(result.job); setDraftUrls({}); setJobMessage("Настройки сохранены. Draft-предпросмотры перерендериваются."); } catch (error) { setJobMessage(error instanceof Error ? error.message : "Не удалось перерендерить preview"); }
+    try { await updateShortsSubtitleSettings(project.id, { style: settings.style, position: settings.position, font_size: settings.fontSize, text_color: settings.textColor, background: settings.background, watermark: settings.watermark, safe_zone: settings.safeZone, words_per_block: settings.wordsPerBlock }); const result = await rerenderShortsProject(project.id); setJob(result.job); setDraftUrls({}); setJobMessage("Настройки сохранены. Draft-предпросмотры перерендериваются."); } catch (error) { setJobMessage(error instanceof Error ? error.message : "Не удалось перерендерить preview"); }
   }
 
   async function saveClipCrop(clipId: string, config: ShortsCropConfig) {
@@ -526,7 +528,7 @@ export function ShortsStudioPage() {
         clips={clips}
         draftUrls={draftUrls}
         sourceUrl={previewUrl}
-        initialSettings={{ style: subtitleStyle, position: subtitlePosition, fontSize: subtitleFontSize, textColor: subtitleTextColor, background: subtitleBackground, watermark, safeZone }}
+        initialSettings={{ style: subtitleStyle, position: subtitlePosition, fontSize: subtitleFontSize, textColor: subtitleTextColor, background: subtitleBackground, watermark, safeZone, wordsPerBlock }}
         timedWords={timedWords}
         onSaveSettings={saveSubtitleSettings}
         onSaveCrop={saveClipCrop}
