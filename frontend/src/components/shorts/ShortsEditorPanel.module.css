@@ -48,9 +48,39 @@
 
 .editorGrid {
   display: grid;
-  grid-template-columns: 238px minmax(360px, 1fr) 286px;
+  grid-template-columns: var(--editor-sidebar-width, 476px) 12px minmax(360px, 1fr) 286px;
   gap: 14px;
   height: 560px;
+}
+
+.sidebarResizeHandle {
+  position: relative;
+  z-index: 3;
+  width: 12px;
+  min-height: 100%;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.sidebarResizeHandle::after {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 6px;
+  height: 96px;
+  border-radius: 999px;
+  background: #d9dee8;
+  content: "";
+  opacity: 0;
+  transform: translate(-50%, -50%);
+  transition: background 0.18s ease, opacity 0.18s ease;
+}
+
+.sidebarResizeHandle:hover::after,
+.sidebarResizeHandle:focus-visible::after,
+.sidebarResizeHandle:active::after {
+  background: var(--editor-accent);
+  opacity: 1;
 }
 
 .panel,
@@ -1608,7 +1638,7 @@
 
 @media (min-width: 1500px) {
   .editorGrid {
-    grid-template-columns: 254px minmax(420px, 1fr) 304px;
+    grid-template-columns: var(--editor-sidebar-width, 508px) 12px minmax(420px, 1fr) 304px;
     height: 580px;
   }
 
@@ -1619,7 +1649,7 @@
 
 @media (max-width: 1250px) {
   .editorGrid {
-    grid-template-columns: 210px minmax(330px, 1fr) 250px;
+    grid-template-columns: var(--editor-sidebar-width, 420px) 12px minmax(330px, 1fr) 250px;
     gap: 10px;
   }
 
@@ -1641,6 +1671,10 @@
   .editorGrid {
     height: auto;
     grid-template-columns: 1fr;
+  }
+
+  .sidebarResizeHandle {
+    display: none;
   }
 
   .structurePanel {

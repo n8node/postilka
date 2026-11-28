@@ -99,6 +99,8 @@ const defaultCropConfig: ShortsCropConfig = {
   keyframes: [{ time: 0, center_x: 0.5, center_y: 0.5, scale: 1 }],
 };
 
+const sidebarWidthByViewport = { compact: 210, standard: 238, wide: 254 } as const;
+
 function cropConfigForClip(clip: ShortsClip, ratio: Ratio): ShortsCropConfig {
   const config = clip.crop_config;
   if (!config || !config.keyframes?.length) return { ...defaultCropConfig, aspect_ratio: ratio, keyframes: [{ ...defaultCropConfig.keyframes[0] }] };
@@ -123,6 +125,8 @@ export function ShortsEditorPanel({ clips, draftUrls, sourceUrl, initialSettings
   const [leftTab, setLeftTab] = useState<LeftTab>("scenes");
   const [rightTab, setRightTab] = useState<RightTab>("visual");
   const [selectedClipId, setSelectedClipId] = useState(clips[0]?.id ?? "");
+  const [sidebarBaseWidth, setSidebarBaseWidth] = useState<number>(sidebarWidthByViewport.standard);
+  const [sidebarWidth, setSidebarWidth] = useState<number>(sidebarWidthByViewport.standard * 2);
   const [ratio, setRatio] = useState<Ratio>("9:16");
   const [showOriginal, setShowOriginal] = useState(false);
   const [cropConfig, setCropConfig] = useState<ShortsCropConfig>(defaultCropConfig);
@@ -148,6 +152,8 @@ export function ShortsEditorPanel({ clips, draftUrls, sourceUrl, initialSettings
   const videoRef = useRef<HTMLVideoElement>(null);
   const previewRef = useRef<HTMLElement>(null);
   const videoFrameRef = useRef<HTMLDivElement>(null);
+  const editorGridRef = useRef<HTMLElement>(null);
+  const sidebarResizeRef = useRef<{ pointerId: number } | null>(null);
   const cropDragRef = useRef<{ pointerId: number; startX: number; startY: number; centerX: number; centerY: number } | null>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
   const pendingSeekRef = useRef<number | null>(null);
@@ -207,6 +213,21 @@ export function ShortsEditorPanel({ clips, draftUrls, sourceUrl, initialSettings
     setVideoDuration(null);
     setVideoError(false);
   }, [selectedClipId]);
+
+  useEffect(() => {
+    const updateSidebarWidth = () => {
+      const baseWidth = window.innerWidth >= 1500
+        ? sidebarWidthByViewport.wide
+        : window.innerWidth <= 1250
+          ? sidebarWidthByViewport.compact
+          : sidebarWidthByViewport.standard;
+      setSidebarBaseWidth(baseWidth);
+      setSidebarWidth(baseWidth * 2);
+    };
+    updateSidebarWidth();
+    window.addEventListener("resize", updateSidebarWidth);
+    return () => window.removeEventListener("resize", updateSidebarWidth);
+  }, []);
 
   useEffect(() => {
     if (!selectedClip) return;
@@ -303,7 +324,7 @@ export function ShortsEditorPanel({ clips, draftUrls, sourceUrl, initialSettings
 
   async function togglePlayback() {
     const video = videoRef.current;
-    if (!video || !selectedUrl) return;
+    if (!video || !(showOriginal ? sourceUrl : selectedUrl)) return;
     if (video.paused) {
       try {
         await video.play();
@@ -353,6 +374,41 @@ export function ShortsEditorPanel({ clips, draftUrls, sourceUrl, initialSettings
     onReorder(fromIndex, toIndex);
   }
 
+  function setSidebarWidthFromPointer(clientX: number) {
+    const grid = editorGridRef.current;
+    if (!grid) return;
+    const rect = grid.getBoundingClientRect();
+    const nextWidth = clientX - rect.left;
+    setSidebarWidth(Math.max(sidebarBaseWidth, Math.min(sidebarBaseWidth * 3.5, nextWidth)));
+  }
+
+  function handleSidebarResizeStart(event: React.PointerEvent<HTMLDivElement>) {
+    sidebarResizeRef.current = { pointerId: event.pointerId };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  }
+
+  function handleSidebarResizeMove(event: React.PointerEvent<HTMLDivElement>) {
+    if (!sidebarResizeRef.current) return;
+    setSidebarWidthFromPointer(event.clientX);
+  }
+
+  function handleSidebarResizeEnd() {
+    sidebarResizeRef.current = null;
+  }
+
+  function handleSidebarResizeKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight" && event.key !== "Home" && event.key !== "End") return;
+    event.preventDefault();
+    const step = event.shiftKey ? 40 : 10;
+    const nextWidth = event.key === "Home"
+      ? sidebarBaseWidth
+      : event.key === "End"
+        ? sidebarBaseWidth * 3.5
+        : sidebarWidth + (event.key === "ArrowRight" ? step : -step);
+    setSidebarWidth(Math.max(sidebarBaseWidth, Math.min(sidebarBaseWidth * 3.5, nextWidth)));
+  }
+
   function updateSettings(patch: Partial<ShortsEditorSettings>) {
     setSettings((current) => ({ ...current, ...patch }));
   }
@@ -395,7 +451,11 @@ export function ShortsEditorPanel({ clips, draftUrls, sourceUrl, initialSettings
 
   return (
     <div className={styles.workspace}>
-      <section className={styles.editorGrid}>
+      <section
+        className={styles.editorGrid}
+        ref={editorGridRef}
+        style={{ "--editor-sidebar-width": `${sidebarWidth}px` } as CSSProperties}
+      >
         <aside className={`${styles.panel} ${styles.structurePanel}`}>
           <div className={`${styles.segmented} ${styles.panelTabs}`} role="tablist" aria-label="Структура ролика">
             <button type="button" className={leftTab === "scenes" ? styles.active : ""} onClick={() => setLeftTab("scenes")} role="tab" aria-selected={leftTab === "scenes"}><Layers3 size={15} /> Сцены <span>{clips.length}</span></button>
@@ -453,6 +513,22 @@ export function ShortsEditorPanel({ clips, draftUrls, sourceUrl, initialSettings
             <button type="button" className={`${styles.button} ${styles.buttonSecondary} ${styles.fullWidth}`} onClick={onOpenClips}><Plus size={16} /> Изменить фрагменты</button>
           </div>}
         </aside>
+
+        <div
+          className={styles.sidebarResizeHandle}
+          role="separator"
+          aria-label="Изменить ширину панели сцен и текста"
+          aria-orientation="vertical"
+          aria-valuemin={sidebarBaseWidth}
+          aria-valuemax={sidebarBaseWidth * 3.5}
+          aria-valuenow={Math.round(sidebarWidth)}
+          tabIndex={0}
+          onPointerDown={handleSidebarResizeStart}
+          onPointerMove={handleSidebarResizeMove}
+          onPointerUp={handleSidebarResizeEnd}
+          onPointerCancel={handleSidebarResizeEnd}
+          onKeyDown={handleSidebarResizeKeyDown}
+        />
 
         <section className={styles.previewPanel} aria-label="Предпросмотр видео" ref={previewRef}>
           <div className={styles.previewToolbar}><div className={styles.previewTitle}><Film size={16} /><strong>Предпросмотр</strong><span>{showOriginal ? "Оригинал 16:9" : ratio} · {ratio === "9:16" ? "1080 × 1920" : ratio === "1:1" ? "1080 × 1080" : "1920 × 1080"}</span></div><div className={styles.previewActions}><button type="button" className={`${styles.toolbarToggle} ${showOriginal ? styles.active : ""}`} onClick={() => setShowOriginal((value) => !value)} aria-pressed={showOriginal}><Crop size={15} /> Оригинал 16:9</button><button type="button" className={`${styles.toolbarToggle} ${safeZoneVisible ? styles.active : ""}`} onClick={() => setSafeZoneVisible((value) => !value)} aria-pressed={safeZoneVisible}>Безопасные зоны</button><button type="button" className={`${styles.iconButton} ${styles.small}`} aria-label="На весь экран" onClick={() => void previewRef.current?.requestFullscreen?.()}><Maximize2 size={16} /></button></div></div>
