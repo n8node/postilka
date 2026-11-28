@@ -261,7 +261,9 @@ func (w *ShortsWorker) processEditExport(ctx context.Context, job repository.Cla
 	defer os.Remove(path)
 	parts := make([]string, 0, len(selected))
 	for _, clip := range selected {
-		rendered, err := RenderShortsDraft(ctx, path, clip.StartSeconds, clip.EndSeconds, transcript.Segments, config)
+		var crop model.ShortsCropConfig
+		_ = json.Unmarshal(clip.CropConfig, &crop)
+		rendered, err := RenderShortsDraft(ctx, path, clip.StartSeconds, clip.EndSeconds, transcript.Segments, config, crop)
 		if err != nil {
 			return err
 		}
@@ -297,6 +299,65 @@ func (w *ShortsWorker) processEditExport(ctx context.Context, job repository.Cla
 }
 
 func (w *ShortsWorker) processEditRerender(ctx context.Context, job repository.ClaimedShortsJob) error {
+	project, err := w.repo.GetEditProject(ctx, job.WorkspaceID, job.EditProjectID)
+	if err != nil {
+		return err
+	}
+	if project.SourceFileID == nil {
+		return ErrShortsSourceRequired
+	}
+	file, err := w.files.GetByID(ctx, job.WorkspaceID, *project.SourceFileID, false)
+	if err != nil {
+		return err
+	}
+	source, err := w.repo.GetSource(ctx, job.WorkspaceID, project.SourceID)
+	if err != nil {
+		return err
+	}
+	transcript, err := transcriptFromSettings(source.Settings)
+	if err != nil {
+		return err
+	}
+	config := ShortsSubtitleConfigFromSettings(project.Settings)
+	path, err := w.downloadObject(ctx, file.S3Key, filepath.Ext(file.Name))
+	if err != nil {
+		return err
+	}
+	defer os.Remove(path)
+	clips, err := w.repo.ListEditProjectClips(ctx, job.WorkspaceID, project.ID)
+	if err != nil {
+		return err
+	}
+	for index, clip := range clips {
+		if !clip.Included {
+			continue
+		}
+		var crop model.ShortsCropConfig
+		_ = json.Unmarshal(clip.CropConfig, &crop)
+		rendered, err := RenderShortsDraft(ctx, path, clip.StartSeconds, clip.EndSeconds, transcript.Segments, config, crop)
+		if err != nil {
+			return err
+		}
+		info, err := os.Stat(rendered)
+		if err != nil {
+			os.Remove(rendered)
+			return err
+		}
+		key := fmt.Sprintf("workspaces/%s/shorts/%s/drafts/%02d-rerender.mp4", job.WorkspaceID, project.ID, index)
+		if err := w.storage.PutObjectFromFile(ctx, key, "video/mp4", rendered); err != nil {
+			os.Remove(rendered)
+			return err
+		}
+		uid := project.CreatedByUserID
+		newFile, err := w.fileStore.RegisterWorkspaceFile(ctx, &model.WorkspaceFile{WorkspaceID: job.WorkspaceID, UploadedByUserID: &uid, Name: fmt.Sprintf("shorts-draft-%02d.mp4", index+1), MimeType: "video/mp4", Size: info.Size(), S3Key: key})
+		os.Remove(rendered)
+		if err != nil {
+			return err
+		}
+		if err := w.repo.SetClipDraft(ctx, job.WorkspaceID, clip.ID, newFile.ID); err != nil {
+			return err
+		}
+	}
 	return w.repo.CompleteJob(ctx, job.ID, w.owner, job.EditProjectID, job.WorkspaceID, model.ShortsProjectCompleted, "completed")
 }
 
@@ -347,7 +408,9 @@ func (w *ShortsWorker) processLegacyExport(ctx context.Context, job repository.C
 		if err := w.repo.UpdateJobProgress(ctx, job.ID, w.owner, "render_clip", 15+(index*65/maxInt(1, len(selected)))); err != nil {
 			return err
 		}
-		path, err := RenderShortsDraft(ctx, sourcePath, clip.StartSeconds, clip.EndSeconds, transcript.Segments, config)
+		var crop model.ShortsCropConfig
+		_ = json.Unmarshal(clip.CropConfig, &crop)
+		path, err := RenderShortsDraft(ctx, sourcePath, clip.StartSeconds, clip.EndSeconds, transcript.Segments, config, crop)
 		if err != nil {
 			return err
 		}
@@ -418,7 +481,9 @@ func (w *ShortsWorker) processLegacyRerender(ctx context.Context, job repository
 		if err := w.repo.UpdateJobProgress(ctx, job.ID, w.owner, "render_draft", 20+(index*70/maxInt(1, len(clips)))); err != nil {
 			return err
 		}
-		path, err := RenderShortsDraft(ctx, sourcePath, clip.StartSeconds, clip.EndSeconds, transcript.Segments, config)
+		var crop model.ShortsCropConfig
+		_ = json.Unmarshal(clip.CropConfig, &crop)
+		path, err := RenderShortsDraft(ctx, sourcePath, clip.StartSeconds, clip.EndSeconds, transcript.Segments, config, crop)
 		if err != nil {
 			return err
 		}

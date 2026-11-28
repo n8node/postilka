@@ -107,6 +107,21 @@ func ShortsVerticalFilter(width, height int) string {
 	return "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920:(iw-1080)/2:(ih-1920)/2,format=yuv420p"
 }
 
+func ShortsCropFilter(config model.ShortsCropConfig) string {
+	config = NormalizeShortsCropConfig(config, 1e9)
+	keyframe := model.ShortsCropKeyframe{CenterX: 0.5, CenterY: 0.5, Scale: 1}
+	if len(config.Keyframes) > 0 {
+		keyframe = config.Keyframes[0]
+	}
+	if keyframe.Scale < 0.5 {
+		keyframe.Scale = 1
+	}
+	if keyframe.Scale != 1 {
+		return fmt.Sprintf("scale=%d:%d:force_original_aspect_ratio=increase,crop=1080:1920:(iw-1080)*%.6f:(ih-1920)*%.6f,format=yuv420p", int(1080*keyframe.Scale), int(1920*keyframe.Scale), keyframe.CenterX, keyframe.CenterY)
+	}
+	return fmt.Sprintf("scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920:(iw-1080)*%.6f:(ih-1920)*%.6f,format=yuv420p", keyframe.CenterX, keyframe.CenterY)
+}
+
 func BuildShortsASS(segments []ShortsTranscriptSegment, clipStart, clipEnd float64, config ShortsSubtitleConfig) string {
 	config = NormalizeShortsSubtitleConfig(config)
 	fontSize, bold, outline := config.FontSize, "-1", 3
@@ -180,7 +195,7 @@ func minFloat(a, b float64) float64 {
 	return b
 }
 
-func RenderShortsDraft(ctx context.Context, inputPath string, startSeconds, endSeconds float64, transcript []ShortsTranscriptSegment, config ShortsSubtitleConfig) (string, error) {
+func RenderShortsDraft(ctx context.Context, inputPath string, startSeconds, endSeconds float64, transcript []ShortsTranscriptSegment, config ShortsSubtitleConfig, cropConfigs ...model.ShortsCropConfig) (string, error) {
 	if strings.TrimSpace(inputPath) == "" || endSeconds <= startSeconds {
 		return "", fmt.Errorf("invalid shorts render input")
 	}
@@ -191,7 +206,11 @@ func RenderShortsDraft(ctx context.Context, inputPath string, startSeconds, endS
 	}
 	defer os.Remove(assPath)
 	duration := fmt.Sprintf("%.3f", endSeconds-startSeconds)
-	filter := ShortsVerticalFilter(0, 0) + ",subtitles='" + escapeFFmpegFilterPath(assPath) + "'"
+	crop := model.ShortsCropConfig{AspectRatio: "9:16", Keyframes: []model.ShortsCropKeyframe{{CenterX: 0.5, CenterY: 0.5, Scale: 1}}}
+	if len(cropConfigs) > 0 {
+		crop = cropConfigs[0]
+	}
+	filter := ShortsCropFilter(crop) + ",subtitles='" + escapeFFmpegFilterPath(assPath) + "'"
 	cmd := exec.CommandContext(ctx, "ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-ss", fmt.Sprintf("%.3f", startSeconds), "-i", inputPath, "-t", duration, "-vf", filter, "-r", "30", "-c:v", "libx264", "-preset", "veryfast", "-crf", "28", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", outputPath)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		_ = os.Remove(outputPath)
