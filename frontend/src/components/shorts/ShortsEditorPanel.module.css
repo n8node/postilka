@@ -610,16 +610,6 @@
   cursor: grabbing;
 }
 
-.cropOverlay.cropOverlay11 {
-  width: 56%;
-  height: 100%;
-}
-
-.cropOverlay.cropOverlay169 {
-  width: 100%;
-  height: 56%;
-}
-
 .cropOverlay span {
   position: absolute;
   top: 7px;

@@ -146,6 +146,7 @@ export function ShortsEditorPanel({ clips, draftUrls, sourceUrl, initialSettings
   const [safeZoneVisible, setSafeZoneVisible] = useState(true);
   const [currentTime, setCurrentTime] = useState(0);
   const [videoDuration, setVideoDuration] = useState<number | null>(null);
+  const [sourceDimensions, setSourceDimensions] = useState({ width: 16, height: 9 });
   const [videoError, setVideoError] = useState(false);
   const [zoom, setZoom] = useState(62);
   const [snap, setSnap] = useState(true);
@@ -297,6 +298,20 @@ export function ShortsEditorPanel({ clips, draftUrls, sourceUrl, initialSettings
     };
   }
 
+  function cropOverlayStyle(keyframe: ShortsCropKeyframe): CSSProperties {
+    const outputAspect = ratio === "9:16" ? 9 / 16 : ratio === "1:1" ? 1 : 16 / 9;
+    const sourceAspect = sourceDimensions.width / sourceDimensions.height;
+    const cropWidth = (sourceAspect >= outputAspect ? outputAspect / sourceAspect : 1) / Math.max(0.5, keyframe.scale);
+    const cropHeight = (sourceAspect >= outputAspect ? 1 : sourceAspect / outputAspect) / Math.max(0.5, keyframe.scale);
+    return {
+      left: `${keyframe.center_x * 100}%`,
+      top: `${keyframe.center_y * 100}%`,
+      width: `${Math.min(1, cropWidth) * 100}%`,
+      height: `${Math.min(1, cropHeight) * 100}%`,
+      transform: "translate(-50%, -50%)",
+    };
+  }
+
   function updateCropPosition(centerX: number, centerY: number) {
     const current = currentCropKeyframe();
     const next = { ...current, time: currentTime, center_x: Math.max(0, Math.min(1, centerX)), center_y: Math.max(0, Math.min(1, centerY)) };
@@ -377,6 +392,7 @@ export function ShortsEditorPanel({ clips, draftUrls, sourceUrl, initialSettings
     const video = videoRef.current;
     if (!video) return;
     if (Number.isFinite(video.duration) && video.duration > 0) setVideoDuration(video.duration);
+    if (video.videoWidth > 0 && video.videoHeight > 0) setSourceDimensions({ width: video.videoWidth, height: video.videoHeight });
     video.playbackRate = speed;
     video.volume = volume / 100;
     video.muted = muted;
@@ -511,7 +527,6 @@ export function ShortsEditorPanel({ clips, draftUrls, sourceUrl, initialSettings
 
   const ratioClass = ratio === "1:1" ? styles.ratio11 : ratio === "16:9" ? styles.ratio169 : "";
   const crop = currentCropKeyframe();
-  const cropStyle = { left: `${crop.center_x * 100}%`, top: `${crop.center_y * 100}%`, transform: "translate(-50%, -50%)" } as CSSProperties;
   const captionPositionClass = settings.position === "top" ? styles.captionTop : settings.position === "center" ? styles.captionCenter : "";
   const captionPresetClass = styles[`preset${captionPreset[0].toUpperCase()}${captionPreset.slice(1)}`];
 
@@ -620,7 +635,7 @@ export function ShortsEditorPanel({ clips, draftUrls, sourceUrl, initialSettings
                 onCanPlay={handleVideoMetadata}
                 onError={() => setVideoError(true)}
               /> : <div className={styles.previewPlaceholder}>{selectedClip.draft_file_id && !videoError ? <Loader2 className={styles.spinning} size={24} /> : <Film size={28} />}<span>{videoError ? "Не удалось загрузить превью" : selectedClip.draft_file_id ? "Загрузка превью…" : "Превью ещё не готово"}</span></div>}
-              {showOriginal && <div className={`${styles.cropOverlay} ${ratio === "1:1" ? styles.cropOverlay11 : ratio === "16:9" ? styles.cropOverlay169 : ""}`} style={cropStyle} onPointerDown={handleCropPointerDown} onPointerMove={handleCropPointerMove} onPointerUp={handleCropPointerUp} onPointerCancel={handleCropPointerUp} role="slider" aria-label="Область кадрирования" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(crop.center_x * 100)} aria-valuetext={`Центр ${Math.round(crop.center_x * 100)}%, ${Math.round(crop.center_y * 100)}%`}><span>Кадр {ratio}</span></div>}
+              {showOriginal && cropConfig.keyframes.length > 0 && <div className={styles.cropOverlay} style={cropOverlayStyle(crop)} onPointerDown={handleCropPointerDown} onPointerMove={handleCropPointerMove} onPointerUp={handleCropPointerUp} onPointerCancel={handleCropPointerUp} role="slider" aria-label="Область кадрирования" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(crop.center_x * 100)} aria-valuetext={`Центр ${Math.round(crop.center_x * 100)}%, ${Math.round(crop.center_y * 100)}%`}><span>Кадр {ratio}</span></div>}
               <div className={styles.videoShade} />
               {safeZoneVisible && <div className={styles.safeZone}><span>Безопасная зона</span></div>}
               {settings.watermark && <div className={styles.videoTitle}>{settings.watermark}</div>}
