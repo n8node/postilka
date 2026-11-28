@@ -298,16 +298,29 @@ export function ShortsEditorPanel({ clips, draftUrls, sourceUrl, initialSettings
     };
   }
 
-  function cropOverlayStyle(keyframe: ShortsCropKeyframe): CSSProperties {
+  function cropGeometry(keyframe: ShortsCropKeyframe) {
     const outputAspect = ratio === "9:16" ? 9 / 16 : ratio === "1:1" ? 1 : 16 / 9;
     const sourceAspect = sourceDimensions.width / sourceDimensions.height;
-    const cropWidth = (sourceAspect >= outputAspect ? outputAspect / sourceAspect : 1) / Math.max(0.5, keyframe.scale);
-    const cropHeight = (sourceAspect >= outputAspect ? 1 : sourceAspect / outputAspect) / Math.max(0.5, keyframe.scale);
+    const zoom = Math.max(1, keyframe.scale);
+    const cropWidth = (sourceAspect >= outputAspect ? outputAspect / sourceAspect : 1) / zoom;
+    const cropHeight = (sourceAspect >= outputAspect ? 1 : sourceAspect / outputAspect) / zoom;
+    const width = Math.min(1, cropWidth);
+    const height = Math.min(1, cropHeight);
     return {
-      left: `${keyframe.center_x * 100}%`,
-      top: `${keyframe.center_y * 100}%`,
-      width: `${Math.min(1, cropWidth) * 100}%`,
-      height: `${Math.min(1, cropHeight) * 100}%`,
+      width,
+      height,
+      left: width / 2 + keyframe.center_x * (1 - width),
+      top: height / 2 + keyframe.center_y * (1 - height),
+    };
+  }
+
+  function cropOverlayStyle(keyframe: ShortsCropKeyframe): CSSProperties {
+    const geometry = cropGeometry(keyframe);
+    return {
+      left: `${geometry.left * 100}%`,
+      top: `${geometry.top * 100}%`,
+      width: `${geometry.width * 100}%`,
+      height: `${geometry.height * 100}%`,
       transform: "translate(-50%, -50%)",
     };
   }
@@ -361,7 +374,11 @@ export function ShortsEditorPanel({ clips, draftUrls, sourceUrl, initialSettings
     const frame = videoFrameRef.current;
     if (!drag || !frame) return;
     const rect = frame.getBoundingClientRect();
-    updateCropPosition(drag.centerX + (event.clientX - drag.startX) / rect.width, drag.centerY + (event.clientY - drag.startY) / rect.height);
+    const geometry = cropGeometry(currentCropKeyframe());
+    updateCropPosition(
+      drag.centerX + (event.clientX - drag.startX) / rect.width / Math.max(0.001, 1 - geometry.width),
+      drag.centerY + (event.clientY - drag.startY) / rect.height / Math.max(0.001, 1 - geometry.height),
+    );
   }
 
   function handleCropPointerUp() {
@@ -615,7 +632,7 @@ export function ShortsEditorPanel({ clips, draftUrls, sourceUrl, initialSettings
           <div className={styles.previewToolbar}><div className={styles.previewTitle}><Film size={16} /><strong>Предпросмотр</strong><span>{showOriginal ? "Оригинал 16:9" : ratio} · {ratio === "9:16" ? "1080 × 1920" : ratio === "1:1" ? "1080 × 1080" : "1920 × 1080"}</span></div><div className={styles.previewActions}><button type="button" className={`${styles.toolbarToggle} ${showOriginal ? styles.active : ""}`} onClick={() => setShowOriginal((value) => !value)} aria-pressed={showOriginal}><Crop size={15} /> Оригинал 16:9</button><button type="button" className={`${styles.toolbarToggle} ${safeZoneVisible ? styles.active : ""}`} onClick={() => setSafeZoneVisible((value) => !value)} aria-pressed={safeZoneVisible}>Безопасные зоны</button><button type="button" className={`${styles.iconButton} ${styles.small}`} aria-label="На весь экран" onClick={() => void previewRef.current?.requestFullscreen?.()}><Maximize2 size={16} /></button></div></div>
           <div className={styles.canvasArea}>
             <div className={`${styles.videoFrame} ${showOriginal ? styles.originalFrame : ratioClass}`} ref={videoFrameRef}>
-              {(showOriginal ? sourceUrl : selectedUrl) && !videoError ? <video
+              {previewUrl && !videoError ? <video
                 key={selectedClip.id}
                 ref={videoRef}
                 className={styles.videoPoster}
