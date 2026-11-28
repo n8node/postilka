@@ -7,6 +7,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -55,7 +57,16 @@ func NormalizeShortsCropConfig(config model.ShortsCropConfig, duration float64) 
 		}
 		valid = append(valid, keyframe)
 	}
-	config.Keyframes = valid
+	sort.SliceStable(valid, func(i, j int) bool { return valid[i].Time < valid[j].Time })
+	deduplicated := make([]model.ShortsCropKeyframe, 0, len(valid))
+	for _, keyframe := range valid {
+		if len(deduplicated) > 0 && deduplicated[len(deduplicated)-1].Time == keyframe.Time {
+			deduplicated[len(deduplicated)-1] = keyframe
+			continue
+		}
+		deduplicated = append(deduplicated, keyframe)
+	}
+	config.Keyframes = deduplicated
 	return config
 }
 
@@ -108,18 +119,53 @@ func ShortsVerticalFilter(width, height int) string {
 }
 
 func ShortsCropFilter(config model.ShortsCropConfig) string {
-	config = NormalizeShortsCropConfig(config, 1e9)
-	keyframe := model.ShortsCropKeyframe{CenterX: 0.5, CenterY: 0.5, Scale: 1}
-	if len(config.Keyframes) > 0 {
-		keyframe = config.Keyframes[0]
+	return shortsCropFilter(config, 1e9)
+}
+
+func shortsCropFilter(config model.ShortsCropConfig, duration float64) string {
+	config = NormalizeShortsCropConfig(config, duration)
+	outputWidth, outputHeight := 1080, 1920
+	switch config.AspectRatio {
+	case "1:1":
+		outputHeight = 1080
+	case "16:9":
+		outputWidth, outputHeight = 1920, 1080
 	}
-	if keyframe.Scale < 0.5 {
-		keyframe.Scale = 1
+	keyframes := config.Keyframes
+	if len(keyframes) == 0 {
+		keyframes = []model.ShortsCropKeyframe{{Time: 0, CenterX: 0.5, CenterY: 0.5, Scale: 1}}
 	}
-	if keyframe.Scale != 1 {
-		return fmt.Sprintf("scale='if(gt(iw/ih,0.5625),-2,1080)':'if(gt(iw/ih,0.5625),1920,-2)',scale=iw*%.6f:ih*%.6f,crop=1080:1920:(iw-1080)*%.6f:(ih-1920)*%.6f,format=yuv420p", keyframe.Scale, keyframe.Scale, keyframe.CenterX, keyframe.CenterY)
+	centerX := shortsCropKeyframeExpression(keyframes, func(keyframe model.ShortsCropKeyframe) float64 { return keyframe.CenterX })
+	centerY := shortsCropKeyframeExpression(keyframes, func(keyframe model.ShortsCropKeyframe) float64 { return keyframe.CenterY })
+	zoom := shortsCropKeyframeExpression(keyframes, func(keyframe model.ShortsCropKeyframe) float64 { return keyframe.Scale })
+	ratio := float64(outputWidth) / float64(outputHeight)
+	effectiveZoom := fmt.Sprintf("max(1\\,%s)", zoom)
+	coverWidth := fmt.Sprintf("if(gte(iw/ih\\,%s)\\,-2\\,ceil(%d*%s/2)*2)", formatFFmpegFloat(ratio), outputWidth, effectiveZoom)
+	coverHeight := fmt.Sprintf("if(gte(iw/ih\\,%s)\\,ceil(%d*%s/2)*2\\,-2)", formatFFmpegFloat(ratio), outputHeight, effectiveZoom)
+	return fmt.Sprintf("scale=w=%s:h=%s:eval=frame,crop=%d:%d:(iw-%d)*%s:(ih-%d)*%s,format=yuv420p", coverWidth, coverHeight, outputWidth, outputHeight, outputWidth, centerX, outputHeight, centerY)
+}
+
+func shortsCropKeyframeExpression(keyframes []model.ShortsCropKeyframe, value func(model.ShortsCropKeyframe) float64) string {
+	if len(keyframes) == 1 {
+		return formatFFmpegFloat(value(keyframes[0]))
 	}
-	return fmt.Sprintf("scale='if(gt(iw/ih,0.5625),-2,1080)':'if(gt(iw/ih,0.5625),1920,-2)',crop=1080:1920:(iw-1080)*%.6f:(ih-1920)*%.6f,format=yuv420p", keyframe.CenterX, keyframe.CenterY)
+	expression := formatFFmpegFloat(value(keyframes[len(keyframes)-1]))
+	for index := len(keyframes) - 2; index >= 0; index-- {
+		current, next := keyframes[index], keyframes[index+1]
+		currentValue, nextValue := value(current), value(next)
+		if next.Time <= current.Time {
+			expression = formatFFmpegFloat(currentValue)
+			continue
+		}
+		progress := fmt.Sprintf("(t-%s)/%s", formatFFmpegFloat(current.Time), formatFFmpegFloat(next.Time-current.Time))
+		interpolation := fmt.Sprintf("(%s+(%s-%s)*%s)", formatFFmpegFloat(currentValue), formatFFmpegFloat(nextValue), formatFFmpegFloat(currentValue), progress)
+		expression = fmt.Sprintf("if(lt(t\\,%s)\\,%s\\,%s)", formatFFmpegFloat(next.Time), formatFFmpegFloat(currentValue), interpolation)
+	}
+	return expression
+}
+
+func formatFFmpegFloat(value float64) string {
+	return strconv.FormatFloat(value, 'f', 6, 64)
 }
 
 func BuildShortsASS(segments []ShortsTranscriptSegment, clipStart, clipEnd float64, config ShortsSubtitleConfig) string {
@@ -210,7 +256,7 @@ func RenderShortsDraft(ctx context.Context, inputPath string, startSeconds, endS
 	if len(cropConfigs) > 0 {
 		crop = cropConfigs[0]
 	}
-	filter := ShortsCropFilter(crop) + ",subtitles='" + escapeFFmpegFilterPath(assPath) + "'"
+	filter := shortsCropFilter(crop, endSeconds-startSeconds) + ",subtitles='" + escapeFFmpegFilterPath(assPath) + "'"
 	cmd := exec.CommandContext(ctx, "ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-ss", fmt.Sprintf("%.3f", startSeconds), "-i", inputPath, "-t", duration, "-vf", filter, "-r", "30", "-c:v", "libx264", "-preset", "veryfast", "-crf", "28", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", outputPath)
 	if output, err := cmd.CombinedOutput(); err != nil {
 		_ = os.Remove(outputPath)

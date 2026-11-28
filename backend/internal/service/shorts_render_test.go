@@ -3,6 +3,8 @@ package service
 import (
 	"strings"
 	"testing"
+
+	"github.com/postilka/postilka/internal/model"
 )
 
 func TestShortsVerticalFilter(t *testing.T) {
@@ -12,6 +14,32 @@ func TestShortsVerticalFilter(t *testing.T) {
 	}
 	if filter != "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920:(iw-1080)/2:(ih-1920)/2,format=yuv420p" {
 		t.Fatalf("unexpected filter: %s", filter)
+	}
+}
+
+func TestShortsCropFilterInterpolatesKeyframes(t *testing.T) {
+	filter := shortsCropFilter(model.ShortsCropConfig{
+		AspectRatio: "9:16",
+		Keyframes: []model.ShortsCropKeyframe{
+			{Time: 0, CenterX: 0.2, CenterY: 0.5, Scale: 1},
+			{Time: 2, CenterX: 0.8, CenterY: 0.4, Scale: 1.5},
+		},
+	}, 4)
+	for _, fragment := range []string{"if(lt(t\\,2.000000)", "(t-0.000000)/2.000000", "crop=1080:1920", "scale=w="} {
+		if !strings.Contains(filter, fragment) {
+			t.Fatalf("expected %q in filter: %s", fragment, filter)
+		}
+	}
+}
+
+func TestShortsCropFilterUsesAspectRatio(t *testing.T) {
+	filter := ShortsCropFilter(model.ShortsCropConfig{AspectRatio: "1:1"})
+	if !strings.Contains(filter, "crop=1080:1080") {
+		t.Fatalf("expected square output: %s", filter)
+	}
+	filter = ShortsCropFilter(model.ShortsCropConfig{AspectRatio: "16:9"})
+	if !strings.Contains(filter, "crop=1920:1080") {
+		t.Fatalf("expected landscape output: %s", filter)
 	}
 }
 
