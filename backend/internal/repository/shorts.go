@@ -659,6 +659,21 @@ func (r *ShortsRepository) SetSubtitleSettings(ctx context.Context, workspaceID,
 	return err
 }
 
+func (r *ShortsRepository) SetClipCropConfig(ctx context.Context, workspaceID, projectID, clipID string, config model.ShortsCropConfig) error {
+	raw, err := json.Marshal(config)
+	if err != nil {
+		return err
+	}
+	tag, err := r.pool.Exec(ctx, `UPDATE shorts_edit_project_clips epc SET crop_config=$1::jsonb, updated_at=now() FROM shorts_edit_projects ep WHERE epc.edit_project_id=ep.id AND epc.edit_project_id=$2 AND epc.clip_id=$3 AND ep.workspace_id=$4`, raw, projectID, clipID, workspaceID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (r *ShortsRepository) ListEditProjectJobs(ctx context.Context, workspaceID string) (map[string]*model.ShortsJob, error) {
 	rows, err := r.pool.Query(ctx, `SELECT DISTINCT ON(j.edit_project_id) j.id,j.source_id,j.edit_project_id,j.job_type,j.status,j.current_step,j.progress,j.attempts,j.available_at,COALESCE(j.last_error,''),j.created_at,j.updated_at FROM shorts_jobs j JOIN shorts_edit_projects ep ON ep.id=j.edit_project_id WHERE ep.workspace_id=$1 ORDER BY j.edit_project_id,j.created_at DESC`, workspaceID)
 	if err != nil {
@@ -727,7 +742,7 @@ func (r *ShortsRepository) SetClipOrder(ctx context.Context, workspaceID, projec
 }
 
 func (r *ShortsRepository) ListClips(ctx context.Context, workspaceID, projectID string) ([]model.ShortsClip, error) {
-	rows, err := r.pool.Query(ctx, `SELECT c.id, c.source_id, c.start_seconds, c.end_seconds, c.transcript_text, c.score, c.score_details, c.crop_config, c.subtitle_config, c.overlay_config, c.status, c.draft_file_id, c.final_file_id, c.created_at, c.updated_at, COALESCE(epc.included, c.status IN ('selected','draft')) FROM shorts_clips c JOIN shorts_sources s ON s.id=c.source_id LEFT JOIN shorts_edit_project_clips epc ON epc.clip_id=c.id AND epc.edit_project_id=$1 WHERE s.id=COALESCE((SELECT source_id FROM shorts_edit_projects WHERE id=$1 AND workspace_id=$2),$1) AND s.workspace_id=$2 AND ($1::uuid=s.id OR epc.clip_id IS NOT NULL) ORDER BY COALESCE(epc.position,(c.score_details->>'order')::int,c.start_seconds::int),c.start_seconds`, projectID, workspaceID)
+	rows, err := r.pool.Query(ctx, `SELECT c.id, c.source_id, c.start_seconds, c.end_seconds, c.transcript_text, c.score, c.score_details, COALESCE(epc.crop_config, c.crop_config), c.subtitle_config, c.overlay_config, c.status, c.draft_file_id, c.final_file_id, c.created_at, c.updated_at, COALESCE(epc.included, c.status IN ('selected','draft')) FROM shorts_clips c JOIN shorts_sources s ON s.id=c.source_id LEFT JOIN shorts_edit_project_clips epc ON epc.clip_id=c.id AND epc.edit_project_id=$1 WHERE s.id=COALESCE((SELECT source_id FROM shorts_edit_projects WHERE id=$1 AND workspace_id=$2),$1) AND s.workspace_id=$2 AND ($1::uuid=s.id OR epc.clip_id IS NOT NULL) ORDER BY COALESCE(epc.position,(c.score_details->>'order')::int,c.start_seconds::int),c.start_seconds`, projectID, workspaceID)
 	if err != nil {
 		return nil, err
 	}

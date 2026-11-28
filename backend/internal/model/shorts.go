@@ -89,6 +89,19 @@ type ShortsClipUpdate struct {
 	Status         string  `json:"status"`
 }
 
+type ShortsCropKeyframe struct {
+	Time    float64 `json:"time"`
+	CenterX float64 `json:"center_x"`
+	CenterY float64 `json:"center_y"`
+	Scale   float64 `json:"scale"`
+}
+
+type ShortsCropConfig struct {
+	Mode        string               `json:"mode"`
+	AspectRatio string               `json:"aspect_ratio"`
+	Keyframes   []ShortsCropKeyframe `json:"keyframes"`
+}
+
 type ShortsJob struct {
 	ID            string          `json:"id"`
 	ProjectID     string          `json:"project_id,omitempty"`

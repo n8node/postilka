@@ -649,6 +649,24 @@ func (s *ShortsService) UpdateSubtitleSettings(ctx context.Context, userID strin
 	return s.repo.SetSubtitleSettings(ctx, ws.ID, projectID, config.Style, config.Position, config.FontSize, config.TextColor, config.Background, config.Watermark, config.SafeZone)
 }
 
+func (s *ShortsService) UpdateClipCrop(ctx context.Context, userID string, r *http.Request, projectID, clipID string, config model.ShortsCropConfig) error {
+	ws, _, err := s.wsSvc.ResolveActive(ctx, userID, r)
+	if err != nil {
+		return err
+	}
+	if ws == nil {
+		return ErrWorkspaceNotFound
+	}
+	if _, err := s.wsSvc.RequireMembership(ctx, userID, ws.ID, model.RoleEditor); err != nil {
+		return err
+	}
+	clip, err := s.repo.GetEditClip(ctx, ws.ID, projectID, clipID)
+	if err != nil {
+		return err
+	}
+	return s.repo.SetClipCropConfig(ctx, ws.ID, projectID, clipID, NormalizeShortsCropConfig(config, clip.EndSeconds-clip.StartSeconds))
+}
+
 func (s *ShortsService) SetClipOrder(ctx context.Context, userID string, r *http.Request, projectID string, clipIDs []string) error {
 	ws, _, err := s.wsSvc.ResolveActive(ctx, userID, r)
 	if err != nil {

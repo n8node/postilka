@@ -36,6 +36,20 @@ export type ShortsClip = {
   score: number;
   status: string;
   draft_file_id?: string;
+  crop_config?: ShortsCropConfig;
+};
+
+export type ShortsCropKeyframe = {
+  time: number;
+  center_x: number;
+  center_y: number;
+  scale: number;
+};
+
+export type ShortsCropConfig = {
+  mode: "auto" | "manual" | "tracking";
+  aspect_ratio: "9:16" | "1:1" | "16:9";
+  keyframes: ShortsCropKeyframe[];
 };
 
 export type ShortsTimedWord = {
@@ -162,6 +176,10 @@ export function updateShortsClip(clipId: string, input: { start_seconds: number;
 
 export function updateShortsSubtitleSettings(projectId: string, input: { style: string; position: string; font_size: number; text_color: string; background: string; watermark: string; safe_zone: number }) {
   return request<{ ok: boolean }>(`/shorts/projects/${projectId}/subtitle-settings`, { method: "PATCH", body: JSON.stringify(input) });
+}
+
+export function updateShortsClipCrop(clipId: string, editProjectId: string, config: ShortsCropConfig) {
+  return request<{ ok: boolean }>(`/shorts/clips/${encodeURIComponent(clipId)}/crop?edit_project_id=${encodeURIComponent(editProjectId)}`, { method: "PATCH", body: JSON.stringify(config) });
 }
 
 export function updateShortsClipOrder(projectId: string, clipIds: string[]) {

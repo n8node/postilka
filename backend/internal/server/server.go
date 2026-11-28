@@ -579,6 +579,7 @@ func New(cfg *config.Config, db *repository.Postgres, logger *slog.Logger) *Serv
 			r.Post("/shorts/edit-projects/{id}/clips", shortsHandler.AddClipToEditProject)
 			r.Get("/shorts/projects/{id}", shortsHandler.GetProject)
 			r.Patch("/shorts/clips/{id}", shortsHandler.UpdateClip)
+		r.Patch("/shorts/clips/{id}/crop", shortsHandler.UpdateClipCrop)
 			r.Delete("/shorts/clips/{id}", shortsHandler.DeleteClip)
 			r.Delete("/shorts/projects/{id}", shortsHandler.DeleteProject)
 			r.Post("/shorts/projects/{id}/analyze", shortsHandler.AnalyzeProject)

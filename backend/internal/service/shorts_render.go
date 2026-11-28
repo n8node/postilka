@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/postilka/postilka/internal/model"
 )
 
 type ShortsSubtitleConfig struct {
@@ -19,6 +21,42 @@ type ShortsSubtitleConfig struct {
 	Background string `json:"background"`
 	Watermark  string `json:"watermark"`
 	SafeZone   int    `json:"safe_zone"`
+}
+
+func NormalizeShortsCropConfig(config model.ShortsCropConfig, duration float64) model.ShortsCropConfig {
+	if config.Mode != "auto" && config.Mode != "manual" && config.Mode != "tracking" {
+		config.Mode = "manual"
+	}
+	if config.AspectRatio != "9:16" && config.AspectRatio != "1:1" && config.AspectRatio != "16:9" {
+		config.AspectRatio = "9:16"
+	}
+	valid := make([]model.ShortsCropKeyframe, 0, len(config.Keyframes))
+	for _, keyframe := range config.Keyframes {
+		if keyframe.Time < 0 || keyframe.Time > duration {
+			continue
+		}
+		if keyframe.CenterX < 0 {
+			keyframe.CenterX = 0
+		}
+		if keyframe.CenterX > 1 {
+			keyframe.CenterX = 1
+		}
+		if keyframe.CenterY < 0 {
+			keyframe.CenterY = 0
+		}
+		if keyframe.CenterY > 1 {
+			keyframe.CenterY = 1
+		}
+		if keyframe.Scale < 0.5 {
+			keyframe.Scale = 0.5
+		}
+		if keyframe.Scale > 3 {
+			keyframe.Scale = 3
+		}
+		valid = append(valid, keyframe)
+	}
+	config.Keyframes = valid
+	return config
 }
 
 func NormalizeShortsSubtitleConfig(config ShortsSubtitleConfig) ShortsSubtitleConfig {

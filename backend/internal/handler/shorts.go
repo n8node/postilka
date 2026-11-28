@@ -337,6 +337,29 @@ func (h *ShortsHandler) UpdateSubtitleSettings(w http.ResponseWriter, r *http.Re
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
+func (h *ShortsHandler) UpdateClipCrop(w http.ResponseWriter, r *http.Request) {
+	userID, ok := middleware.UserIDFromContext(r.Context())
+	if !ok {
+		writeError(w, http.StatusUnauthorized, "Требуется авторизация")
+		return
+	}
+	var config model.ShortsCropConfig
+	if err := json.NewDecoder(r.Body).Decode(&config); err != nil {
+		writeError(w, http.StatusBadRequest, "Некорректная конфигурация кадрирования")
+		return
+	}
+	projectID := r.URL.Query().Get("edit_project_id")
+	if projectID == "" {
+		writeError(w, http.StatusBadRequest, "Не указан монтажный проект")
+		return
+	}
+	if err := h.shorts.UpdateClipCrop(r.Context(), userID, r, projectID, chi.URLParam(r, "id"), config); err != nil {
+		h.mapError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
 func (h *ShortsHandler) UpdateClipOrder(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.UserIDFromContext(r.Context())
 	if !ok {
