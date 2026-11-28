@@ -100,6 +100,7 @@ const defaultCropConfig: ShortsCropConfig = {
 };
 
 const sidebarWidthByViewport = { compact: 210, standard: 238, wide: 254 } as const;
+const inspectorWidthByViewport = { compact: 250, standard: 286, wide: 304 } as const;
 
 function cropConfigForClip(clip: ShortsClip, ratio: Ratio): ShortsCropConfig {
   const config = clip.crop_config;
@@ -127,6 +128,8 @@ export function ShortsEditorPanel({ clips, draftUrls, sourceUrl, initialSettings
   const [selectedClipId, setSelectedClipId] = useState(clips[0]?.id ?? "");
   const [sidebarBaseWidth, setSidebarBaseWidth] = useState<number>(sidebarWidthByViewport.standard);
   const [sidebarWidth, setSidebarWidth] = useState<number>(sidebarWidthByViewport.standard * 2);
+  const [inspectorBaseWidth, setInspectorBaseWidth] = useState<number>(inspectorWidthByViewport.standard);
+  const [inspectorWidth, setInspectorWidth] = useState<number>(inspectorWidthByViewport.standard * 2);
   const [ratio, setRatio] = useState<Ratio>("9:16");
   const [showOriginal, setShowOriginal] = useState(false);
   const [cropConfig, setCropConfig] = useState<ShortsCropConfig>(defaultCropConfig);
@@ -154,6 +157,7 @@ export function ShortsEditorPanel({ clips, draftUrls, sourceUrl, initialSettings
   const videoFrameRef = useRef<HTMLDivElement>(null);
   const editorGridRef = useRef<HTMLElement>(null);
   const sidebarResizeRef = useRef<{ pointerId: number } | null>(null);
+  const inspectorResizeRef = useRef<{ pointerId: number } | null>(null);
   const cropDragRef = useRef<{ pointerId: number; startX: number; startY: number; centerX: number; centerY: number } | null>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
   const pendingSeekRef = useRef<number | null>(null);
@@ -223,6 +227,13 @@ export function ShortsEditorPanel({ clips, draftUrls, sourceUrl, initialSettings
           : sidebarWidthByViewport.standard;
       setSidebarBaseWidth(baseWidth);
       setSidebarWidth(baseWidth * 2);
+      const inspectorBaseWidth = window.innerWidth >= 1500
+        ? inspectorWidthByViewport.wide
+        : window.innerWidth <= 1250
+          ? inspectorWidthByViewport.compact
+          : inspectorWidthByViewport.standard;
+      setInspectorBaseWidth(inspectorBaseWidth);
+      setInspectorWidth(inspectorBaseWidth * 2);
     };
     updateSidebarWidth();
     window.addEventListener("resize", updateSidebarWidth);
@@ -409,6 +420,41 @@ export function ShortsEditorPanel({ clips, draftUrls, sourceUrl, initialSettings
     setSidebarWidth(Math.max(sidebarBaseWidth, Math.min(sidebarBaseWidth * 3.5, nextWidth)));
   }
 
+  function setInspectorWidthFromPointer(clientX: number) {
+    const grid = editorGridRef.current;
+    if (!grid) return;
+    const rect = grid.getBoundingClientRect();
+    const nextWidth = rect.right - clientX;
+    setInspectorWidth(Math.max(inspectorBaseWidth, Math.min(inspectorBaseWidth * 3.5, nextWidth)));
+  }
+
+  function handleInspectorResizeStart(event: React.PointerEvent<HTMLDivElement>) {
+    inspectorResizeRef.current = { pointerId: event.pointerId };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  }
+
+  function handleInspectorResizeMove(event: React.PointerEvent<HTMLDivElement>) {
+    if (!inspectorResizeRef.current) return;
+    setInspectorWidthFromPointer(event.clientX);
+  }
+
+  function handleInspectorResizeEnd() {
+    inspectorResizeRef.current = null;
+  }
+
+  function handleInspectorResizeKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight" && event.key !== "Home" && event.key !== "End") return;
+    event.preventDefault();
+    const step = event.shiftKey ? 40 : 10;
+    const nextWidth = event.key === "Home"
+      ? inspectorBaseWidth
+      : event.key === "End"
+        ? inspectorBaseWidth * 3.5
+        : inspectorWidth + (event.key === "ArrowLeft" ? step : -step);
+    setInspectorWidth(Math.max(inspectorBaseWidth, Math.min(inspectorBaseWidth * 3.5, nextWidth)));
+  }
+
   function updateSettings(patch: Partial<ShortsEditorSettings>) {
     setSettings((current) => ({ ...current, ...patch }));
   }
@@ -454,7 +500,7 @@ export function ShortsEditorPanel({ clips, draftUrls, sourceUrl, initialSettings
       <section
         className={styles.editorGrid}
         ref={editorGridRef}
-        style={{ "--editor-sidebar-width": `${sidebarWidth}px` } as CSSProperties}
+        style={{ "--editor-sidebar-width": `${sidebarWidth}px`, "--editor-inspector-width": `${inspectorWidth}px` } as CSSProperties}
       >
         <aside className={`${styles.panel} ${styles.structurePanel}`}>
           <div className={`${styles.segmented} ${styles.panelTabs}`} role="tablist" aria-label="Структура ролика">
@@ -570,6 +616,22 @@ export function ShortsEditorPanel({ clips, draftUrls, sourceUrl, initialSettings
             <button type="button" className={`${styles.iconButton} ${styles.small}`} aria-label="Развернуть видео" onClick={() => void videoFrameRef.current?.requestFullscreen?.()}><Expand size={16} /></button>
           </div>
         </section>
+
+        <div
+          className={styles.sidebarResizeHandle}
+          role="separator"
+          aria-label="Изменить ширину панели настроек"
+          aria-orientation="vertical"
+          aria-valuemin={inspectorBaseWidth}
+          aria-valuemax={inspectorBaseWidth * 3.5}
+          aria-valuenow={Math.round(inspectorWidth)}
+          tabIndex={0}
+          onPointerDown={handleInspectorResizeStart}
+          onPointerMove={handleInspectorResizeMove}
+          onPointerUp={handleInspectorResizeEnd}
+          onPointerCancel={handleInspectorResizeEnd}
+          onKeyDown={handleInspectorResizeKeyDown}
+        />
 
         <aside className={`${styles.panel} ${styles.inspectorPanel}`}>
           <div className={styles.inspectorHeader}><div><Settings2 size={17} /><strong>Настройки</strong></div><button type="button" className={`${styles.iconButton} ${styles.small}`} aria-label="Сбросить настройки" onClick={resetSettings}><RotateCcw size={15} /></button></div>

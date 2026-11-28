@@ -48,15 +48,15 @@
 
 .editorGrid {
   display: grid;
-  grid-template-columns: var(--editor-sidebar-width, 476px) 12px minmax(360px, 1fr) 286px;
-  gap: 14px;
+  grid-template-columns: var(--editor-sidebar-width, 476px) 8px minmax(360px, 1fr) 8px var(--editor-inspector-width, 572px);
+  gap: 9px;
   height: 560px;
 }
 
 .sidebarResizeHandle {
   position: relative;
   z-index: 3;
-  width: 12px;
+  width: 8px;
   min-height: 100%;
   cursor: col-resize;
   touch-action: none;
@@ -66,12 +66,29 @@
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 6px;
-  height: 96px;
+  display: flex;
+  width: 8px;
+  height: 72px;
+  border: 1px solid rgba(121, 137, 161, 0.28);
   border-radius: 999px;
-  background: #d9dee8;
+  background: rgba(217, 222, 232, 0.72);
   content: "";
-  opacity: 0;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.55), 0 1px 3px rgba(31, 41, 55, 0.08);
+  transform: translate(-50%, -50%);
+  transition: background 0.18s ease, opacity 0.18s ease;
+}
+
+.sidebarResizeHandle::before {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 1;
+  width: 3px;
+  height: 24px;
+  border-radius: 999px;
+  background: repeating-linear-gradient(to bottom, #9ca8ba 0 3px, transparent 3px 6px);
+  content: "";
+  opacity: 0.58;
   transform: translate(-50%, -50%);
   transition: background 0.18s ease, opacity 0.18s ease;
 }
@@ -80,7 +97,15 @@
 .sidebarResizeHandle:focus-visible::after,
 .sidebarResizeHandle:active::after {
   background: var(--editor-accent);
-  opacity: 1;
+  border-color: var(--editor-accent);
+  opacity: 0.96;
+}
+
+.sidebarResizeHandle:hover::before,
+.sidebarResizeHandle:focus-visible::before,
+.sidebarResizeHandle:active::before {
+  background: repeating-linear-gradient(to bottom, #fff 0 3px, transparent 3px 6px);
+  opacity: 0.95;
 }
 
 .panel,
@@ -1638,7 +1663,7 @@
 
 @media (min-width: 1500px) {
   .editorGrid {
-    grid-template-columns: var(--editor-sidebar-width, 508px) 12px minmax(420px, 1fr) 304px;
+    grid-template-columns: var(--editor-sidebar-width, 508px) 8px minmax(420px, 1fr) 8px var(--editor-inspector-width, 608px);
     height: 580px;
   }
 
@@ -1649,8 +1674,8 @@
 
 @media (max-width: 1250px) {
   .editorGrid {
-    grid-template-columns: var(--editor-sidebar-width, 420px) 12px minmax(330px, 1fr) 250px;
-    gap: 10px;
+    grid-template-columns: var(--editor-sidebar-width, 420px) 8px minmax(330px, 1fr) 8px var(--editor-inspector-width, 500px);
+    gap: 7px;
   }
 
   .previewTitle span,
