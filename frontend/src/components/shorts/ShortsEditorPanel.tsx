@@ -126,6 +126,7 @@ export function ShortsEditorPanel({ clips, draftUrls, sourceUrl, initialSettings
   const [ratio, setRatio] = useState<Ratio>("9:16");
   const [showOriginal, setShowOriginal] = useState(false);
   const [cropConfig, setCropConfig] = useState<ShortsCropConfig>(defaultCropConfig);
+  const [cropDirty, setCropDirty] = useState(false);
   const [cropSaving, setCropSaving] = useState(false);
   const [captionPreset, setCaptionPreset] = useState<CaptionPreset>(initialSettings.style === "minimal" ? "minimal" : initialSettings.style === "classic" ? "classic" : "accent");
   const [showCaptions, setShowCaptions] = useState(true);
@@ -211,6 +212,7 @@ export function ShortsEditorPanel({ clips, draftUrls, sourceUrl, initialSettings
     if (!selectedClip) return;
     const next = cropConfigForClip(selectedClip, ratio);
     setCropConfig(next);
+    setCropDirty(false);
   }, [selectedClipId, selectedClip, ratio]);
 
   useEffect(() => {
@@ -248,13 +250,31 @@ export function ShortsEditorPanel({ clips, draftUrls, sourceUrl, initialSettings
   }
 
   function currentCropKeyframe(): ShortsCropKeyframe {
-    return cropConfig.keyframes[0] ?? { time: 0, center_x: 0.5, center_y: 0.5, scale: 1 };
+    const points = [...cropConfig.keyframes].sort((a, b) => a.time - b.time);
+    if (!points.length) return { time: 0, center_x: 0.5, center_y: 0.5, scale: 1 };
+    const previous = [...points].reverse().find((point) => point.time <= currentTime) ?? points[0];
+    const next = points.find((point) => point.time >= currentTime) ?? previous;
+    if (next.time <= previous.time) return previous;
+    const progress = (currentTime - previous.time) / (next.time - previous.time);
+    return {
+      time: currentTime,
+      center_x: previous.center_x + (next.center_x - previous.center_x) * progress,
+      center_y: previous.center_y + (next.center_y - previous.center_y) * progress,
+      scale: previous.scale + (next.scale - previous.scale) * progress,
+    };
   }
 
   function updateCropPosition(centerX: number, centerY: number) {
     const current = currentCropKeyframe();
     const next = { ...current, time: currentTime, center_x: Math.max(0, Math.min(1, centerX)), center_y: Math.max(0, Math.min(1, centerY)) };
-    setCropConfig((config) => ({ ...config, mode: "manual", aspect_ratio: ratio, keyframes: [next, ...config.keyframes.slice(1)] }));
+    setCropConfig((config) => ({ ...config, mode: "manual", aspect_ratio: ratio, keyframes: [...config.keyframes.filter((point) => Math.abs(point.time - currentTime) > 0.02), next].sort((a, b) => a.time - b.time) }));
+    setCropDirty(true);
+  }
+
+  function addCropKeyframe() {
+    const current = currentCropKeyframe();
+    setCropConfig((config) => ({ ...config, keyframes: [...config.keyframes.filter((point) => Math.abs(point.time - currentTime) > 0.02), { ...current, time: currentTime }].sort((a, b) => a.time - b.time) }));
+    setCropDirty(true);
   }
 
   function handleCropPointerDown(event: React.PointerEvent<HTMLDivElement>) {
@@ -278,7 +298,7 @@ export function ShortsEditorPanel({ clips, draftUrls, sourceUrl, initialSettings
   async function saveCrop() {
     if (!selectedClip || !onSaveCrop) return;
     setCropSaving(true);
-    try { await onSaveCrop(selectedClip.id, cropConfig); } finally { setCropSaving(false); }
+    try { await onSaveCrop(selectedClip.id, cropConfig); setCropDirty(false); } finally { setCropSaving(false); }
   }
 
   async function togglePlayback() {
@@ -487,7 +507,8 @@ export function ShortsEditorPanel({ clips, draftUrls, sourceUrl, initialSettings
               <input className={styles.range} type="range" aria-label="Масштаб видео" min="80" max="140" value={scale} onChange={(event) => setScale(Number(event.target.value))} style={rangeStyle(((scale - 80) / 60) * 100)} />
               <button type="button" className={styles.textAction} onClick={() => setScale(100)}><WandSparkles size={14} /> Заполнить кадр автоматически</button>
               <div className={styles.cropHint}>{showOriginal ? "Перетаскивайте рамку на исходном 16:9 видео" : "Включите «Оригинал 16:9», чтобы настроить область кадрирования"}</div>
-              {onSaveCrop && <button type="button" className={`${styles.button} ${styles.buttonSecondary} ${styles.fullWidth}`} onClick={() => void saveCrop()} disabled={cropSaving}>{cropSaving ? "Сохранение кадра…" : "Сохранить кадрирование"}</button>}
+              <button type="button" className={styles.textAction} onClick={addCropKeyframe}><Plus size={14} /> Добавить точку кадрирования на {formatTime(currentTime)}</button>
+              {onSaveCrop && <button type="button" className={`${styles.button} ${cropDirty ? styles.buttonPrimary : styles.buttonSecondary} ${styles.fullWidth}`} onClick={() => void saveCrop()} disabled={cropSaving || !cropDirty}>{cropSaving ? "Сохранение кадра…" : cropDirty ? "Сохранить кадрирование" : "Кадрирование сохранено"}</button>}
             </section>
 
             <section className={styles.settingSection}>
@@ -525,12 +546,13 @@ export function ShortsEditorPanel({ clips, draftUrls, sourceUrl, initialSettings
           <div className={styles.zoomControl}><ZoomOut size={14} /><input className={styles.range} aria-label="Масштаб таймлайна" type="range" min="30" max="100" value={zoom} onChange={(event) => setZoom(Number(event.target.value))} style={rangeStyle(((zoom - 30) / 70) * 100)} /><ZoomIn size={15} /><span>{zoom}%</span></div>
         </div>
         <div className={styles.timelineBody}>
-          <div className={styles.trackLabels}><div className={styles.rulerSpacer} /><div><Film size={14} /> Видео</div><div><Volume2 size={14} /> Аудио</div><div><Captions size={14} /> Субтитры</div></div>
+          <div className={styles.trackLabels}><div className={styles.rulerSpacer} /><div><Film size={14} /> Видео</div><div><Crop size={14} /> Кадрирование</div><div><Volume2 size={14} /> Аудио</div><div><Captions size={14} /> Субтитры</div></div>
           <div className={styles.tracksScroll}>
             <div className={styles.tracksContent} style={{ width: `${Math.max(100, zoom + 38)}%` }}>
               <div className={styles.timeRuler}>{rulerLabels.map((time, index) => <span key={`${time}-${index}`}>{time}</span>)}</div>
               <div className={styles.tracksClickArea} ref={timelineRef} onClick={seekTimeline}>
                 <div className={`${styles.track} ${styles.videoTrack}`}>{segments.map((segment) => <button type="button" key={segment.clip.id} className={`${styles.videoClip} ${selectedClip.id === segment.clip.id ? styles.selected : ""}`} style={{ width: `${(segment.duration / totalDuration) * 100}%` }} onClick={(event) => { event.stopPropagation(); selectScene(segment.clip.id); }}><SceneThumbnail src={draftUrls[segment.clip.id]} className={styles.trackThumb} /><span className={styles.clipName}>Сцена {segment.index + 1}</span></button>)}</div>
+                <div className={`${styles.track} ${styles.cropTrack}`}>{segments.map((segment) => <button type="button" key={segment.clip.id} className={`${styles.cropClip} ${selectedClip.id === segment.clip.id ? styles.selected : ""}`} style={{ width: `${(segment.duration / totalDuration) * 100}%` }} onClick={(event) => { event.stopPropagation(); selectScene(segment.clip.id); }}>{segment.clip.crop_config?.keyframes?.length ?? 0} точек</button>)}</div>
                 <div className={styles.track}><div className={styles.audioClip}>{Array.from({ length: 94 }).map((_, index) => <i key={index} style={{ height: `${6 + ((index * 13) % 18)}px` }} />)}</div></div>
                 <div className={`${styles.track} ${styles.captionsTrack}`}>{segments.map((segment) => <button type="button" key={segment.clip.id} className={`${styles.captionClip} ${selectedClip.id === segment.clip.id ? styles.selected : ""}`} style={{ left: `${(segment.start / totalDuration) * 100}%`, width: `${(segment.duration / totalDuration) * 100}%` }} onClick={(event) => { event.stopPropagation(); selectScene(segment.clip.id); }}>{segment.clip.transcript_text || `Сцена ${segment.index + 1}`}</button>)}</div>
                 <div className={styles.playhead} style={{ left: `${totalDuration ? (timelineTime / totalDuration) * 100 : 0}%` }}><span /></div>

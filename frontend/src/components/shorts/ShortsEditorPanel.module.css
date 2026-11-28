@@ -1476,6 +1476,29 @@
   background: #f8eaa9 !important;
 }
 
+.cropTrack {
+  background: #fbfcff;
+}
+
+.cropClip {
+  height: 30px;
+  overflow: hidden;
+  padding: 0 7px;
+  border: 1px solid #a9bde5 !important;
+  border-radius: 6px;
+  color: #4567a1 !important;
+  background: #eaf1ff !important;
+  font-size: 8px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cropClip.selected {
+  border-color: var(--editor-accent) !important;
+  background: #dce9ff !important;
+}
+
 .playhead {
   position: absolute;
   top: -2px;
