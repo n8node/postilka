@@ -37,7 +37,7 @@ import {
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
-import type { ShortsClip, ShortsTimedWord } from "@/lib/shorts-api";
+import type { ShortsClip, ShortsCropConfig, ShortsCropKeyframe, ShortsTimedWord } from "@/lib/shorts-api";
 import styles from "./ShortsEditorPanel.module.css";
 
 export type ShortsEditorSettings = {
@@ -53,7 +53,9 @@ export type ShortsEditorSettings = {
 type Props = {
   clips: ShortsClip[];
   draftUrls: Record<string, string>;
+  sourceUrl?: string;
   initialSettings: ShortsEditorSettings;
+  onSaveCrop?: (clipId: string, config: ShortsCropConfig) => Promise<void>;
   onSaveSettings: (settings: ShortsEditorSettings) => Promise<void>;
   onReorder: (fromIndex: number, toIndex: number) => void;
   onOpenClips: () => void;
@@ -91,6 +93,18 @@ const defaultSettings: ShortsEditorSettings = {
   safeZone: 70,
 };
 
+const defaultCropConfig: ShortsCropConfig = {
+  mode: "manual",
+  aspect_ratio: "9:16",
+  keyframes: [{ time: 0, center_x: 0.5, center_y: 0.5, scale: 1 }],
+};
+
+function cropConfigForClip(clip: ShortsClip, ratio: Ratio): ShortsCropConfig {
+  const config = clip.crop_config;
+  if (!config || !config.keyframes?.length) return { ...defaultCropConfig, aspect_ratio: ratio, keyframes: [{ ...defaultCropConfig.keyframes[0] }] };
+  return { ...config, aspect_ratio: ratio, keyframes: config.keyframes.map((keyframe) => ({ ...keyframe })) };
+}
+
 function formatTime(value: number) {
   const seconds = Math.max(0, Math.floor(Number.isFinite(value) ? value : 0));
   return `${String(Math.floor(seconds / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
@@ -105,11 +119,14 @@ function SceneThumbnail({ src, className }: { src?: string; className: string })
   return <video className={className} src={src} muted playsInline preload="metadata" aria-hidden="true" tabIndex={-1} />;
 }
 
-export function ShortsEditorPanel({ clips, draftUrls, initialSettings, onSaveSettings, onReorder, onOpenClips, onDeleteClip, timedWords = [] }: Props) {
+export function ShortsEditorPanel({ clips, draftUrls, sourceUrl, initialSettings, onSaveSettings, onSaveCrop, onReorder, onOpenClips, onDeleteClip, timedWords = [] }: Props) {
   const [leftTab, setLeftTab] = useState<LeftTab>("scenes");
   const [rightTab, setRightTab] = useState<RightTab>("visual");
   const [selectedClipId, setSelectedClipId] = useState(clips[0]?.id ?? "");
   const [ratio, setRatio] = useState<Ratio>("9:16");
+  const [showOriginal, setShowOriginal] = useState(false);
+  const [cropConfig, setCropConfig] = useState<ShortsCropConfig>(defaultCropConfig);
+  const [cropSaving, setCropSaving] = useState(false);
   const [captionPreset, setCaptionPreset] = useState<CaptionPreset>(initialSettings.style === "minimal" ? "minimal" : initialSettings.style === "classic" ? "classic" : "accent");
   const [showCaptions, setShowCaptions] = useState(true);
   const [settings, setSettings] = useState<ShortsEditorSettings>({ ...initialSettings });
@@ -130,6 +147,7 @@ export function ShortsEditorPanel({ clips, draftUrls, initialSettings, onSaveSet
   const videoRef = useRef<HTMLVideoElement>(null);
   const previewRef = useRef<HTMLElement>(null);
   const videoFrameRef = useRef<HTMLDivElement>(null);
+  const cropDragRef = useRef<{ pointerId: number; startX: number; startY: number; centerX: number; centerY: number } | null>(null);
   const timelineRef = useRef<HTMLDivElement>(null);
   const pendingSeekRef = useRef<number | null>(null);
   const dragIndexRef = useRef<number | null>(null);
@@ -190,6 +208,12 @@ export function ShortsEditorPanel({ clips, draftUrls, initialSettings, onSaveSet
   }, [selectedClipId]);
 
   useEffect(() => {
+    if (!selectedClip) return;
+    const next = cropConfigForClip(selectedClip, ratio);
+    setCropConfig(next);
+  }, [selectedClipId, selectedClip, ratio]);
+
+  useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
     video.volume = volume / 100;
@@ -217,10 +241,44 @@ export function ShortsEditorPanel({ clips, draftUrls, initialSettings, onSaveSet
     pendingSeekRef.current = time;
     setCurrentTime(time);
     if (clipId === selectedClipId && videoRef.current) {
-      videoRef.current.currentTime = time;
+      videoRef.current.currentTime = showOriginal ? (selectedClip?.start_seconds ?? 0) + time : time;
       return;
     }
     setSelectedClipId(clipId);
+  }
+
+  function currentCropKeyframe(): ShortsCropKeyframe {
+    return cropConfig.keyframes[0] ?? { time: 0, center_x: 0.5, center_y: 0.5, scale: 1 };
+  }
+
+  function updateCropPosition(centerX: number, centerY: number) {
+    const current = currentCropKeyframe();
+    const next = { ...current, time: currentTime, center_x: Math.max(0, Math.min(1, centerX)), center_y: Math.max(0, Math.min(1, centerY)) };
+    setCropConfig((config) => ({ ...config, mode: "manual", aspect_ratio: ratio, keyframes: [next, ...config.keyframes.slice(1)] }));
+  }
+
+  function handleCropPointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    const current = currentCropKeyframe();
+    cropDragRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, centerX: current.center_x, centerY: current.center_y };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function handleCropPointerMove(event: React.PointerEvent<HTMLDivElement>) {
+    const drag = cropDragRef.current;
+    const frame = videoFrameRef.current;
+    if (!drag || !frame) return;
+    const rect = frame.getBoundingClientRect();
+    updateCropPosition(drag.centerX + (event.clientX - drag.startX) / rect.width, drag.centerY + (event.clientY - drag.startY) / rect.height);
+  }
+
+  function handleCropPointerUp() {
+    cropDragRef.current = null;
+  }
+
+  async function saveCrop() {
+    if (!selectedClip || !onSaveCrop) return;
+    setCropSaving(true);
+    try { await onSaveCrop(selectedClip.id, cropConfig); } finally { setCropSaving(false); }
   }
 
   async function togglePlayback() {
@@ -251,7 +309,8 @@ export function ShortsEditorPanel({ clips, draftUrls, initialSettings, onSaveSet
     video.volume = volume / 100;
     video.muted = muted;
     if (pendingSeekRef.current !== null) {
-      video.currentTime = Math.min(pendingSeekRef.current, Number.isFinite(video.duration) ? video.duration : pendingSeekRef.current);
+      const requested = showOriginal ? (selectedClip?.start_seconds ?? 0) + pendingSeekRef.current : pendingSeekRef.current;
+      video.currentTime = Math.min(requested, Number.isFinite(video.duration) ? video.duration : requested);
       pendingSeekRef.current = null;
     }
   }
@@ -309,6 +368,8 @@ export function ShortsEditorPanel({ clips, draftUrls, initialSettings, onSaveSet
   }
 
   const ratioClass = ratio === "1:1" ? styles.ratio11 : ratio === "16:9" ? styles.ratio169 : "";
+  const crop = currentCropKeyframe();
+  const cropStyle = { left: `${crop.center_x * 100}%`, top: `${crop.center_y * 100}%`, transform: "translate(-50%, -50%)" } as CSSProperties;
   const captionPositionClass = settings.position === "top" ? styles.captionTop : settings.position === "center" ? styles.captionCenter : "";
   const captionPresetClass = styles[`preset${captionPreset[0].toUpperCase()}${captionPreset.slice(1)}`];
 
@@ -374,33 +435,34 @@ export function ShortsEditorPanel({ clips, draftUrls, initialSettings, onSaveSet
         </aside>
 
         <section className={styles.previewPanel} aria-label="Предпросмотр видео" ref={previewRef}>
-          <div className={styles.previewToolbar}><div className={styles.previewTitle}><Film size={16} /><strong>Предпросмотр</strong><span>{ratio} · {ratio === "9:16" ? "1080 × 1920" : ratio === "1:1" ? "1080 × 1080" : "1920 × 1080"}</span></div><div className={styles.previewActions}><button type="button" className={`${styles.toolbarToggle} ${safeZoneVisible ? styles.active : ""}`} onClick={() => setSafeZoneVisible((value) => !value)} aria-pressed={safeZoneVisible}><Crop size={15} /> Безопасные зоны</button><button type="button" className={`${styles.iconButton} ${styles.small}`} aria-label="На весь экран" onClick={() => void previewRef.current?.requestFullscreen?.()}><Maximize2 size={16} /></button></div></div>
+          <div className={styles.previewToolbar}><div className={styles.previewTitle}><Film size={16} /><strong>Предпросмотр</strong><span>{showOriginal ? "Оригинал 16:9" : ratio} · {ratio === "9:16" ? "1080 × 1920" : ratio === "1:1" ? "1080 × 1080" : "1920 × 1080"}</span></div><div className={styles.previewActions}><button type="button" className={`${styles.toolbarToggle} ${showOriginal ? styles.active : ""}`} onClick={() => setShowOriginal((value) => !value)} aria-pressed={showOriginal}><Crop size={15} /> Оригинал 16:9</button><button type="button" className={`${styles.toolbarToggle} ${safeZoneVisible ? styles.active : ""}`} onClick={() => setSafeZoneVisible((value) => !value)} aria-pressed={safeZoneVisible}>Безопасные зоны</button><button type="button" className={`${styles.iconButton} ${styles.small}`} aria-label="На весь экран" onClick={() => void previewRef.current?.requestFullscreen?.()}><Maximize2 size={16} /></button></div></div>
           <div className={styles.canvasArea}>
-            <div className={`${styles.videoFrame} ${ratioClass}`} ref={videoFrameRef}>
-              {selectedUrl && !videoError ? <video
+            <div className={`${styles.videoFrame} ${showOriginal ? styles.originalFrame : ratioClass}`} ref={videoFrameRef}>
+              {(showOriginal ? sourceUrl : selectedUrl) && !videoError ? <video
                 key={selectedClip.id}
                 ref={videoRef}
                 className={styles.videoPoster}
-                src={selectedUrl}
+                src={showOriginal ? sourceUrl : selectedUrl}
                 playsInline
                 preload="metadata"
-                style={{ transform: `scale(${scale / 100})` }}
+                style={showOriginal ? undefined : { transform: `scale(${scale / 100})` }}
                 onClick={() => void togglePlayback()}
                 onPlay={() => setPlaying(true)}
                 onPause={() => setPlaying(false)}
                 onEnded={() => setPlaying(false)}
-                onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
+                onTimeUpdate={(event) => setCurrentTime(Math.max(0, event.currentTarget.currentTime - (showOriginal ? (selectedClip.start_seconds ?? 0) : 0)))}
                 onLoadedMetadata={handleVideoMetadata}
                 onCanPlay={handleVideoMetadata}
                 onError={() => setVideoError(true)}
               /> : <div className={styles.previewPlaceholder}>{selectedClip.draft_file_id && !videoError ? <Loader2 className={styles.spinning} size={24} /> : <Film size={28} />}<span>{videoError ? "Не удалось загрузить превью" : selectedClip.draft_file_id ? "Загрузка превью…" : "Превью ещё не готово"}</span></div>}
+              {showOriginal && <div className={`${styles.cropOverlay} ${ratio === "1:1" ? styles.cropOverlay11 : ratio === "16:9" ? styles.cropOverlay169 : ""}`} style={cropStyle} onPointerDown={handleCropPointerDown} onPointerMove={handleCropPointerMove} onPointerUp={handleCropPointerUp} onPointerCancel={handleCropPointerUp} role="slider" aria-label="Область кадрирования" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(crop.center_x * 100)} aria-valuetext={`Центр ${Math.round(crop.center_x * 100)}%, ${Math.round(crop.center_y * 100)}%`}><span>Кадр {ratio}</span></div>}
               <div className={styles.videoShade} />
               {safeZoneVisible && <div className={styles.safeZone}><span>Безопасная зона</span></div>}
               {settings.watermark && <div className={styles.videoTitle}>{settings.watermark}</div>}
               {showCaptions && selectedClip.transcript_text && <div className={`${styles.videoSubtitle} ${captionPresetClass} ${captionPositionClass} ${activeCaptionBlock.length > 0 ? styles.syncedSubtitle : ""}`} style={{ fontSize: `${Math.max(10, Math.round(settings.fontSize / 3.2))}px`, color: settings.textColor, "--caption-background": settings.background } as CSSProperties}>
                 {activeCaptionBlock.length > 0 ? activeCaptionBlock.map((word, index) => <span key={`${word.start}-${index}`} className={index === activeWordIndex ? styles.currentCaptionWord : index < activeWordIndex ? styles.spokenCaptionWord : ""}>{word.word}</span>) : selectedClip.transcript_text}
               </div>}
-              <button type="button" className={styles.centerPlay} aria-label={playing ? "Поставить на паузу" : "Воспроизвести"} disabled={!selectedUrl || videoError} onClick={() => void togglePlayback()}>{playing ? <Pause size={23} fill="currentColor" /> : <Play size={23} fill="currentColor" />}</button>
+              <button type="button" className={styles.centerPlay} aria-label={playing ? "Поставить на паузу" : "Воспроизвести"} disabled={!(showOriginal ? sourceUrl : selectedUrl) || videoError} onClick={() => void togglePlayback()}>{playing ? <Pause size={23} fill="currentColor" /> : <Play size={23} fill="currentColor" />}</button>
             </div>
           </div>
           <div className={styles.playerControls}>
@@ -424,6 +486,8 @@ export function ShortsEditorPanel({ clips, draftUrls, initialSettings, onSaveSet
               <label className={styles.rangeLabel}><span>Масштаб</span><output>{scale}%</output></label>
               <input className={styles.range} type="range" aria-label="Масштаб видео" min="80" max="140" value={scale} onChange={(event) => setScale(Number(event.target.value))} style={rangeStyle(((scale - 80) / 60) * 100)} />
               <button type="button" className={styles.textAction} onClick={() => setScale(100)}><WandSparkles size={14} /> Заполнить кадр автоматически</button>
+              <div className={styles.cropHint}>{showOriginal ? "Перетаскивайте рамку на исходном 16:9 видео" : "Включите «Оригинал 16:9», чтобы настроить область кадрирования"}</div>
+              {onSaveCrop && <button type="button" className={`${styles.button} ${styles.buttonSecondary} ${styles.fullWidth}`} onClick={() => void saveCrop()} disabled={cropSaving}>{cropSaving ? "Сохранение кадра…" : "Сохранить кадрирование"}</button>}
             </section>
 
             <section className={styles.settingSection}>

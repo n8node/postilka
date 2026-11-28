@@ -11,7 +11,7 @@ import { ShortsClipsPanel, type ShortsClipDraft } from "@/components/shorts/Shor
 import { ShortsEditorPanel, type ShortsEditorSettings } from "@/components/shorts/ShortsEditorPanel";
 import { uploadFile, type WorkspaceFile } from "@/lib/files-api";
 import { getCachedFileMediaUrl } from "@/lib/file-media-cache";
-import { analyzeShortsProject, cancelShortsJob, createShortsProject, deleteShortsProject, exportShortsProject, getShortsAudioDownloadUrl, getShortsDraftDownloadUrl, getShortsDraftDownloadUrlPath, getShortsFinalDownloadUrl, getShortsJob, getShortsProject, getShortsTranscriptResult, getShortsTranscriptResultUrl, listShortsProjects, listShortsSources, rerenderShortsProject, deleteShortsClip, updateShortsClip, getShortsAnalysisForFile, getShortsSource, createShortsEditProject, addShortsClipToEditProject, updateShortsClipOrder, updateShortsSubtitleSettings, type ShortsClip, type ShortsJob, type ShortsProject, type ShortsProjectListItem, type ShortsTimedWord } from "@/lib/shorts-api";
+import { analyzeShortsProject, cancelShortsJob, createShortsProject, deleteShortsProject, exportShortsProject, getShortsAudioDownloadUrl, getShortsDraftDownloadUrl, getShortsDraftDownloadUrlPath, getShortsFinalDownloadUrl, getShortsJob, getShortsProject, getShortsTranscriptResult, getShortsTranscriptResultUrl, listShortsProjects, listShortsSources, rerenderShortsProject, deleteShortsClip, updateShortsClip, getShortsAnalysisForFile, getShortsSource, createShortsEditProject, addShortsClipToEditProject, updateShortsClipOrder, updateShortsSubtitleSettings, updateShortsClipCrop, type ShortsClip, type ShortsCropConfig, type ShortsJob, type ShortsProject, type ShortsProjectListItem, type ShortsTimedWord } from "@/lib/shorts-api";
 
 const contentTypes = [
   ["podcast", "Подкаст"],
@@ -62,7 +62,7 @@ export function ShortsStudioPage() {
   const [previewUrl, setPreviewUrl] = useState("");
 
   useEffect(() => {
-    const fileId = sourceFile?.id;
+    const fileId = sourceFile?.id ?? project?.source_file_id;
     if (!fileId) {
       setPreviewUrl("");
       return;
@@ -78,7 +78,7 @@ export function ShortsStudioPage() {
     return () => {
       cancelled = true;
     };
-  }, [sourceFile?.id]);
+  }, [sourceFile?.id, project?.source_file_id]);
 
   function readTimedWords(result: unknown, offset: number): ShortsTimedWord[] {
     if (!result || typeof result !== "object") return [];
@@ -397,6 +397,13 @@ export function ShortsStudioPage() {
     try { await updateShortsSubtitleSettings(project.id, { style: settings.style, position: settings.position, font_size: settings.fontSize, text_color: settings.textColor, background: settings.background, watermark: settings.watermark, safe_zone: settings.safeZone }); const result = await rerenderShortsProject(project.id); setJob(result.job); setDraftUrls({}); setJobMessage("Настройки сохранены. Draft-предпросмотры перерендериваются."); } catch (error) { setJobMessage(error instanceof Error ? error.message : "Не удалось перерендерить preview"); }
   }
 
+  async function saveClipCrop(clipId: string, config: ShortsCropConfig) {
+    if (!editProjectId) return;
+    await updateShortsClipCrop(clipId, editProjectId, config);
+    setClips((items) => items.map((clip) => clip.id === clipId ? { ...clip, crop_config: config } : clip));
+    setJobMessage("Кадрирование сохранено.");
+  }
+
   async function reorderClips(fromIndex: number, toIndex: number) {
     if (!project || fromIndex === toIndex || fromIndex < 0 || toIndex < 0 || fromIndex >= clips.length || toIndex >= clips.length) return;
     const next = [...clips];
@@ -518,9 +525,11 @@ export function ShortsStudioPage() {
         key={project.id}
         clips={clips}
         draftUrls={draftUrls}
+        sourceUrl={previewUrl}
         initialSettings={{ style: subtitleStyle, position: subtitlePosition, fontSize: subtitleFontSize, textColor: subtitleTextColor, background: subtitleBackground, watermark, safeZone }}
         timedWords={timedWords}
         onSaveSettings={saveSubtitleSettings}
+        onSaveCrop={saveClipCrop}
         onReorder={(fromIndex, toIndex) => void reorderClips(fromIndex, toIndex)}
         onOpenClips={() => { if (editProjectId) void getShortsSource(project.source_id || project.id).then((source)=>{setSourceClips(source.clips);setSourceEditProjects(source.edit_projects ?? []);setActiveStep("clips");}); else setActiveStep("clips"); window.history.replaceState(null, "", `/app/shorts?project=${encodeURIComponent(project.id)}&step=clips`); }}
         onDeleteClip={(clipId) => void removeClip(clipId)}
