@@ -1043,6 +1043,107 @@
   text-decoration: underline;
 }
 
+.cropKeyframes {
+  margin-top: 14px;
+  padding: 10px;
+  border: 1px solid var(--editor-border);
+  border-radius: 8px;
+  background: #fbfcfe;
+}
+
+.cropKeyframesHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 7px;
+  color: var(--editor-muted);
+  font-size: 9px;
+}
+
+.cropKeyframesHeader strong {
+  color: var(--editor-text);
+  font-size: 10px;
+}
+
+.cropKeyframesHeader span {
+  min-width: 18px;
+  padding: 2px 5px;
+  border-radius: 999px;
+  color: var(--editor-accent);
+  background: var(--editor-accent-soft);
+  text-align: center;
+}
+
+.cropKeyframe {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 34px;
+  border-top: 1px solid var(--editor-border);
+}
+
+.cropKeyframeSelect {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 0;
+  text-align: left;
+}
+
+.cropKeyframeSelect > span:last-child {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cropKeyframeSelect strong {
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.cropKeyframeSelect small {
+  overflow: hidden;
+  color: var(--editor-muted);
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cropKeyframeDot {
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border: 2px solid var(--editor-accent);
+  border-radius: 50%;
+  background: #fff;
+}
+
+.cropKeyframeDelete {
+  display: flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 5px;
+  color: #a1a9b5;
+}
+
+.cropKeyframeDelete:hover {
+  color: #c33e54;
+  background: #fff0f2;
+}
+
+.cropKeyframesHint {
+  margin: 8px 0 0;
+  color: var(--editor-muted);
+  font-size: 8px;
+  line-height: 1.45;
+}
+
 .switchLabel {
   position: relative;
   display: inline-flex;

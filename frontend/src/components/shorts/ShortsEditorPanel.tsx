@@ -309,6 +309,25 @@ export function ShortsEditorPanel({ clips, draftUrls, sourceUrl, initialSettings
     setCropDirty(true);
   }
 
+  function selectCropKeyframe(keyframe: ShortsCropKeyframe) {
+    setCurrentTime(Math.max(0, Math.min(selectedSegment?.duration ?? 0, keyframe.time)));
+    if (videoRef.current) {
+      videoRef.current.currentTime = showOriginal
+        ? (selectedClip?.start_seconds ?? 0) + keyframe.time
+        : keyframe.time;
+    }
+  }
+
+  function removeCropKeyframe(time: number) {
+    setCropConfig((config) => ({
+      ...config,
+      keyframes: config.keyframes.length <= 1
+        ? [{ time: 0, center_x: 0.5, center_y: 0.5, scale: 1 }]
+        : config.keyframes.filter((keyframe) => Math.abs(keyframe.time - time) > 0.02),
+    }));
+    setCropDirty(true);
+  }
+
   function handleCropPointerDown(event: React.PointerEvent<HTMLDivElement>) {
     const current = currentCropKeyframe();
     cropDragRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, centerX: current.center_x, centerY: current.center_y };
@@ -587,7 +606,10 @@ export function ShortsEditorPanel({ clips, draftUrls, sourceUrl, initialSettings
                 src={showOriginal ? sourceUrl : selectedUrl}
                 playsInline
                 preload="metadata"
-                style={showOriginal ? undefined : { transform: `scale(${scale / 100})` }}
+                style={showOriginal ? undefined : {
+                  objectPosition: `${crop.center_x * 100}% ${crop.center_y * 100}%`,
+                  transform: `scale(${(scale / 100) * crop.scale})`,
+                }}
                 onClick={() => void togglePlayback()}
                 onPlay={() => setPlaying(true)}
                 onPause={() => setPlaying(false)}
@@ -650,6 +672,17 @@ export function ShortsEditorPanel({ clips, draftUrls, sourceUrl, initialSettings
                 <button type="button" className={cropConfig.mode === "auto" ? styles.active : ""} onClick={() => { setCropConfig((config) => ({ ...config, mode: "auto", keyframes: [{ ...currentCropKeyframe(), time: 0, center_x: 0.5, center_y: 0.5 }] })); setCropDirty(true); }}>Авто (центр)</button>
               </div>
               <button type="button" className={styles.textAction} onClick={addCropKeyframe}><Plus size={14} /> Добавить точку кадрирования на {formatTime(currentTime)}</button>
+              <div className={styles.cropKeyframes} aria-label="Сохранённые точки кадрирования">
+                <div className={styles.cropKeyframesHeader}><strong>Точки кадрирования</strong><span>{cropConfig.keyframes.length}</span></div>
+                {[...cropConfig.keyframes].sort((a, b) => a.time - b.time).map((keyframe) => <div className={styles.cropKeyframe} key={`${keyframe.time}-${keyframe.center_x}-${keyframe.center_y}`}>
+                  <button type="button" className={styles.cropKeyframeSelect} onClick={() => selectCropKeyframe(keyframe)}>
+                    <span className={styles.cropKeyframeDot} />
+                    <span><strong>{formatTime(keyframe.time)}</strong><small>Центр {Math.round(keyframe.center_x * 100)}% · масштаб {Math.round(keyframe.scale * 100)}%</small></span>
+                  </button>
+                  <button type="button" className={styles.cropKeyframeDelete} aria-label={`Удалить точку кадрирования на ${formatTime(keyframe.time)}`} onClick={() => removeCropKeyframe(keyframe.time)}><Trash2 size={13} /></button>
+                </div>)}
+                <p className={styles.cropKeyframesHint}>Переместите рамку в нужный момент и добавьте точку. Между точками положение плавно меняется.</p>
+              </div>
               {onSaveCrop && <button type="button" className={`${styles.button} ${cropDirty ? styles.buttonPrimary : styles.buttonSecondary} ${styles.fullWidth}`} onClick={() => void saveCrop()} disabled={cropSaving || !cropDirty}>{cropSaving ? "Сохранение кадра…" : cropDirty ? "Сохранить кадрирование" : "Кадрирование сохранено"}</button>}
             </section>
 
